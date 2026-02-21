@@ -200,12 +200,15 @@ namespace Engine
 
     void GLFWWindowImpl::Shutdown()
     {
-        glfwDestroyWindow(m_Window);
+        if (m_Window)
+        {
+            glfwDestroyWindow(m_Window);
+            m_Window = nullptr;
+            --s_GLFWWindowCount;
+        }
 
         delete m_Context;
         m_Context = nullptr;
-
-        --s_GLFWWindowCount;
 
         if (s_GLFWWindowCount == 0)
         {
@@ -215,6 +218,9 @@ namespace Engine
 
     void GLFWWindowImpl::OnUpdate()
     {
+        if (!m_Window)
+            return;
+
         glfwPollEvents();
         m_Context->SwapBuffers();
     }

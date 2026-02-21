@@ -1,10 +1,12 @@
 #include "engpch.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Core/Application.h"
+#include "Core/Log.h"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <ImGuizmo.h>
 
 #include <GLFW/glfw3.h>
 
@@ -27,8 +29,13 @@ namespace Engine
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
         // 加载中文字体
-        io.Fonts->AddFontFromFileTTF("Editor/assets/fonts/NotoSansSC-Regular.ttf", 18.0f, nullptr,
-                                     io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        ImFont* font = io.Fonts->AddFontFromFileTTF("Editor/assets/fonts/NotoSansSC-Regular.ttf", 18.0f, nullptr,
+                                                     io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        if (!font)
+        {
+            ENGINE_CORE_WARN("Failed to load Chinese font, falling back to default font");
+            io.Fonts->AddFontDefault();
+        }
 
         ImGui::StyleColorsDark();
 
@@ -67,6 +74,7 @@ namespace Engine
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        ImGuizmo::BeginFrame();
     }
 
     void ImGuiLayer::End()

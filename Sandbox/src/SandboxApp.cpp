@@ -112,6 +112,17 @@ namespace Engine
 
         void OnUpdate(Timestep ts) override
         {
+            // ── 在渲染前处理 resize，确保 FBO 重建后立刻有内容 ──
+            FramebufferSpecification spec = m_Framebuffer->GetSpecification();
+            if (m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
+                (spec.Width != static_cast<uint32_t>(m_ViewportSize.x) ||
+                 spec.Height != static_cast<uint32_t>(m_ViewportSize.y)))
+            {
+                m_Framebuffer->Resize(static_cast<uint32_t>(m_ViewportSize.x),
+                                      static_cast<uint32_t>(m_ViewportSize.y));
+                m_Camera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
+            }
+
             m_Camera.OnUpdate(ts);
 
             // 渲染到 Framebuffer
@@ -180,17 +191,9 @@ namespace Engine
             m_ViewportHovered = ImGui::IsWindowHovered();
             Application::Get().GetImGuiLayer()->SetBlockEvents(!m_ViewportHovered);
 
+            // 只记录视口尺寸，实际 resize 延迟到下一帧 OnUpdate 渲染前执行
             ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-            uint32_t newW = static_cast<uint32_t>(viewportSize.x);
-            uint32_t newH = static_cast<uint32_t>(viewportSize.y);
-            if (newW > 0 && newH > 0 &&
-                (newW != static_cast<uint32_t>(m_ViewportSize.x) ||
-                 newH != static_cast<uint32_t>(m_ViewportSize.y)))
-            {
-                m_ViewportSize = {viewportSize.x, viewportSize.y};
-                m_Framebuffer->Resize(newW, newH);
-                m_Camera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
-            }
+            m_ViewportSize = {std::max(viewportSize.x, 1.0f), std::max(viewportSize.y, 1.0f)};
 
             uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
             ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)),
