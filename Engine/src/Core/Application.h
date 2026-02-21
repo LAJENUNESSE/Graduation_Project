@@ -1,0 +1,49 @@
+#pragma once
+
+#include <memory>
+
+#include "Core/LayerStack.h"
+#include "Core/Window.h"
+#include "Events/Event.h"
+
+namespace Engine
+{
+
+    class ImGuiLayer;
+
+    class Application
+    {
+    public:
+        Application();
+        virtual ~Application();
+
+        void Run();
+        void OnEvent(Event& e);
+
+        void PushLayer(Layer* layer);
+        void PushOverlay(Layer* overlay);
+        void Close() { m_Running = false; }
+
+        ImGuiLayer* GetImGuiLayer() { return m_ImGuiLayer; }
+        Window& GetWindow() { return *m_Window; }
+
+        static Application& Get() { return *s_Instance; }
+
+    private:
+        bool OnWindowClose(class WindowCloseEvent& e);
+        bool OnWindowResize(class WindowResizeEvent& e);
+
+        std::unique_ptr<Window> m_Window;
+        ImGuiLayer* m_ImGuiLayer = nullptr;
+        LayerStack m_LayerStack;
+        bool m_Running = true;
+        bool m_Minimized = false;
+        float m_LastFrameTime = 0.0f;
+
+        static Application* s_Instance;
+    };
+
+    // To be defined by the client application
+    Application* CreateApplication();
+
+} // namespace Engine
