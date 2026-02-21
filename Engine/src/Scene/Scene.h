@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Core/Timestep.h"
 #include "Core/UUID.h"
+#include "Renderer/Texture.h"
 
 #include <entt/entt.hpp>
 
@@ -45,6 +46,7 @@ namespace Engine
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;
         Ref<Shader> m_MeshShader;
+        Ref<Texture2D> m_WhiteTexture;
 
         friend class Entity;
     };

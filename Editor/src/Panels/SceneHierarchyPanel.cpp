@@ -23,15 +23,24 @@ namespace Engine
 
         if (m_Context)
         {
+            Entity entityToDelete;
             auto view = m_Context->GetAllEntitiesWith<TagComponent>();
             for (auto entityID : view)
             {
                 Entity entity{entityID, m_Context.get()};
-                DrawEntityNode(entity);
+                DrawEntityNode(entity, entityToDelete);
             }
 
-            // Deselect when clicking on empty space
-            if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
+            // Deferred entity deletion (safe: outside iteration)
+            if (entityToDelete)
+            {
+                if (m_SelectionContext == entityToDelete)
+                    m_SelectionContext = {};
+                m_Context->DestroyEntity(entityToDelete);
+            }
+
+            // Deselect when clicking on empty space (not on any item)
+            if (ImGui::IsMouseClicked(0) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered())
                 m_SelectionContext = {};
 
             // Right-click on blank space
@@ -46,7 +55,7 @@ namespace Engine
         ImGui::End();
     }
 
-    void SceneHierarchyPanel::DrawEntityNode(Entity entity)
+    void SceneHierarchyPanel::DrawEntityNode(Entity entity, Entity& entityToDelete)
     {
         auto& tag = entity.GetComponent<TagComponent>().Tag;
 
@@ -79,9 +88,7 @@ namespace Engine
 
         if (entityDeleted)
         {
-            m_Context->DestroyEntity(entity);
-            if (m_SelectionContext == entity)
-                m_SelectionContext = {};
+            entityToDelete = entity;
         }
     }
 

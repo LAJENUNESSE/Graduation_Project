@@ -21,7 +21,7 @@ namespace Engine
         void SetSelectedEntity(Entity entity) { m_SelectionContext = entity; }
 
     private:
-        void DrawEntityNode(Entity entity);
+        void DrawEntityNode(Entity entity, Entity& entityToDelete);
 
     private:
         Ref<Scene> m_Context;

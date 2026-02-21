@@ -1,6 +1,7 @@
 #include "Panels/PropertiesPanel.h"
 #include "Scene/SceneCamera.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/Texture.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -175,6 +176,15 @@ namespace Engine
                 }
             }
 
+            if (!entity.HasComponent<LightComponent>())
+            {
+                if (ImGui::MenuItem("灯光"))
+                {
+                    entity.AddComponent<LightComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             ImGui::EndPopup();
         }
         ImGui::PopItemWidth();
@@ -219,42 +229,102 @@ namespace Engine
             if (camera.GetProjectionType() == SceneCamera::ProjectionType::Perspective)
             {
                 float perspectiveFOV = glm::degrees(camera.GetPerspectiveVerticalFOV());
-                if (ImGui::DragFloat("垂直FOV", &perspectiveFOV))
-                    camera.SetPerspectiveVerticalFOV(glm::radians(perspectiveFOV));
+                if (ImGui::DragFloat("垂直FOV", &perspectiveFOV, 1.0f, 1.0f, 179.0f))
+                    camera.SetPerspectiveVerticalFOV(glm::radians(std::clamp(perspectiveFOV, 1.0f, 179.0f)));
 
                 float perspectiveNear = camera.GetPerspectiveNearClip();
-                if (ImGui::DragFloat("近平面", &perspectiveNear))
+                if (ImGui::DragFloat("近平面", &perspectiveNear, 0.01f, 0.001f, 0.0f))
+                {
+                    perspectiveNear = std::max(perspectiveNear, 0.001f);
                     camera.SetPerspectiveNearClip(perspectiveNear);
+                }
 
                 float perspectiveFar = camera.GetPerspectiveFarClip();
-                if (ImGui::DragFloat("远平面", &perspectiveFar))
+                if (ImGui::DragFloat("远平面", &perspectiveFar, 1.0f, 0.0f, 0.0f))
+                {
+                    perspectiveFar = std::max(perspectiveFar, camera.GetPerspectiveNearClip() + 0.1f);
                     camera.SetPerspectiveFarClip(perspectiveFar);
+                }
             }
 
             if (camera.GetProjectionType() == SceneCamera::ProjectionType::Orthographic)
             {
                 float orthoSize = camera.GetOrthographicSize();
-                if (ImGui::DragFloat("大小", &orthoSize))
+                if (ImGui::DragFloat("大小", &orthoSize, 0.1f, 0.0f, 0.0f))
+                {
+                    orthoSize = std::max(orthoSize, 0.01f);
                     camera.SetOrthographicSize(orthoSize);
+                }
 
                 float orthoNear = camera.GetOrthographicNearClip();
-                if (ImGui::DragFloat("近平面", &orthoNear))
+                if (ImGui::DragFloat("近平面", &orthoNear, 0.1f))
                     camera.SetOrthographicNearClip(orthoNear);
 
                 float orthoFar = camera.GetOrthographicFarClip();
-                if (ImGui::DragFloat("远平面", &orthoFar))
+                if (ImGui::DragFloat("远平面", &orthoFar, 0.1f))
+                {
+                    orthoFar = std::max(orthoFar, camera.GetOrthographicNearClip() + 0.1f);
                     camera.SetOrthographicFarClip(orthoFar);
+                }
 
                 ImGui::Checkbox("固定宽高比", &component.FixedAspectRatio);
             }
         });
 
-        // Mesh Renderer
-        DrawComponent<MeshRendererComponent>("Mesh Renderer", entity, [](auto& component)
+        // Light
+        DrawComponent<LightComponent>("灯光", entity, [](auto& component)
         {
-            ImGui::ColorEdit4("Color", glm::value_ptr(component.Color));
+            const char* lightTypeStrings[] = {"方向光", "点光源", "聚光灯"};
+            const char* currentLightTypeString = lightTypeStrings[static_cast<int>(component.Type)];
 
-            // Mesh primitive selection — determine current type from Mesh::GetMeshType()
+            if (ImGui::BeginCombo("灯光类型", currentLightTypeString))
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    bool isSelected = (static_cast<int>(component.Type) == i);
+                    if (ImGui::Selectable(lightTypeStrings[i], isSelected))
+                        component.Type = static_cast<LightComponent::LightType>(i);
+                    if (isSelected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::ColorEdit3("颜色", glm::value_ptr(component.Color));
+            ImGui::DragFloat("强度", &component.Intensity, 0.05f, 0.0f, 100.0f, "%.2f");
+
+            if (component.Type == LightComponent::LightType::Point ||
+                component.Type == LightComponent::LightType::Spot)
+            {
+                ImGui::Separator();
+                ImGui::Text("衰减");
+                ImGui::DragFloat("常数项", &component.Constant, 0.01f, 0.001f, 10.0f, "%.3f");
+                ImGui::DragFloat("线性项", &component.Linear, 0.001f, 0.0f, 1.0f, "%.4f");
+                ImGui::DragFloat("二次项", &component.Quadratic, 0.001f, 0.0f, 1.0f, "%.4f");
+            }
+
+            if (component.Type == LightComponent::LightType::Spot)
+            {
+                ImGui::Separator();
+                ImGui::Text("锥角");
+                float innerDeg = glm::degrees(component.InnerCutoff);
+                float outerDeg = glm::degrees(component.OuterCutoff);
+                if (ImGui::DragFloat("内锥角", &innerDeg, 0.1f, 0.0f, 89.0f, "%.1f°"))
+                    component.InnerCutoff = glm::radians(innerDeg);
+                if (ImGui::DragFloat("外锥角", &outerDeg, 0.1f, 0.0f, 89.0f, "%.1f°"))
+                    component.OuterCutoff = glm::radians(outerDeg);
+                // Clamp: outer >= inner
+                if (component.OuterCutoff < component.InnerCutoff)
+                    component.OuterCutoff = component.InnerCutoff;
+            }
+        });
+
+        // Mesh Renderer
+        DrawComponent<MeshRendererComponent>("网格渲染器", entity, [](auto& component)
+        {
+            ImGui::ColorEdit4("颜色", glm::value_ptr(component.Color));
+
+            // Mesh primitive selection
             const char* currentMeshLabel = "None";
             if (component.MeshData)
             {
@@ -263,7 +333,7 @@ namespace Engine
                     currentMeshLabel = meshType.c_str();
             }
 
-            if (ImGui::BeginCombo("Mesh", currentMeshLabel))
+            if (ImGui::BeginCombo("网格", currentMeshLabel))
             {
                 if (ImGui::Selectable("Cube", component.MeshData && component.MeshData->GetMeshType() == "Cube"))
                     component.MeshData = Mesh::CreateCube();
@@ -273,6 +343,36 @@ namespace Engine
                     component.MeshData = Mesh::CreateSphere();
                 ImGui::EndCombo();
             }
+
+            ImGui::Separator();
+            ImGui::Text("材质");
+            ImGui::DragFloat("高光度", &component.Shininess, 1.0f, 1.0f, 256.0f, "%.0f");
+
+            // Texture path
+            char texPathBuf[256];
+            memset(texPathBuf, 0, sizeof(texPathBuf));
+            std::strncpy(texPathBuf, component.TexturePath.c_str(), sizeof(texPathBuf) - 1);
+            if (ImGui::InputText("纹理路径", texPathBuf, sizeof(texPathBuf)))
+            {
+                component.TexturePath = std::string(texPathBuf);
+            }
+
+            if (ImGui::Button("加载纹理"))
+            {
+                if (!component.TexturePath.empty())
+                {
+                    component.DiffuseTexture = Texture2D::Create(component.TexturePath);
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("清除纹理"))
+            {
+                component.DiffuseTexture.reset();
+                component.TexturePath.clear();
+            }
+
+            ImGui::DragFloat("平铺 X", &component.Tiling.x, 0.1f, 0.01f, 100.0f, "%.2f");
+            ImGui::DragFloat("平铺 Y", &component.Tiling.y, 0.1f, 0.01f, 100.0f, "%.2f");
         });
     }
 

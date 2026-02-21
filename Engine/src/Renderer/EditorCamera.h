@@ -62,6 +62,8 @@ namespace Engine
             return m_Yaw;
         }
 
+        void SetViewMatrix(const glm::mat4& viewMatrix);
+
     private:
         void UpdateProjection();
         void UpdateView();

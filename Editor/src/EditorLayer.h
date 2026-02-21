@@ -45,6 +45,7 @@ namespace Engine
 
         bool m_ViewportFocused = false;
         bool m_ViewportHovered = false;
+        glm::vec2 m_LastMousePos = {0.0f, 0.0f};
 
         int m_GizmoType = -1; // -1 = no gizmo
     };

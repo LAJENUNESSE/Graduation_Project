@@ -47,6 +47,9 @@ namespace Engine
         uint32_t m_RendererID = 0;
         std::string m_Name;
         std::string m_FilePath;
+        mutable std::unordered_map<std::string, int> m_UniformLocationCache;
+
+        int GetUniformLocation(const std::string& name) const;
     };
 
 } // namespace Engine

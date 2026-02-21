@@ -5,6 +5,7 @@
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/Texture.h"
 #include "Core/Log.h"
 
 #include <yaml-cpp/yaml.h>
@@ -66,6 +67,29 @@ namespace YAML
         }
     };
 
+    template <>
+    struct convert<glm::vec2>
+    {
+        static Node encode(const glm::vec2& rhs)
+        {
+            Node node;
+            node.push_back(rhs.x);
+            node.push_back(rhs.y);
+            node.SetStyle(YAML::EmitterStyle::Flow);
+            return node;
+        }
+
+        static bool decode(const Node& node, glm::vec2& rhs)
+        {
+            if (!node.IsSequence() || node.size() != 2)
+                return false;
+
+            rhs.x = node[0].as<float>();
+            rhs.y = node[1].as<float>();
+            return true;
+        }
+    };
+
 } // namespace YAML
 
 namespace Engine
@@ -82,6 +106,13 @@ namespace Engine
     {
         out << YAML::Flow;
         out << YAML::BeginSeq << v.x << v.y << v.z << v.w << YAML::EndSeq;
+        return out;
+    }
+
+    static YAML::Emitter& operator<<(YAML::Emitter& out, const glm::vec2& v)
+    {
+        out << YAML::Flow;
+        out << YAML::BeginSeq << v.x << v.y << YAML::EndSeq;
         return out;
     }
 
@@ -133,6 +164,26 @@ namespace Engine
                 meshType = mrc.MeshData->GetMeshType();
             out << YAML::Key << "MeshType" << YAML::Value << meshType;
             out << YAML::Key << "Color" << YAML::Value << mrc.Color;
+            out << YAML::Key << "TexturePath" << YAML::Value << mrc.TexturePath;
+            out << YAML::Key << "Tiling" << YAML::Value << mrc.Tiling;
+            out << YAML::Key << "Shininess" << YAML::Value << mrc.Shininess;
+            out << YAML::EndMap;
+        }
+
+        // LightComponent
+        if (entity.HasComponent<LightComponent>())
+        {
+            out << YAML::Key << "LightComponent";
+            out << YAML::BeginMap;
+            auto& lc = entity.GetComponent<LightComponent>();
+            out << YAML::Key << "Type" << YAML::Value << static_cast<int>(lc.Type);
+            out << YAML::Key << "Color" << YAML::Value << lc.Color;
+            out << YAML::Key << "Intensity" << YAML::Value << lc.Intensity;
+            out << YAML::Key << "Constant" << YAML::Value << lc.Constant;
+            out << YAML::Key << "Linear" << YAML::Value << lc.Linear;
+            out << YAML::Key << "Quadratic" << YAML::Value << lc.Quadratic;
+            out << YAML::Key << "InnerCutoff" << YAML::Value << lc.InnerCutoff;
+            out << YAML::Key << "OuterCutoff" << YAML::Value << lc.OuterCutoff;
             out << YAML::EndMap;
         }
 
@@ -160,7 +211,7 @@ namespace Engine
         out << YAML::EndMap;
     }
 
-    void SceneSerializer::Serialize(const std::string& filepath)
+    bool SceneSerializer::Serialize(const std::string& filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -185,9 +236,15 @@ namespace Engine
         if (!fout.is_open())
         {
             ENGINE_CORE_ERROR("Could not open file '{0}' for writing", filepath);
-            return;
+            return false;
         }
         fout << out.c_str();
+        if (!fout.good())
+        {
+            ENGINE_CORE_ERROR("Failed to write scene file '{0}'", filepath);
+            return false;
+        }
+        return true;
     }
 
     static Ref<Mesh> CreateMeshFromType(const std::string& meshType)
@@ -228,6 +285,7 @@ namespace Engine
 
         for (auto entityNode : entities)
         {
+            Entity deserializedEntity;
             try
             {
                 uint64_t uuid = entityNode["Entity"].as<uint64_t>();
@@ -237,7 +295,7 @@ namespace Engine
                 if (tagComponent)
                     name = tagComponent["Tag"].as<std::string>();
 
-                Entity deserializedEntity = m_Scene->CreateEntityWithUUID(UUID(uuid), name);
+                deserializedEntity = m_Scene->CreateEntityWithUUID(UUID(uuid), name);
 
                 // TransformComponent
                 auto transformComponent = entityNode["TransformComponent"];
@@ -257,6 +315,50 @@ namespace Engine
                     std::string meshType = meshRendererComponent["MeshType"].as<std::string>();
                     mrc.MeshData = CreateMeshFromType(meshType);
                     mrc.Color = meshRendererComponent["Color"].as<glm::vec4>();
+
+                    if (meshRendererComponent["TexturePath"])
+                    {
+                        std::string texPath = meshRendererComponent["TexturePath"].as<std::string>();
+                        // Reject absolute paths and directory traversal
+                        if (!texPath.empty() && texPath[0] != '/' && texPath.find("..") == std::string::npos)
+                        {
+                            mrc.TexturePath = texPath;
+                            mrc.DiffuseTexture = Texture2D::Create(mrc.TexturePath);
+                        }
+                        else if (!texPath.empty())
+                        {
+                            ENGINE_CORE_WARN("Rejected unsafe texture path: {0}", texPath);
+                        }
+                    }
+                    if (meshRendererComponent["Tiling"])
+                        mrc.Tiling = meshRendererComponent["Tiling"].as<glm::vec2>();
+                    if (meshRendererComponent["Shininess"])
+                        mrc.Shininess = meshRendererComponent["Shininess"].as<float>();
+                }
+
+                // LightComponent
+                auto lightComponent = entityNode["LightComponent"];
+                if (lightComponent)
+                {
+                    auto& lc = deserializedEntity.AddComponent<LightComponent>();
+                    int typeVal = lightComponent["Type"] ? lightComponent["Type"].as<int>() : 0;
+                    if (typeVal < 0 || typeVal > 2)
+                        typeVal = 0;
+                    lc.Type = static_cast<LightComponent::LightType>(typeVal);
+                    if (lightComponent["Color"])
+                        lc.Color = lightComponent["Color"].as<glm::vec3>();
+                    if (lightComponent["Intensity"])
+                        lc.Intensity = lightComponent["Intensity"].as<float>();
+                    if (lightComponent["Constant"])
+                        lc.Constant = lightComponent["Constant"].as<float>();
+                    if (lightComponent["Linear"])
+                        lc.Linear = lightComponent["Linear"].as<float>();
+                    if (lightComponent["Quadratic"])
+                        lc.Quadratic = lightComponent["Quadratic"].as<float>();
+                    if (lightComponent["InnerCutoff"])
+                        lc.InnerCutoff = lightComponent["InnerCutoff"].as<float>();
+                    if (lightComponent["OuterCutoff"])
+                        lc.OuterCutoff = lightComponent["OuterCutoff"].as<float>();
                 }
 
                 // CameraComponent
@@ -280,6 +382,9 @@ namespace Engine
             catch (const YAML::Exception& e)
             {
                 ENGINE_CORE_ERROR("Failed to deserialize entity: {0}", e.what());
+                // Rollback: destroy partially-created entity to avoid corrupt scene state
+                if (deserializedEntity)
+                    m_Scene->DestroyEntity(deserializedEntity);
                 continue;
             }
         }
