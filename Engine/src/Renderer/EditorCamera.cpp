@@ -151,4 +151,15 @@ namespace Engine
         return glm::quat(glm::vec3(-m_Pitch, -m_Yaw, 0.0f));
     }
 
+    void EditorCamera::SetViewMatrix(const glm::mat4& viewMatrix)
+    {
+        m_ViewMatrix = viewMatrix;
+        glm::mat4 invView = glm::inverse(viewMatrix);
+        m_Position = glm::vec3(invView[3]);
+        glm::vec3 forward = -glm::normalize(glm::vec3(invView[2]));
+        m_Pitch = std::asin(-forward.y);
+        m_Yaw = std::atan2(forward.x, -forward.z);
+        m_FocalPoint = m_Position + forward * m_Distance;
+    }
+
 } // namespace Engine

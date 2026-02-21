@@ -158,6 +158,7 @@ namespace Engine
             {
                 // Depth-only pass
                 glDrawBuffer(GL_NONE);
+                glReadBuffer(GL_NONE);
             }
         }
         else
@@ -218,6 +219,17 @@ namespace Engine
     {
         ENGINE_CORE_ASSERT(attachmentIndex < m_ColorAttachments.size(), "Attachment index out of range");
 
+        // Bounds check — skip if out of range
+        if (x < 0 || y < 0 || x >= static_cast<int>(m_Specification.Width) ||
+            y >= static_cast<int>(m_Specification.Height))
+        {
+            return -1;
+        }
+
+        // Save and restore GL_READ_FRAMEBUFFER binding
+        GLint previousReadFBO;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFBO);
+
         glBindFramebuffer(GL_READ_FRAMEBUFFER, m_RendererID);
         glReadBuffer(GL_COLOR_ATTACHMENT0 + attachmentIndex);
         int pixelData = -1;
@@ -235,7 +247,7 @@ namespace Engine
             pixelData = static_cast<int>(rgba[0]);
         }
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, previousReadFBO);
         return pixelData;
     }
 

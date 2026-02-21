@@ -15,6 +15,7 @@ namespace Engine
 {
 
     class Mesh;
+    class Texture2D;
 
     struct IDComponent
     {
@@ -66,6 +67,12 @@ namespace Engine
         Ref<Mesh> MeshData;
         glm::vec4 Color = {1.0f, 1.0f, 1.0f, 1.0f};
 
+        // 材质属性
+        Ref<Texture2D> DiffuseTexture;        // null = 纯色
+        std::string TexturePath;              // 用于序列化
+        glm::vec2 Tiling = {1.0f, 1.0f};     // 纹理平铺
+        float Shininess = 32.0f;              // 高光指数
+
         MeshRendererComponent() = default;
         MeshRendererComponent(const MeshRendererComponent&) = default;
     };
@@ -82,8 +89,25 @@ namespace Engine
 
     struct LightComponent
     {
+        enum class LightType : int
+        {
+            Directional = 0,
+            Point = 1,
+            Spot = 2
+        };
+
+        LightType Type = LightType::Directional;
         glm::vec3 Color = {1.0f, 1.0f, 1.0f};
         float Intensity = 1.0f;
+
+        // 衰减参数（Point + Spot）
+        float Constant = 1.0f;
+        float Linear = 0.09f;
+        float Quadratic = 0.032f;
+
+        // 锥角（Spot only），弧度制
+        float InnerCutoff = glm::radians(12.5f);
+        float OuterCutoff = glm::radians(17.5f);
 
         LightComponent() = default;
         LightComponent(const LightComponent&) = default;

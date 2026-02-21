@@ -48,6 +48,14 @@ namespace Engine
         meshRenderer.MeshData = Mesh::CreateCube();
         meshRenderer.Color = {0.8f, 0.2f, 0.3f, 1.0f};
 
+        // Create a default directional light
+        Entity lightEntity = m_ActiveScene->CreateEntity("方向光");
+        auto& light = lightEntity.AddComponent<LightComponent>();
+        light.Type = LightComponent::LightType::Directional;
+        light.Color = {1.0f, 0.95f, 0.9f};
+        auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
+        lightTransform.Rotation = {glm::radians(-45.0f), glm::radians(30.0f), 0.0f};
+
         // Initialize panels
         m_HierarchyPanel.SetContext(m_ActiveScene);
 
@@ -61,17 +69,20 @@ namespace Engine
 
     void EditorLayer::OnUpdate(Timestep ts)
     {
-        // Handle FBO resize before rendering
+        // Handle FBO resize before rendering (only when mouse is released to avoid rebuild spam)
         FramebufferSpecification spec = m_Framebuffer->GetSpecification();
         if (m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
             (spec.Width != static_cast<uint32_t>(m_ViewportSize.x) ||
              spec.Height != static_cast<uint32_t>(m_ViewportSize.y)))
         {
-            m_Framebuffer->Resize(static_cast<uint32_t>(m_ViewportSize.x),
-                                  static_cast<uint32_t>(m_ViewportSize.y));
-            m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
-            m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
-                                            static_cast<uint32_t>(m_ViewportSize.y));
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                m_Framebuffer->Resize(static_cast<uint32_t>(m_ViewportSize.x),
+                                      static_cast<uint32_t>(m_ViewportSize.y));
+                m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
+                m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
+                                                static_cast<uint32_t>(m_ViewportSize.y));
+            }
         }
 
         m_EditorCamera.OnUpdate(ts);
@@ -157,25 +168,32 @@ namespace Engine
         Application::Get().GetImGuiLayer()->SetBlockEvents(!m_ViewportHovered);
 
         ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-        m_ViewportSize = {std::max(viewportPanelSize.x, 1.0f), std::max(viewportPanelSize.y, 1.0f)};
+        m_ViewportSize = {std::max(viewportPanelSize.x, 32.0f), std::max(viewportPanelSize.y, 32.0f)};
 
-        // Mouse picking (after viewport bounds are up-to-date)
+        // Mouse picking — only sample when mouse moved or clicked (avoid per-frame glReadPixels stall)
         {
             ImVec2 mousePos = ImGui::GetMousePos();
-            float mx = mousePos.x - m_ViewportBounds[0].x;
-            float my = mousePos.y - m_ViewportBounds[0].y;
-            glm::vec2 vpSize = m_ViewportBounds[1] - m_ViewportBounds[0];
-            my = vpSize.y - my; // Flip Y
+            glm::vec2 currentMousePos = {mousePos.x, mousePos.y};
+            bool mouseMoved = (currentMousePos != m_LastMousePos);
+            m_LastMousePos = currentMousePos;
 
-            int mouseX = static_cast<int>(mx);
-            int mouseY = static_cast<int>(my);
-
-            if (mouseX >= 0 && mouseY >= 0 && mouseX < static_cast<int>(vpSize.x) &&
-                mouseY < static_cast<int>(vpSize.y))
+            if (mouseMoved || ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
-                int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
-                m_HoveredEntity =
-                    pixelData == -1 ? Entity() : Entity(static_cast<entt::entity>(pixelData), m_ActiveScene.get());
+                float mx = mousePos.x - m_ViewportBounds[0].x;
+                float my = mousePos.y - m_ViewportBounds[0].y;
+                glm::vec2 vpSize = m_ViewportBounds[1] - m_ViewportBounds[0];
+                my = vpSize.y - my; // Flip Y
+
+                int mouseX = static_cast<int>(mx);
+                int mouseY = static_cast<int>(my);
+
+                if (mouseX >= 0 && mouseY >= 0 && mouseX < static_cast<int>(vpSize.x) &&
+                    mouseY < static_cast<int>(vpSize.y))
+                {
+                    int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
+                    m_HoveredEntity =
+                        pixelData == -1 ? Entity() : Entity(static_cast<entt::entity>(pixelData), m_ActiveScene.get());
+                }
             }
         }
 
@@ -183,16 +201,16 @@ namespace Engine
         ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)),
                      ImVec2(m_ViewportSize.x, m_ViewportSize.y), ImVec2(0, 1), ImVec2(1, 0));
 
+        // ImGuizmo setup (shared by Gizmos and ViewManipulate)
+        ImGuizmo::SetOrthographic(false);
+        ImGuizmo::SetDrawlist();
+        ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y,
+                          m_ViewportBounds[1].x - m_ViewportBounds[0].x,
+                          m_ViewportBounds[1].y - m_ViewportBounds[0].y);
+
         // Gizmos
         if (m_SelectedEntity && m_GizmoType != -1 && m_SelectedEntity.HasComponent<TransformComponent>())
         {
-            ImGuizmo::SetOrthographic(false);
-            ImGuizmo::SetDrawlist();
-
-            ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y,
-                              m_ViewportBounds[1].x - m_ViewportBounds[0].x,
-                              m_ViewportBounds[1].y - m_ViewportBounds[0].y);
-
             // Editor camera
             const glm::mat4& cameraView = m_EditorCamera.GetViewMatrix();
             const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
@@ -217,6 +235,18 @@ namespace Engine
                 tc.Rotation += deltaRotation;
                 tc.Scale = scale;
             }
+        }
+
+        // 视口方向指示器（右上角 128x128）
+        {
+            glm::mat4 viewMatrix = m_EditorCamera.GetViewMatrix();
+            float viewManipulateRight = m_ViewportBounds[1].x;
+            float viewManipulateTop = m_ViewportBounds[0].y;
+            ImGuizmo::ViewManipulate(glm::value_ptr(viewMatrix), m_EditorCamera.GetDistance(),
+                                     ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128),
+                                     0x10101010);
+            if (viewMatrix != m_EditorCamera.GetViewMatrix())
+                m_EditorCamera.SetViewMatrix(viewMatrix);
         }
 
         ImGui::End();
@@ -288,7 +318,8 @@ namespace Engine
         // Mouse picking
         if (e.GetMouseButton() == static_cast<int>(MouseCode::ButtonLeft))
         {
-            if (m_ViewportHovered && !ImGuizmo::IsOver() && !Input::IsKeyPressed(KeyCode::LeftAlt))
+            if (m_ViewportHovered && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing() &&
+                !Input::IsKeyPressed(KeyCode::LeftAlt))
             {
                 m_HierarchyPanel.SetSelectedEntity(m_HoveredEntity);
             }
@@ -303,6 +334,7 @@ namespace Engine
                                         static_cast<uint32_t>(m_ViewportSize.y));
         m_HierarchyPanel.SetContext(m_ActiveScene);
         m_SelectedEntity = {};
+        m_HoveredEntity = {};
     }
 
     void EditorLayer::OpenScene()
@@ -320,8 +352,10 @@ namespace Engine
     {
         std::string filepath = "assets/scenes/default.scene";
         SceneSerializer serializer(m_ActiveScene);
-        serializer.Serialize(filepath);
-        ENGINE_INFO("Scene saved to '{0}'", filepath);
+        if (serializer.Serialize(filepath))
+            ENGINE_INFO("Scene saved to '{0}'", filepath);
+        else
+            ENGINE_WARN("Failed to save scene to '{0}'", filepath);
     }
 
 } // namespace Engine
