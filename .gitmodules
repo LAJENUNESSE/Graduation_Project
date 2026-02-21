@@ -1,0 +1,28 @@
+[submodule "vendor/glfw"]
+	path = vendor/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "vendor/glm"]
+	path = vendor/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "vendor/spdlog"]
+	path = vendor/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "vendor/entt"]
+	path = vendor/entt
+	url = https://github.com/skypjack/entt.git
+[submodule "vendor/yaml-cpp"]
+	path = vendor/yaml-cpp
+	url = https://github.com/jbeder/yaml-cpp.git
+[submodule "vendor/imguizmo"]
+	path = vendor/imguizmo
+	url = https://github.com/CedricGuillemet/ImGuizmo.git
+[submodule "vendor/stb_image"]
+	path = vendor/stb_image
+	url = https://github.com/nothings/stb.git
+[submodule "vendor/imgui"]
+	path = vendor/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking
+[submodule "vendor/glad"]
+	path = vendor/glad
+	url = https://github.com/Dav1dde/glad.git
