@@ -1,0 +1,22 @@
+Scene: Untitled
+Entities:
+  - Entity: 5483304457110542616
+    TagComponent:
+      Tag: Empty Entity
+    TransformComponent:
+      Translation: [2.2, -2.4, 7.1]
+      Rotation: [0, 0.58468527, 0]
+      Scale: [1, 1, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [1, 1, 1, 1]
+  - Entity: 4862405551246925507
+    TagComponent:
+      Tag: Cube
+    TransformComponent:
+      Translation: [-3.1, -0.2, -1.8]
+      Rotation: [0.13613568, 0.19547687, 0.0034906585]
+      Scale: [1.6, 3.3, 3.3]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.627451, 0.25490198, 0.5647059, 1]

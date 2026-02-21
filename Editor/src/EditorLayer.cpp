@@ -1,0 +1,327 @@
+#include "EditorLayer.h"
+#include "Core/Input.h"
+#include "Core/Log.h"
+#include "ImGui/ImGuiLayer.h"
+#include "Scene/Components.h"
+#include "Scene/SceneSerializer.h"
+#include "Renderer/Renderer.h"
+#include "Renderer/RenderCommand.h"
+#include "Renderer/Mesh.h"
+
+#include <imgui.h>
+#include <ImGuizmo.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+
+namespace Engine
+{
+
+    EditorLayer::EditorLayer()
+        : Layer("EditorLayer")
+    {
+    }
+
+    void EditorLayer::OnAttach()
+    {
+        ENGINE_INFO("EditorLayer OnAttach");
+
+        // Create framebuffer with multi-attachment:
+        //   index 0 = RGBA8 (color)
+        //   index 1 = RED_INTEGER (entity ID for picking)
+        //   depth = DEPTH24STENCIL8
+        FramebufferSpecification fbSpec;
+        fbSpec.Attachments = {FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER,
+                              FramebufferTextureFormat::DEPTH24STENCIL8};
+        fbSpec.Width = 1280;
+        fbSpec.Height = 720;
+        m_Framebuffer = Framebuffer::Create(fbSpec);
+
+        // Create scene and a default entity
+        m_ActiveScene = CreateRef<Scene>();
+
+        // Create a default cube entity
+        Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
+        auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
+        meshRenderer.MeshData = Mesh::CreateCube();
+        meshRenderer.Color = {0.8f, 0.2f, 0.3f, 1.0f};
+
+        // Initialize panels
+        m_HierarchyPanel.SetContext(m_ActiveScene);
+
+        // Initialize editor camera
+        m_EditorCamera = EditorCamera(45.0f, 1280.0f / 720.0f, 0.1f, 1000.0f);
+    }
+
+    void EditorLayer::OnDetach()
+    {
+    }
+
+    void EditorLayer::OnUpdate(Timestep ts)
+    {
+        // Handle FBO resize before rendering
+        FramebufferSpecification spec = m_Framebuffer->GetSpecification();
+        if (m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
+            (spec.Width != static_cast<uint32_t>(m_ViewportSize.x) ||
+             spec.Height != static_cast<uint32_t>(m_ViewportSize.y)))
+        {
+            m_Framebuffer->Resize(static_cast<uint32_t>(m_ViewportSize.x),
+                                  static_cast<uint32_t>(m_ViewportSize.y));
+            m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
+            m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
+                                            static_cast<uint32_t>(m_ViewportSize.y));
+        }
+
+        m_EditorCamera.OnUpdate(ts);
+
+        // Render
+        m_Framebuffer->Bind();
+        RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
+        RenderCommand::Clear();
+
+        // Clear entity ID attachment to -1 (no entity)
+        m_Framebuffer->ClearAttachment(1, -1);
+
+        // Scene rendering
+        m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+
+        m_Framebuffer->Unbind();
+    }
+
+    void EditorLayer::OnImGuiRender()
+    {
+        // Full-screen dockspace
+        static bool dockspaceOpen = true;
+        static ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_None;
+
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        windowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                       ImGuiWindowFlags_NoNavFocus;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin("DockSpace", &dockspaceOpen, windowFlags);
+        ImGui::PopStyleVar(3);
+
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
+        {
+            ImGuiID dockspaceId = ImGui::GetID("MyDockSpace");
+            ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockspaceFlags);
+        }
+
+        // Menu bar
+        if (ImGui::BeginMenuBar())
+        {
+            if (ImGui::BeginMenu("文件"))
+            {
+                if (ImGui::MenuItem("新建场景", "Ctrl+N"))
+                    NewScene();
+                if (ImGui::MenuItem("打开场景...", "Ctrl+O"))
+                    OpenScene();
+                if (ImGui::MenuItem("保存场景...", "Ctrl+Shift+S"))
+                    SaveScene();
+                ImGui::Separator();
+                if (ImGui::MenuItem("退出"))
+                    Application::Get().Close();
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenuBar();
+        }
+
+        // Panels
+        m_HierarchyPanel.OnImGuiRender();
+        m_SelectedEntity = m_HierarchyPanel.GetSelectedEntity();
+        m_PropertiesPanel.OnImGuiRender(m_SelectedEntity);
+
+        // Viewport
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::Begin("视口");
+
+        auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
+        auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
+        auto viewportOffset = ImGui::GetWindowPos();
+        m_ViewportBounds[0] = {viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y};
+        m_ViewportBounds[1] = {viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y};
+
+        m_ViewportFocused = ImGui::IsWindowFocused();
+        m_ViewportHovered = ImGui::IsWindowHovered();
+        Application::Get().GetImGuiLayer()->SetBlockEvents(!m_ViewportHovered);
+
+        ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+        m_ViewportSize = {std::max(viewportPanelSize.x, 1.0f), std::max(viewportPanelSize.y, 1.0f)};
+
+        // Mouse picking (after viewport bounds are up-to-date)
+        {
+            ImVec2 mousePos = ImGui::GetMousePos();
+            float mx = mousePos.x - m_ViewportBounds[0].x;
+            float my = mousePos.y - m_ViewportBounds[0].y;
+            glm::vec2 vpSize = m_ViewportBounds[1] - m_ViewportBounds[0];
+            my = vpSize.y - my; // Flip Y
+
+            int mouseX = static_cast<int>(mx);
+            int mouseY = static_cast<int>(my);
+
+            if (mouseX >= 0 && mouseY >= 0 && mouseX < static_cast<int>(vpSize.x) &&
+                mouseY < static_cast<int>(vpSize.y))
+            {
+                int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
+                m_HoveredEntity =
+                    pixelData == -1 ? Entity() : Entity(static_cast<entt::entity>(pixelData), m_ActiveScene.get());
+            }
+        }
+
+        uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID(0);
+        ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)),
+                     ImVec2(m_ViewportSize.x, m_ViewportSize.y), ImVec2(0, 1), ImVec2(1, 0));
+
+        // Gizmos
+        if (m_SelectedEntity && m_GizmoType != -1 && m_SelectedEntity.HasComponent<TransformComponent>())
+        {
+            ImGuizmo::SetOrthographic(false);
+            ImGuizmo::SetDrawlist();
+
+            ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y,
+                              m_ViewportBounds[1].x - m_ViewportBounds[0].x,
+                              m_ViewportBounds[1].y - m_ViewportBounds[0].y);
+
+            // Editor camera
+            const glm::mat4& cameraView = m_EditorCamera.GetViewMatrix();
+            const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
+
+            // Entity transform
+            auto& tc = m_SelectedEntity.GetComponent<TransformComponent>();
+            glm::mat4 transform = tc.GetTransform();
+
+            ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection),
+                                 static_cast<ImGuizmo::OPERATION>(m_GizmoType), ImGuizmo::LOCAL,
+                                 glm::value_ptr(transform));
+
+            if (ImGuizmo::IsUsing())
+            {
+                // Decompose the resulting matrix back to translation/rotation/scale
+                glm::vec3 translation, rotation, scale;
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform), glm::value_ptr(translation),
+                                                      glm::value_ptr(rotation), glm::value_ptr(scale));
+
+                glm::vec3 deltaRotation = glm::radians(rotation) - tc.Rotation;
+                tc.Translation = translation;
+                tc.Rotation += deltaRotation;
+                tc.Scale = scale;
+            }
+        }
+
+        ImGui::End();
+        ImGui::PopStyleVar();
+
+        ImGui::End(); // DockSpace
+    }
+
+    void EditorLayer::OnEvent(Event& event)
+    {
+        m_EditorCamera.OnEvent(event);
+
+        EventDispatcher dispatcher(event);
+        dispatcher.Dispatch<KeyPressedEvent>(ENGINE_BIND_EVENT_FN(EditorLayer::OnKeyPressed));
+        dispatcher.Dispatch<MouseButtonPressedEvent>(ENGINE_BIND_EVENT_FN(EditorLayer::OnMouseButtonPressed));
+    }
+
+    bool EditorLayer::OnKeyPressed(KeyPressedEvent& e)
+    {
+        // Shortcuts
+        if (e.GetRepeatCount() > 0)
+            return false;
+
+        bool control = Input::IsKeyPressed(KeyCode::LeftControl) || Input::IsKeyPressed(KeyCode::RightControl);
+        bool shift = Input::IsKeyPressed(KeyCode::LeftShift) || Input::IsKeyPressed(KeyCode::RightShift);
+
+        switch (static_cast<KeyCode>(e.GetKeyCode()))
+        {
+        case KeyCode::N:
+            if (control)
+                NewScene();
+            break;
+        case KeyCode::O:
+            if (control)
+                OpenScene();
+            break;
+        case KeyCode::S:
+            if (control && shift)
+                SaveScene();
+            break;
+
+        // Gizmos
+        case KeyCode::Q:
+            if (!ImGuizmo::IsUsing())
+                m_GizmoType = -1;
+            break;
+        case KeyCode::W:
+            if (!ImGuizmo::IsUsing())
+                m_GizmoType = ImGuizmo::TRANSLATE;
+            break;
+        case KeyCode::E:
+            if (!ImGuizmo::IsUsing())
+                m_GizmoType = ImGuizmo::ROTATE;
+            break;
+        case KeyCode::R:
+            if (!ImGuizmo::IsUsing())
+                m_GizmoType = ImGuizmo::SCALE;
+            break;
+
+        default:
+            break;
+        }
+
+        return false;
+    }
+
+    bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e)
+    {
+        // Mouse picking
+        if (e.GetMouseButton() == static_cast<int>(MouseCode::ButtonLeft))
+        {
+            if (m_ViewportHovered && !ImGuizmo::IsOver() && !Input::IsKeyPressed(KeyCode::LeftAlt))
+            {
+                m_HierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+            }
+        }
+        return false;
+    }
+
+    void EditorLayer::NewScene()
+    {
+        m_ActiveScene = CreateRef<Scene>();
+        m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
+                                        static_cast<uint32_t>(m_ViewportSize.y));
+        m_HierarchyPanel.SetContext(m_ActiveScene);
+        m_SelectedEntity = {};
+    }
+
+    void EditorLayer::OpenScene()
+    {
+        std::string filepath = "assets/scenes/default.scene";
+        NewScene();
+        SceneSerializer serializer(m_ActiveScene);
+        if (!serializer.Deserialize(filepath))
+        {
+            ENGINE_WARN("Failed to load scene from '{0}'", filepath);
+        }
+    }
+
+    void EditorLayer::SaveScene()
+    {
+        std::string filepath = "assets/scenes/default.scene";
+        SceneSerializer serializer(m_ActiveScene);
+        serializer.Serialize(filepath);
+        ENGINE_INFO("Scene saved to '{0}'", filepath);
+    }
+
+} // namespace Engine

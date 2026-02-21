@@ -27,3 +27,11 @@
 #include "Renderer/Framebuffer.h"
 #include "Renderer/Camera.h"
 #include "Renderer/EditorCamera.h"
+#include "Renderer/Mesh.h"
+
+// Scene
+#include "Scene/SceneCamera.h"
+#include "Scene/Components.h"
+#include "Scene/Scene.h"
+#include "Scene/Entity.h"
+#include "Scene/SceneSerializer.h"

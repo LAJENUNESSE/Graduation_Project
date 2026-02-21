@@ -19,6 +19,14 @@ namespace Engine
 
         WindowProps props;
         m_Window = std::unique_ptr<Window>(Window::Create(props));
+
+        if (!m_Window->GetNativeWindow())
+        {
+            ENGINE_CORE_ERROR("Window creation failed! Application cannot continue.");
+            m_Running = false;
+            return;
+        }
+
         m_Window->SetEventCallback([this](Event& e) { OnEvent(e); });
 
         Renderer::Init();
