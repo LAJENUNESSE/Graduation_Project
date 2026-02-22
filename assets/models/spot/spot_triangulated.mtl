@@ -1,0 +1,7 @@
+# Spot cow model material
+newmtl spot_material
+Ka 0.2 0.2 0.2
+Kd 1.0 1.0 1.0
+Ks 0.5 0.5 0.5
+Ns 32.0
+map_Kd spot_texture.png

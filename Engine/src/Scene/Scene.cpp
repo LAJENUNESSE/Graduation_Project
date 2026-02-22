@@ -383,25 +383,29 @@ namespace Engine
 
             if (meshRenderer.MeshData)
             {
-                // Bind texture
-                if (meshRenderer.DiffuseTexture)
-                {
-                    meshRenderer.DiffuseTexture->Bind(0);
-                    m_MeshShader->SetInt("u_HasTexture", 1);
-                }
-                else
-                {
-                    m_WhiteTexture->Bind(0);
-                    m_MeshShader->SetInt("u_HasTexture", 0);
-                }
-                m_MeshShader->SetInt("u_DiffuseTexture", 0);
+                m_MeshShader->SetFloat4("u_Color", meshRenderer.Color);
+                m_MeshShader->SetInt("u_EntityID", static_cast<int>(entity));
                 m_MeshShader->SetFloat2("u_Tiling", meshRenderer.Tiling);
                 m_MeshShader->SetFloat("u_Shininess", meshRenderer.Shininess);
 
-                m_MeshShader->SetFloat4("u_Color", meshRenderer.Color);
-                m_MeshShader->SetInt("u_EntityID", static_cast<int>(entity));
-                Renderer::Submit(m_MeshShader, meshRenderer.MeshData->GetVertexArray(),
-                                 transform.GetTransform());
+                for (const auto& subMesh : meshRenderer.MeshData->GetSubMeshes())
+                {
+                    // Per-submesh texture > component texture > white fallback
+                    Ref<Texture2D> tex = subMesh.DiffuseTexture ? subMesh.DiffuseTexture : meshRenderer.DiffuseTexture;
+                    if (tex)
+                    {
+                        tex->Bind(0);
+                        m_MeshShader->SetInt("u_HasTexture", 1);
+                    }
+                    else
+                    {
+                        m_WhiteTexture->Bind(0);
+                        m_MeshShader->SetInt("u_HasTexture", 0);
+                    }
+                    m_MeshShader->SetInt("u_DiffuseTexture", 0);
+
+                    Renderer::Submit(m_MeshShader, subMesh.VAO, transform.GetTransform());
+                }
             }
         }
 
@@ -463,8 +467,11 @@ namespace Engine
             if (meshRenderer.MeshData)
             {
                 m_DepthShader->SetMat4("u_Transform", transform.GetTransform());
-                meshRenderer.MeshData->GetVertexArray()->Bind();
-                RenderCommand::DrawIndexed(meshRenderer.MeshData->GetVertexArray());
+                for (const auto& subMesh : meshRenderer.MeshData->GetSubMeshes())
+                {
+                    subMesh.VAO->Bind();
+                    RenderCommand::DrawIndexed(subMesh.VAO);
+                }
             }
         }
 

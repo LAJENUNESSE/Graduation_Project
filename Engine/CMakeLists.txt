@@ -21,6 +21,7 @@ target_link_libraries(Engine PUBLIC
     stb_image
     imguizmo
     tinyfiledialogs
+    assimp
 )
 
 target_precompile_headers(Engine PRIVATE

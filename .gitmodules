@@ -26,3 +26,6 @@
 [submodule "vendor/glad"]
 	path = vendor/glad
 	url = https://github.com/Dav1dde/glad.git
+[submodule "vendor/assimp"]
+	path = vendor/assimp
+	url = https://github.com/assimp/assimp.git
