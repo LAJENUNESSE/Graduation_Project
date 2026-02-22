@@ -18,6 +18,7 @@ namespace Engine
 
         // Depth/stencil
         DEPTH24STENCIL8,
+        DEPTH_COMPONENT, // Sampable depth texture (for shadow maps)
 
         // Defaults
         Depth = DEPTH24STENCIL8
@@ -68,6 +69,7 @@ namespace Engine
         virtual void ClearAttachment(uint32_t index, int value) = 0;
 
         virtual uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const = 0;
+        virtual uint32_t GetDepthAttachmentRendererID() const = 0;
         virtual const FramebufferSpecification& GetSpecification() const = 0;
 
         static Ref<Framebuffer> Create(const FramebufferSpecification& spec);

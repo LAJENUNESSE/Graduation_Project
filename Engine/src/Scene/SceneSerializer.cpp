@@ -184,6 +184,7 @@ namespace Engine
             out << YAML::Key << "Quadratic" << YAML::Value << lc.Quadratic;
             out << YAML::Key << "InnerCutoff" << YAML::Value << lc.InnerCutoff;
             out << YAML::Key << "OuterCutoff" << YAML::Value << lc.OuterCutoff;
+            out << YAML::Key << "CastShadows" << YAML::Value << lc.CastShadows;
             out << YAML::EndMap;
         }
 
@@ -216,6 +217,21 @@ namespace Engine
         YAML::Emitter out;
         out << YAML::BeginMap;
         out << YAML::Key << "Scene" << YAML::Value << "Untitled";
+
+        // Shadow settings
+        {
+            auto& shadow = m_Scene->GetShadowSettings();
+            out << YAML::Key << "ShadowSettings";
+            out << YAML::BeginMap;
+            out << YAML::Key << "Enabled" << YAML::Value << shadow.Enabled;
+            out << YAML::Key << "MapResolution" << YAML::Value << shadow.MapResolution;
+            out << YAML::Key << "Bias" << YAML::Value << shadow.Bias;
+            out << YAML::Key << "OrthoSize" << YAML::Value << shadow.OrthoSize;
+            out << YAML::Key << "NearPlane" << YAML::Value << shadow.NearPlane;
+            out << YAML::Key << "FarPlane" << YAML::Value << shadow.FarPlane;
+            out << YAML::EndMap;
+        }
+
         out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
 
         // All entities have IDComponent, so iterate via view
@@ -278,6 +294,28 @@ namespace Engine
 
         if (!data["Scene"])
             return false;
+
+        // Deserialize shadow settings
+        auto shadowNode = data["ShadowSettings"];
+        if (shadowNode)
+        {
+            auto& shadow = m_Scene->GetShadowSettings();
+            if (shadowNode["Enabled"])
+                shadow.Enabled = shadowNode["Enabled"].as<bool>();
+            if (shadowNode["MapResolution"])
+            {
+                int res = shadowNode["MapResolution"].as<int>();
+                m_Scene->ResizeShadowMap(res);
+            }
+            if (shadowNode["Bias"])
+                shadow.Bias = shadowNode["Bias"].as<float>();
+            if (shadowNode["OrthoSize"])
+                shadow.OrthoSize = shadowNode["OrthoSize"].as<float>();
+            if (shadowNode["NearPlane"])
+                shadow.NearPlane = shadowNode["NearPlane"].as<float>();
+            if (shadowNode["FarPlane"])
+                shadow.FarPlane = shadowNode["FarPlane"].as<float>();
+        }
 
         auto entities = data["Entities"];
         if (!entities)
@@ -359,6 +397,8 @@ namespace Engine
                         lc.InnerCutoff = lightComponent["InnerCutoff"].as<float>();
                     if (lightComponent["OuterCutoff"])
                         lc.OuterCutoff = lightComponent["OuterCutoff"].as<float>();
+                    if (lightComponent["CastShadows"])
+                        lc.CastShadows = lightComponent["CastShadows"].as<bool>();
                 }
 
                 // CameraComponent

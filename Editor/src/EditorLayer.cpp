@@ -1,6 +1,7 @@
 #include "EditorLayer.h"
 #include "Core/Input.h"
 #include "Core/Log.h"
+#include "Core/FileDialogs.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Scene/Components.h"
 #include "Scene/SceneSerializer.h"
@@ -87,6 +88,9 @@ namespace Engine
 
         m_EditorCamera.OnUpdate(ts);
 
+        // Shadow pass (renders to its own FBO)
+        m_ActiveScene->ShadowPass();
+
         // Render
         m_Framebuffer->Bind();
         RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
@@ -152,6 +156,35 @@ namespace Engine
         m_HierarchyPanel.OnImGuiRender();
         m_SelectedEntity = m_HierarchyPanel.GetSelectedEntity();
         m_PropertiesPanel.OnImGuiRender(m_SelectedEntity);
+
+        // Rendering settings panel
+        {
+            auto& shadow = m_ActiveScene->GetShadowSettings();
+            ImGui::Begin("渲染设置");
+
+            ImGui::Checkbox("阴影", &shadow.Enabled);
+
+            const char* resolutionItems[] = {"512", "1024", "2048"};
+            int resolutionValues[] = {512, 1024, 2048};
+            int currentIdx = 1; // default 1024
+            for (int i = 0; i < 3; i++)
+            {
+                if (shadow.MapResolution == resolutionValues[i])
+                {
+                    currentIdx = i;
+                    break;
+                }
+            }
+            if (ImGui::Combo("阴影分辨率", &currentIdx, resolutionItems, 3))
+            {
+                m_ActiveScene->ResizeShadowMap(resolutionValues[currentIdx]);
+            }
+
+            ImGui::DragFloat("阴影偏移", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
+            ImGui::DragFloat("阴影范围", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
+
+            ImGui::End();
+        }
 
         // Viewport
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -339,18 +372,34 @@ namespace Engine
 
     void EditorLayer::OpenScene()
     {
-        std::string filepath = "assets/scenes/default.scene";
-        NewScene();
-        SceneSerializer serializer(m_ActiveScene);
+        std::string filepath = FileDialogs::OpenFile("*.scene", "场景文件");
+        if (filepath.empty())
+            return;
+
+        // Transactional load: deserialize into a temporary scene first
+        auto newScene = CreateRef<Scene>();
+        SceneSerializer serializer(newScene);
         if (!serializer.Deserialize(filepath))
         {
-            ENGINE_WARN("Failed to load scene from '{0}'", filepath);
+            ENGINE_WARN("Failed to load scene from '{0}', keeping current scene", filepath);
+            return;
         }
+
+        // Success — swap in the new scene
+        m_ActiveScene = newScene;
+        m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
+                                        static_cast<uint32_t>(m_ViewportSize.y));
+        m_HierarchyPanel.SetContext(m_ActiveScene);
+        m_SelectedEntity = {};
+        m_HoveredEntity = {};
     }
 
     void EditorLayer::SaveScene()
     {
-        std::string filepath = "assets/scenes/default.scene";
+        std::string filepath = FileDialogs::SaveFile("*.scene", "场景文件");
+        if (filepath.empty())
+            return;
+
         SceneSerializer serializer(m_ActiveScene);
         if (serializer.Serialize(filepath))
             ENGINE_INFO("Scene saved to '{0}'", filepath);

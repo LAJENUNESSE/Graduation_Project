@@ -3,17 +3,21 @@
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Renderer/Renderer.h"
+#include "Renderer/RenderCommand.h"
 #include "Renderer/Shader.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
+#include "Renderer/Framebuffer.h"
 #include "Renderer/EditorCamera.h"
+
+#include <glad/gl.h>
 
 namespace Engine
 {
 
     Scene::Scene()
     {
-        // Create default mesh shader (Phong lighting with multi-light support)
+        // Create default mesh shader (Phong lighting with shadow mapping)
         std::string vertexSrc = R"(
             #version 330 core
             layout(location = 0) in vec3 a_Position;
@@ -22,15 +26,18 @@ namespace Engine
 
             uniform mat4 u_ViewProjection;
             uniform mat4 u_Transform;
+            uniform mat4 u_LightSpaceMatrix;
 
             out vec3 v_Normal;
             out vec3 v_FragPos;
             out vec2 v_TexCoord;
+            out vec4 v_FragPosLightSpace;
 
             void main() {
                 v_Normal = mat3(transpose(inverse(u_Transform))) * a_Normal;
                 v_FragPos = vec3(u_Transform * vec4(a_Position, 1.0));
                 v_TexCoord = a_TexCoords;
+                v_FragPosLightSpace = u_LightSpaceMatrix * vec4(v_FragPos, 1.0);
                 gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);
             }
         )";
@@ -89,9 +96,37 @@ namespace Engine
             uniform PointLight u_PointLights[MAX_POINT_LIGHTS];
             uniform SpotLight  u_SpotLights[MAX_SPOT_LIGHTS];
 
+            // Shadow mapping
+            uniform sampler2D u_ShadowMap;
+            uniform int u_ShadowEnabled;
+            uniform float u_ShadowBias;
+
             in vec3 v_Normal;
             in vec3 v_FragPos;
             in vec2 v_TexCoord;
+            in vec4 v_FragPosLightSpace;
+
+            float CalcShadow(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
+            {
+                vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+                projCoords = projCoords * 0.5 + 0.5;
+                if (projCoords.z > 1.0) return 0.0;
+
+                // Slope-scaled bias: steep surfaces get up to 10x base bias
+                float slopeFactor = 1.0 - dot(normal, lightDir);
+                float bias = u_ShadowBias + u_ShadowBias * 10.0 * slopeFactor;
+
+                // 3x3 PCF
+                float shadow = 0.0;
+                vec2 texelSize = 1.0 / textureSize(u_ShadowMap, 0);
+                for (int x = -1; x <= 1; ++x)
+                    for (int y = -1; y <= 1; ++y)
+                    {
+                        float d = texture(u_ShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+                        shadow += (projCoords.z - bias > d) ? 1.0 : 0.0;
+                    }
+                return shadow / 9.0;
+            }
 
             vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, float shininess)
             {
@@ -156,9 +191,21 @@ namespace Engine
                 // Ambient (not pre-multiplied by color, applied once at the end)
                 vec3 ambient = vec3(u_AmbientStrength);
 
+                // Shadow calculation for first directional light
+                float shadow = 0.0;
+                if (u_ShadowEnabled != 0 && u_NumDirLights > 0)
+                {
+                    vec3 lightDir = normalize(-u_DirLights[0].direction);
+                    shadow = CalcShadow(v_FragPosLightSpace, norm, lightDir);
+                }
+
                 // Accumulate lighting from all sources
                 vec3 result = vec3(0.0);
-                for (int i = 0; i < u_NumDirLights; i++)
+                // First directional light with shadow
+                if (u_NumDirLights > 0)
+                    result += (1.0 - shadow) * CalcDirLight(u_DirLights[0], norm, viewDir, u_Shininess);
+                // Remaining directional lights without shadow
+                for (int i = 1; i < u_NumDirLights; i++)
                     result += CalcDirLight(u_DirLights[i], norm, viewDir, u_Shininess);
                 for (int i = 0; i < u_NumPointLights; i++)
                     result += CalcPointLight(u_PointLights[i], norm, v_FragPos, viewDir, u_Shininess);
@@ -176,6 +223,35 @@ namespace Engine
         m_WhiteTexture = Texture2D::Create(1, 1);
         uint32_t whiteData = 0xFFFFFFFF;
         m_WhiteTexture->SetData(&whiteData, sizeof(uint32_t));
+
+        // Depth shader for shadow map pass (minimal: only outputs gl_Position)
+        std::string depthVertSrc = R"(
+            #version 330 core
+            layout(location = 0) in vec3 a_Position;
+
+            uniform mat4 u_LightSpaceMatrix;
+            uniform mat4 u_Transform;
+
+            void main() {
+                gl_Position = u_LightSpaceMatrix * u_Transform * vec4(a_Position, 1.0);
+            }
+        )";
+
+        std::string depthFragSrc = R"(
+            #version 330 core
+            void main() {
+                // Depth is written automatically
+            }
+        )";
+
+        m_DepthShader = Shader::Create("DepthShader", depthVertSrc, depthFragSrc);
+
+        // Shadow Map FBO (depth-only, no color attachments)
+        FramebufferSpecification shadowSpec;
+        shadowSpec.Attachments = {FramebufferTextureFormat::DEPTH_COMPONENT};
+        shadowSpec.Width = m_ShadowSettings.MapResolution;
+        shadowSpec.Height = m_ShadowSettings.MapResolution;
+        m_ShadowMapFBO = Framebuffer::Create(shadowSpec);
     }
 
     Scene::~Scene()
@@ -210,9 +286,18 @@ namespace Engine
         m_MeshShader->SetFloat3("u_ViewPos", camera.GetPosition());
         m_MeshShader->SetFloat("u_AmbientStrength", 0.15f);
 
-        int numDirLights = 0;
         int numPointLights = 0;
         int numSpotLights = 0;
+
+        // Collect directional lights, ensuring CastShadows=true goes to index 0
+        struct DirLightInfo
+        {
+            glm::vec3 direction;
+            glm::vec3 color;
+            float intensity;
+            bool castShadows;
+        };
+        std::vector<DirLightInfo> dirLights;
 
         auto lightView = m_Registry.view<TransformComponent, LightComponent>();
         for (auto entity : lightView)
@@ -224,13 +309,8 @@ namespace Engine
             {
             case LightComponent::LightType::Directional:
             {
-                if (numDirLights >= 2)
-                    break;
-                std::string prefix = "u_DirLights[" + std::to_string(numDirLights) + "]";
-                m_MeshShader->SetFloat3(prefix + ".direction", forward);
-                m_MeshShader->SetFloat3(prefix + ".color", light.Color);
-                m_MeshShader->SetFloat(prefix + ".intensity", light.Intensity);
-                numDirLights++;
+                if (dirLights.size() < 2)
+                    dirLights.push_back({forward, light.Color, light.Intensity, light.CastShadows});
                 break;
             }
             case LightComponent::LightType::Point:
@@ -267,9 +347,33 @@ namespace Engine
             }
         }
 
+        // Sort directional lights: CastShadows=true first (stable for consistent ordering)
+        std::stable_sort(dirLights.begin(), dirLights.end(),
+                         [](const DirLightInfo& a, const DirLightInfo& b)
+                         { return a.castShadows > b.castShadows; });
+
+        // Upload directional lights
+        int numDirLights = static_cast<int>(dirLights.size());
+        for (int i = 0; i < numDirLights; i++)
+        {
+            std::string prefix = "u_DirLights[" + std::to_string(i) + "]";
+            m_MeshShader->SetFloat3(prefix + ".direction", dirLights[i].direction);
+            m_MeshShader->SetFloat3(prefix + ".color", dirLights[i].color);
+            m_MeshShader->SetFloat(prefix + ".intensity", dirLights[i].intensity);
+        }
+
         m_MeshShader->SetInt("u_NumDirLights", numDirLights);
         m_MeshShader->SetInt("u_NumPointLights", numPointLights);
         m_MeshShader->SetInt("u_NumSpotLights", numSpotLights);
+
+        // Shadow uniforms
+        m_MeshShader->SetMat4("u_LightSpaceMatrix", m_LightSpaceMatrix);
+        m_MeshShader->SetInt("u_ShadowEnabled", m_ShadowSettings.Enabled ? 1 : 0);
+        m_MeshShader->SetFloat("u_ShadowBias", m_ShadowSettings.Bias);
+        // Shadow map on texture unit 1 (unit 0 is diffuse texture)
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_ShadowMapFBO->GetDepthAttachmentRendererID());
+        m_MeshShader->SetInt("u_ShadowMap", 1);
 
         // Render meshes
         auto meshView = m_Registry.view<TransformComponent, MeshRendererComponent>();
@@ -302,6 +406,78 @@ namespace Engine
         }
 
         Renderer::EndScene();
+    }
+
+    void Scene::ShadowPass()
+    {
+        if (!m_ShadowSettings.Enabled)
+            return;
+
+        // Find the first CastShadows directional light
+        glm::vec3 lightDir{0.0f};
+        bool found = false;
+
+        auto lightView = m_Registry.view<TransformComponent, LightComponent>();
+        for (auto entity : lightView)
+        {
+            auto [transform, light] = lightView.get<TransformComponent, LightComponent>(entity);
+            if (light.Type == LightComponent::LightType::Directional && light.CastShadows)
+            {
+                lightDir = glm::normalize(glm::quat(transform.Rotation) * glm::vec3(0.0f, 0.0f, -1.0f));
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+            return;
+
+        // Compute light space matrix
+        float s = m_ShadowSettings.OrthoSize;
+        glm::mat4 lightProjection = glm::ortho(-s, s, -s, s, m_ShadowSettings.NearPlane, m_ShadowSettings.FarPlane);
+
+        // Position the light camera looking from far behind the scene center along the light direction
+        glm::vec3 lightPos = -lightDir * m_ShadowSettings.OrthoSize;
+        // Handle degenerate up vector when light is nearly vertical
+        glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.99f)
+                            ? glm::vec3(0.0f, 0.0f, 1.0f)
+                            : glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::mat4 lightViewMat = glm::lookAt(lightPos, lightPos + lightDir, up);
+
+        m_LightSpaceMatrix = lightProjection * lightViewMat;
+
+        // Render to shadow map
+        m_ShadowMapFBO->Bind();
+        RenderCommand::Clear();
+
+        // Front-face culling to reduce shadow acne
+        glCullFace(GL_FRONT);
+
+        m_DepthShader->Bind();
+        m_DepthShader->SetMat4("u_LightSpaceMatrix", m_LightSpaceMatrix);
+
+        auto meshView = m_Registry.view<TransformComponent, MeshRendererComponent>();
+        for (auto entity : meshView)
+        {
+            auto [transform, meshRenderer] = meshView.get<TransformComponent, MeshRendererComponent>(entity);
+            if (meshRenderer.MeshData)
+            {
+                m_DepthShader->SetMat4("u_Transform", transform.GetTransform());
+                meshRenderer.MeshData->GetVertexArray()->Bind();
+                RenderCommand::DrawIndexed(meshRenderer.MeshData->GetVertexArray());
+            }
+        }
+
+        // Restore back-face culling
+        glCullFace(GL_BACK);
+
+        m_ShadowMapFBO->Unbind();
+    }
+
+    void Scene::ResizeShadowMap(int resolution)
+    {
+        m_ShadowSettings.MapResolution = resolution;
+        m_ShadowMapFBO->Resize(resolution, resolution);
     }
 
     void Scene::OnViewportResize(uint32_t width, uint32_t height)

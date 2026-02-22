@@ -20,6 +20,7 @@ target_link_libraries(Engine PUBLIC
     yaml-cpp
     stb_image
     imguizmo
+    tinyfiledialogs
 )
 
 target_precompile_headers(Engine PRIVATE
