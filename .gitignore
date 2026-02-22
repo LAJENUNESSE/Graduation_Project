@@ -17,6 +17,9 @@ Thumbs.db
 # ImGui
 imgui.ini
 
+# Claude Code
+AGENTS.md
+
 # Compiled
 *.o
 *.a
