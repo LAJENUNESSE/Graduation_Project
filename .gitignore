@@ -19,6 +19,7 @@ imgui.ini
 
 # Claude Code
 AGENTS.md
+CLAUDE.md
 
 # Compiled
 *.o
