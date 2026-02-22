@@ -54,6 +54,14 @@ target_include_directories(entt INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/entt/single_include
 )
 
+# ── tinyfiledialogs ──────────────────────────────────────────────────────────
+add_library(tinyfiledialogs STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/tinyfiledialogs/tinyfiledialogs.c
+)
+target_include_directories(tinyfiledialogs PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/tinyfiledialogs
+)
+
 # ── ImGuizmo ──────────────────────────────────────────────────────────────────
 add_library(imguizmo STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/imguizmo/ImGuizmo.cpp

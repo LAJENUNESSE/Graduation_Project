@@ -19,6 +19,7 @@ namespace Engine
             switch (format)
             {
             case FramebufferTextureFormat::DEPTH24STENCIL8:
+            case FramebufferTextureFormat::DEPTH_COMPONENT:
                 return true;
             default:
                 return false;
@@ -78,7 +79,10 @@ namespace Engine
     {
         glDeleteFramebuffers(1, &m_RendererID);
         glDeleteTextures(static_cast<GLsizei>(m_ColorAttachments.size()), m_ColorAttachments.data());
-        glDeleteRenderbuffers(1, &m_DepthAttachment);
+        if (m_DepthIsTexture)
+            glDeleteTextures(1, &m_DepthAttachment);
+        else
+            glDeleteRenderbuffers(1, &m_DepthAttachment);
     }
 
     void OpenGLFramebuffer::Invalidate()
@@ -87,10 +91,14 @@ namespace Engine
         {
             glDeleteFramebuffers(1, &m_RendererID);
             glDeleteTextures(static_cast<GLsizei>(m_ColorAttachments.size()), m_ColorAttachments.data());
-            glDeleteRenderbuffers(1, &m_DepthAttachment);
+            if (m_DepthIsTexture)
+                glDeleteTextures(1, &m_DepthAttachment);
+            else
+                glDeleteRenderbuffers(1, &m_DepthAttachment);
 
             m_ColorAttachments.clear();
             m_DepthAttachment = 0;
+            m_DepthIsTexture = false;
         }
 
         glGenFramebuffers(1, &m_RendererID);
@@ -132,15 +140,31 @@ namespace Engine
             // Depth attachment
             if (m_DepthAttachmentSpecification.TextureFormat != FramebufferTextureFormat::None)
             {
-                glGenRenderbuffers(1, &m_DepthAttachment);
-                glBindRenderbuffer(GL_RENDERBUFFER, m_DepthAttachment);
-
                 switch (m_DepthAttachmentSpecification.TextureFormat)
                 {
                 case FramebufferTextureFormat::DEPTH24STENCIL8:
+                    glGenRenderbuffers(1, &m_DepthAttachment);
+                    glBindRenderbuffer(GL_RENDERBUFFER, m_DepthAttachment);
                     Utils::AttachDepthTexture(m_DepthAttachment, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT,
                                               m_Specification.Width, m_Specification.Height);
+                    m_DepthIsTexture = false;
                     break;
+                case FramebufferTextureFormat::DEPTH_COMPONENT:
+                {
+                    glGenTextures(1, &m_DepthAttachment);
+                    glBindTexture(GL_TEXTURE_2D, m_DepthAttachment);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, m_Specification.Width,
+                                 m_Specification.Height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+                    float borderColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
+                    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_DepthAttachment, 0);
+                    m_DepthIsTexture = true;
+                    break;
+                }
                 default:
                     break;
                 }

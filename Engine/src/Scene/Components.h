@@ -109,6 +109,9 @@ namespace Engine
         float InnerCutoff = glm::radians(12.5f);
         float OuterCutoff = glm::radians(17.5f);
 
+        // 阴影（仅方向光有效）
+        bool CastShadows = true;
+
         LightComponent() = default;
         LightComponent(const LightComponent&) = default;
     };

@@ -2,10 +2,13 @@
 #include "Scene/SceneCamera.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
+#include "Core/FileDialogs.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <glm/gtc/type_ptr.hpp>
+
+#include <filesystem>
 
 namespace Engine
 {
@@ -293,6 +296,12 @@ namespace Engine
             ImGui::ColorEdit3("颜色", glm::value_ptr(component.Color));
             ImGui::DragFloat("强度", &component.Intensity, 0.05f, 0.0f, 100.0f, "%.2f");
 
+            if (component.Type == LightComponent::LightType::Directional)
+            {
+                ImGui::Separator();
+                ImGui::Checkbox("投射阴影", &component.CastShadows);
+            }
+
             if (component.Type == LightComponent::LightType::Point ||
                 component.Type == LightComponent::LightType::Spot)
             {
@@ -355,6 +364,28 @@ namespace Engine
             if (ImGui::InputText("纹理路径", texPathBuf, sizeof(texPathBuf)))
             {
                 component.TexturePath = std::string(texPathBuf);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("浏览..."))
+            {
+                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "图片文件");
+                if (!absPath.empty())
+                {
+                    std::error_code ec;
+                    std::filesystem::path relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
+                    std::string relStr = ec ? absPath : relative.string();
+
+                    // Reject paths that escape project root (contain "..")
+                    if (relStr.find("..") != std::string::npos)
+                    {
+                        ENGINE_WARN("纹理必须位于项目目录内: {0}", relStr);
+                    }
+                    else
+                    {
+                        component.TexturePath = relStr;
+                        component.DiffuseTexture = Texture2D::Create(component.TexturePath);
+                    }
+                }
             }
 
             if (ImGui::Button("加载纹理"))
