@@ -163,6 +163,8 @@ namespace Engine
             if (mrc.MeshData)
                 meshType = mrc.MeshData->GetMeshType();
             out << YAML::Key << "MeshType" << YAML::Value << meshType;
+            if (meshType == "Model" && mrc.MeshData)
+                out << YAML::Key << "ModelPath" << YAML::Value << mrc.MeshData->GetModelPath();
             out << YAML::Key << "Color" << YAML::Value << mrc.Color;
             out << YAML::Key << "TexturePath" << YAML::Value << mrc.TexturePath;
             out << YAML::Key << "Tiling" << YAML::Value << mrc.Tiling;
@@ -263,7 +265,7 @@ namespace Engine
         return true;
     }
 
-    static Ref<Mesh> CreateMeshFromType(const std::string& meshType)
+    static Ref<Mesh> CreateMeshFromType(const std::string& meshType, const std::string& modelPath = "")
     {
         if (meshType == "Cube")
             return Mesh::CreateCube();
@@ -271,6 +273,13 @@ namespace Engine
             return Mesh::CreatePlane();
         if (meshType == "Sphere")
             return Mesh::CreateSphere();
+        if (meshType == "Model" && !modelPath.empty())
+        {
+            auto mesh = Mesh::CreateFromFile(modelPath);
+            if (mesh)
+                return mesh;
+            ENGINE_CORE_WARN("Failed to load model '{0}', falling back to Cube", modelPath);
+        }
         return Mesh::CreateCube();
     }
 
@@ -351,7 +360,22 @@ namespace Engine
                 {
                     auto& mrc = deserializedEntity.AddComponent<MeshRendererComponent>();
                     std::string meshType = meshRendererComponent["MeshType"].as<std::string>();
-                    mrc.MeshData = CreateMeshFromType(meshType);
+
+                    // Read model path for Model type
+                    std::string modelPath;
+                    if (meshType == "Model" && meshRendererComponent["ModelPath"])
+                    {
+                        modelPath = meshRendererComponent["ModelPath"].as<std::string>();
+                        // Security: reject absolute paths and directory traversal
+                        if (!modelPath.empty() && (modelPath[0] == '/' || modelPath.find("..") != std::string::npos))
+                        {
+                            ENGINE_CORE_WARN("Rejected unsafe model path: {0}", modelPath);
+                            modelPath.clear();
+                        }
+                    }
+
+                    mrc.MeshData = CreateMeshFromType(meshType, modelPath);
+                    mrc.ModelPath = modelPath;
                     mrc.Color = meshRendererComponent["Color"].as<glm::vec4>();
 
                     if (meshRendererComponent["TexturePath"])

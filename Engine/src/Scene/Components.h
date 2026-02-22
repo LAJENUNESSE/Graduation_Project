@@ -73,6 +73,8 @@ namespace Engine
         glm::vec2 Tiling = {1.0f, 1.0f};     // 纹理平铺
         float Shininess = 32.0f;              // 高光指数
 
+        std::string ModelPath;                // 模型文件相对路径（Model 类型时非空）
+
         MeshRendererComponent() = default;
         MeshRendererComponent(const MeshRendererComponent&) = default;
     };

@@ -345,12 +345,71 @@ namespace Engine
             if (ImGui::BeginCombo("网格", currentMeshLabel))
             {
                 if (ImGui::Selectable("Cube", component.MeshData && component.MeshData->GetMeshType() == "Cube"))
+                {
                     component.MeshData = Mesh::CreateCube();
+                    component.ModelPath.clear();
+                }
                 if (ImGui::Selectable("Plane", component.MeshData && component.MeshData->GetMeshType() == "Plane"))
+                {
                     component.MeshData = Mesh::CreatePlane();
+                    component.ModelPath.clear();
+                }
                 if (ImGui::Selectable("Sphere", component.MeshData && component.MeshData->GetMeshType() == "Sphere"))
+                {
                     component.MeshData = Mesh::CreateSphere();
+                    component.ModelPath.clear();
+                }
                 ImGui::EndCombo();
+            }
+
+            // Import model button
+            if (ImGui::Button("导入模型..."))
+            {
+                std::string absPath = FileDialogs::OpenFile("*.obj;*.fbx;*.gltf;*.glb", "3D模型文件");
+                if (!absPath.empty())
+                {
+                    std::error_code ec;
+                    std::filesystem::path relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
+                    std::string relStr = ec ? absPath : relative.string();
+
+                    if (relStr.find("..") != std::string::npos)
+                    {
+                        ENGINE_WARN("模型必须位于项目目录内: {0}", relStr);
+                    }
+                    else
+                    {
+                        auto mesh = Mesh::CreateFromFile(relStr);
+                        if (mesh)
+                        {
+                            component.MeshData = mesh;
+                            component.ModelPath = relStr;
+
+                            // Auto-detect: if model has submesh textures, clear the component-level texture
+                            // so per-submesh textures take effect
+                            bool hasSubMeshTex = false;
+                            for (const auto& sub : mesh->GetSubMeshes())
+                            {
+                                if (sub.DiffuseTexture)
+                                {
+                                    hasSubMeshTex = true;
+                                    break;
+                                }
+                            }
+                            if (hasSubMeshTex)
+                            {
+                                component.DiffuseTexture.reset();
+                                component.TexturePath.clear();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Show model path if loaded
+            if (component.MeshData && component.MeshData->GetMeshType() == "Model")
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(%s)", component.MeshData->GetModelPath().c_str());
             }
 
             ImGui::Separator();

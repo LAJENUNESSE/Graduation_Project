@@ -2,11 +2,17 @@
 #include "Renderer/Mesh.h"
 
 #include "Renderer/Buffer.h"
+#include "Core/Log.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
 #include <cmath>
+#include <filesystem>
 
 namespace Engine
 {
@@ -213,6 +219,143 @@ namespace Engine
         vertexArray->SetIndexBuffer(indexBuffer);
 
         return CreateRef<Mesh>(PrivateTag{}, vertexArray, static_cast<uint32_t>(indices.size()), "Sphere");
+    }
+
+    Ref<Mesh> Mesh::CreateFromFile(const std::string& filepath)
+    {
+        Assimp::Importer importer;
+
+        unsigned int flags = aiProcess_Triangulate
+                           | aiProcess_GenSmoothNormals
+                           | aiProcess_FlipUVs
+                           | aiProcess_JoinIdenticalVertices;
+
+        const aiScene* scene = importer.ReadFile(filepath, flags);
+
+        if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode)
+        {
+            ENGINE_CORE_ERROR("Assimp failed to load '{0}': {1}", filepath, importer.GetErrorString());
+            return nullptr;
+        }
+
+        std::filesystem::path modelDir = std::filesystem::path(filepath).parent_path();
+
+        std::vector<SubMesh> subMeshes;
+
+        for (unsigned int m = 0; m < scene->mNumMeshes; m++)
+        {
+            aiMesh* aiM = scene->mMeshes[m];
+
+            std::vector<float> vertices;
+            std::vector<uint32_t> indices;
+
+            vertices.reserve(aiM->mNumVertices * 8);
+
+            for (unsigned int v = 0; v < aiM->mNumVertices; v++)
+            {
+                // Position
+                vertices.push_back(aiM->mVertices[v].x);
+                vertices.push_back(aiM->mVertices[v].y);
+                vertices.push_back(aiM->mVertices[v].z);
+
+                // Normal
+                if (aiM->HasNormals())
+                {
+                    vertices.push_back(aiM->mNormals[v].x);
+                    vertices.push_back(aiM->mNormals[v].y);
+                    vertices.push_back(aiM->mNormals[v].z);
+                }
+                else
+                {
+                    vertices.push_back(0.0f);
+                    vertices.push_back(1.0f);
+                    vertices.push_back(0.0f);
+                }
+
+                // TexCoords (first UV channel)
+                if (aiM->mTextureCoords[0])
+                {
+                    vertices.push_back(aiM->mTextureCoords[0][v].x);
+                    vertices.push_back(aiM->mTextureCoords[0][v].y);
+                }
+                else
+                {
+                    vertices.push_back(0.0f);
+                    vertices.push_back(0.0f);
+                }
+            }
+
+            // Indices
+            for (unsigned int f = 0; f < aiM->mNumFaces; f++)
+            {
+                aiFace& face = aiM->mFaces[f];
+                for (unsigned int i = 0; i < face.mNumIndices; i++)
+                    indices.push_back(face.mIndices[i]);
+            }
+
+            if (indices.empty())
+                continue;
+
+            // Create GPU buffers
+            auto vertexArray = VertexArray::Create();
+
+            auto vertexBuffer = VertexBuffer::Create(
+                vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
+            vertexBuffer->SetLayout(GetMeshVertexLayout());
+            vertexArray->AddVertexBuffer(vertexBuffer);
+
+            auto indexBuffer = IndexBuffer::Create(
+                indices.data(), static_cast<uint32_t>(indices.size()));
+            vertexArray->SetIndexBuffer(indexBuffer);
+
+            SubMesh sub;
+            sub.VAO = vertexArray;
+            sub.IndexCount = static_cast<uint32_t>(indices.size());
+
+            // Extract diffuse texture from material
+            if (aiM->mMaterialIndex < scene->mNumMaterials)
+            {
+                aiMaterial* mat = scene->mMaterials[aiM->mMaterialIndex];
+                if (mat->GetTextureCount(aiTextureType_DIFFUSE) > 0)
+                {
+                    aiString texPath;
+                    mat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath);
+
+                    std::string texStr = texPath.C_Str();
+                    if (!texStr.empty())
+                    {
+                        // Resolve relative to model directory
+                        std::filesystem::path fullTexPath = modelDir / texStr;
+
+                        if (std::filesystem::exists(fullTexPath))
+                        {
+                            // Convert to path relative to working directory
+                            std::error_code ec;
+                            std::filesystem::path relPath = std::filesystem::relative(fullTexPath, std::filesystem::current_path(), ec);
+                            std::string relStr = ec ? fullTexPath.string() : relPath.string();
+
+                            // Safety: reject paths that escape project root
+                            if (relStr.find("..") == std::string::npos)
+                            {
+                                sub.DiffuseTexturePath = relStr;
+                                sub.DiffuseTexture = Texture2D::Create(relStr);
+                            }
+                        }
+                    }
+                }
+            }
+
+            subMeshes.push_back(std::move(sub));
+        }
+
+        if (subMeshes.empty())
+        {
+            ENGINE_CORE_ERROR("No valid meshes found in '{0}'", filepath);
+            return nullptr;
+        }
+
+        ENGINE_CORE_INFO("Loaded model '{0}': {1} submesh(es)", filepath, subMeshes.size());
+        return CreateRef<Mesh>(PrivateTag{}, std::move(subMeshes), "Model", filepath);
     }
 
 } // namespace Engine
