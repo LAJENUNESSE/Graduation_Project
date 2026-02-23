@@ -234,6 +234,18 @@ namespace Engine
             out << YAML::EndMap;
         }
 
+        // Skybox settings
+        {
+            const auto& skyboxPaths = m_Scene->GetSkyboxFacePaths();
+            if (!skyboxPaths.empty())
+            {
+                out << YAML::Key << "Skybox";
+                out << YAML::BeginMap;
+                out << YAML::Key << "Faces" << YAML::Value << YAML::Flow << skyboxPaths;
+                out << YAML::EndMap;
+            }
+        }
+
         out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
 
         // All entities have IDComponent, so iterate via view
@@ -324,6 +336,20 @@ namespace Engine
                 shadow.NearPlane = shadowNode["NearPlane"].as<float>();
             if (shadowNode["FarPlane"])
                 shadow.FarPlane = shadowNode["FarPlane"].as<float>();
+        }
+
+        // Deserialize skybox
+        auto skyboxNode = data["Skybox"];
+        if (skyboxNode && skyboxNode["Faces"])
+        {
+            auto facesNode = skyboxNode["Faces"];
+            if (facesNode.IsSequence() && facesNode.size() == 6)
+            {
+                std::vector<std::string> faces;
+                for (const auto& f : facesNode)
+                    faces.push_back(f.as<std::string>());
+                m_Scene->LoadSkybox(faces);
+            }
         }
 
         auto entities = data["Entities"];

@@ -85,4 +85,58 @@ namespace Engine
         glBindTexture(GL_TEXTURE_2D, m_RendererID);
     }
 
+    // ---- TextureCubemap ----
+
+    OpenGLTextureCubemap::OpenGLTextureCubemap(const std::vector<std::string>& facePaths)
+    {
+        glGenTextures(1, &m_RendererID);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
+
+        stbi_set_flip_vertically_on_load(0); // Cubemaps should NOT be flipped
+
+        for (int i = 0; i < 6; i++)
+        {
+            int width, height, channels;
+            stbi_uc* data = stbi_load(facePaths[i].c_str(), &width, &height, &channels, 4);
+            if (data)
+            {
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8,
+                             width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+                if (i == 0)
+                {
+                    m_Width = width;
+                    m_Height = height;
+                }
+                stbi_image_free(data);
+            }
+            else
+            {
+                ENGINE_CORE_ERROR("Cubemap face failed to load: {}", facePaths[i]);
+                // 1x1 magenta fallback for this face
+                uint32_t magenta = 0xFFFF00FF;
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8,
+                             1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &magenta);
+            }
+        }
+
+        stbi_set_flip_vertically_on_load(1); // Restore for Texture2D
+
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    }
+
+    OpenGLTextureCubemap::~OpenGLTextureCubemap()
+    {
+        glDeleteTextures(1, &m_RendererID);
+    }
+
+    void OpenGLTextureCubemap::Bind(uint32_t slot) const
+    {
+        glActiveTexture(GL_TEXTURE0 + slot);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
+    }
+
 } // namespace Engine
