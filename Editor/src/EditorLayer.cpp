@@ -129,6 +129,19 @@ namespace Engine
             m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
             m_HDRFramebuffer->Unbind();
 
+            // If MSAA enabled: re-render to MSAA FBO for anti-aliased color, then blit
+            if (m_HDRFramebuffer->IsMSAAEnabled())
+            {
+                m_HDRFramebuffer->BindMSAA();
+                RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
+                RenderCommand::Clear();
+
+                m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+
+                // Resolve MSAA color to HDR FBO attachment 0 (entity IDs in attachment 1 preserved)
+                m_HDRFramebuffer->BlitMSAA();
+            }
+
             // Post-processing: HDR → Tone Mapping + Bloom → LDR output to main FBO
             m_Framebuffer->Bind();
             RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 1.0f});
@@ -249,7 +262,7 @@ namespace Engine
                 const char* msaaItems[] = {"关闭", "2x", "4x"};
                 int msaaValues[] = {1, 2, 4};
                 int currentMsaaIdx = 0;
-                uint32_t currentSamples = m_Framebuffer->GetSpecification().Samples;
+                uint32_t currentSamples = m_HDRFramebuffer->GetSpecification().Samples;
                 for (int i = 0; i < 3; i++)
                 {
                     if (currentSamples == static_cast<uint32_t>(msaaValues[i]))
@@ -260,9 +273,9 @@ namespace Engine
                 }
                 if (ImGui::Combo("MSAA", &currentMsaaIdx, msaaItems, 3))
                 {
-                    FramebufferSpecification spec = m_Framebuffer->GetSpecification();
+                    FramebufferSpecification spec = m_HDRFramebuffer->GetSpecification();
                     spec.Samples = msaaValues[currentMsaaIdx];
-                    m_Framebuffer = Framebuffer::Create(spec);
+                    m_HDRFramebuffer = Framebuffer::Create(spec);
                 }
             }
 
