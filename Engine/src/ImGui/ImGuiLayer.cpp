@@ -26,7 +26,9 @@ namespace Engine
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        // Note: ViewportsEnable disabled — it causes glfwSwapBuffers in ImGuiLayer::End()
+        // which adds ~14ms vsync stall to the ImGui CPU timing, distorting perf data.
+        // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
         // 加载中文字体
         ImFont* font = io.Fonts->AddFontFromFileTTF("Editor/assets/fonts/NotoSansSC-Regular.ttf", 18.0f, nullptr,

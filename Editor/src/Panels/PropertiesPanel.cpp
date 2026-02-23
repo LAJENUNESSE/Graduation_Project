@@ -14,7 +14,7 @@ namespace Engine
 {
 
     template <typename T, typename UIFunction>
-    void PropertiesPanel::DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction)
+    void PropertiesPanel::DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction, bool removable)
     {
         const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
                                                  ImGuiTreeNodeFlags_SpanAvailWidth |
@@ -33,18 +33,21 @@ namespace Engine
                                       name.c_str());
         ImGui::PopStyleVar();
 
-        ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
-        if (ImGui::Button("+", ImVec2{lineHeight, lineHeight}))
-        {
-            ImGui::OpenPopup("ComponentSettings");
-        }
-
         bool removeComponent = false;
-        if (ImGui::BeginPopup("ComponentSettings"))
+        if (removable)
         {
-            if (ImGui::MenuItem("Remove Component"))
-                removeComponent = true;
-            ImGui::EndPopup();
+            ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
+            if (ImGui::Button("+", ImVec2{lineHeight, lineHeight}))
+            {
+                ImGui::OpenPopup("ComponentSettings");
+            }
+
+            if (ImGui::BeginPopup("ComponentSettings"))
+            {
+                if (ImGui::MenuItem("Remove Component"))
+                    removeComponent = true;
+                ImGui::EndPopup();
+            }
         }
 
         if (open)
@@ -200,7 +203,7 @@ namespace Engine
             DrawVec3Control("旋转", rotation);
             component.Rotation = glm::radians(rotation);
             DrawVec3Control("缩放", component.Scale, 1.0f);
-        });
+        }, false);
 
         // Camera
         DrawComponent<CameraComponent>("相机", entity, [](auto& component)

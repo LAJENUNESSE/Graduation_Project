@@ -32,3 +32,9 @@ CLAUDE.md
 *.doc
 *.docx
 *.png
+
+#photo
+pic/
+
+# Performance logs
+logs/

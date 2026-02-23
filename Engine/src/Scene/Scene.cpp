@@ -9,6 +9,7 @@
 #include "Renderer/Texture.h"
 #include "Renderer/Framebuffer.h"
 #include "Renderer/EditorCamera.h"
+#include "Debug/PerformanceMonitor.h"
 
 #include <glad/gl.h>
 
@@ -279,6 +280,8 @@ namespace Engine
 
     void Scene::OnUpdateEditor(Timestep ts, EditorCamera& camera)
     {
+        PerformanceMonitor::Get().GetSceneRenderGPUTimer().Begin();
+
         Renderer::BeginScene(camera.GetViewProjection());
 
         // Collect and upload lights
@@ -366,9 +369,10 @@ namespace Engine
         m_MeshShader->SetInt("u_NumPointLights", numPointLights);
         m_MeshShader->SetInt("u_NumSpotLights", numSpotLights);
 
-        // Shadow uniforms
+        // Shadow uniforms — only enable sampling when a valid shadow caster produced this frame's map
         m_MeshShader->SetMat4("u_LightSpaceMatrix", m_LightSpaceMatrix);
-        m_MeshShader->SetInt("u_ShadowEnabled", m_ShadowSettings.Enabled ? 1 : 0);
+        bool shadowActive = m_ShadowSettings.Enabled && m_HasValidShadowCaster;
+        m_MeshShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
         m_MeshShader->SetFloat("u_ShadowBias", m_ShadowSettings.Bias);
         // Shadow map on texture unit 1 (unit 0 is diffuse texture)
         glActiveTexture(GL_TEXTURE1);
@@ -410,12 +414,22 @@ namespace Engine
         }
 
         Renderer::EndScene();
+
+        PerformanceMonitor::Get().GetSceneRenderGPUTimer().End();
     }
 
     void Scene::ShadowPass()
     {
         if (!m_ShadowSettings.Enabled)
+        {
+            // Still need to cycle the GPU timer to avoid stale state
+            PerformanceMonitor::Get().GetShadowPassGPUTimer().Begin();
+            PerformanceMonitor::Get().GetShadowPassGPUTimer().End();
+            m_HasValidShadowCaster = false;
             return;
+        }
+
+        PerformanceMonitor::Get().GetShadowPassGPUTimer().Begin();
 
         // Find the first CastShadows directional light
         glm::vec3 lightDir{0.0f};
@@ -434,7 +448,13 @@ namespace Engine
         }
 
         if (!found)
+        {
+            PerformanceMonitor::Get().GetShadowPassGPUTimer().End();
+            m_HasValidShadowCaster = false;
             return;
+        }
+
+        m_HasValidShadowCaster = true;
 
         // Compute light space matrix
         float s = m_ShadowSettings.OrthoSize;
@@ -479,6 +499,8 @@ namespace Engine
         glCullFace(GL_BACK);
 
         m_ShadowMapFBO->Unbind();
+
+        PerformanceMonitor::Get().GetShadowPassGPUTimer().End();
     }
 
     void Scene::ResizeShadowMap(int resolution)

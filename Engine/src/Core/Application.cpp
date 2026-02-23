@@ -5,6 +5,8 @@
 #include "Events/ApplicationEvent.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Renderer/Renderer.h"
+#include "Debug/PerformanceMonitor.h"
+#include "Debug/ProfileTimer.h"
 
 #include <GLFW/glfw3.h>
 
@@ -30,6 +32,7 @@ namespace Engine
         m_Window->SetEventCallback([this](Event& e) { OnEvent(e); });
 
         Renderer::Init();
+        PerformanceMonitor::Get().Init();
 
         m_ImGuiLayer = new ImGuiLayer();
         PushOverlay(m_ImGuiLayer);
@@ -37,6 +40,7 @@ namespace Engine
 
     Application::~Application()
     {
+        PerformanceMonitor::Get().Shutdown();
         Renderer::Shutdown();
     }
 
@@ -93,7 +97,10 @@ namespace Engine
         {
             float time = static_cast<float>(glfwGetTime());
             Timestep timestep = time - m_LastFrameTime;
+            float frameTimeMs = timestep * 1000.0f;
             m_LastFrameTime = time;
+
+            PerformanceMonitor::Get().BeginFrame(time, frameTimeMs);
 
             if (!m_Minimized)
             {
@@ -102,13 +109,20 @@ namespace Engine
                     layer->OnUpdate(timestep);
                 }
 
+                float imguiCpuMs = 0.0f;
                 m_ImGuiLayer->Begin();
-                for (Layer* layer : m_LayerStack)
                 {
-                    layer->OnImGuiRender();
+                    PROFILE_SCOPE("ImGui", &imguiCpuMs);
+                    for (Layer* layer : m_LayerStack)
+                    {
+                        layer->OnImGuiRender();
+                    }
                 }
+                PerformanceMonitor::Get().SetImGuiCPU(imguiCpuMs);
                 m_ImGuiLayer->End();
             }
+
+            PerformanceMonitor::Get().EndFrame();
 
             m_Window->OnUpdate();
         }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Renderer/RendererAPI.h"
+#include "Debug/PerformanceMonitor.h"
 
 namespace Engine
 {
@@ -31,6 +32,13 @@ namespace Engine
         static void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0)
         {
             s_RendererAPI->DrawIndexed(vertexArray, indexCount);
+
+            // Performance stats tracking
+            uint32_t count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
+            auto& stats = PerformanceMonitor::Get().GetStats();
+            stats.DrawCalls++;
+            stats.Vertices += count;
+            stats.Triangles += count / 3;
         }
 
     private:

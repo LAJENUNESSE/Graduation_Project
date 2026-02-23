@@ -35,3 +35,8 @@
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
 #include "Scene/SceneSerializer.h"
+
+// Debug / Performance
+#include "Debug/ProfileTimer.h"
+#include "Debug/GPUTimerQuery.h"
+#include "Debug/PerformanceMonitor.h"
