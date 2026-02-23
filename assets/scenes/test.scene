@@ -9,22 +9,23 @@ ShadowSettings:
 Skybox:
   Faces: [/home/liu/Graduation_Project/assets/textures/skybox/right.jpg, /home/liu/Graduation_Project/assets/textures/skybox/left.jpg, /home/liu/Graduation_Project/assets/textures/skybox/top.jpg, /home/liu/Graduation_Project/assets/textures/skybox/bottom.jpg, /home/liu/Graduation_Project/assets/textures/skybox/front.jpg, /home/liu/Graduation_Project/assets/textures/skybox/back.jpg]
 Entities:
-  - Entity: 6023771213501241446
+  - Entity: 6011378084646293149
     TagComponent:
-      Tag: Cube
+      Tag: 空实体
     TransformComponent:
-      Translation: [0.42562288, 4.8911247, 4.0888963]
+      Translation: [0, 1.0355301, 0]
       Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
+      Scale: [6.1182, 6.1182, 6.1182]
     MeshRendererComponent:
-      MeshType: Cube
+      MeshType: Model
+      ModelPath: assets/models/spot/spot_triangulated.obj
       Color: [1, 1, 1, 1]
-      TexturePath: assets/textures/CD001.jpg
+      TexturePath: ""
       Tiling: [1, 1]
       Shininess: 32
       NormalMapPath: ""
       Metallic: 0
-      Roughness: 1
+      Roughness: 0.5
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
@@ -45,23 +46,22 @@ Entities:
       InnerCutoff: 0.21816616
       OuterCutoff: 0.30543262
       CastShadows: true
-  - Entity: 6011378084646293149
+  - Entity: 6023771213501241446
     TagComponent:
-      Tag: 空实体
+      Tag: Cube
     TransformComponent:
-      Translation: [0, 1.0355301, 0]
+      Translation: [0.42562288, 4.8911247, 4.0888963]
       Rotation: [0, 0, 0]
-      Scale: [6.1182, 6.1182, 6.1182]
+      Scale: [1, 1, 1]
     MeshRendererComponent:
-      MeshType: Model
-      ModelPath: assets/models/spot/spot_triangulated.obj
+      MeshType: Cube
       Color: [1, 1, 1, 1]
-      TexturePath: ""
+      TexturePath: assets/textures/CD001.jpg
       Tiling: [1, 1]
       Shininess: 32
       NormalMapPath: ""
       Metallic: 0
-      Roughness: 0.5
+      Roughness: 1
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
