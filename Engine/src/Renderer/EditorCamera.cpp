@@ -59,9 +59,9 @@ namespace Engine
         return speed;
     }
 
-    void EditorCamera::OnUpdate(Timestep ts)
+    void EditorCamera::OnUpdate(Timestep ts, bool allowInput)
     {
-        if (Input::IsKeyPressed(KeyCode::LeftAlt))
+        if (allowInput && Input::IsKeyPressed(KeyCode::LeftAlt))
         {
             glm::vec2 mouse = Input::GetMousePosition();
             glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;

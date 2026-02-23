@@ -2,41 +2,11 @@ Scene: Untitled
 ShadowSettings:
   Enabled: true
   MapResolution: 2048
-  Bias: 0
+  Bias: 0.005
   OrthoSize: 5
   NearPlane: 0.1
   FarPlane: 50
 Entities:
-  - Entity: 4673658506239221672
-    TagComponent:
-      Tag: 方向光
-    TransformComponent:
-      Translation: [-0.4514893, 1.7709053, -1.0791177]
-      Rotation: [-1.3898057, -0.8192575, -0.5386086]
-      Scale: [-2.8, 0.99999994, 0.99999964]
-    LightComponent:
-      Type: 0
-      Color: [1, 1, 1]
-      Intensity: 2.05
-      Constant: 1
-      Linear: 0.09
-      Quadratic: 0.032
-      InnerCutoff: 0.34906584
-      OuterCutoff: 1.2077677
-      CastShadows: true
-  - Entity: 11568292089209508630
-    TagComponent:
-      Tag: Cube
-    TransformComponent:
-      Translation: [-0.46603388, 0, -0.810003]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [1, 1, 0.9882353, 1]
-      TexturePath: assets/textures/CD001.jpg
-      Tiling: [1, 1]
-      Shininess: 32
   - Entity: 10580137286682331230
     TagComponent:
       Tag: 空实体
@@ -50,3 +20,33 @@ Entities:
       TexturePath: ""
       Tiling: [1, 1]
       Shininess: 32
+  - Entity: 11568292089209508630
+    TagComponent:
+      Tag: Cube
+    TransformComponent:
+      Translation: [-0.46603388, 0, -0.810003]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [1, 1, 0.9882353, 1]
+      TexturePath: assets/textures/CD001.jpg
+      Tiling: [1, 1]
+      Shininess: 32
+  - Entity: 4673658506239221672
+    TagComponent:
+      Tag: 方向光
+    TransformComponent:
+      Translation: [-0.4514893, 1.7709053, -1.0791177]
+      Rotation: [-1.3898057, -0.8192575, -0.5386086]
+      Scale: [-2.8, 0.99999994, 0.99999964]
+    LightComponent:
+      Type: 0
+      Color: [1, 1, 1]
+      Intensity: 0.85
+      Constant: 1
+      Linear: 0.09
+      Quadratic: 0.032
+      InnerCutoff: 0.34906584
+      OuterCutoff: 1.2077677
+      CastShadows: true

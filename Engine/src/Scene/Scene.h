@@ -69,6 +69,7 @@ namespace Engine
         Ref<Framebuffer> m_ShadowMapFBO;
         ShadowSettings m_ShadowSettings;
         glm::mat4 m_LightSpaceMatrix{1.0f};
+        bool m_HasValidShadowCaster = false;
 
         friend class Entity;
     };

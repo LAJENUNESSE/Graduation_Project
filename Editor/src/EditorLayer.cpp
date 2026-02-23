@@ -8,6 +8,8 @@
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Mesh.h"
+#include "Debug/PerformanceMonitor.h"
+#include "Debug/ProfileTimer.h"
 
 #include <imgui.h>
 #include <ImGuizmo.h>
@@ -86,23 +88,33 @@ namespace Engine
             }
         }
 
-        m_EditorCamera.OnUpdate(ts);
+        m_EditorCamera.OnUpdate(ts, m_ViewportHovered);
 
-        // Shadow pass (renders to its own FBO)
-        m_ActiveScene->ShadowPass();
+        // Shadow pass (renders to its own FBO) — CPU profiled
+        float shadowCpuMs = 0.0f;
+        {
+            PROFILE_SCOPE("ShadowPass", &shadowCpuMs);
+            m_ActiveScene->ShadowPass();
+        }
+        PerformanceMonitor::Get().SetShadowPassCPU(shadowCpuMs);
 
-        // Render
-        m_Framebuffer->Bind();
-        RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
-        RenderCommand::Clear();
+        // Render — CPU profiled
+        float sceneRenderCpuMs = 0.0f;
+        {
+            PROFILE_SCOPE("SceneRender", &sceneRenderCpuMs);
+            m_Framebuffer->Bind();
+            RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
+            RenderCommand::Clear();
 
-        // Clear entity ID attachment to -1 (no entity)
-        m_Framebuffer->ClearAttachment(1, -1);
+            // Clear entity ID attachment to -1 (no entity)
+            m_Framebuffer->ClearAttachment(1, -1);
 
-        // Scene rendering
-        m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+            // Scene rendering
+            m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
 
-        m_Framebuffer->Unbind();
+            m_Framebuffer->Unbind();
+        }
+        PerformanceMonitor::Get().SetSceneRenderCPU(sceneRenderCpuMs);
     }
 
     void EditorLayer::OnImGuiRender()
@@ -149,6 +161,11 @@ namespace Engine
                     Application::Get().Close();
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("\xe8\xa7\x86\xe5\x9b\xbe"))
+            {
+                ImGui::MenuItem("\xe6\x80\xa7\xe8\x83\xbd\xe7\x9b\x91\xe6\x8e\xa7", nullptr, &m_ShowStatsPanel);
+                ImGui::EndMenu();
+            }
             ImGui::EndMenuBar();
         }
 
@@ -182,6 +199,44 @@ namespace Engine
 
             ImGui::DragFloat("阴影偏移", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
             ImGui::DragFloat("阴影范围", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
+
+            ImGui::End();
+        }
+
+        // Performance monitoring panel
+        if (m_ShowStatsPanel)
+        {
+            auto& pm = PerformanceMonitor::Get();
+
+            ImGui::Begin("\xe6\x80\xa7\xe8\x83\xbd\xe7\x9b\x91\xe6\x8e\xa7", &m_ShowStatsPanel);
+
+            ImGui::Text("FPS: %.1f", pm.GetFPS());
+            ImGui::Text("\xe5\xb8\xa7\xe6\x97\xb6\xe9\x97\xb4: %.2f ms", pm.GetFrameTimeMs());
+
+            ImGui::Separator();
+            ImGui::Text("CPU \xe8\x80\x97\xe6\x97\xb6:");
+            ImGui::Text("  \xe9\x98\xb4\xe5\xbd\xb1Pass:  %.3f ms", pm.GetShadowPassCpuMs());
+            ImGui::Text("  \xe5\x9c\xba\xe6\x99\xaf\xe6\xb8\xb2\xe6\x9f\x93:  %.3f ms", pm.GetSceneRenderCpuMs());
+            ImGui::Text("  ImGui:     %.3f ms", pm.GetImGuiCpuMs());
+
+            ImGui::Separator();
+            ImGui::Text("GPU \xe8\x80\x97\xe6\x97\xb6 (\xe4\xb8\x8a\xe4\xb8\x80\xe5\xb8\xa7):");
+            ImGui::Text("  \xe9\x98\xb4\xe5\xbd\xb1Pass:  %.3f ms", pm.GetShadowPassGpuMs());
+            ImGui::Text("  \xe5\x9c\xba\xe6\x99\xaf\xe6\xb8\xb2\xe6\x9f\x93:  %.3f ms", pm.GetSceneRenderGpuMs());
+
+            ImGui::Separator();
+            const auto& stats = pm.GetStats();
+            ImGui::Text("\xe6\xb8\xb2\xe6\x9f\x93\xe7\xbb\x9f\xe8\xae\xa1:");
+            ImGui::Text("  Draw Calls: %u", stats.DrawCalls);
+            ImGui::Text("  \xe9\xa1\xb6\xe7\x82\xb9\xe6\x95\xb0: %u", stats.Vertices);
+            ImGui::Text("  \xe4\xb8\x89\xe8\xa7\x92\xe5\xbd\xa2: %u", stats.Triangles);
+
+            ImGui::Separator();
+            ImGui::Text("\xe5\xb8\xa7\xe6\x97\xb6\xe9\x97\xb4\xe5\x8e\x86\xe5\x8f\xb2:");
+            ImGui::PlotLines("##FrameTime", pm.GetFrameTimeHistory(),
+                             PerformanceMonitor::FrameHistorySize,
+                             pm.GetFrameTimeHistoryOffset(),
+                             nullptr, 0.0f, 33.3f, ImVec2(0, 80));
 
             ImGui::End();
         }
