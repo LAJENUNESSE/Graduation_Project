@@ -8,6 +8,8 @@
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
 #include "Renderer/Framebuffer.h"
+#include "Renderer/VertexArray.h"
+#include "Renderer/Buffer.h"
 #include "Renderer/EditorCamera.h"
 #include "Debug/PerformanceMonitor.h"
 
@@ -253,6 +255,62 @@ namespace Engine
         shadowSpec.Width = m_ShadowSettings.MapResolution;
         shadowSpec.Height = m_ShadowSettings.MapResolution;
         m_ShadowMapFBO = Framebuffer::Create(shadowSpec);
+
+        // Skybox shader
+        std::string skyboxVertSrc = R"(
+            #version 330 core
+            layout(location = 0) in vec3 a_Position;
+
+            uniform mat4 u_ViewProjection;
+
+            out vec3 v_TexCoords;
+
+            void main() {
+                v_TexCoords = a_Position;
+                vec4 pos = u_ViewProjection * vec4(a_Position, 1.0);
+                gl_Position = pos.xyww;
+            }
+        )";
+
+        std::string skyboxFragSrc = R"(
+            #version 330 core
+            layout(location = 0) out vec4 o_Color;
+            layout(location = 1) out int o_EntityID;
+
+            in vec3 v_TexCoords;
+            uniform samplerCube u_Skybox;
+
+            void main() {
+                o_Color = texture(u_Skybox, v_TexCoords);
+                o_EntityID = -1;
+            }
+        )";
+
+        m_SkyboxShader = Shader::Create("SkyboxShader", skyboxVertSrc, skyboxFragSrc);
+
+        // Skybox cube VAO (36 vertices, positions only)
+        float skyboxVertices[] = {
+            -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+             1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+            -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f,
+        };
+
+        auto skyboxVB = VertexBuffer::Create(skyboxVertices, sizeof(skyboxVertices));
+        skyboxVB->SetLayout({{ShaderDataType::Float3, "a_Position"}});
+
+        m_SkyboxVAO = VertexArray::Create();
+        m_SkyboxVAO->AddVertexBuffer(skyboxVB);
+
+        // No index buffer — 36 vertices drawn as GL_TRIANGLES via glDrawArrays
     }
 
     Scene::~Scene()
@@ -413,6 +471,24 @@ namespace Engine
             }
         }
 
+        // Skybox — render last with depth trick (z = 1.0, GL_LEQUAL)
+        if (m_SkyboxTexture)
+        {
+            glDepthFunc(GL_LEQUAL);
+
+            m_SkyboxShader->Bind();
+            // Strip translation from view matrix so skybox doesn't move with camera
+            glm::mat4 viewNoTranslation = glm::mat4(glm::mat3(camera.GetViewMatrix()));
+            m_SkyboxShader->SetMat4("u_ViewProjection", camera.GetProjection() * viewNoTranslation);
+            m_SkyboxShader->SetInt("u_Skybox", 0);
+            m_SkyboxTexture->Bind(0);
+
+            m_SkyboxVAO->Bind();
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+
+            glDepthFunc(GL_LESS);
+        }
+
         Renderer::EndScene();
 
         PerformanceMonitor::Get().GetSceneRenderGPUTimer().End();
@@ -524,6 +600,23 @@ namespace Engine
                 cameraComponent.Camera.SetViewportSize(width, height);
             }
         }
+    }
+
+    void Scene::LoadSkybox(const std::vector<std::string>& facePaths)
+    {
+        if (facePaths.size() != 6)
+        {
+            ENGINE_CORE_ERROR("Skybox requires exactly 6 face paths");
+            return;
+        }
+        m_SkyboxFacePaths = facePaths;
+        m_SkyboxTexture = TextureCubemap::Create(facePaths);
+    }
+
+    void Scene::ClearSkybox()
+    {
+        m_SkyboxTexture.reset();
+        m_SkyboxFacePaths.clear();
     }
 
 } // namespace Engine

@@ -16,6 +16,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <filesystem>
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
@@ -199,6 +201,56 @@ namespace Engine
 
             ImGui::DragFloat("阴影偏移", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
             ImGui::DragFloat("阴影范围", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
+
+            ImGui::Separator();
+            ImGui::Text("\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92");
+
+            if (m_ActiveScene->HasSkybox())
+            {
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "\xe5\xb7\xb2\xe5\x8a\xa0\xe8\xbd\xbd");
+                if (ImGui::Button("\xe6\xb8\x85\xe9\x99\xa4\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92"))
+                    m_ActiveScene->ClearSkybox();
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "\xe6\x9c\xaa\xe5\x8a\xa0\xe8\xbd\xbd");
+            }
+
+            if (ImGui::Button("\xe5\x8a\xa0\xe8\xbd\xbd\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92..."))
+            {
+                std::string dir = FileDialogs::OpenFile("*.jpg *.png *.tga", "\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92\xe6\x96\x87\xe4\xbb\xb6\xe5\xa4\xb9\xe4\xb8\xad\xe4\xbb\xbb\xe6\x84\x8f\xe4\xb8\x80\xe5\xbc\xa0\xe5\x9b\xbe");
+                if (!dir.empty())
+                {
+                    // Derive folder and try standard naming: right/left/top/bottom/front/back
+                    std::filesystem::path p(dir);
+                    std::filesystem::path folder = p.parent_path();
+                    std::string ext = p.extension().string();
+
+                    std::vector<std::string> suffixes = {"right", "left", "top", "bottom", "front", "back"};
+                    std::vector<std::string> faces;
+                    bool allFound = true;
+                    for (const auto& s : suffixes)
+                    {
+                        std::filesystem::path facePath = folder / (s + ext);
+                        if (std::filesystem::exists(facePath))
+                            faces.push_back(facePath.string());
+                        else
+                        {
+                            allFound = false;
+                            break;
+                        }
+                    }
+
+                    if (allFound)
+                        m_ActiveScene->LoadSkybox(faces);
+                    else
+                        ENGINE_WARN("Skybox needs: right/left/top/bottom/front/back{}", ext);
+                }
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(?)");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("right/left/top/bottom/front/back + .jpg/.png");
 
             ImGui::End();
         }

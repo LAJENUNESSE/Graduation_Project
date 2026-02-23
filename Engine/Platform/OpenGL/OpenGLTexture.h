@@ -37,4 +37,28 @@ namespace Engine
         unsigned int m_DataFormat;
     };
 
+    class OpenGLTextureCubemap : public TextureCubemap
+    {
+    public:
+        OpenGLTextureCubemap(const std::vector<std::string>& facePaths);
+        ~OpenGLTextureCubemap() override;
+
+        uint32_t GetWidth() const override { return m_Width; }
+        uint32_t GetHeight() const override { return m_Height; }
+        uint32_t GetRendererID() const override { return m_RendererID; }
+
+        void SetData(void* data, uint32_t size) override {}
+        void Bind(uint32_t slot = 0) const override;
+
+        bool operator==(const Texture& other) const override
+        {
+            return m_RendererID == static_cast<const OpenGLTextureCubemap&>(other).m_RendererID;
+        }
+
+    private:
+        uint32_t m_Width = 0;
+        uint32_t m_Height = 0;
+        uint32_t m_RendererID = 0;
+    };
+
 } // namespace Engine

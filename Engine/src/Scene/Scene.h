@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -17,6 +18,7 @@ namespace Engine
     class EditorCamera;
     class Shader;
     class Framebuffer;
+    class VertexArray;
 
     struct ShadowSettings
     {
@@ -46,6 +48,12 @@ namespace Engine
         ShadowSettings& GetShadowSettings() { return m_ShadowSettings; }
         void ResizeShadowMap(int resolution);
 
+        // Skybox
+        void LoadSkybox(const std::vector<std::string>& facePaths);
+        void ClearSkybox();
+        bool HasSkybox() const { return m_SkyboxTexture != nullptr; }
+        const std::vector<std::string>& GetSkyboxFacePaths() const { return m_SkyboxFacePaths; }
+
         template <typename... Components>
         auto GetAllEntitiesWith()
         {
@@ -70,6 +78,12 @@ namespace Engine
         ShadowSettings m_ShadowSettings;
         glm::mat4 m_LightSpaceMatrix{1.0f};
         bool m_HasValidShadowCaster = false;
+
+        // Skybox
+        Ref<Shader> m_SkyboxShader;
+        Ref<VertexArray> m_SkyboxVAO;
+        Ref<TextureCubemap> m_SkyboxTexture;
+        std::vector<std::string> m_SkyboxFacePaths;
 
         friend class Entity;
     };

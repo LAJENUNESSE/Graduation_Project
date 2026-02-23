@@ -31,4 +31,11 @@ namespace Engine
         static Ref<Texture2D> Create(const std::string& path);
     };
 
+    class TextureCubemap : public Texture
+    {
+    public:
+        // faces order: +X, -X, +Y, -Y, +Z, -Z
+        static Ref<TextureCubemap> Create(const std::vector<std::string>& facePaths);
+    };
+
 } // namespace Engine

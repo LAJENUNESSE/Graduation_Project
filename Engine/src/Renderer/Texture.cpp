@@ -16,4 +16,9 @@ namespace Engine
         return CreateRef<OpenGLTexture2D>(path);
     }
 
+    Ref<TextureCubemap> TextureCubemap::Create(const std::vector<std::string>& facePaths)
+    {
+        return CreateRef<OpenGLTextureCubemap>(facePaths);
+    }
+
 } // namespace Engine
