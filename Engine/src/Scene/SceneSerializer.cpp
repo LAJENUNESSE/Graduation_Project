@@ -217,10 +217,47 @@ namespace Engine
             out << YAML::EndMap;
         }
 
+        // RigidBodyComponent
+        if (entity.HasComponent<RigidBodyComponent>())
+        {
+            out << YAML::Key << "RigidBodyComponent";
+            out << YAML::BeginMap;
+            auto& rb = entity.GetComponent<RigidBodyComponent>();
+            out << YAML::Key << "Type" << YAML::Value << static_cast<int>(rb.Type);
+            out << YAML::Key << "Mass" << YAML::Value << rb.Mass;
+            out << YAML::Key << "Restitution" << YAML::Value << rb.Restitution;
+            out << YAML::Key << "Friction" << YAML::Value << rb.Friction;
+            out << YAML::Key << "GravityScale" << YAML::Value << rb.GravityScale;
+            out << YAML::Key << "FixedRotation" << YAML::Value << rb.FixedRotation;
+            out << YAML::EndMap;
+        }
+
+        // BoxColliderComponent
+        if (entity.HasComponent<BoxColliderComponent>())
+        {
+            out << YAML::Key << "BoxColliderComponent";
+            out << YAML::BeginMap;
+            auto& bc = entity.GetComponent<BoxColliderComponent>();
+            out << YAML::Key << "HalfExtents" << YAML::Value << bc.HalfExtents;
+            out << YAML::Key << "Offset" << YAML::Value << bc.Offset;
+            out << YAML::EndMap;
+        }
+
+        // SphereColliderComponent
+        if (entity.HasComponent<SphereColliderComponent>())
+        {
+            out << YAML::Key << "SphereColliderComponent";
+            out << YAML::BeginMap;
+            auto& sc = entity.GetComponent<SphereColliderComponent>();
+            out << YAML::Key << "Radius" << YAML::Value << sc.Radius;
+            out << YAML::Key << "Offset" << YAML::Value << sc.Offset;
+            out << YAML::EndMap;
+        }
+
         out << YAML::EndMap;
     }
 
-    bool SceneSerializer::Serialize(const std::string& filepath)
+    bool SceneSerializer::Serialize(const std::string& filepath, const EditorRenderSettings& renderSettings)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -237,6 +274,21 @@ namespace Engine
             out << YAML::Key << "OrthoSize" << YAML::Value << shadow.OrthoSize;
             out << YAML::Key << "NearPlane" << YAML::Value << shadow.NearPlane;
             out << YAML::Key << "FarPlane" << YAML::Value << shadow.FarPlane;
+            out << YAML::EndMap;
+        }
+
+        // Render settings (后处理 + MSAA + 物理后端)
+        {
+            out << YAML::Key << "RenderSettings";
+            out << YAML::BeginMap;
+            out << YAML::Key << "BloomEnabled" << YAML::Value << renderSettings.PostProcessing.BloomEnabled;
+            out << YAML::Key << "BloomThreshold" << YAML::Value << renderSettings.PostProcessing.BloomThreshold;
+            out << YAML::Key << "BloomStrength" << YAML::Value << renderSettings.PostProcessing.BloomStrength;
+            out << YAML::Key << "BloomIterations" << YAML::Value << renderSettings.PostProcessing.BloomIterations;
+            out << YAML::Key << "ToneMappingMode" << YAML::Value << renderSettings.PostProcessing.ToneMappingMode;
+            out << YAML::Key << "GammaCorrection" << YAML::Value << renderSettings.PostProcessing.GammaCorrection;
+            out << YAML::Key << "MSAASamples" << YAML::Value << renderSettings.MSAASamples;
+            out << YAML::Key << "PhysicsBackend" << YAML::Value << renderSettings.PhysicsBackend;
             out << YAML::EndMap;
         }
 
@@ -301,7 +353,7 @@ namespace Engine
         return Mesh::CreateCube();
     }
 
-    bool SceneSerializer::Deserialize(const std::string& filepath)
+    bool SceneSerializer::Deserialize(const std::string& filepath, EditorRenderSettings* outRenderSettings)
     {
         YAML::Node data;
         try
@@ -342,6 +394,28 @@ namespace Engine
                 shadow.NearPlane = shadowNode["NearPlane"].as<float>();
             if (shadowNode["FarPlane"])
                 shadow.FarPlane = shadowNode["FarPlane"].as<float>();
+        }
+
+        // Deserialize render settings
+        auto renderNode = data["RenderSettings"];
+        if (renderNode && outRenderSettings)
+        {
+            if (renderNode["BloomEnabled"])
+                outRenderSettings->PostProcessing.BloomEnabled = renderNode["BloomEnabled"].as<bool>();
+            if (renderNode["BloomThreshold"])
+                outRenderSettings->PostProcessing.BloomThreshold = renderNode["BloomThreshold"].as<float>();
+            if (renderNode["BloomStrength"])
+                outRenderSettings->PostProcessing.BloomStrength = renderNode["BloomStrength"].as<float>();
+            if (renderNode["BloomIterations"])
+                outRenderSettings->PostProcessing.BloomIterations = renderNode["BloomIterations"].as<int>();
+            if (renderNode["ToneMappingMode"])
+                outRenderSettings->PostProcessing.ToneMappingMode = renderNode["ToneMappingMode"].as<int>();
+            if (renderNode["GammaCorrection"])
+                outRenderSettings->PostProcessing.GammaCorrection = renderNode["GammaCorrection"].as<bool>();
+            if (renderNode["MSAASamples"])
+                outRenderSettings->MSAASamples = renderNode["MSAASamples"].as<uint32_t>();
+            if (renderNode["PhysicsBackend"])
+                outRenderSettings->PhysicsBackend = renderNode["PhysicsBackend"].as<int>();
         }
 
         // Deserialize skybox
@@ -515,6 +589,48 @@ namespace Engine
                     cc.Camera.SetOrthographicFarClip(cameraComponent["OrthographicFar"].as<float>());
                     cc.Primary = cameraComponent["Primary"].as<bool>();
                     cc.FixedAspectRatio = cameraComponent["FixedAspectRatio"].as<bool>();
+                }
+
+                // RigidBodyComponent
+                auto rigidBodyComponent = entityNode["RigidBodyComponent"];
+                if (rigidBodyComponent)
+                {
+                    auto& rb = deserializedEntity.AddComponent<RigidBodyComponent>();
+                    int typeVal = rigidBodyComponent["Type"] ? rigidBodyComponent["Type"].as<int>() : 0;
+                    if (typeVal < 0 || typeVal > 2) typeVal = 0;
+                    rb.Type = static_cast<RigidBodyComponent::BodyType>(typeVal);
+                    if (rigidBodyComponent["Mass"])
+                        rb.Mass = rigidBodyComponent["Mass"].as<float>();
+                    if (rigidBodyComponent["Restitution"])
+                        rb.Restitution = rigidBodyComponent["Restitution"].as<float>();
+                    if (rigidBodyComponent["Friction"])
+                        rb.Friction = rigidBodyComponent["Friction"].as<float>();
+                    if (rigidBodyComponent["GravityScale"])
+                        rb.GravityScale = rigidBodyComponent["GravityScale"].as<float>();
+                    if (rigidBodyComponent["FixedRotation"])
+                        rb.FixedRotation = rigidBodyComponent["FixedRotation"].as<bool>();
+                }
+
+                // BoxColliderComponent
+                auto boxColliderComponent = entityNode["BoxColliderComponent"];
+                if (boxColliderComponent)
+                {
+                    auto& bc = deserializedEntity.AddComponent<BoxColliderComponent>();
+                    if (boxColliderComponent["HalfExtents"])
+                        bc.HalfExtents = boxColliderComponent["HalfExtents"].as<glm::vec3>();
+                    if (boxColliderComponent["Offset"])
+                        bc.Offset = boxColliderComponent["Offset"].as<glm::vec3>();
+                }
+
+                // SphereColliderComponent
+                auto sphereColliderComponent = entityNode["SphereColliderComponent"];
+                if (sphereColliderComponent)
+                {
+                    auto& sc = deserializedEntity.AddComponent<SphereColliderComponent>();
+                    if (sphereColliderComponent["Radius"])
+                        sc.Radius = sphereColliderComponent["Radius"].as<float>();
+                    if (sphereColliderComponent["Offset"])
+                        sc.Offset = sphereColliderComponent["Offset"].as<glm::vec3>();
                 }
             }
             catch (const YAML::Exception& e)

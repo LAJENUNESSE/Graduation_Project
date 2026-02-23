@@ -191,6 +191,33 @@ namespace Engine
                 }
             }
 
+            if (!entity.HasComponent<RigidBodyComponent>())
+            {
+                if (ImGui::MenuItem("刚体"))
+                {
+                    entity.AddComponent<RigidBodyComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<BoxColliderComponent>())
+            {
+                if (ImGui::MenuItem("盒碰撞器"))
+                {
+                    entity.AddComponent<BoxColliderComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<SphereColliderComponent>())
+            {
+                if (ImGui::MenuItem("球碰撞器"))
+                {
+                    entity.AddComponent<SphereColliderComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             ImGui::EndPopup();
         }
         ImGui::PopItemWidth();
@@ -510,6 +537,50 @@ namespace Engine
                 component.NormalMapTexture.reset();
                 component.NormalMapPath.clear();
             }
+        });
+
+        // RigidBody
+        DrawComponent<RigidBodyComponent>("刚体", entity, [](auto& component)
+        {
+            const char* bodyTypeStrings[] = {"静态", "动态", "运动学"};
+            const char* currentBodyTypeString = bodyTypeStrings[static_cast<int>(component.Type)];
+
+            if (ImGui::BeginCombo("类型", currentBodyTypeString))
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    bool isSelected = (static_cast<int>(component.Type) == i);
+                    if (ImGui::Selectable(bodyTypeStrings[i], isSelected))
+                        component.Type = static_cast<RigidBodyComponent::BodyType>(i);
+                    if (isSelected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            if (component.Type == RigidBodyComponent::BodyType::Dynamic)
+            {
+                ImGui::DragFloat("质量", &component.Mass, 0.1f, 0.01f, 1000.0f, "%.2f");
+            }
+
+            ImGui::DragFloat("弹性系数", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f");
+            ImGui::DragFloat("摩擦系数", &component.Friction, 0.01f, 0.0f, 1.0f, "%.2f");
+            ImGui::DragFloat("重力缩放", &component.GravityScale, 0.1f, -10.0f, 10.0f, "%.1f");
+            ImGui::Checkbox("固定旋转", &component.FixedRotation);
+        });
+
+        // BoxCollider
+        DrawComponent<BoxColliderComponent>("盒碰撞器", entity, [this](auto& component)
+        {
+            DrawVec3Control("半尺寸", component.HalfExtents, 0.5f);
+            DrawVec3Control("偏移", component.Offset);
+        });
+
+        // SphereCollider
+        DrawComponent<SphereColliderComponent>("球碰撞器", entity, [this](auto& component)
+        {
+            ImGui::DragFloat("半径", &component.Radius, 0.01f, 0.01f, 100.0f, "%.2f");
+            DrawVec3Control("偏移", component.Offset);
         });
     }
 

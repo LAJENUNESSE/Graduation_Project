@@ -126,7 +126,16 @@ namespace Engine
             RenderCommand::Clear();
             m_HDRFramebuffer->ClearAttachment(1, -1);
 
-            m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+            switch (m_SceneState)
+            {
+            case SceneState::Edit:
+                m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+                break;
+            case SceneState::Play:
+                m_ActiveScene->OnUpdateRuntime(ts, m_EditorCamera);
+                break;
+            }
+
             m_HDRFramebuffer->Unbind();
 
             // If MSAA enabled: re-render to MSAA FBO for anti-aliased color, then blit
@@ -136,10 +145,26 @@ namespace Engine
                 RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
                 RenderCommand::Clear();
 
-                m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+                switch (m_SceneState)
+                {
+                case SceneState::Edit:
+                    m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+                    break;
+                case SceneState::Play:
+                    m_ActiveScene->OnUpdateRuntime(ts, m_EditorCamera);
+                    break;
+                }
 
                 // Resolve MSAA color to HDR FBO attachment 0 (entity IDs in attachment 1 preserved)
                 m_HDRFramebuffer->BlitMSAA();
+            }
+
+            // 物理碰撞体调试绘制（在 MSAA Blit 之后、后处理之前）
+            if (m_ShowPhysicsColliders)
+            {
+                m_HDRFramebuffer->Bind();
+                m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_EditorCamera);
+                m_HDRFramebuffer->Unbind();
             }
 
             // Post-processing: HDR → Tone Mapping + Bloom → LDR output to main FBO
@@ -207,6 +232,45 @@ namespace Engine
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
+        }
+
+        // 工具栏 - Play/Stop 按钮
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
+
+            ImGui::Begin("##工具栏", nullptr,
+                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoScrollWithMouse);
+
+            float windowWidth = ImGui::GetWindowContentRegionMax().x;
+            float buttonWidth = 80.0f;
+            float buttonHeight = 28.0f;
+
+            ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
+            ImGui::SetCursorPosY((ImGui::GetWindowHeight() - buttonHeight) * 0.5f);
+
+            if (m_SceneState == SceneState::Edit)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.5f, 0.15f, 1.0f));
+                if (ImGui::Button("\xe2\x96\xb6 \xe6\x92\xad\xe6\x94\xbe", ImVec2(buttonWidth, buttonHeight)))
+                    OnScenePlay();
+                ImGui::PopStyleColor(3);
+            }
+            else if (m_SceneState == SceneState::Play)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
+                if (ImGui::Button("\xe2\x96\xa0 \xe5\x81\x9c\xe6\xad\xa2", ImVec2(buttonWidth, buttonHeight)))
+                    OnSceneStop();
+                ImGui::PopStyleColor(3);
+            }
+
+            ImGui::PopStyleVar(2);
+            ImGui::End();
         }
 
         // Panels
@@ -328,6 +392,19 @@ namespace Engine
             ImGui::TextDisabled("(?)");
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("right/left/top/bottom/front/back + .jpg/.png");
+
+            // 物理设置
+            ImGui::Separator();
+            ImGui::Text("物理设置");
+            {
+                const char* backendItems[] = {"手写物理", "Bullet3"};
+                int currentBackend = static_cast<int>(m_ActiveScene->GetPhysicsBackend());
+                if (ImGui::Combo("物理后端", &currentBackend, backendItems, 2))
+                {
+                    m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(currentBackend));
+                }
+            }
+            ImGui::Checkbox("显示碰撞体", &m_ShowPhysicsColliders);
 
             ImGui::End();
         }
@@ -562,8 +639,9 @@ namespace Engine
 
         // Transactional load: deserialize into a temporary scene first
         auto newScene = CreateRef<Scene>();
+        EditorRenderSettings renderSettings;
         SceneSerializer serializer(newScene);
-        if (!serializer.Deserialize(filepath))
+        if (!serializer.Deserialize(filepath, &renderSettings))
         {
             ENGINE_WARN("Failed to load scene from '{0}', keeping current scene", filepath);
             return;
@@ -576,6 +654,18 @@ namespace Engine
         m_HierarchyPanel.SetContext(m_ActiveScene);
         m_SelectedEntity = {};
         m_HoveredEntity = {};
+
+        // 恢复编辑器渲染设置
+        m_PostProcessingSettings = renderSettings.PostProcessing;
+        m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
+
+        // 恢复 MSAA
+        if (renderSettings.MSAASamples != m_HDRFramebuffer->GetSpecification().Samples)
+        {
+            FramebufferSpecification spec = m_HDRFramebuffer->GetSpecification();
+            spec.Samples = renderSettings.MSAASamples;
+            m_HDRFramebuffer = Framebuffer::Create(spec);
+        }
     }
 
     void EditorLayer::SaveScene()
@@ -584,11 +674,42 @@ namespace Engine
         if (filepath.empty())
             return;
 
+        // 收集编辑器渲染设置
+        EditorRenderSettings renderSettings;
+        renderSettings.PostProcessing = m_PostProcessingSettings;
+        renderSettings.MSAASamples = m_HDRFramebuffer->GetSpecification().Samples;
+        renderSettings.PhysicsBackend = static_cast<int>(m_ActiveScene->GetPhysicsBackend());
+
         SceneSerializer serializer(m_ActiveScene);
-        if (serializer.Serialize(filepath))
+        if (serializer.Serialize(filepath, renderSettings))
             ENGINE_INFO("Scene saved to '{0}'", filepath);
         else
             ENGINE_WARN("Failed to save scene to '{0}'", filepath);
+    }
+
+    void EditorLayer::OnScenePlay()
+    {
+        m_SceneState = SceneState::Play;
+
+        // 深拷贝当前场景作为编辑器快照
+        m_EditorScene = Scene::Copy(m_ActiveScene);
+
+        m_ActiveScene->OnRuntimeStart();
+    }
+
+    void EditorLayer::OnSceneStop()
+    {
+        m_SceneState = SceneState::Edit;
+
+        m_ActiveScene->OnRuntimeStop();
+
+        // 恢复编辑器场景
+        m_ActiveScene = m_EditorScene;
+        m_EditorScene = nullptr;
+
+        m_HierarchyPanel.SetContext(m_ActiveScene);
+        m_SelectedEntity = {};
+        m_HoveredEntity = {};
     }
 
 } // namespace Engine

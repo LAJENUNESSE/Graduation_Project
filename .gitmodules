@@ -29,3 +29,6 @@
 [submodule "vendor/assimp"]
 	path = vendor/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "vendor/bullet3"]
+	path = vendor/bullet3
+	url = https://github.com/bulletphysics/bullet3.git
