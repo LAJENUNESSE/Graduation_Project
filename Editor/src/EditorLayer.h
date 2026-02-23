@@ -6,9 +6,12 @@
 #include "Panels/SceneHierarchyPanel.h"
 #include "Panels/PropertiesPanel.h"
 #include "Renderer/PostProcessing.h"
+#include "Physics/PhysicsDebugDraw.h"
 
 namespace Engine
 {
+
+    enum class SceneState { Edit = 0, Play = 1 };
 
     class EditorLayer : public Layer
     {
@@ -30,10 +33,16 @@ namespace Engine
         void OpenScene();
         void SaveScene();
 
+        void OnScenePlay();
+        void OnSceneStop();
+
     private:
         Ref<Framebuffer> m_Framebuffer;
         Ref<Framebuffer> m_HDRFramebuffer; // HDR scene render target
         Ref<Scene> m_ActiveScene;
+        Ref<Scene> m_EditorScene;          // 编辑器原始场景（Play 时保存快照）
+
+        SceneState m_SceneState = SceneState::Edit;
 
         PostProcessing m_PostProcessing;
         PostProcessingSettings m_PostProcessingSettings;
@@ -56,6 +65,10 @@ namespace Engine
 
         // Performance panel
         bool m_ShowStatsPanel = true;
+
+        // Physics debug
+        bool m_ShowPhysicsColliders = false;
+        PhysicsDebugDraw m_PhysicsDebugDraw;
     };
 
 } // namespace Engine

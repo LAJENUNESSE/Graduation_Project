@@ -10,6 +10,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace Engine
 {
@@ -19,6 +20,8 @@ namespace Engine
     class Shader;
     class Framebuffer;
     class VertexArray;
+    class PhysicsWorld;
+    class BulletPhysicsWorld;
 
     struct ShadowSettings
     {
@@ -29,6 +32,8 @@ namespace Engine
         float NearPlane = 0.1f;
         float FarPlane = 50.0f;
     };
+
+    enum class PhysicsBackend { Custom = 0, Bullet = 1 };
 
     class Scene
     {
@@ -41,6 +46,11 @@ namespace Engine
         void DestroyEntity(Entity entity);
 
         void OnUpdateEditor(Timestep ts, EditorCamera& camera);
+        void OnUpdateRuntime(Timestep ts, EditorCamera& camera);
+        void OnRuntimeStart();
+        void OnRuntimeStop();
+
+        static Ref<Scene> Copy(Ref<Scene> src);
 
         void OnViewportResize(uint32_t width, uint32_t height);
 
@@ -65,7 +75,11 @@ namespace Engine
             return m_Registry;
         }
 
+        PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
+        void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
+
     private:
+        void RenderScene(Timestep ts, EditorCamera& camera);
         entt::registry m_Registry;
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;
@@ -84,6 +98,11 @@ namespace Engine
         Ref<VertexArray> m_SkyboxVAO;
         Ref<TextureCubemap> m_SkyboxTexture;
         std::vector<std::string> m_SkyboxFacePaths;
+
+        // Physics
+        PhysicsBackend m_PhysicsBackend = PhysicsBackend::Custom;
+        std::unique_ptr<PhysicsWorld> m_PhysicsWorld;
+        std::unique_ptr<BulletPhysicsWorld> m_BulletPhysicsWorld;
 
         friend class Entity;
     };

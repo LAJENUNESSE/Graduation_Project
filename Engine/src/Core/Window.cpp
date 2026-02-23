@@ -14,10 +14,24 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+#ifdef __linux__
+#include <X11/Xlib.h>
+#endif
+
 namespace Engine
 {
 
     static uint8_t s_GLFWWindowCount = 0;
+
+#ifdef __linux__
+    // 抑制 X11 退出时的 BadWindow 错误（VMware/Mesa 已知问题）
+    static int X11ErrorHandler(Display*, XErrorEvent* event)
+    {
+        if (event->error_code == BadWindow)
+            return 0; // 忽略
+        return 0;
+    }
+#endif
 
     static void GLFWErrorCallback(int error, const char* description)
     {
@@ -89,6 +103,10 @@ namespace Engine
             int success = glfwInit();
             ENGINE_CORE_ASSERT(success, "Could not initialize GLFW!");
             glfwSetErrorCallback(GLFWErrorCallback);
+
+#ifdef __linux__
+            XSetErrorHandler(X11ErrorHandler);
+#endif
         }
 
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);

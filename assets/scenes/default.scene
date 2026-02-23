@@ -6,6 +6,15 @@ ShadowSettings:
   OrthoSize: 5
   NearPlane: 0.1
   FarPlane: 50
+RenderSettings:
+  BloomEnabled: false
+  BloomThreshold: 1
+  BloomStrength: 0.3
+  BloomIterations: 5
+  ToneMappingMode: 1
+  GammaCorrection: true
+  MSAASamples: 4
+  PhysicsBackend: 0
 Entities:
   - Entity: 10580137286682331230
     TagComponent:
@@ -20,19 +29,31 @@ Entities:
       TexturePath: ""
       Tiling: [1, 1]
       Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
   - Entity: 11568292089209508630
     TagComponent:
       Tag: Cube
     TransformComponent:
-      Translation: [-0.46603388, 0, -0.810003]
+      Translation: [-0.49066392, -11.566714, -2.3310552]
       Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
+      Scale: [1, 1.1555866, 1]
     MeshRendererComponent:
       MeshType: Cube
       Color: [1, 1, 0.9882353, 1]
       TexturePath: assets/textures/CD001.jpg
       Tiling: [1, 1]
       Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
   - Entity: 4673658506239221672
     TagComponent:
       Tag: 方向光
@@ -50,3 +71,61 @@ Entities:
       InnerCutoff: 0.34906584
       OuterCutoff: 1.2077677
       CastShadows: true
+  - Entity: 1583677241799010637
+    TagComponent:
+      Tag: Cube1
+    TransformComponent:
+      Translation: [7.450581e-09, 51.8, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1.01, 1.01, 1.01]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [1, 1, 1, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    RigidBodyComponent:
+      Type: 1
+      Mass: 1
+      Restitution: 0.8
+      Friction: 0.5
+      GravityScale: 1
+      FixedRotation: false
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+  - Entity: 5714801137704381953
+    TagComponent:
+      Tag: cube2
+    TransformComponent:
+      Translation: [0.10254964, 0, 0.010477573]
+      Rotation: [0, 0, 0]
+      Scale: [16.499832, 16.499832, 16.499832]
+    MeshRendererComponent:
+      MeshType: Plane
+      Color: [1, 1, 1, 1]
+      TexturePath: assets/textures/CD001.jpg
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    RigidBodyComponent:
+      Type: 0
+      Mass: 1
+      Restitution: 1
+      Friction: 0.5
+      GravityScale: 1
+      FixedRotation: false
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.01, 0.5]
+      Offset: [0, 0, 0]

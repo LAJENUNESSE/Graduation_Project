@@ -12,6 +12,8 @@
 #include "Renderer/Buffer.h"
 #include "Renderer/EditorCamera.h"
 #include "Debug/PerformanceMonitor.h"
+#include "Physics/PhysicsWorld.h"
+#include "Physics/BulletPhysicsWorld.h"
 
 #include <glad/gl.h>
 
@@ -427,6 +429,119 @@ namespace Engine
     }
 
     void Scene::OnUpdateEditor(Timestep ts, EditorCamera& camera)
+    {
+        RenderScene(ts, camera);
+    }
+
+    void Scene::OnUpdateRuntime(Timestep ts, EditorCamera& camera)
+    {
+        // Physics step
+        if (m_PhysicsBackend == PhysicsBackend::Custom && m_PhysicsWorld)
+            m_PhysicsWorld->Step(ts, m_Registry);
+        else if (m_PhysicsBackend == PhysicsBackend::Bullet && m_BulletPhysicsWorld)
+            m_BulletPhysicsWorld->Step(ts, m_Registry);
+
+        // Render
+        RenderScene(ts, camera);
+    }
+
+    void Scene::OnRuntimeStart()
+    {
+        if (m_PhysicsBackend == PhysicsBackend::Custom)
+        {
+            m_PhysicsWorld = std::make_unique<PhysicsWorld>();
+            m_PhysicsWorld->Init();
+        }
+        else
+        {
+            m_BulletPhysicsWorld = std::make_unique<BulletPhysicsWorld>();
+            m_BulletPhysicsWorld->Init();
+            m_BulletPhysicsWorld->CreateBodies(m_Registry);
+        }
+    }
+
+    void Scene::OnRuntimeStop()
+    {
+        m_PhysicsWorld.reset();
+        if (m_BulletPhysicsWorld)
+        {
+            m_BulletPhysicsWorld->Shutdown();
+            m_BulletPhysicsWorld.reset();
+        }
+    }
+
+    Ref<Scene> Scene::Copy(Ref<Scene> src)
+    {
+        auto newScene = CreateRef<Scene>();
+
+        newScene->m_ViewportWidth = src->m_ViewportWidth;
+        newScene->m_ViewportHeight = src->m_ViewportHeight;
+        newScene->m_ShadowSettings = src->m_ShadowSettings;
+        newScene->m_PhysicsBackend = src->m_PhysicsBackend;
+
+        // Copy skybox
+        if (!src->m_SkyboxFacePaths.empty())
+            newScene->LoadSkybox(src->m_SkyboxFacePaths);
+
+        // Resize shadow map to match source
+        newScene->ResizeShadowMap(src->m_ShadowSettings.MapResolution);
+
+        // Copy all entities
+        auto& srcReg = src->m_Registry;
+        auto view = srcReg.view<IDComponent>();
+        for (auto srcEntity : view)
+        {
+            UUID uuid = srcReg.get<IDComponent>(srcEntity).ID;
+            const auto& name = srcReg.get<TagComponent>(srcEntity).Tag;
+            Entity newEntity = newScene->CreateEntityWithUUID(uuid, name);
+
+            // TransformComponent (already added by CreateEntityWithUUID)
+            if (srcReg.all_of<TransformComponent>(srcEntity))
+            {
+                newEntity.GetComponent<TransformComponent>() = srcReg.get<TransformComponent>(srcEntity);
+            }
+
+            // MeshRendererComponent
+            if (srcReg.all_of<MeshRendererComponent>(srcEntity))
+            {
+                newEntity.AddComponent<MeshRendererComponent>(srcReg.get<MeshRendererComponent>(srcEntity));
+            }
+
+            // LightComponent
+            if (srcReg.all_of<LightComponent>(srcEntity))
+            {
+                newEntity.AddComponent<LightComponent>(srcReg.get<LightComponent>(srcEntity));
+            }
+
+            // CameraComponent
+            if (srcReg.all_of<CameraComponent>(srcEntity))
+            {
+                newEntity.AddComponent<CameraComponent>(srcReg.get<CameraComponent>(srcEntity));
+            }
+
+            // RigidBodyComponent
+            if (srcReg.all_of<RigidBodyComponent>(srcEntity))
+            {
+                newEntity.AddComponent<RigidBodyComponent>(srcReg.get<RigidBodyComponent>(srcEntity));
+            }
+
+            // BoxColliderComponent
+            if (srcReg.all_of<BoxColliderComponent>(srcEntity))
+            {
+                newEntity.AddComponent<BoxColliderComponent>(srcReg.get<BoxColliderComponent>(srcEntity));
+            }
+
+            // SphereColliderComponent
+            if (srcReg.all_of<SphereColliderComponent>(srcEntity))
+            {
+                newEntity.AddComponent<SphereColliderComponent>(srcReg.get<SphereColliderComponent>(srcEntity));
+            }
+        }
+
+        return newScene;
+    }
+
+    void Scene::RenderScene(Timestep ts, EditorCamera& camera)
     {
         PerformanceMonitor::Get().GetSceneRenderGPUTimer().Begin();
 

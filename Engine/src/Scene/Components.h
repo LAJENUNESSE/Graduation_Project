@@ -132,4 +132,42 @@ namespace Engine
         LightComponent(const LightComponent&) = default;
     };
 
+    struct RigidBodyComponent
+    {
+        enum class BodyType { Static = 0, Dynamic = 1, Kinematic = 2 };
+        BodyType Type = BodyType::Static;
+        float Mass = 1.0f;
+        float Restitution = 0.3f;    // 弹性系数 (e)
+        float Friction = 0.5f;
+        float GravityScale = 1.0f;
+        bool FixedRotation = false;
+
+        // 运行时状态（不序列化）
+        glm::vec3 LinearVelocity = {0, 0, 0};
+        glm::vec3 AngularVelocity = {0, 0, 0};
+        glm::vec3 Force = {0, 0, 0};
+        glm::vec3 Torque = {0, 0, 0};
+
+        RigidBodyComponent() = default;
+        RigidBodyComponent(const RigidBodyComponent&) = default;
+    };
+
+    struct BoxColliderComponent
+    {
+        glm::vec3 HalfExtents = {0.5f, 0.5f, 0.5f};
+        glm::vec3 Offset = {0, 0, 0};
+
+        BoxColliderComponent() = default;
+        BoxColliderComponent(const BoxColliderComponent&) = default;
+    };
+
+    struct SphereColliderComponent
+    {
+        float Radius = 0.5f;
+        glm::vec3 Offset = {0, 0, 0};
+
+        SphereColliderComponent() = default;
+        SphereColliderComponent(const SphereColliderComponent&) = default;
+    };
+
 } // namespace Engine
