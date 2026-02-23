@@ -206,6 +206,10 @@ namespace Engine
 
     void PostProcessing::Process(uint32_t hdrTextureID, const PostProcessingSettings& settings)
     {
+        // Save caller's FBO so we can restore it for the final tone mapping pass
+        GLint callerFBO;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &callerFBO);
+
         uint32_t bloomTextureID = 0;
 
         if (settings.BloomEnabled)
@@ -244,7 +248,10 @@ namespace Engine
             bloomTextureID = inputTexture;
         }
 
-        // Step 3: Tone mapping + composite (renders to currently bound FBO or screen)
+        // Step 3: Tone mapping + composite — restore caller's FBO
+        glBindFramebuffer(GL_FRAMEBUFFER, callerFBO);
+        glViewport(0, 0, m_Width, m_Height);
+
         m_ToneMappingShader->Bind();
 
         glActiveTexture(GL_TEXTURE0);
