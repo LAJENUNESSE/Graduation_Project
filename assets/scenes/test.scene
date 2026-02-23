@@ -9,6 +9,42 @@ ShadowSettings:
 Skybox:
   Faces: [/home/liu/Graduation_Project/assets/textures/skybox/right.jpg, /home/liu/Graduation_Project/assets/textures/skybox/left.jpg, /home/liu/Graduation_Project/assets/textures/skybox/top.jpg, /home/liu/Graduation_Project/assets/textures/skybox/bottom.jpg, /home/liu/Graduation_Project/assets/textures/skybox/front.jpg, /home/liu/Graduation_Project/assets/textures/skybox/back.jpg]
 Entities:
+  - Entity: 6023771213501241446
+    TagComponent:
+      Tag: Cube
+    TransformComponent:
+      Translation: [0.42562288, 4.8911247, 4.0888963]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [1, 1, 1, 1]
+      TexturePath: assets/textures/CD001.jpg
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 1
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+  - Entity: 9715429878831076142
+    TagComponent:
+      Tag: 方向光
+    TransformComponent:
+      Translation: [3.3596175, 6.719235, 5.8190336]
+      Rotation: [-0.7853979, 0.52359843, 0]
+      Scale: [1, 0.9999997, 0.99999964]
+    LightComponent:
+      Type: 0
+      Color: [1, 0.95, 0.9]
+      Intensity: 5.8
+      Constant: 1
+      Linear: 0.09
+      Quadratic: 0.032
+      InnerCutoff: 0.21816616
+      OuterCutoff: 0.30543262
+      CastShadows: true
   - Entity: 6011378084646293149
     TagComponent:
       Tag: 空实体
@@ -20,42 +56,6 @@ Entities:
       MeshType: Model
       ModelPath: assets/models/spot/spot_triangulated.obj
       Color: [1, 1, 1, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.5
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-  - Entity: 9715429878831076142
-    TagComponent:
-      Tag: 方向光
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [-0.7853982, 0.5235988, 0]
-      Scale: [1, 1, 1]
-    LightComponent:
-      Type: 0
-      Color: [1, 0.95, 0.9]
-      Intensity: 1
-      Constant: 1
-      Linear: 0.09
-      Quadratic: 0.032
-      InnerCutoff: 0.21816616
-      OuterCutoff: 0.30543262
-      CastShadows: true
-  - Entity: 6023771213501241446
-    TagComponent:
-      Tag: Cube
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.8, 0.2, 0.3, 1]
       TexturePath: ""
       Tiling: [1, 1]
       Shininess: 32

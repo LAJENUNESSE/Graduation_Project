@@ -306,9 +306,23 @@ namespace Engine
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, m_MSAAFBO);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_RendererID);
+
+        // Only blit to color attachment 0 to preserve entity IDs in attachment 1
+        GLenum drawBuf = GL_COLOR_ATTACHMENT0;
+        glDrawBuffers(1, &drawBuf);
+
         glBlitFramebuffer(0, 0, m_Specification.Width, m_Specification.Height,
                           0, 0, m_Specification.Width, m_Specification.Height,
                           GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+        // Restore all draw buffers
+        if (m_ColorAttachments.size() > 1)
+        {
+            GLenum buffers[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2,
+                                 GL_COLOR_ATTACHMENT3};
+            glDrawBuffers(static_cast<GLsizei>(m_ColorAttachments.size()), buffers);
+        }
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 

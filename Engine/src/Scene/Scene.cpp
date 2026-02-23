@@ -217,7 +217,7 @@ namespace Engine
                 // Energy conservation: diffuse = (1 - specular) * (1 - metallic)
                 vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
 
-                return (kD * albedo / PI + specular) * radiance * NdotL;
+                return (kD * albedo + specular) * radiance * NdotL;
             }
 
             void main() {
@@ -369,7 +369,9 @@ namespace Engine
             uniform samplerCube u_Skybox;
 
             void main() {
-                o_Color = texture(u_Skybox, v_TexCoords);
+                vec4 texColor = texture(u_Skybox, v_TexCoords);
+                texColor.rgb = pow(texColor.rgb, vec3(2.2));  // sRGB -> Linear
+                o_Color = texColor;
                 o_EntityID = -1;
             }
         )";
@@ -433,7 +435,7 @@ namespace Engine
         // Collect and upload lights
         m_MeshShader->Bind();
         m_MeshShader->SetFloat3("u_ViewPos", camera.GetPosition());
-        m_MeshShader->SetFloat("u_AmbientStrength", 0.15f);
+        m_MeshShader->SetFloat("u_AmbientStrength", 0.3f);
 
         int numPointLights = 0;
         int numSpotLights = 0;
