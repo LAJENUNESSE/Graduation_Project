@@ -5,6 +5,7 @@
 #include "Scene/Entity.h"
 #include "Panels/SceneHierarchyPanel.h"
 #include "Panels/PropertiesPanel.h"
+#include "Renderer/PostProcessing.h"
 
 namespace Engine
 {
@@ -31,7 +32,11 @@ namespace Engine
 
     private:
         Ref<Framebuffer> m_Framebuffer;
+        Ref<Framebuffer> m_HDRFramebuffer; // HDR scene render target
         Ref<Scene> m_ActiveScene;
+
+        PostProcessing m_PostProcessing;
+        PostProcessingSettings m_PostProcessingSettings;
 
         EditorCamera m_EditorCamera;
         Entity m_SelectedEntity;

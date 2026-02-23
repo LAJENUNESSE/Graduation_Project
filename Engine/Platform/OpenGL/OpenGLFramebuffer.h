@@ -38,6 +38,11 @@ namespace Engine
             return m_Specification;
         }
 
+        // MSAA support
+        void BindMSAA() override;
+        void BlitMSAA() override;
+        bool IsMSAAEnabled() const override { return m_Specification.Samples > 1 && m_MSAAFBO != 0; }
+
     private:
         void Invalidate();
 
@@ -50,6 +55,11 @@ namespace Engine
         std::vector<uint32_t> m_ColorAttachments;
         uint32_t m_DepthAttachment = 0;
         bool m_DepthIsTexture = false;
+
+        // MSAA
+        uint32_t m_MSAAFBO = 0;
+        uint32_t m_MSAAColorRenderbuffer = 0;
+        uint32_t m_MSAADepthRenderbuffer = 0;
     };
 
 } // namespace Engine

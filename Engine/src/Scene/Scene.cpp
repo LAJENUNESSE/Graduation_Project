@@ -20,12 +20,13 @@ namespace Engine
 
     Scene::Scene()
     {
-        // Create default mesh shader (Phong lighting with shadow mapping)
+        // Create default mesh shader (PBR Cook-Torrance BRDF with shadow mapping)
         std::string vertexSrc = R"(
             #version 330 core
             layout(location = 0) in vec3 a_Position;
             layout(location = 1) in vec3 a_Normal;
             layout(location = 2) in vec2 a_TexCoords;
+            layout(location = 3) in vec3 a_Tangent;
 
             uniform mat4 u_ViewProjection;
             uniform mat4 u_Transform;
@@ -35,12 +36,22 @@ namespace Engine
             out vec3 v_FragPos;
             out vec2 v_TexCoord;
             out vec4 v_FragPosLightSpace;
+            out mat3 v_TBN;
 
             void main() {
-                v_Normal = mat3(transpose(inverse(u_Transform))) * a_Normal;
+                mat3 normalMatrix = mat3(transpose(inverse(u_Transform)));
+                v_Normal = normalMatrix * a_Normal;
                 v_FragPos = vec3(u_Transform * vec4(a_Position, 1.0));
                 v_TexCoord = a_TexCoords;
                 v_FragPosLightSpace = u_LightSpaceMatrix * vec4(v_FragPos, 1.0);
+
+                // TBN matrix for normal mapping
+                vec3 T = normalize(normalMatrix * a_Tangent);
+                vec3 N = normalize(v_Normal);
+                T = normalize(T - dot(T, N) * N);  // Gram-Schmidt orthogonalization
+                vec3 B = cross(N, T);
+                v_TBN = mat3(T, B, N);
+
                 gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);
             }
         )";
@@ -49,6 +60,8 @@ namespace Engine
             #version 330 core
             layout(location = 0) out vec4 o_Color;
             layout(location = 1) out int o_EntityID;
+
+            const float PI = 3.14159265359;
 
             #define MAX_DIR_LIGHTS   2
             #define MAX_POINT_LIGHTS 8
@@ -86,10 +99,20 @@ namespace Engine
             uniform vec3 u_ViewPos;
             uniform float u_AmbientStrength;
 
-            uniform sampler2D u_DiffuseTexture;
+            // Textures
+            uniform sampler2D u_DiffuseTexture;  // unit 0 - Albedo
             uniform int u_HasTexture;
             uniform vec2 u_Tiling;
-            uniform float u_Shininess;
+
+            // PBR parameters
+            uniform float u_Metallic;
+            uniform float u_Roughness;
+            uniform sampler2D u_MetallicMap;    // unit 3
+            uniform sampler2D u_RoughnessMap;   // unit 4
+            uniform sampler2D u_AOMap;           // unit 5
+            uniform int u_HasMetallicMap;
+            uniform int u_HasRoughnessMap;
+            uniform int u_HasAOMap;
 
             uniform int u_NumDirLights;
             uniform int u_NumPointLights;
@@ -100,14 +123,58 @@ namespace Engine
             uniform SpotLight  u_SpotLights[MAX_SPOT_LIGHTS];
 
             // Shadow mapping
-            uniform sampler2D u_ShadowMap;
+            uniform sampler2D u_ShadowMap;       // unit 1
             uniform int u_ShadowEnabled;
             uniform float u_ShadowBias;
+
+            // Normal mapping
+            uniform sampler2D u_NormalMap;        // unit 2
+            uniform int u_HasNormalMap;
 
             in vec3 v_Normal;
             in vec3 v_FragPos;
             in vec2 v_TexCoord;
             in vec4 v_FragPosLightSpace;
+            in mat3 v_TBN;
+
+            // ---- PBR Functions ----
+
+            // GGX/Trowbridge-Reitz Normal Distribution
+            float DistributionGGX(vec3 N, vec3 H, float roughness)
+            {
+                float a = roughness * roughness;
+                float a2 = a * a;
+                float NdotH = max(dot(N, H), 0.0);
+                float NdotH2 = NdotH * NdotH;
+                float denom = NdotH2 * (a2 - 1.0) + 1.0;
+                denom = PI * denom * denom;
+                return a2 / max(denom, 0.0001);
+            }
+
+            // Schlick-GGX Geometry (single direction)
+            float GeometrySchlickGGX(float NdotV, float roughness)
+            {
+                float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
+                return NdotV / (NdotV * (1.0 - k) + k);
+            }
+
+            // Smith's Geometry (both directions)
+            float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+            {
+                float NdotV = max(dot(N, V), 0.0);
+                float NdotL = max(dot(N, L), 0.0);
+                float ggx1 = GeometrySchlickGGX(NdotV, roughness);
+                float ggx2 = GeometrySchlickGGX(NdotL, roughness);
+                return ggx1 * ggx2;
+            }
+
+            // Fresnel-Schlick approximation
+            vec3 FresnelSchlick(float cosTheta, vec3 F0)
+            {
+                return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+            }
+
+            // ---- Shadow Function ----
 
             float CalcShadow(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
             {
@@ -115,7 +182,6 @@ namespace Engine
                 projCoords = projCoords * 0.5 + 0.5;
                 if (projCoords.z > 1.0) return 0.0;
 
-                // Slope-scaled bias: steep surfaces get up to 10x base bias
                 float slopeFactor = 1.0 - dot(normal, lightDir);
                 float bias = u_ShadowBias + u_ShadowBias * 10.0 * slopeFactor;
 
@@ -131,91 +197,113 @@ namespace Engine
                 return shadow / 9.0;
             }
 
-            vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, float shininess)
+            // ---- Per-light PBR radiance ----
+
+            vec3 CalcPBRLight(vec3 L, vec3 radiance, vec3 N, vec3 V,
+                              vec3 albedo, float metallic, float roughness, vec3 F0)
             {
-                vec3 lightDir = normalize(-light.direction);
-                // Diffuse
-                float diff = max(dot(normal, lightDir), 0.0);
-                // Specular (Blinn-Phong)
-                vec3 halfwayDir = normalize(lightDir + viewDir);
-                float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
+                vec3 H = normalize(V + L);
+                float NdotL = max(dot(N, L), 0.0);
 
-                vec3 diffuse  = light.color * light.intensity * diff;
-                vec3 specular = light.color * light.intensity * spec;
-                return diffuse + specular;
-            }
+                // Cook-Torrance specular BRDF
+                float D = DistributionGGX(N, H, roughness);
+                vec3  F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+                float G = GeometrySmith(N, V, L, roughness);
 
-            vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, float shininess)
-            {
-                vec3 lightDir = normalize(light.position - fragPos);
-                // Diffuse
-                float diff = max(dot(normal, lightDir), 0.0);
-                // Specular (Blinn-Phong)
-                vec3 halfwayDir = normalize(lightDir + viewDir);
-                float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-                // Attenuation
-                float distance = length(light.position - fragPos);
-                float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * distance * distance);
+                vec3 numerator = D * F * G;
+                float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL + 0.001;
+                vec3 specular = numerator / denominator;
 
-                vec3 diffuse  = light.color * light.intensity * diff * attenuation;
-                vec3 specular = light.color * light.intensity * spec * attenuation;
-                return diffuse + specular;
-            }
+                // Energy conservation: diffuse = (1 - specular) * (1 - metallic)
+                vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
 
-            vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, float shininess)
-            {
-                vec3 lightDir = normalize(light.position - fragPos);
-                // Diffuse
-                float diff = max(dot(normal, lightDir), 0.0);
-                // Specular (Blinn-Phong)
-                vec3 halfwayDir = normalize(lightDir + viewDir);
-                float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-                // Attenuation
-                float distance = length(light.position - fragPos);
-                float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * distance * distance);
-                // Spotlight cone (innerCutoff/outerCutoff are already cos values)
-                float theta = dot(lightDir, normalize(-light.direction));
-                float epsilon = light.innerCutoff - light.outerCutoff;
-                float spotIntensity = (abs(epsilon) < 0.0001) ? step(light.innerCutoff, theta) : clamp((theta - light.outerCutoff) / epsilon, 0.0, 1.0);
-
-                vec3 diffuse  = light.color * light.intensity * diff * attenuation * spotIntensity;
-                vec3 specular = light.color * light.intensity * spec * attenuation * spotIntensity;
-                return diffuse + specular;
+                return (kD * albedo / PI + specular) * radiance * NdotL;
             }
 
             void main() {
-                vec3 norm = normalize(v_Normal);
-                vec3 viewDir = normalize(u_ViewPos - v_FragPos);
+                // Normal: use normal map if available, otherwise vertex normal
+                vec3 N;
+                if (u_HasNormalMap != 0) {
+                    N = texture(u_NormalMap, v_TexCoord * u_Tiling).rgb;
+                    N = N * 2.0 - 1.0;
+                    N = normalize(v_TBN * N);
+                } else {
+                    N = normalize(v_Normal);
+                }
+                vec3 V = normalize(u_ViewPos - v_FragPos);
 
-                // Texture sampling
+                // Albedo (sRGB → Linear)
                 vec4 texColor = (u_HasTexture != 0) ? texture(u_DiffuseTexture, v_TexCoord * u_Tiling) : vec4(1.0);
-                vec4 baseColor = texColor * u_Color;
+                if (u_HasTexture != 0)
+                    texColor.rgb = pow(texColor.rgb, vec3(2.2));
+                vec3 albedo = texColor.rgb * u_Color.rgb;
 
-                // Ambient (not pre-multiplied by color, applied once at the end)
-                vec3 ambient = vec3(u_AmbientStrength);
+                // PBR parameters (uniform or texture)
+                float metallic = u_Metallic;
+                if (u_HasMetallicMap != 0)
+                    metallic = texture(u_MetallicMap, v_TexCoord * u_Tiling).r;
+
+                float roughness = u_Roughness;
+                if (u_HasRoughnessMap != 0)
+                    roughness = texture(u_RoughnessMap, v_TexCoord * u_Tiling).r;
+
+                float ao = 1.0;
+                if (u_HasAOMap != 0)
+                    ao = texture(u_AOMap, v_TexCoord * u_Tiling).r;
+
+                // F0: dielectric = 0.04, metallic = albedo
+                vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
                 // Shadow calculation for first directional light
                 float shadow = 0.0;
                 if (u_ShadowEnabled != 0 && u_NumDirLights > 0)
                 {
                     vec3 lightDir = normalize(-u_DirLights[0].direction);
-                    shadow = CalcShadow(v_FragPosLightSpace, norm, lightDir);
+                    shadow = CalcShadow(v_FragPosLightSpace, N, lightDir);
                 }
 
-                // Accumulate lighting from all sources
-                vec3 result = vec3(0.0);
-                // First directional light with shadow
-                if (u_NumDirLights > 0)
-                    result += (1.0 - shadow) * CalcDirLight(u_DirLights[0], norm, viewDir, u_Shininess);
-                // Remaining directional lights without shadow
-                for (int i = 1; i < u_NumDirLights; i++)
-                    result += CalcDirLight(u_DirLights[i], norm, viewDir, u_Shininess);
-                for (int i = 0; i < u_NumPointLights; i++)
-                    result += CalcPointLight(u_PointLights[i], norm, v_FragPos, viewDir, u_Shininess);
-                for (int i = 0; i < u_NumSpotLights; i++)
-                    result += CalcSpotLight(u_SpotLights[i], norm, v_FragPos, viewDir, u_Shininess);
+                // Accumulate lighting
+                vec3 Lo = vec3(0.0);
 
-                o_Color = vec4((ambient + result) * baseColor.rgb, baseColor.a);
+                // Directional lights
+                if (u_NumDirLights > 0) {
+                    vec3 L = normalize(-u_DirLights[0].direction);
+                    vec3 radiance = u_DirLights[0].color * u_DirLights[0].intensity;
+                    Lo += (1.0 - shadow) * CalcPBRLight(L, radiance, N, V, albedo, metallic, roughness, F0);
+                }
+                for (int i = 1; i < u_NumDirLights; i++) {
+                    vec3 L = normalize(-u_DirLights[i].direction);
+                    vec3 radiance = u_DirLights[i].color * u_DirLights[i].intensity;
+                    Lo += CalcPBRLight(L, radiance, N, V, albedo, metallic, roughness, F0);
+                }
+
+                // Point lights
+                for (int i = 0; i < u_NumPointLights; i++) {
+                    vec3 L = normalize(u_PointLights[i].position - v_FragPos);
+                    float distance = length(u_PointLights[i].position - v_FragPos);
+                    float attenuation = 1.0 / (u_PointLights[i].constant + u_PointLights[i].linear * distance + u_PointLights[i].quadratic * distance * distance);
+                    vec3 radiance = u_PointLights[i].color * u_PointLights[i].intensity * attenuation;
+                    Lo += CalcPBRLight(L, radiance, N, V, albedo, metallic, roughness, F0);
+                }
+
+                // Spot lights
+                for (int i = 0; i < u_NumSpotLights; i++) {
+                    vec3 L = normalize(u_SpotLights[i].position - v_FragPos);
+                    float distance = length(u_SpotLights[i].position - v_FragPos);
+                    float attenuation = 1.0 / (u_SpotLights[i].constant + u_SpotLights[i].linear * distance + u_SpotLights[i].quadratic * distance * distance);
+                    float theta = dot(L, normalize(-u_SpotLights[i].direction));
+                    float epsilon = u_SpotLights[i].innerCutoff - u_SpotLights[i].outerCutoff;
+                    float spotIntensity = (abs(epsilon) < 0.0001) ? step(u_SpotLights[i].innerCutoff, theta) : clamp((theta - u_SpotLights[i].outerCutoff) / epsilon, 0.0, 1.0);
+                    vec3 radiance = u_SpotLights[i].color * u_SpotLights[i].intensity * attenuation * spotIntensity;
+                    Lo += CalcPBRLight(L, radiance, N, V, albedo, metallic, roughness, F0);
+                }
+
+                // Ambient (simple, non-IBL)
+                vec3 ambient = vec3(u_AmbientStrength) * albedo * ao;
+
+                // Output linear HDR (tone mapping + gamma done in post-processing)
+                vec3 color = ambient + Lo;
+                o_Color = vec4(color, u_Color.a * texColor.a);
                 o_EntityID = u_EntityID;
             }
         )";
@@ -448,7 +536,10 @@ namespace Engine
                 m_MeshShader->SetFloat4("u_Color", meshRenderer.Color);
                 m_MeshShader->SetInt("u_EntityID", static_cast<int>(entity));
                 m_MeshShader->SetFloat2("u_Tiling", meshRenderer.Tiling);
-                m_MeshShader->SetFloat("u_Shininess", meshRenderer.Shininess);
+
+                // PBR parameters
+                m_MeshShader->SetFloat("u_Metallic", meshRenderer.Metallic);
+                m_MeshShader->SetFloat("u_Roughness", meshRenderer.Roughness);
 
                 for (const auto& subMesh : meshRenderer.MeshData->GetSubMeshes())
                 {
@@ -465,6 +556,55 @@ namespace Engine
                         m_MeshShader->SetInt("u_HasTexture", 0);
                     }
                     m_MeshShader->SetInt("u_DiffuseTexture", 0);
+
+                    // Normal map: per-submesh > component-level > none
+                    Ref<Texture2D> normalTex = subMesh.NormalTexture ? subMesh.NormalTexture : meshRenderer.NormalMapTexture;
+                    if (normalTex)
+                    {
+                        normalTex->Bind(2);
+                        m_MeshShader->SetInt("u_HasNormalMap", 1);
+                    }
+                    else
+                    {
+                        m_MeshShader->SetInt("u_HasNormalMap", 0);
+                    }
+                    m_MeshShader->SetInt("u_NormalMap", 2);
+
+                    // Metallic map (unit 3)
+                    if (meshRenderer.MetallicTexture)
+                    {
+                        meshRenderer.MetallicTexture->Bind(3);
+                        m_MeshShader->SetInt("u_HasMetallicMap", 1);
+                    }
+                    else
+                    {
+                        m_MeshShader->SetInt("u_HasMetallicMap", 0);
+                    }
+                    m_MeshShader->SetInt("u_MetallicMap", 3);
+
+                    // Roughness map (unit 4)
+                    if (meshRenderer.RoughnessTexture)
+                    {
+                        meshRenderer.RoughnessTexture->Bind(4);
+                        m_MeshShader->SetInt("u_HasRoughnessMap", 1);
+                    }
+                    else
+                    {
+                        m_MeshShader->SetInt("u_HasRoughnessMap", 0);
+                    }
+                    m_MeshShader->SetInt("u_RoughnessMap", 4);
+
+                    // AO map (unit 5)
+                    if (meshRenderer.AOTexture)
+                    {
+                        meshRenderer.AOTexture->Bind(5);
+                        m_MeshShader->SetInt("u_HasAOMap", 1);
+                    }
+                    else
+                    {
+                        m_MeshShader->SetInt("u_HasAOMap", 0);
+                    }
+                    m_MeshShader->SetInt("u_AOMap", 5);
 
                     Renderer::Submit(m_MeshShader, subMesh.VAO, transform.GetTransform());
                 }

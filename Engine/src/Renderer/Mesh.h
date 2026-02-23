@@ -17,6 +17,8 @@ namespace Engine
         uint32_t IndexCount = 0;
         std::string DiffuseTexturePath;   // relative path (extracted from model)
         Ref<Texture2D> DiffuseTexture;    // loaded texture, null if none
+        std::string NormalTexturePath;    // relative path (extracted from model)
+        Ref<Texture2D> NormalTexture;     // loaded normal map, null if none
     };
 
     class Mesh

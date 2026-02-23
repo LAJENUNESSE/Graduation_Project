@@ -44,6 +44,17 @@ namespace Engine
         fbSpec.Height = 720;
         m_Framebuffer = Framebuffer::Create(fbSpec);
 
+        // HDR framebuffer for scene rendering (RGBA16F for HDR values)
+        FramebufferSpecification hdrSpec;
+        hdrSpec.Attachments = {FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RED_INTEGER,
+                               FramebufferTextureFormat::DEPTH24STENCIL8};
+        hdrSpec.Width = 1280;
+        hdrSpec.Height = 720;
+        m_HDRFramebuffer = Framebuffer::Create(hdrSpec);
+
+        // Initialize post-processing
+        m_PostProcessing.Init(1280, 720);
+
         // Create scene and a default entity
         m_ActiveScene = CreateRef<Scene>();
 
@@ -84,6 +95,10 @@ namespace Engine
             {
                 m_Framebuffer->Resize(static_cast<uint32_t>(m_ViewportSize.x),
                                       static_cast<uint32_t>(m_ViewportSize.y));
+                m_HDRFramebuffer->Resize(static_cast<uint32_t>(m_ViewportSize.x),
+                                         static_cast<uint32_t>(m_ViewportSize.y));
+                m_PostProcessing.Resize(static_cast<uint32_t>(m_ViewportSize.x),
+                                        static_cast<uint32_t>(m_ViewportSize.y));
                 m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
                 m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
                                                 static_cast<uint32_t>(m_ViewportSize.y));
@@ -104,15 +119,25 @@ namespace Engine
         float sceneRenderCpuMs = 0.0f;
         {
             PROFILE_SCOPE("SceneRender", &sceneRenderCpuMs);
-            m_Framebuffer->Bind();
+
+            // Render scene to HDR FBO (linear space, RGBA16F)
+            m_HDRFramebuffer->Bind();
             RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
             RenderCommand::Clear();
+            m_HDRFramebuffer->ClearAttachment(1, -1);
 
-            // Clear entity ID attachment to -1 (no entity)
+            m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+            m_HDRFramebuffer->Unbind();
+
+            // Post-processing: HDR → Tone Mapping + Bloom → LDR output to main FBO
+            m_Framebuffer->Bind();
+            RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 1.0f});
+            RenderCommand::Clear();
             m_Framebuffer->ClearAttachment(1, -1);
 
-            // Scene rendering
-            m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+            // Run post-processing (outputs to currently bound FBO = main framebuffer)
+            m_PostProcessing.Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0),
+                                     m_PostProcessingSettings);
 
             m_Framebuffer->Unbind();
         }
@@ -201,6 +226,45 @@ namespace Engine
 
             ImGui::DragFloat("阴影偏移", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
             ImGui::DragFloat("阴影范围", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
+
+            ImGui::Separator();
+            ImGui::Checkbox("Gamma 校正", &m_PostProcessingSettings.GammaCorrection);
+
+            ImGui::Separator();
+            ImGui::Text("后处理");
+            ImGui::Checkbox("泛光 (Bloom)", &m_PostProcessingSettings.BloomEnabled);
+            if (m_PostProcessingSettings.BloomEnabled)
+            {
+                ImGui::DragFloat("泛光阈值", &m_PostProcessingSettings.BloomThreshold, 0.05f, 0.0f, 10.0f, "%.2f");
+                ImGui::DragFloat("泛光强度", &m_PostProcessingSettings.BloomStrength, 0.01f, 0.0f, 3.0f, "%.2f");
+                ImGui::DragInt("泛光迭代", &m_PostProcessingSettings.BloomIterations, 1, 1, 10);
+            }
+
+            const char* toneMappingItems[] = {"Reinhard", "ACES"};
+            ImGui::Combo("色调映射", &m_PostProcessingSettings.ToneMappingMode, toneMappingItems, 2);
+
+            ImGui::Separator();
+            ImGui::Text("MSAA 抗锯齿");
+            {
+                const char* msaaItems[] = {"关闭", "2x", "4x"};
+                int msaaValues[] = {1, 2, 4};
+                int currentMsaaIdx = 0;
+                uint32_t currentSamples = m_Framebuffer->GetSpecification().Samples;
+                for (int i = 0; i < 3; i++)
+                {
+                    if (currentSamples == static_cast<uint32_t>(msaaValues[i]))
+                    {
+                        currentMsaaIdx = i;
+                        break;
+                    }
+                }
+                if (ImGui::Combo("MSAA", &currentMsaaIdx, msaaItems, 3))
+                {
+                    FramebufferSpecification spec = m_Framebuffer->GetSpecification();
+                    spec.Samples = msaaValues[currentMsaaIdx];
+                    m_Framebuffer = Framebuffer::Create(spec);
+                }
+            }
 
             ImGui::Separator();
             ImGui::Text("\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92");
@@ -330,7 +394,7 @@ namespace Engine
                 if (mouseX >= 0 && mouseY >= 0 && mouseX < static_cast<int>(vpSize.x) &&
                     mouseY < static_cast<int>(vpSize.y))
                 {
-                    int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
+                    int pixelData = m_HDRFramebuffer->ReadPixel(1, mouseX, mouseY);
                     m_HoveredEntity =
                         pixelData == -1 ? Entity() : Entity(static_cast<entt::entity>(pixelData), m_ActiveScene.get());
                 }
