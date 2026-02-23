@@ -169,6 +169,12 @@ namespace Engine
             out << YAML::Key << "TexturePath" << YAML::Value << mrc.TexturePath;
             out << YAML::Key << "Tiling" << YAML::Value << mrc.Tiling;
             out << YAML::Key << "Shininess" << YAML::Value << mrc.Shininess;
+            out << YAML::Key << "NormalMapPath" << YAML::Value << mrc.NormalMapPath;
+            out << YAML::Key << "Metallic" << YAML::Value << mrc.Metallic;
+            out << YAML::Key << "Roughness" << YAML::Value << mrc.Roughness;
+            out << YAML::Key << "MetallicTexturePath" << YAML::Value << mrc.MetallicTexturePath;
+            out << YAML::Key << "RoughnessTexturePath" << YAML::Value << mrc.RoughnessTexturePath;
+            out << YAML::Key << "AOTexturePath" << YAML::Value << mrc.AOTexturePath;
             out << YAML::EndMap;
         }
 
@@ -422,6 +428,48 @@ namespace Engine
                         mrc.Tiling = meshRendererComponent["Tiling"].as<glm::vec2>();
                     if (meshRendererComponent["Shininess"])
                         mrc.Shininess = meshRendererComponent["Shininess"].as<float>();
+
+                    if (meshRendererComponent["NormalMapPath"])
+                    {
+                        std::string normalPath = meshRendererComponent["NormalMapPath"].as<std::string>();
+                        if (!normalPath.empty() && normalPath[0] != '/' && normalPath.find("..") == std::string::npos)
+                        {
+                            mrc.NormalMapPath = normalPath;
+                            mrc.NormalMapTexture = Texture2D::Create(mrc.NormalMapPath);
+                        }
+                        else if (!normalPath.empty())
+                        {
+                            ENGINE_CORE_WARN("Rejected unsafe normal map path: {0}", normalPath);
+                        }
+                    }
+
+                    // PBR parameters
+                    if (meshRendererComponent["Metallic"])
+                        mrc.Metallic = meshRendererComponent["Metallic"].as<float>();
+                    if (meshRendererComponent["Roughness"])
+                        mrc.Roughness = meshRendererComponent["Roughness"].as<float>();
+
+                    auto loadSafeTexture = [](const YAML::Node& node, const std::string& key,
+                                              std::string& outPath, Ref<Texture2D>& outTex) {
+                        if (!node[key]) return;
+                        std::string path = node[key].as<std::string>();
+                        if (!path.empty() && path[0] != '/' && path.find("..") == std::string::npos)
+                        {
+                            outPath = path;
+                            outTex = Texture2D::Create(path);
+                        }
+                        else if (!path.empty())
+                        {
+                            ENGINE_CORE_WARN("Rejected unsafe texture path: {0}", path);
+                        }
+                    };
+
+                    loadSafeTexture(meshRendererComponent, "MetallicTexturePath",
+                                    mrc.MetallicTexturePath, mrc.MetallicTexture);
+                    loadSafeTexture(meshRendererComponent, "RoughnessTexturePath",
+                                    mrc.RoughnessTexturePath, mrc.RoughnessTexture);
+                    loadSafeTexture(meshRendererComponent, "AOTexturePath",
+                                    mrc.AOTexturePath, mrc.AOTexture);
                 }
 
                 // LightComponent

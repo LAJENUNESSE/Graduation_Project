@@ -23,49 +23,51 @@ namespace Engine
             {ShaderDataType::Float3, "a_Position"},
             {ShaderDataType::Float3, "a_Normal"},
             {ShaderDataType::Float2, "a_TexCoords"},
+            {ShaderDataType::Float3, "a_Tangent"},
         };
     }
 
     Ref<Mesh> Mesh::CreateCube()
     {
-        // 24 vertices: 4 per face, each face has its own normal
+        // 24 vertices: 4 per face, each face has its own normal and tangent
+        // Layout: Position(3) + Normal(3) + TexCoords(2) + Tangent(3) = 11 floats/vertex
         // clang-format off
         float vertices[] = {
-            // Front face (z = +0.5, normal = 0,0,1)
-            -0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   0.0f, 0.0f,
-             0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   1.0f, 0.0f,
-             0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   1.0f, 1.0f,
-            -0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   0.0f, 1.0f,
+            // Front face (z = +0.5, normal = 0,0,1, tangent = 1,0,0)
+            -0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   0.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
+            -0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   0.0f, 1.0f,   1.0f, 0.0f, 0.0f,
 
-            // Back face (z = -0.5, normal = 0,0,-1)
-             0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   0.0f, 0.0f,
-            -0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   1.0f, 0.0f,
-            -0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   1.0f, 1.0f,
-             0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   0.0f, 1.0f,
+            // Back face (z = -0.5, normal = 0,0,-1, tangent = -1,0,0)
+             0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,
+            -0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   1.0f, 0.0f,  -1.0f, 0.0f, 0.0f,
+            -0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,
+             0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   0.0f, 1.0f,  -1.0f, 0.0f, 0.0f,
 
-            // Top face (y = +0.5, normal = 0,1,0)
-            -0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,   0.0f, 0.0f,
-             0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,   1.0f, 0.0f,
-             0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,   1.0f, 1.0f,
-            -0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,   0.0f, 1.0f,
+            // Top face (y = +0.5, normal = 0,1,0, tangent = 1,0,0)
+            -0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,   0.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,   1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
+            -0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,   0.0f, 1.0f,   1.0f, 0.0f, 0.0f,
 
-            // Bottom face (y = -0.5, normal = 0,-1,0)
-            -0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,   0.0f, 0.0f,
-             0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,   1.0f, 0.0f,
-             0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,   1.0f, 1.0f,
-            -0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,   0.0f, 1.0f,
+            // Bottom face (y = -0.5, normal = 0,-1,0, tangent = 1,0,0)
+            -0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,   0.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,   1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
+            -0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,   0.0f, 1.0f,   1.0f, 0.0f, 0.0f,
 
-            // Right face (x = +0.5, normal = 1,0,0)
-             0.5f, -0.5f,  0.5f,   1.0f,  0.0f,  0.0f,   0.0f, 0.0f,
-             0.5f, -0.5f, -0.5f,   1.0f,  0.0f,  0.0f,   1.0f, 0.0f,
-             0.5f,  0.5f, -0.5f,   1.0f,  0.0f,  0.0f,   1.0f, 1.0f,
-             0.5f,  0.5f,  0.5f,   1.0f,  0.0f,  0.0f,   0.0f, 1.0f,
+            // Right face (x = +0.5, normal = 1,0,0, tangent = 0,0,-1)
+             0.5f, -0.5f,  0.5f,   1.0f,  0.0f,  0.0f,   0.0f, 0.0f,   0.0f, 0.0f, -1.0f,
+             0.5f, -0.5f, -0.5f,   1.0f,  0.0f,  0.0f,   1.0f, 0.0f,   0.0f, 0.0f, -1.0f,
+             0.5f,  0.5f, -0.5f,   1.0f,  0.0f,  0.0f,   1.0f, 1.0f,   0.0f, 0.0f, -1.0f,
+             0.5f,  0.5f,  0.5f,   1.0f,  0.0f,  0.0f,   0.0f, 1.0f,   0.0f, 0.0f, -1.0f,
 
-            // Left face (x = -0.5, normal = -1,0,0)
-            -0.5f, -0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,   0.0f, 0.0f,
-            -0.5f, -0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,   1.0f, 0.0f,
-            -0.5f,  0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,   1.0f, 1.0f,
-            -0.5f,  0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,   0.0f, 1.0f,
+            // Left face (x = -0.5, normal = -1,0,0, tangent = 0,0,1)
+            -0.5f, -0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,   0.0f, 0.0f,   0.0f, 0.0f, 1.0f,
+            -0.5f, -0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,   1.0f, 0.0f,   0.0f, 0.0f, 1.0f,
+            -0.5f,  0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,   1.0f, 1.0f,   0.0f, 0.0f, 1.0f,
+            -0.5f,  0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,   0.0f, 1.0f,   0.0f, 0.0f, 1.0f,
         };
 
         uint32_t indices[] = {
@@ -98,14 +100,15 @@ namespace Engine
 
     Ref<Mesh> Mesh::CreatePlane()
     {
-        // 4 vertices in XZ plane at y=0, normal pointing up
+        // 4 vertices in XZ plane at y=0, normal pointing up, tangent along +X
+        // Layout: Position(3) + Normal(3) + TexCoords(2) + Tangent(3) = 11 floats/vertex
         // clang-format off
         float vertices[] = {
-            // Position              Normal            TexCoords
-            -0.5f, 0.0f,  0.5f,   0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
-             0.5f, 0.0f,  0.5f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,
-             0.5f, 0.0f, -0.5f,   0.0f, 1.0f, 0.0f,   1.0f, 1.0f,
-            -0.5f, 0.0f, -0.5f,   0.0f, 1.0f, 0.0f,   0.0f, 1.0f,
+            // Position              Normal            TexCoords    Tangent
+            -0.5f, 0.0f,  0.5f,   0.0f, 1.0f, 0.0f,   0.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f, 0.0f,  0.5f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,
+             0.5f, 0.0f, -0.5f,   0.0f, 1.0f, 0.0f,   1.0f, 1.0f,   1.0f, 0.0f, 0.0f,
+            -0.5f, 0.0f, -0.5f,   0.0f, 1.0f, 0.0f,   0.0f, 1.0f,   1.0f, 0.0f, 0.0f,
         };
 
         uint32_t indices[] = {
@@ -172,6 +175,11 @@ namespace Engine
                 float s = static_cast<float>(j) / static_cast<float>(sectors);
                 float t = static_cast<float>(i) / static_cast<float>(stacks);
 
+                // Tangent: derivative of position w.r.t. sectorAngle (normalized)
+                float tx = -std::sin(sectorAngle);
+                float ty = 0.0f;
+                float tz = std::cos(sectorAngle);
+
                 vertices.push_back(px);
                 vertices.push_back(py);
                 vertices.push_back(pz);
@@ -180,6 +188,9 @@ namespace Engine
                 vertices.push_back(nz);
                 vertices.push_back(s);
                 vertices.push_back(t);
+                vertices.push_back(tx);
+                vertices.push_back(ty);
+                vertices.push_back(tz);
             }
         }
 
@@ -228,7 +239,8 @@ namespace Engine
         unsigned int flags = aiProcess_Triangulate
                            | aiProcess_GenSmoothNormals
                            | aiProcess_FlipUVs
-                           | aiProcess_JoinIdenticalVertices;
+                           | aiProcess_JoinIdenticalVertices
+                           | aiProcess_CalcTangentSpace;
 
         const aiScene* scene = importer.ReadFile(filepath, flags);
 
@@ -249,7 +261,7 @@ namespace Engine
             std::vector<float> vertices;
             std::vector<uint32_t> indices;
 
-            vertices.reserve(aiM->mNumVertices * 8);
+            vertices.reserve(aiM->mNumVertices * 11);
 
             for (unsigned int v = 0; v < aiM->mNumVertices; v++)
             {
@@ -280,6 +292,20 @@ namespace Engine
                 }
                 else
                 {
+                    vertices.push_back(0.0f);
+                    vertices.push_back(0.0f);
+                }
+
+                // Tangent
+                if (aiM->HasTangentsAndBitangents())
+                {
+                    vertices.push_back(aiM->mTangents[v].x);
+                    vertices.push_back(aiM->mTangents[v].y);
+                    vertices.push_back(aiM->mTangents[v].z);
+                }
+                else
+                {
+                    vertices.push_back(1.0f);
                     vertices.push_back(0.0f);
                     vertices.push_back(0.0f);
                 }
@@ -339,6 +365,33 @@ namespace Engine
                             {
                                 sub.DiffuseTexturePath = relStr;
                                 sub.DiffuseTexture = Texture2D::Create(relStr);
+                            }
+                        }
+                    }
+                }
+
+                // Extract normal map texture from material
+                if (mat->GetTextureCount(aiTextureType_NORMALS) > 0 || mat->GetTextureCount(aiTextureType_HEIGHT) > 0)
+                {
+                    aiString texPath;
+                    aiTextureType normalType = (mat->GetTextureCount(aiTextureType_NORMALS) > 0)
+                        ? aiTextureType_NORMALS : aiTextureType_HEIGHT;
+                    mat->GetTexture(normalType, 0, &texPath);
+
+                    std::string texStr = texPath.C_Str();
+                    if (!texStr.empty())
+                    {
+                        std::filesystem::path fullTexPath = modelDir / texStr;
+                        if (std::filesystem::exists(fullTexPath))
+                        {
+                            std::error_code ec2;
+                            std::filesystem::path relPath2 = std::filesystem::relative(fullTexPath, std::filesystem::current_path(), ec2);
+                            std::string relStr2 = ec2 ? fullTexPath.string() : relPath2.string();
+
+                            if (relStr2.find("..") == std::string::npos)
+                            {
+                                sub.NormalTexturePath = relStr2;
+                                sub.NormalTexture = Texture2D::Create(relStr2);
                             }
                         }
                     }

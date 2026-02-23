@@ -83,6 +83,14 @@ namespace Engine
             glDeleteTextures(1, &m_DepthAttachment);
         else
             glDeleteRenderbuffers(1, &m_DepthAttachment);
+
+        // MSAA cleanup
+        if (m_MSAAFBO)
+        {
+            glDeleteFramebuffers(1, &m_MSAAFBO);
+            glDeleteRenderbuffers(1, &m_MSAAColorRenderbuffer);
+            glDeleteRenderbuffers(1, &m_MSAADepthRenderbuffer);
+        }
     }
 
     void OpenGLFramebuffer::Invalidate()
@@ -99,6 +107,17 @@ namespace Engine
             m_ColorAttachments.clear();
             m_DepthAttachment = 0;
             m_DepthIsTexture = false;
+        }
+
+        // MSAA cleanup
+        if (m_MSAAFBO)
+        {
+            glDeleteFramebuffers(1, &m_MSAAFBO);
+            glDeleteRenderbuffers(1, &m_MSAAColorRenderbuffer);
+            glDeleteRenderbuffers(1, &m_MSAADepthRenderbuffer);
+            m_MSAAFBO = 0;
+            m_MSAAColorRenderbuffer = 0;
+            m_MSAADepthRenderbuffer = 0;
         }
 
         glGenFramebuffers(1, &m_RendererID);
@@ -125,6 +144,10 @@ namespace Engine
                     {
                     case FramebufferTextureFormat::RGBA8:
                         Utils::AttachColorTexture(m_ColorAttachments[i], GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE,
+                                                  m_Specification.Width, m_Specification.Height, static_cast<int>(i));
+                        break;
+                    case FramebufferTextureFormat::RGBA16F:
+                        Utils::AttachColorTexture(m_ColorAttachments[i], GL_RGBA16F, GL_RGBA, GL_FLOAT,
                                                   m_Specification.Width, m_Specification.Height, static_cast<int>(i));
                         break;
                     case FramebufferTextureFormat::RED_INTEGER:
@@ -212,6 +235,44 @@ namespace Engine
                            "Framebuffer is incomplete!");
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // Create MSAA FBO if Samples > 1
+        if (m_Specification.Samples > 1 && !m_ColorAttachments.empty())
+        {
+            GLsizei samples = static_cast<GLsizei>(m_Specification.Samples);
+
+            // Determine internal format from first color attachment
+            GLenum msaaInternalFormat = GL_RGBA8;
+            if (!m_ColorAttachmentSpecifications.empty() &&
+                m_ColorAttachmentSpecifications[0].TextureFormat == FramebufferTextureFormat::RGBA16F)
+            {
+                msaaInternalFormat = GL_RGBA16F;
+            }
+
+            glGenFramebuffers(1, &m_MSAAFBO);
+            glBindFramebuffer(GL_FRAMEBUFFER, m_MSAAFBO);
+
+            // MSAA color renderbuffer
+            glGenRenderbuffers(1, &m_MSAAColorRenderbuffer);
+            glBindRenderbuffer(GL_RENDERBUFFER, m_MSAAColorRenderbuffer);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, msaaInternalFormat,
+                                             m_Specification.Width, m_Specification.Height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                      GL_RENDERBUFFER, m_MSAAColorRenderbuffer);
+
+            // MSAA depth renderbuffer
+            glGenRenderbuffers(1, &m_MSAADepthRenderbuffer);
+            glBindRenderbuffer(GL_RENDERBUFFER, m_MSAADepthRenderbuffer);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8,
+                                             m_Specification.Width, m_Specification.Height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                                      GL_RENDERBUFFER, m_MSAADepthRenderbuffer);
+
+            ENGINE_CORE_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
+                               "MSAA Framebuffer is incomplete!");
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
     }
 
     void OpenGLFramebuffer::Bind()
@@ -222,6 +283,32 @@ namespace Engine
 
     void OpenGLFramebuffer::Unbind()
     {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    void OpenGLFramebuffer::BindMSAA()
+    {
+        if (m_MSAAFBO)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, m_MSAAFBO);
+            glViewport(0, 0, m_Specification.Width, m_Specification.Height);
+        }
+        else
+        {
+            Bind();
+        }
+    }
+
+    void OpenGLFramebuffer::BlitMSAA()
+    {
+        if (!m_MSAAFBO)
+            return;
+
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_MSAAFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_RendererID);
+        glBlitFramebuffer(0, 0, m_Specification.Width, m_Specification.Height,
+                          0, 0, m_Specification.Width, m_Specification.Height,
+                          GL_COLOR_BUFFER_BIT, GL_NEAREST);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 

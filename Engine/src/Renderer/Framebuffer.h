@@ -14,6 +14,7 @@ namespace Engine
 
         // Color
         RGBA8,
+        RGBA16F,
         RED_INTEGER,
 
         // Depth/stencil
@@ -71,6 +72,11 @@ namespace Engine
         virtual uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const = 0;
         virtual uint32_t GetDepthAttachmentRendererID() const = 0;
         virtual const FramebufferSpecification& GetSpecification() const = 0;
+
+        // MSAA support
+        virtual void BindMSAA() = 0;
+        virtual void BlitMSAA() = 0;
+        virtual bool IsMSAAEnabled() const = 0;
 
         static Ref<Framebuffer> Create(const FramebufferSpecification& spec);
     };

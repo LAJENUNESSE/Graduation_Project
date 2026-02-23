@@ -68,10 +68,24 @@ namespace Engine
         glm::vec4 Color = {1.0f, 1.0f, 1.0f, 1.0f};
 
         // 材质属性
-        Ref<Texture2D> DiffuseTexture;        // null = 纯色
+        Ref<Texture2D> DiffuseTexture;        // null = 纯色 (Albedo)
         std::string TexturePath;              // 用于序列化
         glm::vec2 Tiling = {1.0f, 1.0f};     // 纹理平铺
-        float Shininess = 32.0f;              // 高光指数
+        float Shininess = 32.0f;              // 高光指数 (Phong fallback, unused in PBR)
+
+        // 法线贴图
+        Ref<Texture2D> NormalMapTexture;      // null = 不使用法线贴图
+        std::string NormalMapPath;            // 用于序列化
+
+        // PBR 参数 (Metallic-Roughness 工作流)
+        float Metallic = 0.0f;                // 金属度 0-1
+        float Roughness = 0.5f;               // 粗糙度 0-1
+        Ref<Texture2D> MetallicTexture;       // 可选金属度贴图
+        std::string MetallicTexturePath;
+        Ref<Texture2D> RoughnessTexture;      // 可选粗糙度贴图
+        std::string RoughnessTexturePath;
+        Ref<Texture2D> AOTexture;             // 可选环境遮蔽贴图
+        std::string AOTexturePath;
 
         std::string ModelPath;                // 模型文件相对路径（Model 类型时非空）
 

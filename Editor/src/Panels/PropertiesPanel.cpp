@@ -416,8 +416,9 @@ namespace Engine
             }
 
             ImGui::Separator();
-            ImGui::Text("材质");
-            ImGui::DragFloat("高光度", &component.Shininess, 1.0f, 1.0f, 256.0f, "%.0f");
+            ImGui::Text("PBR 材质");
+            ImGui::DragFloat("金属度", &component.Metallic, 0.01f, 0.0f, 1.0f, "%.2f");
+            ImGui::DragFloat("粗糙度", &component.Roughness, 0.01f, 0.0f, 1.0f, "%.2f");
 
             // Texture path
             char texPathBuf[256];
@@ -466,6 +467,49 @@ namespace Engine
 
             ImGui::DragFloat("平铺 X", &component.Tiling.x, 0.1f, 0.01f, 100.0f, "%.2f");
             ImGui::DragFloat("平铺 Y", &component.Tiling.y, 0.1f, 0.01f, 100.0f, "%.2f");
+
+            ImGui::Separator();
+            ImGui::Text("法线贴图");
+            char normalPathBuf[256];
+            memset(normalPathBuf, 0, sizeof(normalPathBuf));
+            std::strncpy(normalPathBuf, component.NormalMapPath.c_str(), sizeof(normalPathBuf) - 1);
+            if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf)))
+            {
+                component.NormalMapPath = std::string(normalPathBuf);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("浏览##NormalMap"))
+            {
+                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "法线贴图");
+                if (!absPath.empty())
+                {
+                    std::error_code ec;
+                    std::filesystem::path relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
+                    std::string relStr = ec ? absPath : relative.string();
+
+                    if (relStr.find("..") != std::string::npos)
+                    {
+                        ENGINE_WARN("法线贴图必须位于项目目录内: {0}", relStr);
+                    }
+                    else
+                    {
+                        component.NormalMapPath = relStr;
+                        component.NormalMapTexture = Texture2D::Create(component.NormalMapPath);
+                    }
+                }
+            }
+
+            if (ImGui::Button("加载法线贴图"))
+            {
+                if (!component.NormalMapPath.empty())
+                    component.NormalMapTexture = Texture2D::Create(component.NormalMapPath);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("清除法线贴图"))
+            {
+                component.NormalMapTexture.reset();
+                component.NormalMapPath.clear();
+            }
         });
     }
 
