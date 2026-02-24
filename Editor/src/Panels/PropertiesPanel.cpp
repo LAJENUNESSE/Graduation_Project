@@ -689,6 +689,28 @@ namespace Engine
                 ImGui::DragFloat("粘性系数", &component.SPH_Viscosity, 0.001f, 0.0f, 1.0f, "%.4f");
                 ImGui::DragFloat("光滑半径", &component.SPH_SmoothingRadius, 0.01f, 0.01f, 2.0f, "%.3f");
                 ImGui::DragFloat("粒子质量", &component.SPH_ParticleMass, 0.001f, 0.001f, 1.0f, "%.4f");
+
+                ImGui::Separator();
+                ImGui::Text("PCISPH");
+                ImGui::Checkbox("启用 PCISPH", &component.SPH_PCISPHEnabled);
+                if (component.SPH_PCISPHEnabled)
+                {
+                    ImGui::SliderInt("PCISPH 迭代次数", &component.SPH_PCISPHIterations, 1, 8);
+                    ImGui::DragFloat("PCISPH 校正系数", &component.SPH_PCISPHDelta, 0.01f, 0.01f, 1.0f, "%.3f");
+                }
+
+                ImGui::Separator();
+                ImGui::Text("表面张力");
+                ImGui::DragFloat("表面张力系数", &component.SPH_SurfaceTension, 0.1f, 0.0f, 20.0f, "%.2f");
+
+                ImGui::Separator();
+                ImGui::Text("刚体耦合");
+                ImGui::Checkbox("启用刚体耦合", &component.SPH_RigidBodyCoupling);
+                if (component.SPH_RigidBodyCoupling)
+                {
+                    ImGui::DragFloat("边界刚度", &component.SPH_BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
+                    ImGui::DragFloat("边界阻尼", &component.SPH_BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
+                }
             }
         });
 

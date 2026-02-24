@@ -213,6 +213,17 @@ namespace Engine
         float SPH_SmoothingRadius = 0.1f;      // 光滑核半径 h
         float SPH_ParticleMass = 0.02f;        // 单粒子质量 m
 
+        // PCISPH
+        bool SPH_PCISPHEnabled = true;
+        int SPH_PCISPHIterations = 3;       // 1-8
+        float SPH_PCISPHDelta = 0.3f;
+        // 表面张力
+        float SPH_SurfaceTension = 0.0f;    // γ, 0=关闭
+        // 刚体耦合
+        bool SPH_RigidBodyCoupling = false;
+        float SPH_BoundaryStiffness = 5000.0f;
+        float SPH_BoundaryDamping = 0.5f;
+
         // 运行时（不序列化）
         void* RuntimeParticleSystem = nullptr;  // ParticleSystemGPU*
         int CollisionBurstCount = 0;            // 碰撞触发的爆发（帧末自动清零）
