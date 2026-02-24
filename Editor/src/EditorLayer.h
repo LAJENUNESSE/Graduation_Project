@@ -6,6 +6,7 @@
 #include "Panels/SceneHierarchyPanel.h"
 #include "Panels/PropertiesPanel.h"
 #include "Renderer/PostProcessing.h"
+#include "Renderer/SceneRenderer.h"
 #include "Physics/PhysicsDebugDraw.h"
 
 namespace Engine
@@ -38,12 +39,13 @@ namespace Engine
 
     private:
         Ref<Framebuffer> m_Framebuffer;
-        Ref<Framebuffer> m_HDRFramebuffer; // HDR scene render target
+        Ref<Framebuffer> m_HDRFramebuffer;
         Ref<Scene> m_ActiveScene;
-        Ref<Scene> m_EditorScene;          // 编辑器原始场景（Play 时保存快照）
+        Ref<Scene> m_EditorScene;
 
         SceneState m_SceneState = SceneState::Edit;
 
+        SceneRenderer m_SceneRenderer;
         PostProcessing m_PostProcessing;
         PostProcessingSettings m_PostProcessingSettings;
 
@@ -61,12 +63,10 @@ namespace Engine
         bool m_ViewportHovered = false;
         glm::vec2 m_LastMousePos = {0.0f, 0.0f};
 
-        int m_GizmoType = -1; // -1 = no gizmo
+        int m_GizmoType = -1;
 
-        // Performance panel
         bool m_ShowStatsPanel = true;
 
-        // Physics debug
         bool m_ShowPhysicsColliders = false;
         PhysicsDebugDraw m_PhysicsDebugDraw;
     };

@@ -16,6 +16,7 @@ namespace Engine
 
     class Mesh;
     class Texture2D;
+    class Material;
 
     struct IDComponent
     {
@@ -88,6 +89,8 @@ namespace Engine
         std::string AOTexturePath;
 
         std::string ModelPath;                // 模型文件相对路径（Model 类型时非空）
+
+        Ref<Material> MaterialInstance;       // 可选，运行时构建的 Material 实例
 
         MeshRendererComponent() = default;
         MeshRendererComponent(const MeshRendererComponent&) = default;

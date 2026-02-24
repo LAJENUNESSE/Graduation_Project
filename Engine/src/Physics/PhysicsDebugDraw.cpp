@@ -19,36 +19,8 @@ namespace Engine
         if (m_Initialized)
             return;
 
-        // 简单的线段着色器
-        std::string vertSrc = R"(
-            #version 330 core
-            layout(location = 0) in vec3 a_Position;
-            layout(location = 1) in vec3 a_Color;
-
-            uniform mat4 u_ViewProjection;
-
-            out vec3 v_Color;
-
-            void main() {
-                v_Color = a_Color;
-                gl_Position = u_ViewProjection * vec4(a_Position, 1.0);
-            }
-        )";
-
-        std::string fragSrc = R"(
-            #version 330 core
-            layout(location = 0) out vec4 o_Color;
-            layout(location = 1) out int o_EntityID;
-
-            in vec3 v_Color;
-
-            void main() {
-                o_Color = vec4(v_Color, 1.0);
-                o_EntityID = -1;
-            }
-        )";
-
-        m_LineShader = Shader::Create("PhysicsDebugLine", vertSrc, fragSrc);
+        // 物理调试线段着色器
+        m_LineShader = Shader::Create("assets/shaders/PhysicsDebugLine.glsl");
 
         // 创建动态 VBO（预分配空间，后续用 SetData 更新）
         m_LineVBO = VertexBuffer::Create(sizeof(LineVertex) * 4096);

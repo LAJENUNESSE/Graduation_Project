@@ -55,17 +55,19 @@ namespace Engine
         // Initialize post-processing
         m_PostProcessing.Init(1280, 720);
 
+        // Initialize scene renderer
+        m_SceneRenderer.Init();
+
         // Create scene and a default entity
         m_ActiveScene = CreateRef<Scene>();
+        m_ActiveScene->SetSceneRenderer(&m_SceneRenderer);
 
-        // Create a default cube entity
         Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
         auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
         meshRenderer.MeshData = Mesh::CreateCube();
         meshRenderer.Color = {0.8f, 0.2f, 0.3f, 1.0f};
 
-        // Create a default directional light
-        Entity lightEntity = m_ActiveScene->CreateEntity("方向光");
+        Entity lightEntity = m_ActiveScene->CreateEntity("\xe6\x96\xb9\xe5\x90\x91\xe5\x85\x89");
         auto& light = lightEntity.AddComponent<LightComponent>();
         light.Type = LightComponent::LightType::Directional;
         light.Color = {1.0f, 0.95f, 0.9f};
@@ -81,11 +83,12 @@ namespace Engine
 
     void EditorLayer::OnDetach()
     {
+        m_SceneRenderer.Shutdown();
     }
 
     void EditorLayer::OnUpdate(Timestep ts)
     {
-        // Handle FBO resize before rendering (only when mouse is released to avoid rebuild spam)
+        // Handle FBO resize before rendering
         FramebufferSpecification spec = m_Framebuffer->GetSpecification();
         if (m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
             (spec.Width != static_cast<uint32_t>(m_ViewportSize.x) ||
@@ -107,11 +110,30 @@ namespace Engine
 
         m_EditorCamera.OnUpdate(ts, m_ViewportHovered);
 
+        // 物理更新（仅运行时）
+        switch (m_SceneState)
+        {
+        case SceneState::Edit:
+            m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+            break;
+        case SceneState::Play:
+            m_ActiveScene->OnUpdateRuntime(ts, m_EditorCamera);
+            break;
+        }
+
+        // 开始场景渲染
+        m_SceneRenderer.BeginScene(m_EditorCamera, m_ActiveScene.get());
+
         // Shadow pass (renders to its own FBO) — CPU profiled
         float shadowCpuMs = 0.0f;
         {
             PROFILE_SCOPE("ShadowPass", &shadowCpuMs);
-            m_ActiveScene->ShadowPass();
+            // 手动执行 LightCollect + ShadowPass
+            for (auto& pass : m_SceneRenderer.GetPassQueue())
+            {
+                if (pass.Enabled && (pass.Name == "LightCollect" || pass.Name == "ShadowPass"))
+                    pass.ExecuteFn(m_SceneRenderer.GetContext());
+            }
         }
         PerformanceMonitor::Get().SetShadowPassCPU(shadowCpuMs);
 
@@ -120,39 +142,34 @@ namespace Engine
         {
             PROFILE_SCOPE("SceneRender", &sceneRenderCpuMs);
 
-            // Render scene to HDR FBO (linear space, RGBA16F)
+            // Render scene to HDR FBO
             m_HDRFramebuffer->Bind();
             RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
             RenderCommand::Clear();
             m_HDRFramebuffer->ClearAttachment(1, -1);
 
-            switch (m_SceneState)
+            // 执行 GeometryPass + SkyboxPass
+            for (auto& pass : m_SceneRenderer.GetPassQueue())
             {
-            case SceneState::Edit:
-                m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
-                break;
-            case SceneState::Play:
-                m_ActiveScene->OnUpdateRuntime(ts, m_EditorCamera);
-                break;
+                if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass"))
+                    pass.ExecuteFn(m_SceneRenderer.GetContext());
             }
 
             m_HDRFramebuffer->Unbind();
 
-            // If MSAA enabled: re-render to MSAA FBO for anti-aliased color, then blit
-            // 注意：仅重走渲染，不重复执行逻辑更新（物理/脚本等），避免双执行 bug
+            // MSAA: re-render geometry+skybox to MSAA FBO, then blit
             if (m_HDRFramebuffer->IsMSAAEnabled())
             {
                 m_HDRFramebuffer->BindMSAA();
                 RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
                 RenderCommand::Clear();
 
-                m_ActiveScene->RenderScene(ts, m_EditorCamera);
+                m_SceneRenderer.RenderGeometryAndSkybox();
 
-                // Resolve MSAA color to HDR FBO attachment 0 (entity IDs in attachment 1 preserved)
                 m_HDRFramebuffer->BlitMSAA();
             }
 
-            // 物理碰撞体调试绘制（在 MSAA Blit 之后、后处理之前）
+            // 物理碰撞体调试绘制
             if (m_ShowPhysicsColliders)
             {
                 m_HDRFramebuffer->Bind();
@@ -160,17 +177,18 @@ namespace Engine
                 m_HDRFramebuffer->Unbind();
             }
 
-            // Post-processing: HDR → Tone Mapping + Bloom → LDR output to main FBO
+            // Post-processing: HDR -> LDR
             m_Framebuffer->Bind();
             RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 1.0f});
             RenderCommand::Clear();
             m_Framebuffer->ClearAttachment(1, -1);
 
-            // Run post-processing (outputs to currently bound FBO = main framebuffer)
             m_PostProcessing.Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0),
                                      m_PostProcessingSettings);
 
             m_Framebuffer->Unbind();
+
+            m_SceneRenderer.EndScene();
         }
         PerformanceMonitor::Get().SetSceneRenderCPU(sceneRenderCpuMs);
     }
@@ -206,16 +224,16 @@ namespace Engine
         // Menu bar
         if (ImGui::BeginMenuBar())
         {
-            if (ImGui::BeginMenu("文件"))
+            if (ImGui::BeginMenu("\xe6\x96\x87\xe4\xbb\xb6"))
             {
-                if (ImGui::MenuItem("新建场景", "Ctrl+N"))
+                if (ImGui::MenuItem("\xe6\x96\xb0\xe5\xbb\xba\xe5\x9c\xba\xe6\x99\xaf", "Ctrl+N"))
                     NewScene();
-                if (ImGui::MenuItem("打开场景...", "Ctrl+O"))
+                if (ImGui::MenuItem("\xe6\x89\x93\xe5\xbc\x80\xe5\x9c\xba\xe6\x99\xaf...", "Ctrl+O"))
                     OpenScene();
-                if (ImGui::MenuItem("保存场景...", "Ctrl+Shift+S"))
+                if (ImGui::MenuItem("\xe4\xbf\x9d\xe5\xad\x98\xe5\x9c\xba\xe6\x99\xaf...", "Ctrl+Shift+S"))
                     SaveScene();
                 ImGui::Separator();
-                if (ImGui::MenuItem("退出"))
+                if (ImGui::MenuItem("\xe9\x80\x80\xe5\x87\xba"))
                     Application::Get().Close();
                 ImGui::EndMenu();
             }
@@ -227,12 +245,12 @@ namespace Engine
             ImGui::EndMenuBar();
         }
 
-        // 工具栏 - Play/Stop 按钮
+        // Play/Stop toolbar
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
 
-            ImGui::Begin("##工具栏", nullptr,
+            ImGui::Begin("##\xe5\xb7\xa5\xe5\x85\xb7\xe6\xa0\x8f", nullptr,
                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar |
                 ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -273,14 +291,14 @@ namespace Engine
 
         // Rendering settings panel
         {
-            auto& shadow = m_ActiveScene->GetShadowSettings();
-            ImGui::Begin("渲染设置");
+            auto& shadow = m_SceneRenderer.GetShadowSystem().GetSettings();
+            ImGui::Begin("\xe6\xb8\xb2\xe6\x9f\x93\xe8\xae\xbe\xe7\xbd\xae");
 
-            ImGui::Checkbox("阴影", &shadow.Enabled);
+            ImGui::Checkbox("\xe9\x98\xb4\xe5\xbd\xb1", &shadow.Enabled);
 
             const char* resolutionItems[] = {"512", "1024", "2048"};
             int resolutionValues[] = {512, 1024, 2048};
-            int currentIdx = 1; // default 1024
+            int currentIdx = 1;
             for (int i = 0; i < 3; i++)
             {
                 if (shadow.MapResolution == resolutionValues[i])
@@ -289,34 +307,34 @@ namespace Engine
                     break;
                 }
             }
-            if (ImGui::Combo("阴影分辨率", &currentIdx, resolutionItems, 3))
+            if (ImGui::Combo("\xe9\x98\xb4\xe5\xbd\xb1\xe5\x88\x86\xe8\xbe\xa8\xe7\x8e\x87", &currentIdx, resolutionItems, 3))
             {
-                m_ActiveScene->ResizeShadowMap(resolutionValues[currentIdx]);
+                m_SceneRenderer.GetShadowSystem().ResizeShadowMap(resolutionValues[currentIdx]);
             }
 
-            ImGui::DragFloat("阴影偏移", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
-            ImGui::DragFloat("阴影范围", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
+            ImGui::DragFloat("\xe9\x98\xb4\xe5\xbd\xb1\xe5\x81\x8f\xe7\xa7\xbb", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
+            ImGui::DragFloat("\xe9\x98\xb4\xe5\xbd\xb1\xe8\x8c\x83\xe5\x9b\xb4", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
 
             ImGui::Separator();
-            ImGui::Checkbox("Gamma 校正", &m_PostProcessingSettings.GammaCorrection);
+            ImGui::Checkbox("Gamma \xe6\xa0\xa1\xe6\xad\xa3", &m_PostProcessingSettings.GammaCorrection);
 
             ImGui::Separator();
-            ImGui::Text("后处理");
-            ImGui::Checkbox("泛光 (Bloom)", &m_PostProcessingSettings.BloomEnabled);
+            ImGui::Text("\xe5\x90\x8e\xe5\xa4\x84\xe7\x90\x86");
+            ImGui::Checkbox("\xe6\xb3\x9b\xe5\x85\x89 (Bloom)", &m_PostProcessingSettings.BloomEnabled);
             if (m_PostProcessingSettings.BloomEnabled)
             {
-                ImGui::DragFloat("泛光阈值", &m_PostProcessingSettings.BloomThreshold, 0.05f, 0.0f, 10.0f, "%.2f");
-                ImGui::DragFloat("泛光强度", &m_PostProcessingSettings.BloomStrength, 0.01f, 0.0f, 3.0f, "%.2f");
-                ImGui::DragInt("泛光迭代", &m_PostProcessingSettings.BloomIterations, 1, 1, 10);
+                ImGui::DragFloat("\xe6\xb3\x9b\xe5\x85\x89\xe9\x98\x88\xe5\x80\xbc", &m_PostProcessingSettings.BloomThreshold, 0.05f, 0.0f, 10.0f, "%.2f");
+                ImGui::DragFloat("\xe6\xb3\x9b\xe5\x85\x89\xe5\xbc\xba\xe5\xba\xa6", &m_PostProcessingSettings.BloomStrength, 0.01f, 0.0f, 3.0f, "%.2f");
+                ImGui::DragInt("\xe6\xb3\x9b\xe5\x85\x89\xe8\xbf\xad\xe4\xbb\xa3", &m_PostProcessingSettings.BloomIterations, 1, 1, 10);
             }
 
             const char* toneMappingItems[] = {"Reinhard", "ACES"};
-            ImGui::Combo("色调映射", &m_PostProcessingSettings.ToneMappingMode, toneMappingItems, 2);
+            ImGui::Combo("\xe8\x89\xb2\xe8\xb0\x83\xe6\x98\xa0\xe5\xb0\x84", &m_PostProcessingSettings.ToneMappingMode, toneMappingItems, 2);
 
             ImGui::Separator();
-            ImGui::Text("MSAA 抗锯齿");
+            ImGui::Text("MSAA \xe6\x8a\x97\xe9\x94\xaf\xe9\xbd\xbf");
             {
-                const char* msaaItems[] = {"关闭", "2x", "4x"};
+                const char* msaaItems[] = {"\xe5\x85\xb3\xe9\x97\xad", "2x", "4x"};
                 int msaaValues[] = {1, 2, 4};
                 int currentMsaaIdx = 0;
                 uint32_t currentSamples = m_HDRFramebuffer->GetSpecification().Samples;
@@ -339,11 +357,11 @@ namespace Engine
             ImGui::Separator();
             ImGui::Text("\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92");
 
-            if (m_ActiveScene->HasSkybox())
+            if (m_SceneRenderer.GetSkyboxSystem().HasSkybox())
             {
                 ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "\xe5\xb7\xb2\xe5\x8a\xa0\xe8\xbd\xbd");
                 if (ImGui::Button("\xe6\xb8\x85\xe9\x99\xa4\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92"))
-                    m_ActiveScene->ClearSkybox();
+                    m_SceneRenderer.GetSkyboxSystem().ClearSkybox();
             }
             else
             {
@@ -355,7 +373,6 @@ namespace Engine
                 std::string dir = FileDialogs::OpenFile("*.jpg *.png *.tga", "\xe5\xa4\xa9\xe7\xa9\xba\xe7\x9b\x92\xe6\x96\x87\xe4\xbb\xb6\xe5\xa4\xb9\xe4\xb8\xad\xe4\xbb\xbb\xe6\x84\x8f\xe4\xb8\x80\xe5\xbc\xa0\xe5\x9b\xbe");
                 if (!dir.empty())
                 {
-                    // Derive folder and try standard naming: right/left/top/bottom/front/back
                     std::filesystem::path p(dir);
                     std::filesystem::path folder = p.parent_path();
                     std::string ext = p.extension().string();
@@ -376,7 +393,7 @@ namespace Engine
                     }
 
                     if (allFound)
-                        m_ActiveScene->LoadSkybox(faces);
+                        m_SceneRenderer.GetSkyboxSystem().LoadSkybox(faces);
                     else
                         ENGINE_WARN("Skybox needs: right/left/top/bottom/front/back{}", ext);
                 }
@@ -388,16 +405,16 @@ namespace Engine
 
             // 物理设置
             ImGui::Separator();
-            ImGui::Text("物理设置");
+            ImGui::Text("\xe7\x89\xa9\xe7\x90\x86\xe8\xae\xbe\xe7\xbd\xae");
             {
-                const char* backendItems[] = {"手写物理", "Bullet3"};
+                const char* backendItems[] = {"\xe6\x89\x8b\xe5\x86\x99\xe7\x89\xa9\xe7\x90\x86", "Bullet3"};
                 int currentBackend = static_cast<int>(m_ActiveScene->GetPhysicsBackend());
-                if (ImGui::Combo("物理后端", &currentBackend, backendItems, 2))
+                if (ImGui::Combo("\xe7\x89\xa9\xe7\x90\x86\xe5\x90\x8e\xe7\xab\xaf", &currentBackend, backendItems, 2))
                 {
                     m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(currentBackend));
                 }
             }
-            ImGui::Checkbox("显示碰撞体", &m_ShowPhysicsColliders);
+            ImGui::Checkbox("\xe6\x98\xbe\xe7\xa4\xba\xe7\xa2\xb0\xe6\x92\x9e\xe4\xbd\x93", &m_ShowPhysicsColliders);
 
             ImGui::End();
         }
@@ -442,7 +459,7 @@ namespace Engine
 
         // Viewport
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        ImGui::Begin("视口");
+        ImGui::Begin("\xe8\xa7\x86\xe5\x8f\xa3");
 
         auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
         auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
@@ -457,7 +474,7 @@ namespace Engine
         ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
         m_ViewportSize = {std::max(viewportPanelSize.x, 32.0f), std::max(viewportPanelSize.y, 32.0f)};
 
-        // Mouse picking — only sample when mouse moved or clicked (avoid per-frame glReadPixels stall)
+        // Mouse picking
         {
             ImVec2 mousePos = ImGui::GetMousePos();
             glm::vec2 currentMousePos = {mousePos.x, mousePos.y};
@@ -469,7 +486,7 @@ namespace Engine
                 float mx = mousePos.x - m_ViewportBounds[0].x;
                 float my = mousePos.y - m_ViewportBounds[0].y;
                 glm::vec2 vpSize = m_ViewportBounds[1] - m_ViewportBounds[0];
-                my = vpSize.y - my; // Flip Y
+                my = vpSize.y - my;
 
                 int mouseX = static_cast<int>(mx);
                 int mouseY = static_cast<int>(my);
@@ -488,7 +505,7 @@ namespace Engine
         ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)),
                      ImVec2(m_ViewportSize.x, m_ViewportSize.y), ImVec2(0, 1), ImVec2(1, 0));
 
-        // ImGuizmo setup (shared by Gizmos and ViewManipulate)
+        // ImGuizmo setup
         ImGuizmo::SetOrthographic(false);
         ImGuizmo::SetDrawlist();
         ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y,
@@ -498,11 +515,9 @@ namespace Engine
         // Gizmos
         if (m_SelectedEntity && m_GizmoType != -1 && m_SelectedEntity.HasComponent<TransformComponent>())
         {
-            // Editor camera
             const glm::mat4& cameraView = m_EditorCamera.GetViewMatrix();
             const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
 
-            // Entity transform
             auto& tc = m_SelectedEntity.GetComponent<TransformComponent>();
             glm::mat4 transform = tc.GetTransform();
 
@@ -512,7 +527,6 @@ namespace Engine
 
             if (ImGuizmo::IsUsing())
             {
-                // Decompose the resulting matrix back to translation/rotation/scale
                 glm::vec3 translation, rotation, scale;
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform), glm::value_ptr(translation),
                                                       glm::value_ptr(rotation), glm::value_ptr(scale));
@@ -524,7 +538,7 @@ namespace Engine
             }
         }
 
-        // 视口方向指示器（右上角 128x128）
+        // ViewManipulate
         {
             glm::mat4 viewMatrix = m_EditorCamera.GetViewMatrix();
             float viewManipulateRight = m_ViewportBounds[1].x;
@@ -553,7 +567,6 @@ namespace Engine
 
     bool EditorLayer::OnKeyPressed(KeyPressedEvent& e)
     {
-        // Shortcuts
         if (e.GetRepeatCount() > 0)
             return false;
 
@@ -575,7 +588,6 @@ namespace Engine
                 SaveScene();
             break;
 
-        // Gizmos
         case KeyCode::Q:
             if (!ImGuizmo::IsUsing())
                 m_GizmoType = -1;
@@ -602,7 +614,6 @@ namespace Engine
 
     bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e)
     {
-        // Mouse picking
         if (e.GetMouseButton() == static_cast<int>(MouseCode::ButtonLeft))
         {
             if (m_ViewportHovered && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing() &&
@@ -617,6 +628,7 @@ namespace Engine
     void EditorLayer::NewScene()
     {
         m_ActiveScene = CreateRef<Scene>();
+        m_ActiveScene->SetSceneRenderer(&m_SceneRenderer);
         m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
                                         static_cast<uint32_t>(m_ViewportSize.y));
         m_HierarchyPanel.SetContext(m_ActiveScene);
@@ -626,12 +638,12 @@ namespace Engine
 
     void EditorLayer::OpenScene()
     {
-        std::string filepath = FileDialogs::OpenFile("*.scene", "场景文件");
+        std::string filepath = FileDialogs::OpenFile("*.scene", "\xe5\x9c\xba\xe6\x99\xaf\xe6\x96\x87\xe4\xbb\xb6");
         if (filepath.empty())
             return;
 
-        // Transactional load: deserialize into a temporary scene first
         auto newScene = CreateRef<Scene>();
+        newScene->SetSceneRenderer(&m_SceneRenderer);
         EditorRenderSettings renderSettings;
         SceneSerializer serializer(newScene);
         if (!serializer.Deserialize(filepath, &renderSettings))
@@ -640,7 +652,6 @@ namespace Engine
             return;
         }
 
-        // Success — swap in the new scene
         m_ActiveScene = newScene;
         m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
                                         static_cast<uint32_t>(m_ViewportSize.y));
@@ -648,11 +659,9 @@ namespace Engine
         m_SelectedEntity = {};
         m_HoveredEntity = {};
 
-        // 恢复编辑器渲染设置
         m_PostProcessingSettings = renderSettings.PostProcessing;
         m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
 
-        // 恢复 MSAA
         if (renderSettings.MSAASamples != m_HDRFramebuffer->GetSpecification().Samples)
         {
             FramebufferSpecification spec = m_HDRFramebuffer->GetSpecification();
@@ -663,11 +672,10 @@ namespace Engine
 
     void EditorLayer::SaveScene()
     {
-        std::string filepath = FileDialogs::SaveFile("*.scene", "场景文件");
+        std::string filepath = FileDialogs::SaveFile("*.scene", "\xe5\x9c\xba\xe6\x99\xaf\xe6\x96\x87\xe4\xbb\xb6");
         if (filepath.empty())
             return;
 
-        // 收集编辑器渲染设置
         EditorRenderSettings renderSettings;
         renderSettings.PostProcessing = m_PostProcessingSettings;
         renderSettings.MSAASamples = m_HDRFramebuffer->GetSpecification().Samples;
@@ -684,8 +692,9 @@ namespace Engine
     {
         m_SceneState = SceneState::Play;
 
-        // 深拷贝当前场景作为编辑器快照
+        // 深拷贝当前场景作为编辑器快照（ShadowSettings 保存在 Copy 的 fallback 中）
         m_EditorScene = Scene::Copy(m_ActiveScene);
+        m_EditorScene->SetSceneRenderer(&m_SceneRenderer);
 
         m_ActiveScene->OnRuntimeStart();
     }
@@ -699,6 +708,9 @@ namespace Engine
         // 恢复编辑器场景
         m_ActiveScene = m_EditorScene;
         m_EditorScene = nullptr;
+
+        // 恢复 ShadowSettings（从备份的 fallback 恢复到 renderer）
+        m_SceneRenderer.GetShadowSystem().GetSettings() = m_ActiveScene->GetShadowSettings();
 
         m_HierarchyPanel.SetContext(m_ActiveScene);
         m_SelectedEntity = {};
