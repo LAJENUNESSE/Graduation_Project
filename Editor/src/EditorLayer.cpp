@@ -139,21 +139,14 @@ namespace Engine
             m_HDRFramebuffer->Unbind();
 
             // If MSAA enabled: re-render to MSAA FBO for anti-aliased color, then blit
+            // 注意：仅重走渲染，不重复执行逻辑更新（物理/脚本等），避免双执行 bug
             if (m_HDRFramebuffer->IsMSAAEnabled())
             {
                 m_HDRFramebuffer->BindMSAA();
                 RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
                 RenderCommand::Clear();
 
-                switch (m_SceneState)
-                {
-                case SceneState::Edit:
-                    m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
-                    break;
-                case SceneState::Play:
-                    m_ActiveScene->OnUpdateRuntime(ts, m_EditorCamera);
-                    break;
-                }
+                m_ActiveScene->RenderScene(ts, m_EditorCamera);
 
                 // Resolve MSAA color to HDR FBO attachment 0 (entity IDs in attachment 1 preserved)
                 m_HDRFramebuffer->BlitMSAA();

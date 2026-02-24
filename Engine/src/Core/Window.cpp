@@ -102,6 +102,8 @@ namespace Engine
         {
             int success = glfwInit();
             ENGINE_CORE_ASSERT(success, "Could not initialize GLFW!");
+            if (!success)
+                return;
             glfwSetErrorCallback(GLFWErrorCallback);
 
 #ifdef __linux__

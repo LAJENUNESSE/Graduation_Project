@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Core/Application.h"
 #include "Core/Log.h"
+#include "Core/Assert.h"
 #include "Core/Timestep.h"
 #include "Events/ApplicationEvent.h"
 #include "ImGui/ImGuiLayer.h"
@@ -17,6 +18,7 @@ namespace Engine
 
     Application::Application()
     {
+        ENGINE_CORE_ASSERT(!s_Instance, "Application already exists!");
         s_Instance = this;
 
         WindowProps props;
@@ -42,6 +44,7 @@ namespace Engine
     {
         PerformanceMonitor::Get().Shutdown();
         Renderer::Shutdown();
+        s_Instance = nullptr;
     }
 
     void Application::PushLayer(Layer* layer)

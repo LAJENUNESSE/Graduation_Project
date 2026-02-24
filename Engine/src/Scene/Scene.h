@@ -78,8 +78,9 @@ namespace Engine
         PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
         void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
 
-    private:
         void RenderScene(Timestep ts, EditorCamera& camera);
+
+    private:
         entt::registry m_Registry;
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;

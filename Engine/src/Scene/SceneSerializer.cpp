@@ -11,6 +11,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <glm/glm.hpp>
+#include <filesystem>
 
 namespace YAML
 {
@@ -94,6 +95,28 @@ namespace YAML
 
 namespace Engine
 {
+
+    // 统一路径安全校验：拒绝绝对路径（POSIX/Windows/UNC）与目录穿越
+    static bool IsSafeAssetPath(const std::string& path)
+    {
+        if (path.empty())
+            return false;
+
+        // 使用 std::filesystem 判断绝对路径（跨平台：覆盖 /xxx, C:\xxx, \\server\xxx）
+        std::filesystem::path p(path);
+        if (p.is_absolute())
+            return false;
+
+        // 拒绝目录穿越（.. 和反斜杠变体）
+        if (path.find("..") != std::string::npos)
+            return false;
+
+        // 拒绝含反斜杠的路径（防止 Windows 风格穿越如 ..\secret）
+        if (path.find('\\') != std::string::npos)
+            return false;
+
+        return true;
+    }
 
     static YAML::Emitter& operator<<(YAML::Emitter& out, const glm::vec3& v)
     {
@@ -384,6 +407,9 @@ namespace Engine
             if (shadowNode["MapResolution"])
             {
                 int res = shadowNode["MapResolution"].as<int>();
+                // 范围校验：256 ~ 8192
+                if (res < 256) res = 256;
+                if (res > 8192) res = 8192;
                 m_Scene->ResizeShadowMap(res);
             }
             if (shadowNode["Bias"])
@@ -407,15 +433,45 @@ namespace Engine
             if (renderNode["BloomStrength"])
                 outRenderSettings->PostProcessing.BloomStrength = renderNode["BloomStrength"].as<float>();
             if (renderNode["BloomIterations"])
-                outRenderSettings->PostProcessing.BloomIterations = renderNode["BloomIterations"].as<int>();
+            {
+                int iters = renderNode["BloomIterations"].as<int>();
+                if (iters < 1) iters = 1;
+                if (iters > 20) iters = 20;
+                outRenderSettings->PostProcessing.BloomIterations = iters;
+            }
             if (renderNode["ToneMappingMode"])
-                outRenderSettings->PostProcessing.ToneMappingMode = renderNode["ToneMappingMode"].as<int>();
+            {
+                int mode = renderNode["ToneMappingMode"].as<int>();
+                if (mode < 0 || mode > 3)
+                {
+                    ENGINE_CORE_WARN("Invalid ToneMappingMode {0}, falling back to 0", mode);
+                    mode = 0;
+                }
+                outRenderSettings->PostProcessing.ToneMappingMode = mode;
+            }
             if (renderNode["GammaCorrection"])
                 outRenderSettings->PostProcessing.GammaCorrection = renderNode["GammaCorrection"].as<bool>();
             if (renderNode["MSAASamples"])
-                outRenderSettings->MSAASamples = renderNode["MSAASamples"].as<uint32_t>();
+            {
+                uint32_t samples = renderNode["MSAASamples"].as<uint32_t>();
+                // 白名单校验：仅允许 1, 2, 4, 8
+                if (samples != 1 && samples != 2 && samples != 4 && samples != 8)
+                {
+                    ENGINE_CORE_WARN("Invalid MSAASamples {0}, falling back to 1", samples);
+                    samples = 1;
+                }
+                outRenderSettings->MSAASamples = samples;
+            }
             if (renderNode["PhysicsBackend"])
-                outRenderSettings->PhysicsBackend = renderNode["PhysicsBackend"].as<int>();
+            {
+                int backend = renderNode["PhysicsBackend"].as<int>();
+                if (backend < 0 || backend > 1)
+                {
+                    ENGINE_CORE_WARN("Invalid PhysicsBackend {0}, falling back to 0 (Custom)", backend);
+                    backend = 0;
+                }
+                outRenderSettings->PhysicsBackend = backend;
+            }
         }
 
         // Deserialize skybox
@@ -472,8 +528,8 @@ namespace Engine
                     if (meshType == "Model" && meshRendererComponent["ModelPath"])
                     {
                         modelPath = meshRendererComponent["ModelPath"].as<std::string>();
-                        // Security: reject absolute paths and directory traversal
-                        if (!modelPath.empty() && (modelPath[0] == '/' || modelPath.find("..") != std::string::npos))
+                        // Security: reject unsafe paths
+                        if (!IsSafeAssetPath(modelPath))
                         {
                             ENGINE_CORE_WARN("Rejected unsafe model path: {0}", modelPath);
                             modelPath.clear();
@@ -487,8 +543,7 @@ namespace Engine
                     if (meshRendererComponent["TexturePath"])
                     {
                         std::string texPath = meshRendererComponent["TexturePath"].as<std::string>();
-                        // Reject absolute paths and directory traversal
-                        if (!texPath.empty() && texPath[0] != '/' && texPath.find("..") == std::string::npos)
+                        if (IsSafeAssetPath(texPath))
                         {
                             mrc.TexturePath = texPath;
                             mrc.DiffuseTexture = Texture2D::Create(mrc.TexturePath);
@@ -506,7 +561,7 @@ namespace Engine
                     if (meshRendererComponent["NormalMapPath"])
                     {
                         std::string normalPath = meshRendererComponent["NormalMapPath"].as<std::string>();
-                        if (!normalPath.empty() && normalPath[0] != '/' && normalPath.find("..") == std::string::npos)
+                        if (IsSafeAssetPath(normalPath))
                         {
                             mrc.NormalMapPath = normalPath;
                             mrc.NormalMapTexture = Texture2D::Create(mrc.NormalMapPath);
@@ -527,7 +582,7 @@ namespace Engine
                                               std::string& outPath, Ref<Texture2D>& outTex) {
                         if (!node[key]) return;
                         std::string path = node[key].as<std::string>();
-                        if (!path.empty() && path[0] != '/' && path.find("..") == std::string::npos)
+                        if (IsSafeAssetPath(path))
                         {
                             outPath = path;
                             outTex = Texture2D::Create(path);
@@ -579,16 +634,25 @@ namespace Engine
                 {
                     auto& cc = deserializedEntity.AddComponent<CameraComponent>();
 
-                    cc.Camera.SetProjectionType(
-                        static_cast<SceneCamera::ProjectionType>(cameraComponent["ProjectionType"].as<int>()));
-                    cc.Camera.SetPerspectiveVerticalFOV(cameraComponent["PerspectiveFOV"].as<float>());
-                    cc.Camera.SetPerspectiveNearClip(cameraComponent["PerspectiveNear"].as<float>());
-                    cc.Camera.SetPerspectiveFarClip(cameraComponent["PerspectiveFar"].as<float>());
-                    cc.Camera.SetOrthographicSize(cameraComponent["OrthographicSize"].as<float>());
-                    cc.Camera.SetOrthographicNearClip(cameraComponent["OrthographicNear"].as<float>());
-                    cc.Camera.SetOrthographicFarClip(cameraComponent["OrthographicFar"].as<float>());
-                    cc.Primary = cameraComponent["Primary"].as<bool>();
-                    cc.FixedAspectRatio = cameraComponent["FixedAspectRatio"].as<bool>();
+                    if (cameraComponent["ProjectionType"])
+                        cc.Camera.SetProjectionType(
+                            static_cast<SceneCamera::ProjectionType>(cameraComponent["ProjectionType"].as<int>()));
+                    if (cameraComponent["PerspectiveFOV"])
+                        cc.Camera.SetPerspectiveVerticalFOV(cameraComponent["PerspectiveFOV"].as<float>());
+                    if (cameraComponent["PerspectiveNear"])
+                        cc.Camera.SetPerspectiveNearClip(cameraComponent["PerspectiveNear"].as<float>());
+                    if (cameraComponent["PerspectiveFar"])
+                        cc.Camera.SetPerspectiveFarClip(cameraComponent["PerspectiveFar"].as<float>());
+                    if (cameraComponent["OrthographicSize"])
+                        cc.Camera.SetOrthographicSize(cameraComponent["OrthographicSize"].as<float>());
+                    if (cameraComponent["OrthographicNear"])
+                        cc.Camera.SetOrthographicNearClip(cameraComponent["OrthographicNear"].as<float>());
+                    if (cameraComponent["OrthographicFar"])
+                        cc.Camera.SetOrthographicFarClip(cameraComponent["OrthographicFar"].as<float>());
+                    if (cameraComponent["Primary"])
+                        cc.Primary = cameraComponent["Primary"].as<bool>();
+                    if (cameraComponent["FixedAspectRatio"])
+                        cc.FixedAspectRatio = cameraComponent["FixedAspectRatio"].as<bool>();
                 }
 
                 // RigidBodyComponent
