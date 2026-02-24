@@ -19,6 +19,16 @@ class btDefaultMotionState;
 namespace Engine
 {
 
+    // 碰撞事件信息
+    struct CollisionEvent
+    {
+        entt::entity EntityA;
+        entt::entity EntityB;
+        glm::vec3 ContactPoint;
+        glm::vec3 ContactNormal;  // A → B 方向
+        float Impulse;
+    };
+
     class BulletPhysicsWorld
     {
     public:
@@ -36,6 +46,9 @@ namespace Engine
         // 将 Bullet 状态同步回 ECS
         void SyncToECS(entt::registry& reg);
 
+        // 获取本帧碰撞事件（Step 后有效）
+        const std::vector<CollisionEvent>& GetCollisionEvents() const { return m_CollisionEvents; }
+
     private:
         btDiscreteDynamicsWorld* m_DynamicsWorld = nullptr;
         btBroadphaseInterface* m_Broadphase = nullptr;
@@ -52,7 +65,11 @@ namespace Engine
 
         std::unordered_map<uint32_t, BodyInfo> m_Bodies; // entt::entity -> BodyInfo
 
+        // 本帧碰撞事件
+        std::vector<CollisionEvent> m_CollisionEvents;
+
         void DestroyBodies();
+        void CollectCollisionEvents(entt::registry& reg);
     };
 
 } // namespace Engine

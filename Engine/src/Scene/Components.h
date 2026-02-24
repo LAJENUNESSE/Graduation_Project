@@ -175,6 +175,10 @@ namespace Engine
 
     struct ParticleEmitterComponent
     {
+        // 预设
+        enum class Preset { Custom = 0, Fire, Smoke, Explosion, Sparks };
+        Preset CurrentPreset = Preset::Custom;
+
         // 发射参数
         float EmitRate = 100.0f;               // 粒子/秒
         int BurstCount = 0;                    // 一次性爆发数量
@@ -201,11 +205,101 @@ namespace Engine
         enum class BlendMode { Additive = 0, AlphaBlend = 1 };
         BlendMode Blend = BlendMode::Additive;
 
+        // SPH 流体参数（SPHEnabled=true 时启用）
+        bool SPHEnabled = false;
+        float SPH_RestDensity = 200.0f;        // 静止密度 ρ_0
+        float SPH_GasConstant = 50.0f;         // 气体常数 k（刚度）
+        float SPH_Viscosity = 3.5f;            // 粘性系数 μ
+        float SPH_SmoothingRadius = 0.1f;      // 光滑核半径 h
+        float SPH_ParticleMass = 0.02f;        // 单粒子质量 m
+
         // 运行时（不序列化）
         void* RuntimeParticleSystem = nullptr;  // ParticleSystemGPU*
+        int CollisionBurstCount = 0;            // 碰撞触发的爆发（帧末自动清零）
 
         ParticleEmitterComponent() = default;
         ParticleEmitterComponent(const ParticleEmitterComponent&) = default;
+
+        // 预设应用
+        static void ApplyPreset(ParticleEmitterComponent& emitter, Preset preset)
+        {
+            emitter.CurrentPreset = preset;
+            emitter.SPHEnabled = false;
+
+            switch (preset)
+            {
+            case Preset::Fire:
+                emitter.EmitRate = 200.0f;
+                emitter.BurstCount = 0;
+                emitter.LifeMin = 0.5f;  emitter.LifeMax = 1.5f;
+                emitter.SpeedMin = 1.0f; emitter.SpeedMax = 3.0f;
+                emitter.SizeStart = 0.1f; emitter.SizeEnd = 0.3f;
+                emitter.EmitDirection = {0.0f, 1.0f, 0.0f};
+                emitter.EmitAngle = 15.0f;
+                emitter.ColorStart = {2.0f, 1.2f, 0.2f, 1.0f};  // HDR 橙
+                emitter.ColorEnd   = {0.5f, 0.05f, 0.0f, 0.0f}; // 暗红淡出
+                emitter.Gravity = {0.0f, 0.5f, 0.0f};            // 上浮
+                emitter.Damping = 0.96f;
+                emitter.Blend = BlendMode::Additive;
+                break;
+            case Preset::Smoke:
+                emitter.EmitRate = 50.0f;
+                emitter.BurstCount = 0;
+                emitter.LifeMin = 2.0f;  emitter.LifeMax = 5.0f;
+                emitter.SpeedMin = 0.3f; emitter.SpeedMax = 1.0f;
+                emitter.SizeStart = 0.2f; emitter.SizeEnd = 0.8f;
+                emitter.EmitDirection = {0.0f, 1.0f, 0.0f};
+                emitter.EmitAngle = 20.0f;
+                emitter.ColorStart = {0.5f, 0.5f, 0.5f, 0.6f};  // 灰半透明
+                emitter.ColorEnd   = {0.3f, 0.3f, 0.3f, 0.0f};  // 透明
+                emitter.Gravity = {0.0f, 0.3f, 0.0f};            // 缓慢上浮
+                emitter.Damping = 0.99f;
+                emitter.Blend = BlendMode::AlphaBlend;
+                break;
+            case Preset::Explosion:
+                emitter.EmitRate = 0.0f;
+                emitter.BurstCount = 500;
+                emitter.LifeMin = 0.3f;  emitter.LifeMax = 1.0f;
+                emitter.SpeedMin = 3.0f; emitter.SpeedMax = 10.0f;
+                emitter.SizeStart = 0.05f; emitter.SizeEnd = 0.15f;
+                emitter.EmitDirection = {0.0f, 1.0f, 0.0f};
+                emitter.EmitAngle = 180.0f;                       // 全方向
+                emitter.ColorStart = {4.0f, 3.0f, 1.0f, 1.0f};  // 超亮 HDR
+                emitter.ColorEnd   = {0.5f, 0.05f, 0.0f, 0.0f}; // 暗红淡出
+                emitter.Gravity = {0.0f, -4.0f, 0.0f};
+                emitter.Damping = 0.95f;
+                emitter.Blend = BlendMode::Additive;
+                break;
+            case Preset::Sparks:
+                emitter.EmitRate = 300.0f;
+                emitter.BurstCount = 0;
+                emitter.LifeMin = 0.2f;  emitter.LifeMax = 0.8f;
+                emitter.SpeedMin = 2.0f; emitter.SpeedMax = 8.0f;
+                emitter.SizeStart = 0.01f; emitter.SizeEnd = 0.03f;
+                emitter.EmitDirection = {0.0f, 1.0f, 0.0f};
+                emitter.EmitAngle = 45.0f;
+                emitter.ColorStart = {3.0f, 2.5f, 0.5f, 1.0f};  // 亮黄 HDR
+                emitter.ColorEnd   = {1.0f, 0.3f, 0.0f, 0.0f};
+                emitter.Gravity = {0.0f, -9.81f, 0.0f};
+                emitter.Damping = 0.97f;
+                emitter.Blend = BlendMode::Additive;
+                break;
+            case Preset::Custom:
+            default:
+                break;
+            }
+        }
+    };
+
+    struct CollisionParticleTriggerComponent
+    {
+        bool Enabled = true;
+        int BurstOnCollision = 50;           // 碰撞时爆发粒子数
+        float MinImpulse = 1.0f;             // 最小触发冲量
+        bool UseCollisionNormal = true;      // 是否用碰撞法线作为发射方向
+
+        CollisionParticleTriggerComponent() = default;
+        CollisionParticleTriggerComponent(const CollisionParticleTriggerComponent&) = default;
     };
 
 } // namespace Engine

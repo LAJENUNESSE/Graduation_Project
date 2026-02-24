@@ -283,6 +283,7 @@ namespace Engine
             out << YAML::Key << "ParticleEmitterComponent";
             out << YAML::BeginMap;
             auto& pe = entity.GetComponent<ParticleEmitterComponent>();
+            out << YAML::Key << "Preset" << YAML::Value << static_cast<int>(pe.CurrentPreset);
             out << YAML::Key << "EmitRate" << YAML::Value << pe.EmitRate;
             out << YAML::Key << "BurstCount" << YAML::Value << pe.BurstCount;
             out << YAML::Key << "MaxParticles" << YAML::Value << pe.MaxParticles;
@@ -299,6 +300,25 @@ namespace Engine
             out << YAML::Key << "Gravity" << YAML::Value << pe.Gravity;
             out << YAML::Key << "Damping" << YAML::Value << pe.Damping;
             out << YAML::Key << "BlendMode" << YAML::Value << static_cast<int>(pe.Blend);
+            out << YAML::Key << "SPHEnabled" << YAML::Value << pe.SPHEnabled;
+            out << YAML::Key << "SPH_RestDensity" << YAML::Value << pe.SPH_RestDensity;
+            out << YAML::Key << "SPH_GasConstant" << YAML::Value << pe.SPH_GasConstant;
+            out << YAML::Key << "SPH_Viscosity" << YAML::Value << pe.SPH_Viscosity;
+            out << YAML::Key << "SPH_SmoothingRadius" << YAML::Value << pe.SPH_SmoothingRadius;
+            out << YAML::Key << "SPH_ParticleMass" << YAML::Value << pe.SPH_ParticleMass;
+            out << YAML::EndMap;
+        }
+
+        // CollisionParticleTriggerComponent
+        if (entity.HasComponent<CollisionParticleTriggerComponent>())
+        {
+            out << YAML::Key << "CollisionParticleTriggerComponent";
+            out << YAML::BeginMap;
+            auto& ct = entity.GetComponent<CollisionParticleTriggerComponent>();
+            out << YAML::Key << "Enabled" << YAML::Value << ct.Enabled;
+            out << YAML::Key << "BurstOnCollision" << YAML::Value << ct.BurstOnCollision;
+            out << YAML::Key << "MinImpulse" << YAML::Value << ct.MinImpulse;
+            out << YAML::Key << "UseCollisionNormal" << YAML::Value << ct.UseCollisionNormal;
             out << YAML::EndMap;
         }
 
@@ -727,6 +747,12 @@ namespace Engine
                 if (particleEmitterComponent)
                 {
                     auto& pe = deserializedEntity.AddComponent<ParticleEmitterComponent>();
+                    if (particleEmitterComponent["Preset"])
+                    {
+                        int preset = particleEmitterComponent["Preset"].as<int>();
+                        if (preset >= 0 && preset <= 4)
+                            pe.CurrentPreset = static_cast<ParticleEmitterComponent::Preset>(preset);
+                    }
                     if (particleEmitterComponent["EmitRate"])
                         pe.EmitRate = particleEmitterComponent["EmitRate"].as<float>();
                     if (particleEmitterComponent["BurstCount"])
@@ -759,10 +785,37 @@ namespace Engine
                         pe.Damping = particleEmitterComponent["Damping"].as<float>();
                     if (particleEmitterComponent["BlendMode"])
                     {
-                        int mode = particleEmitterComponent["BlendMode"].as<float>();
+                        int mode = particleEmitterComponent["BlendMode"].as<int>();
                         if (mode >= 0 && mode <= 1)
                             pe.Blend = static_cast<ParticleEmitterComponent::BlendMode>(mode);
                     }
+                    if (particleEmitterComponent["SPHEnabled"])
+                        pe.SPHEnabled = particleEmitterComponent["SPHEnabled"].as<bool>();
+                    if (particleEmitterComponent["SPH_RestDensity"])
+                        pe.SPH_RestDensity = particleEmitterComponent["SPH_RestDensity"].as<float>();
+                    if (particleEmitterComponent["SPH_GasConstant"])
+                        pe.SPH_GasConstant = particleEmitterComponent["SPH_GasConstant"].as<float>();
+                    if (particleEmitterComponent["SPH_Viscosity"])
+                        pe.SPH_Viscosity = particleEmitterComponent["SPH_Viscosity"].as<float>();
+                    if (particleEmitterComponent["SPH_SmoothingRadius"])
+                        pe.SPH_SmoothingRadius = particleEmitterComponent["SPH_SmoothingRadius"].as<float>();
+                    if (particleEmitterComponent["SPH_ParticleMass"])
+                        pe.SPH_ParticleMass = particleEmitterComponent["SPH_ParticleMass"].as<float>();
+                }
+
+                // CollisionParticleTriggerComponent
+                auto collisionTriggerComponent = entityNode["CollisionParticleTriggerComponent"];
+                if (collisionTriggerComponent)
+                {
+                    auto& ct = deserializedEntity.AddComponent<CollisionParticleTriggerComponent>();
+                    if (collisionTriggerComponent["Enabled"])
+                        ct.Enabled = collisionTriggerComponent["Enabled"].as<bool>();
+                    if (collisionTriggerComponent["BurstOnCollision"])
+                        ct.BurstOnCollision = collisionTriggerComponent["BurstOnCollision"].as<int>();
+                    if (collisionTriggerComponent["MinImpulse"])
+                        ct.MinImpulse = collisionTriggerComponent["MinImpulse"].as<float>();
+                    if (collisionTriggerComponent["UseCollisionNormal"])
+                        ct.UseCollisionNormal = collisionTriggerComponent["UseCollisionNormal"].as<bool>();
                 }
             }
             catch (const YAML::Exception& e)

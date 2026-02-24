@@ -16,7 +16,7 @@ namespace Engine
         glm::vec4 velAndMaxLife;
         glm::vec4 startColor;
         glm::vec4 endColor;
-        glm::vec4 params;
+        glm::vec4 params;       // x=sizeStart, y=sizeEnd, z=density(SPH), w=pressure(SPH)
     };
 
     // Counter buffer layout: 4 x uint32 = 16 bytes
@@ -52,9 +52,18 @@ namespace Engine
         m_RenderArgsShader = Shader::Create("assets/shaders/particle_render_args.glsl");
         m_BillboardShader  = Shader::Create("assets/shaders/particle_billboard.glsl");
 
-        // Allocate particle pool (all zeroed = all dead with life <= 0)
+        // SPH shaders (loaded eagerly, only dispatched when SPHEnabled)
+        m_SPHDensityShader = Shader::Create("assets/shaders/sph_density.glsl");
+        m_SPHForceShader   = Shader::Create("assets/shaders/sph_force.glsl");
+
+        // Allocate particle pool — MUST be zero-initialized so all particles
+        // start with life=0.0 (properly dead). Undefined buffer data may contain
+        // NaN or positive life values, causing simulate to treat uninitialized
+        // particles as alive and permanently corrupting the dead/alive counters.
         uint32_t particleSize = sizeof(GPUParticleData); // 80 bytes
-        m_ParticleBuffer = ShaderStorageBuffer::Create(m_MaxParticles * particleSize, 0);
+        uint32_t totalBytes = m_MaxParticles * particleSize;
+        std::vector<uint8_t> zeroData(totalBytes, 0);
+        m_ParticleBuffer = ShaderStorageBuffer::Create(zeroData.data(), totalBytes, 0);
 
         // Fill dead list with indices [0, 1, 2, ..., MAX-1]
         std::vector<uint32_t> deadIndices(m_MaxParticles);
@@ -80,6 +89,18 @@ namespace Engine
         m_Initialized = true;
     }
 
+    void ParticleSystemGPU::InitSPH(float smoothingRadius)
+    {
+        if (m_SPHInitialized) return;
+
+        // Grid cell size = 2 * smoothing radius (保证邻域在 3x3x3 cell 内)
+        float cellSize = 2.0f * smoothingRadius;
+        uint32_t gridSize = 64;
+
+        m_Grid.Init(m_MaxParticles, gridSize, cellSize);
+        m_SPHInitialized = true;
+    }
+
     void ParticleSystemGPU::Update(float dt, const glm::vec3& emitterPos,
                                     const ParticleEmitterComponent& emitter)
     {
@@ -95,9 +116,10 @@ namespace Engine
         uint32_t emitCount = static_cast<uint32_t>(m_EmitAccumulator);
         m_EmitAccumulator -= static_cast<float>(emitCount);
 
-        // Add burst
-        if (emitter.BurstCount > 0)
-            emitCount += static_cast<uint32_t>(emitter.BurstCount);
+        // Add burst (user-set + collision-triggered)
+        int totalBurst = emitter.BurstCount + emitter.CollisionBurstCount;
+        if (totalBurst > 0)
+            emitCount += static_cast<uint32_t>(totalBurst);
 
         // Clamp to MaxParticles — prevent shader atomic underflow
         emitCount = std::min(emitCount, m_MaxParticles);
@@ -137,9 +159,63 @@ namespace Engine
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
         }
 
-        // ---- Pass 2: Simulate ----
+        // ---- SPH passes (only when SPHEnabled) ----
+        if (emitter.SPHEnabled)
+        {
+            // Lazy-init spatial hash grid
+            if (!m_SPHInitialized)
+                InitSPH(emitter.SPH_SmoothingRadius);
+
+            // 用上一帧的活跃粒子数做 SPH dispatch（本帧 aliveCount 还没建好）
+            // 首帧 m_LastAliveCount=0 会跳过 SPH，第二帧开始正常
+            if (m_LastAliveCount > 0)
+            {
+                float cellSize = m_Grid.GetCellSize();
+                int gridSize = static_cast<int>(m_Grid.GetGridSize());
+
+                // Pass 2a: Build Spatial Hash Grid
+                m_Grid.Build(m_LastAliveCount);
+
+                // Pass 2b: SPH Density
+                m_SPHDensityShader->Bind();
+                m_SPHDensityShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                m_SPHDensityShader->SetFloat("u_SmoothingRadius", emitter.SPH_SmoothingRadius);
+                m_SPHDensityShader->SetFloat("u_ParticleMass", emitter.SPH_ParticleMass);
+                m_SPHDensityShader->SetFloat("u_RestDensity", emitter.SPH_RestDensity);
+                m_SPHDensityShader->SetFloat("u_GasConstant", emitter.SPH_GasConstant);
+                m_SPHDensityShader->SetInt("u_GridSize", gridSize);
+                m_SPHDensityShader->SetFloat("u_CellSize", cellSize);
+
+                uint32_t sphGroups = (m_LastAliveCount + 255) / 256;
+                RenderCommand::DispatchCompute(sphGroups);
+                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                // Pass 2c: SPH Force → directly updates velocity
+                m_SPHForceShader->Bind();
+                m_SPHForceShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                m_SPHForceShader->SetFloat("u_SmoothingRadius", emitter.SPH_SmoothingRadius);
+                m_SPHForceShader->SetFloat("u_ParticleMass", emitter.SPH_ParticleMass);
+                m_SPHForceShader->SetFloat("u_Viscosity", emitter.SPH_Viscosity);
+                m_SPHForceShader->SetFloat("u_DeltaTime", clampedDt);
+                m_SPHForceShader->SetInt("u_GridSize", gridSize);
+                m_SPHForceShader->SetFloat("u_CellSize", cellSize);
+
+                RenderCommand::DispatchCompute(sphGroups);
+                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+            }
+
+            // Rebind DeadList(1) and IndirectArgs(4) — Grid passes temporarily
+            // used these binding slots for CellHash and BlockSums.
+            m_DeadList->Bind(1);
+            m_IndirectArgs->Bind(4);
+        }
+
+        // ---- Pass 3: Simulate (gravity + damping + alive/dead management) ----
+        // Clamp dt for simulate too: if the application stalls (save dialog, etc.),
+        // a huge dt would kill ALL particles in one frame, corrupting counters.
+        float simulateDt = std::min(dt, 0.05f);
         m_SimulateShader->Bind();
-        m_SimulateShader->SetFloat("u_DeltaTime", dt);
+        m_SimulateShader->SetFloat("u_DeltaTime", simulateDt);
         m_SimulateShader->SetFloat3("u_Gravity", emitter.Gravity);
         m_SimulateShader->SetFloat("u_Damping", emitter.Damping);
         m_SimulateShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
@@ -148,10 +224,18 @@ namespace Engine
         RenderCommand::DispatchCompute(simGroups);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-        // ---- Pass 3: Render Args ----
+        // ---- Pass 4: Render Args ----
         m_RenderArgsShader->Bind();
         RenderCommand::DispatchCompute(1);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
+
+        // Read back aliveCount for next frame's SPH dispatch
+        if (emitter.SPHEnabled)
+        {
+            CounterData counters{};
+            m_CounterBuffer->GetData(&counters, sizeof(CounterData), 0);
+            m_LastAliveCount = counters.aliveCount;
+        }
     }
 
     void ParticleSystemGPU::Render(const glm::mat4& viewMatrix, const glm::mat4& projection)

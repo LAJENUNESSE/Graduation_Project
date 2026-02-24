@@ -10,7 +10,7 @@ struct GPUParticle
     vec4 velAndMaxLife;    // xyz=velocity, w=maxLife
     vec4 startColor;       // RGBA
     vec4 endColor;         // RGBA
-    vec4 params;           // x=sizeStart, y=sizeEnd, z=unused, w=unused
+    vec4 params;           // x=sizeStart, y=sizeEnd, z=density(SPH用), w=pressure(SPH用)
 };
 
 layout(std430, binding = 0) buffer ParticlePool  { GPUParticle particles[]; };

@@ -89,6 +89,9 @@ namespace Engine
                 system->Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
 
                 RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+
+                // 只重置碰撞触发的爆发（用户设的 BurstCount 保持不变）
+                emitter.CollisionBurstCount = 0;
             }
         }});
     }

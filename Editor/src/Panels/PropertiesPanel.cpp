@@ -227,6 +227,15 @@ namespace Engine
                 }
             }
 
+            if (!entity.HasComponent<CollisionParticleTriggerComponent>())
+            {
+                if (ImGui::MenuItem("碰撞粒子触发器"))
+                {
+                    entity.AddComponent<CollisionParticleTriggerComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             ImGui::EndPopup();
         }
         ImGui::PopItemWidth();
@@ -595,52 +604,101 @@ namespace Engine
         // ParticleEmitter
         DrawComponent<ParticleEmitterComponent>("粒子发射器", entity, [this](auto& component)
         {
+            // ---- 预设选择 ----
+            const char* presetNames[] = {"自定义", "火焰", "烟雾", "爆炸", "火花"};
+            int presetIdx = static_cast<int>(component.CurrentPreset);
+            if (ImGui::Combo("预设", &presetIdx, presetNames, 5))
+            {
+                auto preset = static_cast<ParticleEmitterComponent::Preset>(presetIdx);
+                if (preset != ParticleEmitterComponent::Preset::Custom)
+                    ParticleEmitterComponent::ApplyPreset(component, preset);
+                else
+                    component.CurrentPreset = ParticleEmitterComponent::Preset::Custom;
+            }
+
+            ImGui::Separator();
             ImGui::Text("发射");
-            ImGui::DragFloat("发射速率", &component.EmitRate, 1.0f, 0.0f, 100000.0f, "%.0f");
+
+            // 检测参数修改 → 自动切换为自定义预设
+            bool changed = false;
+
+            changed |= ImGui::DragFloat("发射速率", &component.EmitRate, 1.0f, 0.0f, 100000.0f, "%.0f");
             ImGui::SameLine();
             ImGui::TextDisabled("粒子/秒");
-            ImGui::DragInt("爆发数量", &component.BurstCount, 1, 0, 10000);
+            changed |= ImGui::DragInt("爆发数量", &component.BurstCount, 1, 0, 10000);
 
             int maxP = static_cast<int>(component.MaxParticles);
             if (ImGui::DragInt("最大粒子数", &maxP, 100, 100, 1000000))
+            {
                 component.MaxParticles = static_cast<uint32_t>(std::max(maxP, 100));
+                changed = true;
+            }
 
             ImGui::Separator();
             ImGui::Text("生命周期");
-            ImGui::DragFloat("最短寿命", &component.LifeMin, 0.05f, 0.01f, 60.0f, "%.2f 秒");
-            ImGui::DragFloat("最长寿命", &component.LifeMax, 0.05f, 0.01f, 60.0f, "%.2f 秒");
+            changed |= ImGui::DragFloat("最短寿命", &component.LifeMin, 0.05f, 0.01f, 60.0f, "%.2f 秒");
+            changed |= ImGui::DragFloat("最长寿命", &component.LifeMax, 0.05f, 0.01f, 60.0f, "%.2f 秒");
             if (component.LifeMax < component.LifeMin)
                 component.LifeMax = component.LifeMin;
 
             ImGui::Separator();
             ImGui::Text("速度与方向");
-            ImGui::DragFloat("最小速度", &component.SpeedMin, 0.1f, 0.0f, 100.0f, "%.1f");
-            ImGui::DragFloat("最大速度", &component.SpeedMax, 0.1f, 0.0f, 100.0f, "%.1f");
+            changed |= ImGui::DragFloat("最小速度", &component.SpeedMin, 0.1f, 0.0f, 100.0f, "%.1f");
+            changed |= ImGui::DragFloat("最大速度", &component.SpeedMax, 0.1f, 0.0f, 100.0f, "%.1f");
             if (component.SpeedMax < component.SpeedMin)
                 component.SpeedMax = component.SpeedMin;
             DrawVec3Control("发射方向", component.EmitDirection);
-            ImGui::DragFloat("锥角", &component.EmitAngle, 0.5f, 0.0f, 180.0f, "%.1f°");
+            changed |= ImGui::DragFloat("锥角", &component.EmitAngle, 0.5f, 0.0f, 180.0f, "%.1f°");
 
             ImGui::Separator();
             ImGui::Text("大小");
-            ImGui::DragFloat("起始大小", &component.SizeStart, 0.01f, 0.001f, 10.0f, "%.3f");
-            ImGui::DragFloat("结束大小", &component.SizeEnd, 0.01f, 0.0f, 10.0f, "%.3f");
+            changed |= ImGui::DragFloat("起始大小", &component.SizeStart, 0.01f, 0.001f, 10.0f, "%.3f");
+            changed |= ImGui::DragFloat("结束大小", &component.SizeEnd, 0.01f, 0.0f, 10.0f, "%.3f");
 
             ImGui::Separator();
             ImGui::Text("颜色");
-            ImGui::ColorEdit4("起始颜色", glm::value_ptr(component.ColorStart));
-            ImGui::ColorEdit4("结束颜色", glm::value_ptr(component.ColorEnd));
+            changed |= ImGui::ColorEdit4("起始颜色", glm::value_ptr(component.ColorStart));
+            changed |= ImGui::ColorEdit4("结束颜色", glm::value_ptr(component.ColorEnd));
 
             ImGui::Separator();
             ImGui::Text("物理");
             DrawVec3Control("重力", component.Gravity);
-            ImGui::DragFloat("阻尼", &component.Damping, 0.01f, 0.0f, 1.0f, "%.2f");
+            changed |= ImGui::DragFloat("阻尼", &component.Damping, 0.01f, 0.0f, 1.0f, "%.2f");
 
             ImGui::Separator();
             const char* blendModes[] = {"加法混合", "Alpha混合"};
             int blendIdx = static_cast<int>(component.Blend);
             if (ImGui::Combo("混合模式", &blendIdx, blendModes, 2))
+            {
                 component.Blend = static_cast<ParticleEmitterComponent::BlendMode>(blendIdx);
+                changed = true;
+            }
+
+            // 参数修改后自动切换为自定义
+            if (changed && component.CurrentPreset != ParticleEmitterComponent::Preset::Custom)
+                component.CurrentPreset = ParticleEmitterComponent::Preset::Custom;
+
+            // ---- SPH 流体参数 ----
+            ImGui::Separator();
+            ImGui::Text("SPH 流体");
+            ImGui::Checkbox("启用 SPH", &component.SPHEnabled);
+            if (component.SPHEnabled)
+            {
+                ImGui::DragFloat("静止密度", &component.SPH_RestDensity, 10.0f, 100.0f, 10000.0f, "%.0f");
+                ImGui::DragFloat("气体常数", &component.SPH_GasConstant, 10.0f, 100.0f, 50000.0f, "%.0f");
+                ImGui::DragFloat("粘性系数", &component.SPH_Viscosity, 0.001f, 0.0f, 1.0f, "%.4f");
+                ImGui::DragFloat("光滑半径", &component.SPH_SmoothingRadius, 0.01f, 0.01f, 2.0f, "%.3f");
+                ImGui::DragFloat("粒子质量", &component.SPH_ParticleMass, 0.001f, 0.001f, 1.0f, "%.4f");
+            }
+        });
+
+        // CollisionParticleTrigger
+        DrawComponent<CollisionParticleTriggerComponent>("碰撞粒子触发器", entity, [](auto& component)
+        {
+            ImGui::Checkbox("启用", &component.Enabled);
+            ImGui::DragInt("爆发粒子数", &component.BurstOnCollision, 1, 1, 1000);
+            ImGui::DragFloat("最小冲量", &component.MinImpulse, 0.1f, 0.0f, 100.0f, "%.1f");
+            ImGui::Checkbox("使用碰撞法线", &component.UseCollisionNormal);
         });
     }
 
