@@ -2,6 +2,8 @@
 
 #include "Core/Base.h"
 #include "Renderer/Shader.h"
+#include "Renderer/VertexArray.h"
+#include "Renderer/Buffer.h"
 
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
@@ -32,8 +34,8 @@ namespace Engine
 
         std::vector<LineVertex> m_LineVertices;
         Ref<Shader> m_LineShader;
-        uint32_t m_LineVAO = 0;
-        uint32_t m_LineVBO = 0;
+        Ref<VertexArray> m_LineVAO;
+        Ref<VertexBuffer> m_LineVBO;
         bool m_Initialized = false;
     };
 

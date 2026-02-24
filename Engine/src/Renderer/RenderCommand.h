@@ -41,6 +41,61 @@ namespace Engine
             stats.Triangles += count / 3;
         }
 
+        static void DrawArrays(uint32_t count, uint32_t first = 0)
+        {
+            s_RendererAPI->DrawArrays(count, first);
+        }
+
+        static void DrawLines(uint32_t count, uint32_t first = 0)
+        {
+            s_RendererAPI->DrawLines(count, first);
+        }
+
+        static void SetDepthTest(bool enable)
+        {
+            s_RendererAPI->SetDepthTest(enable);
+        }
+
+        static void SetDepthFunc(DepthFunc func)
+        {
+            s_RendererAPI->SetDepthFunc(func);
+        }
+
+        static void SetCullFace(bool enable)
+        {
+            s_RendererAPI->SetCullFace(enable);
+        }
+
+        static void SetCullFaceMode(CullFaceMode mode)
+        {
+            s_RendererAPI->SetCullFaceMode(mode);
+        }
+
+        static void SetLineWidth(float width)
+        {
+            s_RendererAPI->SetLineWidth(width);
+        }
+
+        static void BindTextureUnit(uint32_t slot, uint32_t textureID)
+        {
+            s_RendererAPI->BindTextureUnit(slot, textureID);
+        }
+
+        static void ClearColorOnly()
+        {
+            s_RendererAPI->ClearColorOnly();
+        }
+
+        static int GetBoundFramebufferID()
+        {
+            return s_RendererAPI->GetBoundFramebufferID();
+        }
+
+        static void BindFramebufferByID(int id)
+        {
+            s_RendererAPI->BindFramebufferByID(id);
+        }
+
     private:
         static Scope<RendererAPI> s_RendererAPI;
     };

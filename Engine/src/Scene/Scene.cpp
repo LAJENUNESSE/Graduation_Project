@@ -15,8 +15,6 @@
 #include "Physics/PhysicsWorld.h"
 #include "Physics/BulletPhysicsWorld.h"
 
-#include <glad/gl.h>
-
 namespace Engine
 {
 
@@ -642,8 +640,7 @@ namespace Engine
         m_MeshShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
         m_MeshShader->SetFloat("u_ShadowBias", m_ShadowSettings.Bias);
         // Shadow map on texture unit 1 (unit 0 is diffuse texture)
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, m_ShadowMapFBO->GetDepthAttachmentRendererID());
+        RenderCommand::BindTextureUnit(1, m_ShadowMapFBO->GetDepthAttachmentRendererID());
         m_MeshShader->SetInt("u_ShadowMap", 1);
 
         // Render meshes
@@ -735,7 +732,7 @@ namespace Engine
         // Skybox — render last with depth trick (z = 1.0, GL_LEQUAL)
         if (m_SkyboxTexture)
         {
-            glDepthFunc(GL_LEQUAL);
+            RenderCommand::SetDepthFunc(DepthFunc::LEqual);
 
             m_SkyboxShader->Bind();
             // Strip translation from view matrix so skybox doesn't move with camera
@@ -745,9 +742,9 @@ namespace Engine
             m_SkyboxTexture->Bind(0);
 
             m_SkyboxVAO->Bind();
-            glDrawArrays(GL_TRIANGLES, 0, 36);
+            RenderCommand::DrawArrays(36);
 
-            glDepthFunc(GL_LESS);
+            RenderCommand::SetDepthFunc(DepthFunc::Less);
         }
 
         Renderer::EndScene();
@@ -812,7 +809,7 @@ namespace Engine
         RenderCommand::Clear();
 
         // Front-face culling to reduce shadow acne
-        glCullFace(GL_FRONT);
+        RenderCommand::SetCullFaceMode(CullFaceMode::Front);
 
         m_DepthShader->Bind();
         m_DepthShader->SetMat4("u_LightSpaceMatrix", m_LightSpaceMatrix);
@@ -833,7 +830,7 @@ namespace Engine
         }
 
         // Restore back-face culling
-        glCullFace(GL_BACK);
+        RenderCommand::SetCullFaceMode(CullFaceMode::Back);
 
         m_ShadowMapFBO->Unbind();
 
