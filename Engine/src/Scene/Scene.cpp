@@ -124,6 +124,9 @@ namespace Engine
 
             if (srcReg.all_of<SphereColliderComponent>(srcEntity))
                 newEntity.AddComponent<SphereColliderComponent>(srcReg.get<SphereColliderComponent>(srcEntity));
+
+            if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))
+                newEntity.AddComponent<ParticleEmitterComponent>(srcReg.get<ParticleEmitterComponent>(srcEntity));
         }
 
         return newScene;

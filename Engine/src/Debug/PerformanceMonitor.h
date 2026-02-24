@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Debug/GPUTimerQuery.h"
 
+#include <chrono>
 #include <fstream>
 #include <string>
 #include <cstdint>
@@ -29,7 +30,7 @@ namespace Engine
         void Init();
         void Shutdown();
 
-        void BeginFrame(float timestampSeconds, float frameTimeMs);
+        void BeginFrame(float timestampSeconds);
         void EndFrame();
 
         // CPU timing setters (called by PROFILE_SCOPE users)
@@ -90,6 +91,9 @@ namespace Engine
         // Frame time history ring buffer
         float m_FrameTimeHistory[FrameHistorySize] = {};
         int m_FrameTimeHistoryOffset = 0;
+
+        // High-resolution clock for accurate frame timing
+        std::chrono::high_resolution_clock::time_point m_FrameStartClock;
     };
 
 } // namespace Engine

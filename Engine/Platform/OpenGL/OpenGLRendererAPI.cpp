@@ -111,4 +111,45 @@ namespace Engine
         glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(id));
     }
 
+    void OpenGLRendererAPI::DispatchCompute(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ)
+    {
+        glDispatchCompute(groupsX, groupsY, groupsZ);
+    }
+
+    void OpenGLRendererAPI::MemoryBarrier(uint32_t barriers)
+    {
+        glMemoryBarrier(barriers);
+    }
+
+    void OpenGLRendererAPI::DrawArraysIndirect(uint32_t bufferID)
+    {
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, bufferID);
+        glDrawArraysIndirect(GL_TRIANGLES, nullptr);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    }
+
+    void OpenGLRendererAPI::SetDepthMask(bool enable)
+    {
+        glDepthMask(enable ? GL_TRUE : GL_FALSE);
+    }
+
+    static GLenum BlendFactorToGL(BlendFactor f)
+    {
+        switch (f)
+        {
+        case BlendFactor::Zero:              return GL_ZERO;
+        case BlendFactor::One:               return GL_ONE;
+        case BlendFactor::SrcAlpha:          return GL_SRC_ALPHA;
+        case BlendFactor::OneMinusSrcAlpha:  return GL_ONE_MINUS_SRC_ALPHA;
+        case BlendFactor::DstAlpha:          return GL_DST_ALPHA;
+        case BlendFactor::OneMinusDstAlpha:  return GL_ONE_MINUS_DST_ALPHA;
+        }
+        return GL_ONE;
+    }
+
+    void OpenGLRendererAPI::SetBlendFunc(BlendFactor src, BlendFactor dst)
+    {
+        glBlendFunc(BlendFactorToGL(src), BlendFactorToGL(dst));
+    }
+
 } // namespace Engine

@@ -58,24 +58,28 @@ namespace Engine
         }
     }
 
-    void PerformanceMonitor::BeginFrame(float timestampSeconds, float frameTimeMs)
+    void PerformanceMonitor::BeginFrame(float timestampSeconds)
     {
         m_TimestampSeconds = timestampSeconds;
-        m_FrameTimeMs = frameTimeMs;
-        m_FPS = (frameTimeMs > 0.0f) ? (1000.0f / frameTimeMs) : 0.0f;
+        m_FrameStartClock = std::chrono::high_resolution_clock::now();
 
         // Reset render stats
         m_Stats.DrawCalls = 0;
         m_Stats.Vertices = 0;
         m_Stats.Triangles = 0;
-
-        // Update frame time history ring buffer
-        m_FrameTimeHistory[m_FrameTimeHistoryOffset] = frameTimeMs;
-        m_FrameTimeHistoryOffset = (m_FrameTimeHistoryOffset + 1) % FrameHistorySize;
     }
 
     void PerformanceMonitor::EndFrame()
     {
+        // Compute frame time at END so it aligns with CPU sub-timers
+        auto now = std::chrono::high_resolution_clock::now();
+        m_FrameTimeMs = std::chrono::duration<float, std::milli>(now - m_FrameStartClock).count();
+        m_FPS = (m_FrameTimeMs > 0.0f) ? (1000.0f / m_FrameTimeMs) : 0.0f;
+
+        // Update frame time history ring buffer
+        m_FrameTimeHistory[m_FrameTimeHistoryOffset] = m_FrameTimeMs;
+        m_FrameTimeHistoryOffset = (m_FrameTimeHistoryOffset + 1) % FrameHistorySize;
+
         m_FrameNumber++;
 
         // Write CSV row

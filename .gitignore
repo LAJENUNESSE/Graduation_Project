@@ -42,5 +42,8 @@ logs/
 # Doc
 docs/
 
+# Scripts
+scripts/
+
 # Temp
 temp/

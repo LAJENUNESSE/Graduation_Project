@@ -25,6 +25,11 @@ namespace Engine
         void ClearColorOnly() override;
         int GetBoundFramebufferID() override;
         void BindFramebufferByID(int id) override;
+        void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1) override;
+        void MemoryBarrier(uint32_t barriers) override;
+        void DrawArraysIndirect(uint32_t bufferID) override;
+        void SetDepthMask(bool enable) override;
+        void SetBlendFunc(BlendFactor src, BlendFactor dst) override;
     };
 
 } // namespace Engine

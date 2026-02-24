@@ -16,6 +16,8 @@ namespace Engine
             return GL_VERTEX_SHADER;
         if (type == "fragment" || type == "pixel")
             return GL_FRAGMENT_SHADER;
+        if (type == "compute")
+            return GL_COMPUTE_SHADER;
 
         ENGINE_CORE_ASSERT(false, "Unknown shader type!");
         return 0;
@@ -107,9 +109,9 @@ namespace Engine
     void OpenGLShader::Compile(const std::unordered_map<unsigned int, std::string>& shaderSources)
     {
         GLuint program = glCreateProgram();
-        ENGINE_CORE_ASSERT(shaderSources.size() <= 2, "We only support 2 shaders for now");
+        ENGINE_CORE_ASSERT(shaderSources.size() <= 3, "We only support 3 shaders for now");
 
-        std::array<GLuint, 2> glShaderIDs;
+        std::array<GLuint, 3> glShaderIDs;
         int glShaderIDIndex = 0;
 
         for (auto& [type, source] : shaderSources)

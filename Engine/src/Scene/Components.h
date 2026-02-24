@@ -173,4 +173,39 @@ namespace Engine
         SphereColliderComponent(const SphereColliderComponent&) = default;
     };
 
+    struct ParticleEmitterComponent
+    {
+        // 发射参数
+        float EmitRate = 100.0f;               // 粒子/秒
+        int BurstCount = 0;                    // 一次性爆发数量
+        uint32_t MaxParticles = 10000;
+
+        // 初始值范围
+        float LifeMin = 1.0f, LifeMax = 3.0f;
+        float SpeedMin = 1.0f, SpeedMax = 5.0f;
+        float SizeStart = 0.1f, SizeEnd = 0.0f;
+
+        // 发射方向 (锥形)
+        glm::vec3 EmitDirection = {0.0f, 1.0f, 0.0f};
+        float EmitAngle = 30.0f;               // 锥体半角 (度)
+
+        // 颜色
+        glm::vec4 ColorStart = {1.0f, 0.8f, 0.2f, 1.0f};   // 火焰橙
+        glm::vec4 ColorEnd = {1.0f, 0.0f, 0.0f, 0.0f};     // 红色淡出
+
+        // 物理
+        glm::vec3 Gravity = {0.0f, -9.81f, 0.0f};
+        float Damping = 0.98f;
+
+        // 混合模式
+        enum class BlendMode { Additive = 0, AlphaBlend = 1 };
+        BlendMode Blend = BlendMode::Additive;
+
+        // 运行时（不序列化）
+        void* RuntimeParticleSystem = nullptr;  // ParticleSystemGPU*
+
+        ParticleEmitterComponent() = default;
+        ParticleEmitterComponent(const ParticleEmitterComponent&) = default;
+    };
+
 } // namespace Engine

@@ -10,6 +10,15 @@ namespace Engine
 
     enum class DepthFunc { Less, LEqual, Greater, Always };
     enum class CullFaceMode { Front, Back };
+    enum class BlendFactor { Zero = 0, One, SrcAlpha, OneMinusSrcAlpha, DstAlpha, OneMinusDstAlpha };
+
+    namespace BarrierBit
+    {
+        constexpr uint32_t ShaderStorage = 0x00002000;  // GL_SHADER_STORAGE_BARRIER_BIT
+        constexpr uint32_t Command       = 0x00000040;  // GL_COMMAND_BARRIER_BIT
+        constexpr uint32_t BufferUpdate  = 0x00000200;  // GL_BUFFER_UPDATE_BARRIER_BIT
+        constexpr uint32_t All           = 0xFFFFFFFF;  // GL_ALL_BARRIER_BITS
+    }
 
     class RendererAPI
     {
@@ -40,6 +49,17 @@ namespace Engine
         virtual void ClearColorOnly() = 0;
         virtual int GetBoundFramebufferID() = 0;
         virtual void BindFramebufferByID(int id) = 0;
+
+        // Compute Shader
+        virtual void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1) = 0;
+        virtual void MemoryBarrier(uint32_t barriers) = 0;
+
+        // Indirect Draw
+        virtual void DrawArraysIndirect(uint32_t bufferID) = 0;
+
+        // Blend / Depth
+        virtual void SetDepthMask(bool enable) = 0;
+        virtual void SetBlendFunc(BlendFactor src, BlendFactor dst) = 0;
 
         static API GetAPI()
         {
