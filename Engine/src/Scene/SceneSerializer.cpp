@@ -306,6 +306,13 @@ namespace Engine
             out << YAML::Key << "SPH_Viscosity" << YAML::Value << pe.SPH_Viscosity;
             out << YAML::Key << "SPH_SmoothingRadius" << YAML::Value << pe.SPH_SmoothingRadius;
             out << YAML::Key << "SPH_ParticleMass" << YAML::Value << pe.SPH_ParticleMass;
+            out << YAML::Key << "SPH_PCISPHEnabled" << YAML::Value << pe.SPH_PCISPHEnabled;
+            out << YAML::Key << "SPH_PCISPHIterations" << YAML::Value << pe.SPH_PCISPHIterations;
+            out << YAML::Key << "SPH_PCISPHDelta" << YAML::Value << pe.SPH_PCISPHDelta;
+            out << YAML::Key << "SPH_SurfaceTension" << YAML::Value << pe.SPH_SurfaceTension;
+            out << YAML::Key << "SPH_RigidBodyCoupling" << YAML::Value << pe.SPH_RigidBodyCoupling;
+            out << YAML::Key << "SPH_BoundaryStiffness" << YAML::Value << pe.SPH_BoundaryStiffness;
+            out << YAML::Key << "SPH_BoundaryDamping" << YAML::Value << pe.SPH_BoundaryDamping;
             out << YAML::EndMap;
         }
 
@@ -801,6 +808,20 @@ namespace Engine
                         pe.SPH_SmoothingRadius = particleEmitterComponent["SPH_SmoothingRadius"].as<float>();
                     if (particleEmitterComponent["SPH_ParticleMass"])
                         pe.SPH_ParticleMass = particleEmitterComponent["SPH_ParticleMass"].as<float>();
+                    if (particleEmitterComponent["SPH_PCISPHEnabled"])
+                        pe.SPH_PCISPHEnabled = particleEmitterComponent["SPH_PCISPHEnabled"].as<bool>();
+                    if (particleEmitterComponent["SPH_PCISPHIterations"])
+                        pe.SPH_PCISPHIterations = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
+                    if (particleEmitterComponent["SPH_PCISPHDelta"])
+                        pe.SPH_PCISPHDelta = particleEmitterComponent["SPH_PCISPHDelta"].as<float>();
+                    if (particleEmitterComponent["SPH_SurfaceTension"])
+                        pe.SPH_SurfaceTension = particleEmitterComponent["SPH_SurfaceTension"].as<float>();
+                    if (particleEmitterComponent["SPH_RigidBodyCoupling"])
+                        pe.SPH_RigidBodyCoupling = particleEmitterComponent["SPH_RigidBodyCoupling"].as<bool>();
+                    if (particleEmitterComponent["SPH_BoundaryStiffness"])
+                        pe.SPH_BoundaryStiffness = particleEmitterComponent["SPH_BoundaryStiffness"].as<float>();
+                    if (particleEmitterComponent["SPH_BoundaryDamping"])
+                        pe.SPH_BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
                 }
 
                 // CollisionParticleTriggerComponent

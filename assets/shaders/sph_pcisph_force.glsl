@@ -1,9 +1,7 @@
 #type compute
 #version 430 core
 
-// SPH 力计算 — 压力梯度力 (Spiky kernel) + 粘性力 (Viscosity kernel)
-// 直接将 SPH 加速度应用到粒子速度（vel += sphAccel * dt）
-// simulate pass 随后照常叠加重力和阻尼
+// PCISPH 力计算: 压力梯度力 + 刚体边界力
 
 layout(local_size_x = 256) in;
 
@@ -16,11 +14,12 @@ struct GPUParticle
     vec4 params;           // x=sizeStart, y=sizeEnd, z=density(SPH), w=pressure(SPH)
 };
 
-layout(std430, binding = 0) buffer ParticlePool  { GPUParticle particles[]; };
-layout(std430, binding = 2) readonly buffer AliveList    { uint aliveIndices[];     };
-layout(std430, binding = 5) readonly buffer CellStart    { uint cellStart[];        };
-layout(std430, binding = 6) readonly buffer CellCount    { uint cellCount[];        };
-layout(std430, binding = 7) readonly buffer SortedIndices { uint sortedIndices[];   };
+struct PCISPHData
+{
+    vec4 predictedPosAndPressure;  // xyz=x*, w=P
+    vec4 predictedVelAndDensity;   // xyz=v*, w=ρ*
+    vec4 nonPressureAccel;         // xyz=a_np, w=unused
+};
 
 struct GPURigidBody
 {
@@ -33,17 +32,21 @@ struct GPURigidBody
     vec4 angularVel;
 };
 
+layout(std430, binding = 0) readonly buffer ParticlePool   { GPUParticle  particles[];   };
+layout(std430, binding = 1) buffer PCISPHBuffer             { PCISPHData   pcisphData[];  };
+layout(std430, binding = 2) readonly buffer AliveList       { uint aliveIndices[];        };
 layout(std430, binding = 3) readonly buffer RigidBodyBuffer { GPURigidBody rigidBodies[]; };
+layout(std430, binding = 5) readonly buffer CellStart       { uint cellStart[];           };
+layout(std430, binding = 6) readonly buffer CellCount       { uint cellCount[];           };
+layout(std430, binding = 7) readonly buffer SortedIndices   { uint sortedIndices[];       };
 
 uniform int   u_AliveCount;
 uniform float u_SmoothingRadius;
 uniform float u_ParticleMass;
-uniform float u_Viscosity;         // μ
 uniform float u_DeltaTime;
 uniform int   u_GridSize;
 uniform float u_CellSize;
-uniform float u_SurfaceTension;     // γ, 0=关闭
-uniform int   u_RigidBodyCount;     // 0=无刚体
+uniform int   u_RigidBodyCount;
 uniform float u_BoundaryStiffness;
 uniform float u_BoundaryDamping;
 
@@ -59,26 +62,7 @@ vec3 spikyGrad(vec3 diff, float dist, float h)
     return coeff * hd * hd * (diff / dist);
 }
 
-// Viscosity kernel Laplacian: ∇²W_visc(r, h) = 45 / (π * h^6) * (h - |r|)
-float viscLaplacian(float dist, float h)
-{
-    if (dist >= h) return 0.0;
-    float h6 = h * h * h * h * h * h;
-    return 45.0 / (PI * h6) * (h - dist);
-}
-
-// Akinci C_spline 表面张力核
-float C_spline(float r, float h)
-{
-    float q = r / h;
-    float coeff = 32.0 / (PI * h * h * h);
-    if (q < 0.5)
-        return coeff * (2.0 * (1.0 - q) * (1.0 - q) * (1.0 - q) * q * q * q - 1.0 / 64.0);
-    else if (q < 1.0)
-        return coeff * ((1.0 - q) * (1.0 - q) * (1.0 - q) * q * q * q - 1.0 / 64.0);
-    return 0.0;
-}
-
+// 空间哈希
 uint hashCell(ivec3 cell, int gridSize)
 {
     cell = ((cell % gridSize) + gridSize) % gridSize;
@@ -94,18 +78,16 @@ void main()
     uint myAliveIdx = gid;
     uint myParticleIdx = aliveIndices[myAliveIdx];
 
+    // 用原始位置进行 cell 查找和压力力计算（grid 一致性）
     vec3 posI = particles[myParticleIdx].posAndLife.xyz;
-    vec3 velI = particles[myParticleIdx].velAndMaxLife.xyz;
-    float densityI  = particles[myParticleIdx].params.z;
-    float pressureI = particles[myParticleIdx].params.w;
+    float pressureI = pcisphData[gid].predictedPosAndPressure.w;
+    float densityI  = pcisphData[gid].predictedVelAndDensity.w;
     float h = u_SmoothingRadius;
 
     // 防止除零
     if (densityI < 0.0001) densityI = 0.0001;
 
     vec3 fPressure = vec3(0.0);
-    vec3 fViscosity = vec3(0.0);
-    vec3 fSurfaceTension = vec3(0.0);
 
     ivec3 myCell = ivec3(floor(posI / u_CellSize));
 
@@ -118,7 +100,6 @@ void main()
 
         uint cCount = cellCount[cellIdx];
         if (cCount == 0u) continue;
-        // scatter 后: CellStart[h] = original_start + CellCount[h]
         uint cEnd   = cellStart[cellIdx];
         uint cBegin = cEnd - cCount;
 
@@ -130,9 +111,8 @@ void main()
             if (neighborParticleIdx == myParticleIdx) continue;
 
             vec3 posJ = particles[neighborParticleIdx].posAndLife.xyz;
-            vec3 velJ = particles[neighborParticleIdx].velAndMaxLife.xyz;
-            float densityJ  = particles[neighborParticleIdx].params.z;
-            float pressureJ = particles[neighborParticleIdx].params.w;
+            float pressureJ = pcisphData[neighborAliveIdx].predictedPosAndPressure.w;
+            float densityJ  = pcisphData[neighborAliveIdx].predictedVelAndDensity.w;
 
             if (densityJ < 0.0001) densityJ = 0.0001;
 
@@ -142,21 +122,10 @@ void main()
             // 压力力: f_press = -Σ m_j * (P_i + P_j) / (2 * ρ_j) * ∇W_spiky
             fPressure += -u_ParticleMass * (pressureI + pressureJ) / (2.0 * densityJ)
                          * spikyGrad(diff, dist, h);
-
-            // 粘性力: f_visc = μ * Σ m_j * (v_j - v_i) / ρ_j * ∇²W_visc
-            fViscosity += u_Viscosity * u_ParticleMass * (velJ - velI) / densityJ
-                          * viscLaplacian(dist, h);
-
-            // 表面张力
-            if (u_SurfaceTension > 0.0 && dist > 0.001)
-            {
-                fSurfaceTension += -u_SurfaceTension * u_ParticleMass * C_spline(dist, h)
-                                   * (diff / dist);
-            }
         }
     }
 
-    // 刚体 SDF 边界力
+    // --- 刚体 SDF 边界力 ---
     vec3 fBoundary = vec3(0.0);
     for (int rb = 0; rb < u_RigidBodyCount; rb++)
     {
@@ -177,41 +146,40 @@ void main()
             sdf = length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
             vec3 s = sign(localPos);
             if (d.x > d.y && d.x > d.z)
-                localNormal = vec3(s.x, 0.0, 0.0);
+                localNormal = vec3(s.x, 0, 0);
             else if (d.y > d.z)
-                localNormal = vec3(0.0, s.y, 0.0);
+                localNormal = vec3(0, s.y, 0);
             else
-                localNormal = vec3(0.0, 0.0, s.z);
+                localNormal = vec3(0, 0, s.z);
         }
         else // Sphere
         {
             float radius = rigidBodies[rb].halfExtents.x;
             sdf = length(localPos) - radius;
-            localNormal = length(localPos) > 0.001
-                ? normalize(localPos) : vec3(0.0, 1.0, 0.0);
+            localNormal = length(localPos) > 0.001 ? normalize(localPos) : vec3(0, 1, 0);
         }
 
-        if (sdf < h)
+        if (sdf < u_SmoothingRadius)
         {
             vec3 worldNormal = rbRot * localNormal;
             vec3 rbVel = rigidBodies[rb].linearVel.xyz
                        + cross(rigidBodies[rb].angularVel.xyz, posI - rbPos);
-            vec3 velRel = velI - rbVel;
-            float penetration = max(0.0, h - sdf);
+            vec3 velRel = pcisphData[gid].predictedVelAndDensity.xyz - rbVel;
+            float penetration = max(0.0, u_SmoothingRadius - sdf);
             fBoundary += u_BoundaryStiffness * penetration * worldNormal
                        - u_BoundaryDamping * dot(velRel, worldNormal) * worldNormal;
         }
     }
 
-    // 总 SPH 加速度 = (fPressure + fViscosity + fSurfaceTension + fBoundary) / ρ_i
-    vec3 sphAccel = (fPressure + fViscosity + fSurfaceTension + fBoundary) / densityI;
+    // 压力加速度
+    vec3 a_pressure = (fPressure + fBoundary) / densityI;
 
-    // 安全限幅：防止参数极端时数值爆炸
+    // 安全限幅
     float maxAccel = 500.0;
-    float accelMag = length(sphAccel);
+    float accelMag = length(a_pressure);
     if (accelMag > maxAccel)
-        sphAccel *= maxAccel / accelMag;
+        a_pressure *= maxAccel / accelMag;
 
-    // 直接应用到速度（simulate pass 之后会再叠加重力 + 阻尼）
-    particles[myParticleIdx].velAndMaxLife.xyz += sphAccel * u_DeltaTime;
+    // 更新预测速度: v* += a_pressure * dt
+    pcisphData[gid].predictedVelAndDensity.xyz += a_pressure * u_DeltaTime;
 }

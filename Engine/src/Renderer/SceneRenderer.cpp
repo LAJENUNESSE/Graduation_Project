@@ -79,7 +79,7 @@ namespace Engine
                     system->Init();
                 }
 
-                system->Update(ctx.DeltaTime, transform.Translation, emitter);
+                system->Update(ctx.DeltaTime, transform.Translation, emitter, &ctx.ActiveScene->GetRegistry());
 
                 if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
                     RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);

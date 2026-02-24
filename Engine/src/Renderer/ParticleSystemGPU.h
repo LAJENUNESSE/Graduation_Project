@@ -7,6 +7,7 @@
 #include "Renderer/SpatialHashGrid.h"
 
 #include <glm/glm.hpp>
+#include <entt/entt.hpp>
 
 namespace Engine
 {
@@ -20,7 +21,7 @@ namespace Engine
         ~ParticleSystemGPU() = default;
 
         void Init();
-        void Update(float dt, const glm::vec3& emitterPos, const ParticleEmitterComponent& emitter);
+        void Update(float dt, const glm::vec3& emitterPos, const ParticleEmitterComponent& emitter, entt::registry* registry = nullptr);
         void Render(const glm::mat4& viewMatrix, const glm::mat4& projection);
 
         uint32_t GetMaxParticles() const { return m_MaxParticles; }
@@ -53,6 +54,23 @@ namespace Engine
 
         bool m_Initialized = false;
         bool m_SPHInitialized = false;
+
+        // PCISPH
+        Ref<Shader> m_PCISPHInitShader;
+        Ref<Shader> m_PCISPHPredictShader;
+        Ref<Shader> m_PCISPHDensityShader;
+        Ref<Shader> m_PCISPHForceShader;
+        Ref<Shader> m_PCISPHApplyShader;
+
+        Ref<ShaderStorageBuffer> m_PCISPHBuffer;      // binding 1 during SPH, 48B/particle
+        Ref<ShaderStorageBuffer> m_RigidBodyBuffer;    // binding 3 during SPH, 112B × MAX_RIGID_BODIES
+        static constexpr uint32_t MAX_RIGID_BODIES = 64;
+        bool m_PCISPHInitialized = false;
+
+        void InitPCISPH();
+        void InitRigidBodyBuffer();
+        uint32_t UploadRigidBodies(entt::registry* registry);
+
         float m_EmitAccumulator = 0.0f;
 
         // 上一帧的活跃粒子数（用于 SPH dispatch）
