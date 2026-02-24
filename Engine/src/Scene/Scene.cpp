@@ -51,7 +51,34 @@ namespace Engine
         if (m_PhysicsBackend == PhysicsBackend::Custom && m_PhysicsWorld)
             m_PhysicsWorld->Step(ts, m_Registry);
         else if (m_PhysicsBackend == PhysicsBackend::Bullet && m_BulletPhysicsWorld)
+        {
             m_BulletPhysicsWorld->Step(ts, m_Registry);
+
+            // 碰撞触发粒子爆发
+            for (const auto& event : m_BulletPhysicsWorld->GetCollisionEvents())
+            {
+                auto tryTriggerBurst = [&](entt::entity entity, const glm::vec3& normal) {
+                    if (!m_Registry.valid(entity)) return;
+                    if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(entity)) return;
+
+                    auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(entity);
+                    auto& emitter = m_Registry.get<ParticleEmitterComponent>(entity);
+
+                    if (!trigger.Enabled) return;
+                    if (event.Impulse < trigger.MinImpulse) return;
+
+                    // 按冲量比例缩放爆发数
+                    float scale = std::min(event.Impulse / trigger.MinImpulse, 5.0f);
+                    emitter.CollisionBurstCount += static_cast<int>(trigger.BurstOnCollision * scale);
+
+                    if (trigger.UseCollisionNormal)
+                        emitter.EmitDirection = normal;
+                };
+
+                tryTriggerBurst(event.EntityA, event.ContactNormal);
+                tryTriggerBurst(event.EntityB, -event.ContactNormal);
+            }
+        }
 
         // 运行时渲染由 EditorLayer 通过 SceneRenderer 驱动
     }
@@ -127,6 +154,9 @@ namespace Engine
 
             if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))
                 newEntity.AddComponent<ParticleEmitterComponent>(srcReg.get<ParticleEmitterComponent>(srcEntity));
+
+            if (srcReg.all_of<CollisionParticleTriggerComponent>(srcEntity))
+                newEntity.AddComponent<CollisionParticleTriggerComponent>(srcReg.get<CollisionParticleTriggerComponent>(srcEntity));
         }
 
         return newScene;

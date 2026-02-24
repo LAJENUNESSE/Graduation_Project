@@ -4,6 +4,7 @@
 #include "Renderer/Shader.h"
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/VertexArray.h"
+#include "Renderer/SpatialHashGrid.h"
 
 #include <glm/glm.hpp>
 
@@ -40,11 +41,24 @@ namespace Engine
         Ref<Shader> m_RenderArgsShader;
         Ref<Shader> m_BillboardShader;
 
+        // SPH shaders
+        Ref<Shader> m_SPHDensityShader;
+        Ref<Shader> m_SPHForceShader;
+
+        // Spatial hash grid for SPH
+        SpatialHashGrid m_Grid;
+
         // Empty VAO for indirect draw
         Ref<VertexArray> m_EmptyVAO;
 
         bool m_Initialized = false;
+        bool m_SPHInitialized = false;
         float m_EmitAccumulator = 0.0f;
+
+        // 上一帧的活跃粒子数（用于 SPH dispatch）
+        uint32_t m_LastAliveCount = 0;
+
+        void InitSPH(float smoothingRadius);
     };
 
 } // namespace Engine

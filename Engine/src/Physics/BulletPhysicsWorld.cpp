@@ -125,6 +125,9 @@ namespace Engine
 
             auto* body = new btRigidBody(rbInfo);
 
+            // 存储 entity ID 到 Bullet userPointer，用于碰撞回调
+            body->setUserIndex(static_cast<int>(entityId));
+
             // Kinematic 设置
             if (rb.Type == RigidBodyComponent::BodyType::Kinematic)
             {
@@ -158,6 +161,43 @@ namespace Engine
 
         m_DynamicsWorld->stepSimulation(dt, 10, 1.0f / 60.0f);
         SyncToECS(reg);
+        CollectCollisionEvents(reg);
+    }
+
+    void BulletPhysicsWorld::CollectCollisionEvents(entt::registry& reg)
+    {
+        m_CollisionEvents.clear();
+
+        if (!m_Dispatcher)
+            return;
+
+        int numManifolds = m_Dispatcher->getNumManifolds();
+        for (int i = 0; i < numManifolds; i++)
+        {
+            btPersistentManifold* manifold = m_Dispatcher->getManifoldByIndexInternal(i);
+            const btCollisionObject* objA = manifold->getBody0();
+            const btCollisionObject* objB = manifold->getBody1();
+
+            int numContacts = manifold->getNumContacts();
+            for (int j = 0; j < numContacts; j++)
+            {
+                btManifoldPoint& pt = manifold->getContactPoint(j);
+
+                // 只处理本帧新生碰撞（impulse > 0）
+                float impulse = pt.getAppliedImpulse();
+                if (impulse <= 0.0f)
+                    continue;
+
+                CollisionEvent event;
+                event.EntityA = static_cast<entt::entity>(objA->getUserIndex());
+                event.EntityB = static_cast<entt::entity>(objB->getUserIndex());
+                event.ContactPoint = ToGlm(pt.getPositionWorldOnB());
+                event.ContactNormal = ToGlm(pt.m_normalWorldOnB);
+                event.Impulse = impulse;
+
+                m_CollisionEvents.push_back(event);
+            }
+        }
     }
 
     void BulletPhysicsWorld::SyncToECS(entt::registry& reg)
