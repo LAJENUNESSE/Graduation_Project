@@ -3,7 +3,7 @@
 #include "Core/Base.h"
 #include "Core/Timestep.h"
 #include "Core/UUID.h"
-#include "Renderer/Texture.h"
+#include "Scene/Systems/ShadowSystem.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -17,21 +17,9 @@ namespace Engine
 
     class Entity;
     class EditorCamera;
-    class Shader;
-    class Framebuffer;
-    class VertexArray;
+    class SceneRenderer;
     class PhysicsWorld;
     class BulletPhysicsWorld;
-
-    struct ShadowSettings
-    {
-        bool Enabled = true;
-        int MapResolution = 1024;
-        float Bias = 0.005f;
-        float OrthoSize = 20.0f;
-        float NearPlane = 0.1f;
-        float FarPlane = 50.0f;
-    };
 
     enum class PhysicsBackend { Custom = 0, Bullet = 1 };
 
@@ -54,15 +42,19 @@ namespace Engine
 
         void OnViewportResize(uint32_t width, uint32_t height);
 
-        void ShadowPass();
-        ShadowSettings& GetShadowSettings() { return m_ShadowSettings; }
-        void ResizeShadowMap(int resolution);
+        // 渲染器绑定
+        void SetSceneRenderer(SceneRenderer* renderer) { m_SceneRenderer = renderer; }
+        SceneRenderer* GetSceneRenderer() const { return m_SceneRenderer; }
 
-        // Skybox
+        // Skybox 委托
         void LoadSkybox(const std::vector<std::string>& facePaths);
         void ClearSkybox();
-        bool HasSkybox() const { return m_SkyboxTexture != nullptr; }
-        const std::vector<std::string>& GetSkyboxFacePaths() const { return m_SkyboxFacePaths; }
+        bool HasSkybox() const;
+        const std::vector<std::string>& GetSkyboxFacePaths() const;
+
+        // Shadow 委托
+        ShadowSettings& GetShadowSettings();
+        void ResizeShadowMap(int resolution);
 
         template <typename... Components>
         auto GetAllEntitiesWith()
@@ -78,32 +70,21 @@ namespace Engine
         PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
         void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
 
-        void RenderScene(Timestep ts, EditorCamera& camera);
-
     private:
         entt::registry m_Registry;
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;
-        Ref<Shader> m_MeshShader;
-        Ref<Texture2D> m_WhiteTexture;
 
-        // Shadow mapping
-        Ref<Shader> m_DepthShader;
-        Ref<Framebuffer> m_ShadowMapFBO;
-        ShadowSettings m_ShadowSettings;
-        glm::mat4 m_LightSpaceMatrix{1.0f};
-        bool m_HasValidShadowCaster = false;
-
-        // Skybox
-        Ref<Shader> m_SkyboxShader;
-        Ref<VertexArray> m_SkyboxVAO;
-        Ref<TextureCubemap> m_SkyboxTexture;
-        std::vector<std::string> m_SkyboxFacePaths;
+        // 渲染器引用（非所有权）
+        SceneRenderer* m_SceneRenderer = nullptr;
 
         // Physics
         PhysicsBackend m_PhysicsBackend = PhysicsBackend::Custom;
         std::unique_ptr<PhysicsWorld> m_PhysicsWorld;
         std::unique_ptr<BulletPhysicsWorld> m_BulletPhysicsWorld;
+
+        // 备份用的 ShadowSettings（SceneRenderer 为 null 时使用）
+        ShadowSettings m_FallbackShadowSettings;
 
         friend class Entity;
     };
