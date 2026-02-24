@@ -190,6 +190,27 @@ namespace Engine
         }
     }
 
+    void BulletPhysicsWorld::DestroyBody(entt::entity entity)
+    {
+        if (!m_DynamicsWorld)
+            return;
+
+        uint32_t entityId = static_cast<uint32_t>(entity);
+        auto it = m_Bodies.find(entityId);
+        if (it == m_Bodies.end())
+            return;
+
+        auto& info = it->second;
+        if (info.body)
+        {
+            m_DynamicsWorld->removeRigidBody(info.body);
+            delete info.body;
+        }
+        delete info.shape;
+        delete info.motionState;
+        m_Bodies.erase(it);
+    }
+
     void BulletPhysicsWorld::DestroyBodies()
     {
         if (!m_DynamicsWorld)

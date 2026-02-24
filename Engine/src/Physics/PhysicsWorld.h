@@ -50,6 +50,9 @@ namespace Engine
         glm::vec3 m_Gravity = {0, -9.81f, 0};
         float m_Accumulator = 0.0f;
         static constexpr float FIXED_DT = 1.0f / 60.0f;
+        static constexpr float MAX_DT = 0.25f;        // 单帧最大 dt 截断
+        static constexpr int MAX_SUBSTEPS = 8;         // 单帧最大子步数
+        static constexpr int SOLVER_ITERATIONS = 6;    // 约束求解迭代次数
         std::vector<CollisionInfo> m_Contacts;
     };
 

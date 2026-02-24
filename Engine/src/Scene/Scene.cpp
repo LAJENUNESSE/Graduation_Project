@@ -425,6 +425,10 @@ namespace Engine
 
     void Scene::DestroyEntity(Entity entity)
     {
+        // 运行时：同步移除物理刚体
+        if (m_BulletPhysicsWorld)
+            m_BulletPhysicsWorld->DestroyBody((entt::entity)entity);
+
         m_Registry.destroy(entity);
     }
 

@@ -74,7 +74,13 @@ namespace Engine
 
     void OpenGLTexture2D::SetData(void* data, uint32_t size)
     {
-        ENGINE_CORE_ASSERT(size == m_Width * m_Height * 4, "Data must be entire texture!");
+        uint32_t expected = m_Width * m_Height * 4;
+        ENGINE_CORE_ASSERT(size == expected, "Data must be entire texture!");
+        if (size != expected)
+        {
+            ENGINE_CORE_ERROR("Texture SetData size mismatch: expected {0}, got {1}", expected, size);
+            return;
+        }
         glBindTexture(GL_TEXTURE_2D, m_RendererID);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_Width, m_Height, m_DataFormat, GL_UNSIGNED_BYTE, data);
     }
@@ -89,6 +95,25 @@ namespace Engine
 
     OpenGLTextureCubemap::OpenGLTextureCubemap(const std::vector<std::string>& facePaths)
     {
+        if (facePaths.size() != 6)
+        {
+            ENGINE_CORE_ERROR("Cubemap requires exactly 6 face paths, got {0}. Using fallback.", facePaths.size());
+            // 创建 1x1 品红 fallback cubemap
+            m_Width = 1;
+            m_Height = 1;
+            glGenTextures(1, &m_RendererID);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
+            uint32_t magenta = 0xFFFF00FF;
+            for (int i = 0; i < 6; i++)
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &magenta);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+            return;
+        }
+
         glGenTextures(1, &m_RendererID);
         glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
 

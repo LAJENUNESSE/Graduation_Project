@@ -19,16 +19,34 @@ namespace Engine
 
     void PhysicsWorld::Step(float dt, entt::registry& reg)
     {
+        // 防止死亡螺旋：截断极端 dt
+        if (dt > MAX_DT)
+            dt = MAX_DT;
+
         m_Accumulator += dt;
 
+        int steps = 0;
         // 固定步长累加器模式，防止帧率波动影响物理
-        while (m_Accumulator >= FIXED_DT)
+        while (m_Accumulator >= FIXED_DT && steps < MAX_SUBSTEPS)
         {
             Integrate(reg, FIXED_DT);
             DetectCollisions(reg);
-            ResolveCollisions(reg);
+            // 多次迭代求解约束（类似 Bullet 的 sequential impulse solver）
+            // 单次迭代在高速碰撞时穿透严重，多次迭代可渐进收敛
+            for (int iter = 0; iter < SOLVER_ITERATIONS; ++iter)
+            {
+                ResolveCollisions(reg);
+                // 重新检测以更新穿透深度（位置修正后碰撞状态变化）
+                if (iter < SOLVER_ITERATIONS - 1)
+                    DetectCollisions(reg);
+            }
             m_Accumulator -= FIXED_DT;
+            ++steps;
         }
+
+        // 如果仍有剩余累积（超过最大子步数限制），丢弃避免无限累积
+        if (m_Accumulator > FIXED_DT * 2)
+            m_Accumulator = 0.0f;
     }
 
     // 半隐式欧拉积分 (Semi-implicit Euler)
@@ -292,9 +310,10 @@ namespace Engine
 
     void PhysicsWorld::ResolveCollisions(entt::registry& reg)
     {
-        constexpr float SLOP = 0.01f;       // 允许的微小穿透量（防抖动）
-        constexpr float PERCENT = 0.4f;      // 每帧位置修正比例（渐进收敛）
+        constexpr float SLOP = 0.005f;       // 允许的微小穿透量（防抖动）
+        constexpr float BAUMGARTE = 0.2f;    // 速度级 Baumgarte 偏置系数
         constexpr float EPSILON = 1e-6f;
+        constexpr float REST_THRESHOLD = 0.5f; // 低于此速度视为静止，取消弹性
 
         for (auto& contact : m_Contacts)
         {
@@ -327,6 +346,20 @@ namespace Engine
 
             glm::vec3 n = contact.contactNormal;
 
+            // ===== 位置修正（直接全量修正，先于冲量）=====
+            // 先修正位置，保证后续速度计算基于正确的几何状态
+            float penetration = contact.penetrationDepth;
+            if (penetration > SLOP)
+            {
+                float correctionMag = (penetration - SLOP) / (invMassA + invMassB + EPSILON);
+                glm::vec3 correction = correctionMag * n;
+
+                if (rbA && aIsDynamic)
+                    transformA.Translation -= correction * invMassA;
+                if (rbB && bIsDynamic)
+                    transformB.Translation += correction * invMassB;
+            }
+
             // 接触点相对于质心的向量
             glm::vec3 rA = contact.contactPoint - transformA.Translation;
             glm::vec3 rB = contact.contactPoint - transformB.Translation;
@@ -341,16 +374,25 @@ namespace Engine
             glm::vec3 vRel = vB - vA;
             float vn = glm::dot(vRel, n);
 
-            // 如果正在分离，跳过
+            // 如果正在分离，跳过冲量（位置已修正）
             if (vn > 0.0f)
                 continue;
 
-            // 弹性系数：取两者较小值
+            // 弹性系数：低速碰撞时置零，防止无限微弹跳导致逐步下沉
             float e = std::min(rbA ? rbA->Restitution : 0.0f,
                                rbB ? rbB->Restitution : 0.0f);
+            if (std::abs(vn) < REST_THRESHOLD)
+                e = 0.0f;
+
+            // ===== 速度级 Baumgarte 偏置 =====
+            // 将穿透量转化为目标分离速度，注入冲量公式
+            // 确保即使冲量不够也能通过速度修正推开物体
+            float biasPenetration = 0.0f;
+            if (penetration > SLOP)
+                biasPenetration = (BAUMGARTE / FIXED_DT) * (penetration - SLOP);
 
             // ===== 带旋转的冲量大小 j =====
-            // j = -(1 + e) * v_n / (1/mA + 1/mB + dot(IA⁻¹(rA×n)×rA, n) + dot(IB⁻¹(rB×n)×rB, n))
+            // j = (-(1 + e) * v_n + bias) / (1/mA + 1/mB + angularTerms)
             glm::vec3 rAxN = glm::cross(rA, n);
             glm::vec3 rBxN = glm::cross(rB, n);
 
@@ -361,7 +403,8 @@ namespace Engine
             if (denominator < EPSILON)
                 continue;
 
-            float j = -(1.0f + e) * vn / denominator;
+            float j = (-(1.0f + e) * vn + biasPenetration) / denominator;
+            if (j < 0.0f) j = 0.0f; // 冲量只推开，不拉近
 
             // 施加法线冲量
             glm::vec3 impulse = j * n;
@@ -434,16 +477,6 @@ namespace Engine
                     }
                 }
             }
-
-            // ===== 位置修正（Baumgarte 稳定化）=====
-            float correctionMag = std::max(contact.penetrationDepth - SLOP, 0.0f)
-                / (invMassA + invMassB) * PERCENT;
-            glm::vec3 correction = correctionMag * n;
-
-            if (rbA && aIsDynamic)
-                transformA.Translation -= correction * invMassA;
-            if (rbB && bIsDynamic)
-                transformB.Translation += correction * invMassB;
         }
     }
 

@@ -31,6 +31,8 @@ namespace Engine
 
         // 从 ECS 组件创建 Bullet 刚体
         void CreateBodies(entt::registry& reg);
+        // 销毁单个实体的 Bullet 刚体（运行时删除实体时调用）
+        void DestroyBody(entt::entity entity);
         // 将 Bullet 状态同步回 ECS
         void SyncToECS(entt::registry& reg);
 
