@@ -13,6 +13,18 @@ namespace Engine
         void SetClearColor(const glm::vec4& color) override;
         void Clear() override;
         void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) override;
+
+        void DrawArrays(uint32_t count, uint32_t first = 0) override;
+        void DrawLines(uint32_t count, uint32_t first = 0) override;
+        void SetDepthTest(bool enable) override;
+        void SetDepthFunc(DepthFunc func) override;
+        void SetCullFace(bool enable) override;
+        void SetCullFaceMode(CullFaceMode mode) override;
+        void SetLineWidth(float width) override;
+        void BindTextureUnit(uint32_t slot, uint32_t textureID) override;
+        void ClearColorOnly() override;
+        int GetBoundFramebufferID() override;
+        void BindFramebufferByID(int id) override;
     };
 
 } // namespace Engine

@@ -3,8 +3,8 @@
 #include "Scene/Components.h"
 #include "Renderer/Shader.h"
 #include "Renderer/EditorCamera.h"
+#include "Renderer/RenderCommand.h"
 
-#include <glad/gl.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -50,22 +50,15 @@ namespace Engine
 
         m_LineShader = Shader::Create("PhysicsDebugLine", vertSrc, fragSrc);
 
-        // 创建 VAO/VBO（动态更新）
-        glGenVertexArrays(1, &m_LineVAO);
-        glGenBuffers(1, &m_LineVBO);
+        // 创建动态 VBO（预分配空间，后续用 SetData 更新）
+        m_LineVBO = VertexBuffer::Create(sizeof(LineVertex) * 4096);
+        m_LineVBO->SetLayout({
+            {ShaderDataType::Float3, "a_Position"},
+            {ShaderDataType::Float3, "a_Color"},
+        });
 
-        glBindVertexArray(m_LineVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, m_LineVBO);
-
-        // Position (location 0)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(LineVertex), (void*)0);
-        glEnableVertexAttribArray(0);
-
-        // Color (location 1)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(LineVertex), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(1);
-
-        glBindVertexArray(0);
+        m_LineVAO = VertexArray::Create();
+        m_LineVAO->AddVertexBuffer(m_LineVBO);
 
         m_Initialized = true;
     }
@@ -186,26 +179,21 @@ namespace Engine
     void PhysicsDebugDraw::Flush(const glm::mat4& viewProjection)
     {
         // 关闭深度测试，让线框始终可见（不被物体遮挡）
-        glDisable(GL_DEPTH_TEST);
+        RenderCommand::SetDepthTest(false);
 
         m_LineShader->Bind();
         m_LineShader->SetMat4("u_ViewProjection", viewProjection);
 
-        glBindVertexArray(m_LineVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, m_LineVBO);
-        glBufferData(GL_ARRAY_BUFFER,
-                     m_LineVertices.size() * sizeof(LineVertex),
-                     m_LineVertices.data(),
-                     GL_DYNAMIC_DRAW);
+        m_LineVBO->SetData(m_LineVertices.data(),
+                           static_cast<uint32_t>(m_LineVertices.size() * sizeof(LineVertex)));
 
-        glLineWidth(2.0f);
-        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_LineVertices.size()));
-        glLineWidth(1.0f);
-
-        glBindVertexArray(0);
+        m_LineVAO->Bind();
+        RenderCommand::SetLineWidth(2.0f);
+        RenderCommand::DrawLines(static_cast<uint32_t>(m_LineVertices.size()), 0);
+        RenderCommand::SetLineWidth(1.0f);
 
         // 恢复深度测试
-        glEnable(GL_DEPTH_TEST);
+        RenderCommand::SetDepthTest(true);
     }
 
 } // namespace Engine

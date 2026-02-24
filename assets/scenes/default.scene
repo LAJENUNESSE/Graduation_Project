@@ -75,7 +75,7 @@ Entities:
     TagComponent:
       Tag: Cube1
     TransformComponent:
-      Translation: [7.450581e-09, 51.8, 0]
+      Translation: [7.450581e-09, 10, 0]
       Rotation: [0, 0, 0]
       Scale: [1.01, 1.01, 1.01]
     MeshRendererComponent:

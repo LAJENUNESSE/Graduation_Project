@@ -3,8 +3,6 @@
 #include "Renderer/Buffer.h"
 #include "Renderer/RenderCommand.h"
 
-#include <glad/gl.h>
-
 namespace Engine
 {
 
@@ -207,8 +205,7 @@ namespace Engine
     void PostProcessing::Process(uint32_t hdrTextureID, const PostProcessingSettings& settings)
     {
         // Save caller's FBO so we can restore it for the final tone mapping pass
-        GLint callerFBO;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &callerFBO);
+        int callerFBO = RenderCommand::GetBoundFramebufferID();
 
         uint32_t bloomTextureID = 0;
 
@@ -216,11 +213,10 @@ namespace Engine
         {
             // Step 1: Brightness extraction
             m_BrightnessFBO->Bind();
-            glClear(GL_COLOR_BUFFER_BIT);
+            RenderCommand::ClearColorOnly();
 
             m_BrightnessExtractShader->Bind();
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, hdrTextureID);
+            RenderCommand::BindTextureUnit(0, hdrTextureID);
             m_BrightnessExtractShader->SetInt("u_HDRBuffer", 0);
             m_BrightnessExtractShader->SetFloat("u_Threshold", settings.BloomThreshold);
             RenderFullscreenQuad();
@@ -233,11 +229,10 @@ namespace Engine
             for (int i = 0; i < settings.BloomIterations * 2; i++)
             {
                 m_PingPongFBO[horizontal ? 0 : 1]->Bind();
-                glClear(GL_COLOR_BUFFER_BIT);
+                RenderCommand::ClearColorOnly();
 
                 m_GaussianBlurShader->SetInt("u_Horizontal", horizontal ? 1 : 0);
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, inputTexture);
+                RenderCommand::BindTextureUnit(0, inputTexture);
                 m_GaussianBlurShader->SetInt("u_Image", 0);
                 RenderFullscreenQuad();
 
@@ -249,18 +244,15 @@ namespace Engine
         }
 
         // Step 3: Tone mapping + composite — restore caller's FBO
-        glBindFramebuffer(GL_FRAMEBUFFER, callerFBO);
-        glViewport(0, 0, m_Width, m_Height);
+        RenderCommand::BindFramebufferByID(callerFBO);
+        RenderCommand::SetViewport(0, 0, m_Width, m_Height);
 
         m_ToneMappingShader->Bind();
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, hdrTextureID);
+        RenderCommand::BindTextureUnit(0, hdrTextureID);
         m_ToneMappingShader->SetInt("u_HDRBuffer", 0);
 
-        glActiveTexture(GL_TEXTURE1);
-        if (bloomTextureID)
-            glBindTexture(GL_TEXTURE_2D, bloomTextureID);
+        RenderCommand::BindTextureUnit(1, bloomTextureID ? bloomTextureID : 0);
         m_ToneMappingShader->SetInt("u_BloomBlur", 1);
 
         m_ToneMappingShader->SetFloat("u_BloomStrength", settings.BloomStrength);
