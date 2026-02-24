@@ -5,6 +5,7 @@
 #include "Renderer/Shader.h"
 #include "Renderer/Texture.h"
 #include "Renderer/RenderQueue.h"
+#include "Renderer/ParticleSystemGPU.h"
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Systems/ShadowSystem.h"
 #include "Scene/Systems/SkyboxSystem.h"
@@ -13,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <unordered_map>
 
 namespace Engine
 {
@@ -24,6 +26,7 @@ namespace Engine
     {
         EditorCamera* Camera = nullptr;
         Scene* ActiveScene = nullptr;
+        float DeltaTime = 0.0f;
     };
 
     struct RenderPassConfig
@@ -39,7 +42,7 @@ namespace Engine
         void Init();
         void Shutdown();
 
-        void BeginScene(const EditorCamera& camera, Scene* scene);
+        void BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime);
         void Render();
         void EndScene();
 
@@ -66,6 +69,10 @@ namespace Engine
 
         Ref<Shader> m_PBRShader;
         Ref<Texture2D> m_WhiteTexture;
+
+        // Particle systems keyed by entity ID
+        std::unordered_map<uint32_t, Ref<ParticleSystemGPU>> m_ParticleSystems;
+        Scene* m_LastScene = nullptr;
     };
 
 } // namespace Engine

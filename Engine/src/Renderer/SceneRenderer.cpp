@@ -2,6 +2,7 @@
 #include "Renderer/SceneRenderer.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderCommand.h"
+#include "Renderer/RendererAPI.h"
 #include "Renderer/EditorCamera.h"
 #include "Scene/Scene.h"
 #include "Scene/Components.h"
@@ -22,7 +23,6 @@ namespace Engine
         m_ShadowSystem.Init();
         m_SkyboxSystem.Init();
 
-        // 注册 Pass 队列
         m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx) {
             m_LightEnv = LightSystem::CollectLights(ctx.ActiveScene->GetRegistry());
         }});
@@ -36,12 +36,10 @@ namespace Engine
 
             Renderer::BeginScene(ctx.Camera->GetViewProjection());
 
-            // Upload lights + shadow to PBR shader
             m_PBRShader->Bind();
             m_PBRShader->SetFloat3("u_ViewPos", ctx.Camera->GetPosition());
             LightSystem::UploadToShader(m_PBRShader, m_LightEnv);
 
-            // Shadow uniforms
             m_PBRShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
             bool shadowActive = m_ShadowSystem.GetSettings().Enabled && m_ShadowData.HasValidShadowCaster;
             m_PBRShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
@@ -49,12 +47,10 @@ namespace Engine
             RenderCommand::BindTextureUnit(1, m_ShadowData.ShadowMapTextureID);
             m_PBRShader->SetInt("u_ShadowMap", 1);
 
-            // Submit mesh render packets
             m_RenderQueue.Clear();
             MeshRenderSystem::SubmitRenderPackets(ctx.ActiveScene->GetRegistry(), m_RenderQueue,
                                                     m_PBRShader, m_WhiteTexture);
 
-            // Flush: bind each material + set per-draw VP/Transform + draw
             m_RenderQueue.Flush(ctx.Camera->GetViewProjection());
 
             Renderer::EndScene();
@@ -65,17 +61,55 @@ namespace Engine
         m_PassQueue.push_back({"SkyboxPass", [this](RenderContext& ctx) {
             m_SkyboxSystem.Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
         }});
+
+        m_PassQueue.push_back({"ParticlePass", [this](RenderContext& ctx) {
+            auto view = ctx.ActiveScene->GetRegistry().view<TransformComponent, ParticleEmitterComponent>();
+
+            for (auto entity : view)
+            {
+                auto& transform = view.get<TransformComponent>(entity);
+                auto& emitter = view.get<ParticleEmitterComponent>(entity);
+
+                uint32_t eid = static_cast<uint32_t>(entity);
+                auto& system = m_ParticleSystems[eid];
+
+                if (!system || system->GetMaxParticles() != emitter.MaxParticles)
+                {
+                    system = CreateRef<ParticleSystemGPU>(emitter.MaxParticles);
+                    system->Init();
+                }
+
+                system->Update(ctx.DeltaTime, transform.Translation, emitter);
+
+                if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
+                    RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
+                else
+                    RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+
+                system->Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
+
+                RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+            }
+        }});
     }
 
     void SceneRenderer::Shutdown()
     {
         m_PassQueue.clear();
+        m_ParticleSystems.clear();
     }
 
-    void SceneRenderer::BeginScene(const EditorCamera& camera, Scene* scene)
+    void SceneRenderer::BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime)
     {
+        if (m_LastScene != scene)
+        {
+            m_ParticleSystems.clear();
+            m_LastScene = scene;
+        }
+
         m_Context.Camera = const_cast<EditorCamera*>(&camera);
         m_Context.ActiveScene = scene;
+        m_Context.DeltaTime = deltaTime;
     }
 
     void SceneRenderer::Render()
@@ -91,11 +125,11 @@ namespace Engine
     {
         m_Context.Camera = nullptr;
         m_Context.ActiveScene = nullptr;
+        m_Context.DeltaTime = 0.0f;
     }
 
     void SceneRenderer::RenderGeometryAndSkybox()
     {
-        // MSAA 重绘时只走 Geometry + Skybox，不重新收集光照/阴影
         for (auto& pass : m_PassQueue)
         {
             if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass"))

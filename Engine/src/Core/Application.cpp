@@ -100,10 +100,9 @@ namespace Engine
         {
             float time = static_cast<float>(glfwGetTime());
             Timestep timestep = time - m_LastFrameTime;
-            float frameTimeMs = timestep * 1000.0f;
             m_LastFrameTime = time;
 
-            PerformanceMonitor::Get().BeginFrame(time, frameTimeMs);
+            PerformanceMonitor::Get().BeginFrame(time);
 
             if (!m_Minimized)
             {

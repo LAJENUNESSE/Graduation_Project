@@ -277,6 +277,31 @@ namespace Engine
             out << YAML::EndMap;
         }
 
+        // ParticleEmitterComponent
+        if (entity.HasComponent<ParticleEmitterComponent>())
+        {
+            out << YAML::Key << "ParticleEmitterComponent";
+            out << YAML::BeginMap;
+            auto& pe = entity.GetComponent<ParticleEmitterComponent>();
+            out << YAML::Key << "EmitRate" << YAML::Value << pe.EmitRate;
+            out << YAML::Key << "BurstCount" << YAML::Value << pe.BurstCount;
+            out << YAML::Key << "MaxParticles" << YAML::Value << pe.MaxParticles;
+            out << YAML::Key << "LifeMin" << YAML::Value << pe.LifeMin;
+            out << YAML::Key << "LifeMax" << YAML::Value << pe.LifeMax;
+            out << YAML::Key << "SpeedMin" << YAML::Value << pe.SpeedMin;
+            out << YAML::Key << "SpeedMax" << YAML::Value << pe.SpeedMax;
+            out << YAML::Key << "SizeStart" << YAML::Value << pe.SizeStart;
+            out << YAML::Key << "SizeEnd" << YAML::Value << pe.SizeEnd;
+            out << YAML::Key << "EmitDirection" << YAML::Value << pe.EmitDirection;
+            out << YAML::Key << "EmitAngle" << YAML::Value << pe.EmitAngle;
+            out << YAML::Key << "ColorStart" << YAML::Value << pe.ColorStart;
+            out << YAML::Key << "ColorEnd" << YAML::Value << pe.ColorEnd;
+            out << YAML::Key << "Gravity" << YAML::Value << pe.Gravity;
+            out << YAML::Key << "Damping" << YAML::Value << pe.Damping;
+            out << YAML::Key << "BlendMode" << YAML::Value << static_cast<int>(pe.Blend);
+            out << YAML::EndMap;
+        }
+
         out << YAML::EndMap;
     }
 
@@ -406,7 +431,7 @@ namespace Engine
                 shadow.Enabled = shadowNode["Enabled"].as<bool>();
             if (shadowNode["MapResolution"])
             {
-                int res = shadowNode["MapResolution"].as<int>();
+                int res = shadowNode["MapResolution"].as<float>();
                 // 范围校验：256 ~ 8192
                 if (res < 256) res = 256;
                 if (res > 8192) res = 8192;
@@ -434,14 +459,14 @@ namespace Engine
                 outRenderSettings->PostProcessing.BloomStrength = renderNode["BloomStrength"].as<float>();
             if (renderNode["BloomIterations"])
             {
-                int iters = renderNode["BloomIterations"].as<int>();
+                int iters = renderNode["BloomIterations"].as<float>();
                 if (iters < 1) iters = 1;
                 if (iters > 20) iters = 20;
                 outRenderSettings->PostProcessing.BloomIterations = iters;
             }
             if (renderNode["ToneMappingMode"])
             {
-                int mode = renderNode["ToneMappingMode"].as<int>();
+                int mode = renderNode["ToneMappingMode"].as<float>();
                 if (mode < 0 || mode > 3)
                 {
                     ENGINE_CORE_WARN("Invalid ToneMappingMode {0}, falling back to 0", mode);
@@ -464,7 +489,7 @@ namespace Engine
             }
             if (renderNode["PhysicsBackend"])
             {
-                int backend = renderNode["PhysicsBackend"].as<int>();
+                int backend = renderNode["PhysicsBackend"].as<float>();
                 if (backend < 0 || backend > 1)
                 {
                     ENGINE_CORE_WARN("Invalid PhysicsBackend {0}, falling back to 0 (Custom)", backend);
@@ -606,7 +631,7 @@ namespace Engine
                 if (lightComponent)
                 {
                     auto& lc = deserializedEntity.AddComponent<LightComponent>();
-                    int typeVal = lightComponent["Type"] ? lightComponent["Type"].as<int>() : 0;
+                    int typeVal = lightComponent["Type"] ? lightComponent["Type"].as<float>() : 0;
                     if (typeVal < 0 || typeVal > 2)
                         typeVal = 0;
                     lc.Type = static_cast<LightComponent::LightType>(typeVal);
@@ -636,7 +661,7 @@ namespace Engine
 
                     if (cameraComponent["ProjectionType"])
                         cc.Camera.SetProjectionType(
-                            static_cast<SceneCamera::ProjectionType>(cameraComponent["ProjectionType"].as<int>()));
+                            static_cast<SceneCamera::ProjectionType>(cameraComponent["ProjectionType"].as<float>()));
                     if (cameraComponent["PerspectiveFOV"])
                         cc.Camera.SetPerspectiveVerticalFOV(cameraComponent["PerspectiveFOV"].as<float>());
                     if (cameraComponent["PerspectiveNear"])
@@ -660,7 +685,7 @@ namespace Engine
                 if (rigidBodyComponent)
                 {
                     auto& rb = deserializedEntity.AddComponent<RigidBodyComponent>();
-                    int typeVal = rigidBodyComponent["Type"] ? rigidBodyComponent["Type"].as<int>() : 0;
+                    int typeVal = rigidBodyComponent["Type"] ? rigidBodyComponent["Type"].as<float>() : 0;
                     if (typeVal < 0 || typeVal > 2) typeVal = 0;
                     rb.Type = static_cast<RigidBodyComponent::BodyType>(typeVal);
                     if (rigidBodyComponent["Mass"])
@@ -695,6 +720,49 @@ namespace Engine
                         sc.Radius = sphereColliderComponent["Radius"].as<float>();
                     if (sphereColliderComponent["Offset"])
                         sc.Offset = sphereColliderComponent["Offset"].as<glm::vec3>();
+                }
+
+                // ParticleEmitterComponent
+                auto particleEmitterComponent = entityNode["ParticleEmitterComponent"];
+                if (particleEmitterComponent)
+                {
+                    auto& pe = deserializedEntity.AddComponent<ParticleEmitterComponent>();
+                    if (particleEmitterComponent["EmitRate"])
+                        pe.EmitRate = particleEmitterComponent["EmitRate"].as<float>();
+                    if (particleEmitterComponent["BurstCount"])
+                        pe.BurstCount = particleEmitterComponent["BurstCount"].as<int>();
+                    if (particleEmitterComponent["MaxParticles"])
+                        pe.MaxParticles = particleEmitterComponent["MaxParticles"].as<uint32_t>();
+                    if (particleEmitterComponent["LifeMin"])
+                        pe.LifeMin = particleEmitterComponent["LifeMin"].as<float>();
+                    if (particleEmitterComponent["LifeMax"])
+                        pe.LifeMax = particleEmitterComponent["LifeMax"].as<float>();
+                    if (particleEmitterComponent["SpeedMin"])
+                        pe.SpeedMin = particleEmitterComponent["SpeedMin"].as<float>();
+                    if (particleEmitterComponent["SpeedMax"])
+                        pe.SpeedMax = particleEmitterComponent["SpeedMax"].as<float>();
+                    if (particleEmitterComponent["SizeStart"])
+                        pe.SizeStart = particleEmitterComponent["SizeStart"].as<float>();
+                    if (particleEmitterComponent["SizeEnd"])
+                        pe.SizeEnd = particleEmitterComponent["SizeEnd"].as<float>();
+                    if (particleEmitterComponent["EmitDirection"])
+                        pe.EmitDirection = particleEmitterComponent["EmitDirection"].as<glm::vec3>();
+                    if (particleEmitterComponent["EmitAngle"])
+                        pe.EmitAngle = particleEmitterComponent["EmitAngle"].as<float>();
+                    if (particleEmitterComponent["ColorStart"])
+                        pe.ColorStart = particleEmitterComponent["ColorStart"].as<glm::vec4>();
+                    if (particleEmitterComponent["ColorEnd"])
+                        pe.ColorEnd = particleEmitterComponent["ColorEnd"].as<glm::vec4>();
+                    if (particleEmitterComponent["Gravity"])
+                        pe.Gravity = particleEmitterComponent["Gravity"].as<glm::vec3>();
+                    if (particleEmitterComponent["Damping"])
+                        pe.Damping = particleEmitterComponent["Damping"].as<float>();
+                    if (particleEmitterComponent["BlendMode"])
+                    {
+                        int mode = particleEmitterComponent["BlendMode"].as<float>();
+                        if (mode >= 0 && mode <= 1)
+                            pe.Blend = static_cast<ParticleEmitterComponent::BlendMode>(mode);
+                    }
                 }
             }
             catch (const YAML::Exception& e)

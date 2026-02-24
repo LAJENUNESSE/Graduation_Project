@@ -218,6 +218,15 @@ namespace Engine
                 }
             }
 
+            if (!entity.HasComponent<ParticleEmitterComponent>())
+            {
+                if (ImGui::MenuItem("粒子发射器"))
+                {
+                    entity.AddComponent<ParticleEmitterComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             ImGui::EndPopup();
         }
         ImGui::PopItemWidth();
@@ -581,6 +590,57 @@ namespace Engine
         {
             ImGui::DragFloat("半径", &component.Radius, 0.01f, 0.01f, 100.0f, "%.2f");
             DrawVec3Control("偏移", component.Offset);
+        });
+
+        // ParticleEmitter
+        DrawComponent<ParticleEmitterComponent>("粒子发射器", entity, [this](auto& component)
+        {
+            ImGui::Text("发射");
+            ImGui::DragFloat("发射速率", &component.EmitRate, 1.0f, 0.0f, 100000.0f, "%.0f");
+            ImGui::SameLine();
+            ImGui::TextDisabled("粒子/秒");
+            ImGui::DragInt("爆发数量", &component.BurstCount, 1, 0, 10000);
+
+            int maxP = static_cast<int>(component.MaxParticles);
+            if (ImGui::DragInt("最大粒子数", &maxP, 100, 100, 1000000))
+                component.MaxParticles = static_cast<uint32_t>(std::max(maxP, 100));
+
+            ImGui::Separator();
+            ImGui::Text("生命周期");
+            ImGui::DragFloat("最短寿命", &component.LifeMin, 0.05f, 0.01f, 60.0f, "%.2f 秒");
+            ImGui::DragFloat("最长寿命", &component.LifeMax, 0.05f, 0.01f, 60.0f, "%.2f 秒");
+            if (component.LifeMax < component.LifeMin)
+                component.LifeMax = component.LifeMin;
+
+            ImGui::Separator();
+            ImGui::Text("速度与方向");
+            ImGui::DragFloat("最小速度", &component.SpeedMin, 0.1f, 0.0f, 100.0f, "%.1f");
+            ImGui::DragFloat("最大速度", &component.SpeedMax, 0.1f, 0.0f, 100.0f, "%.1f");
+            if (component.SpeedMax < component.SpeedMin)
+                component.SpeedMax = component.SpeedMin;
+            DrawVec3Control("发射方向", component.EmitDirection);
+            ImGui::DragFloat("锥角", &component.EmitAngle, 0.5f, 0.0f, 180.0f, "%.1f°");
+
+            ImGui::Separator();
+            ImGui::Text("大小");
+            ImGui::DragFloat("起始大小", &component.SizeStart, 0.01f, 0.001f, 10.0f, "%.3f");
+            ImGui::DragFloat("结束大小", &component.SizeEnd, 0.01f, 0.0f, 10.0f, "%.3f");
+
+            ImGui::Separator();
+            ImGui::Text("颜色");
+            ImGui::ColorEdit4("起始颜色", glm::value_ptr(component.ColorStart));
+            ImGui::ColorEdit4("结束颜色", glm::value_ptr(component.ColorEnd));
+
+            ImGui::Separator();
+            ImGui::Text("物理");
+            DrawVec3Control("重力", component.Gravity);
+            ImGui::DragFloat("阻尼", &component.Damping, 0.01f, 0.0f, 1.0f, "%.2f");
+
+            ImGui::Separator();
+            const char* blendModes[] = {"加法混合", "Alpha混合"};
+            int blendIdx = static_cast<int>(component.Blend);
+            if (ImGui::Combo("混合模式", &blendIdx, blendModes, 2))
+                component.Blend = static_cast<ParticleEmitterComponent::BlendMode>(blendIdx);
         });
     }
 

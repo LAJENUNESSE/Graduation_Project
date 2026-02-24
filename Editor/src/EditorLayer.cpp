@@ -122,7 +122,7 @@ namespace Engine
         }
 
         // 开始场景渲染
-        m_SceneRenderer.BeginScene(m_EditorCamera, m_ActiveScene.get());
+        m_SceneRenderer.BeginScene(m_EditorCamera, m_ActiveScene.get(), ts);
 
         // Shadow pass (renders to its own FBO) — CPU profiled
         float shadowCpuMs = 0.0f;
@@ -148,10 +148,10 @@ namespace Engine
             RenderCommand::Clear();
             m_HDRFramebuffer->ClearAttachment(1, -1);
 
-            // 执行 GeometryPass + SkyboxPass
+            // 执行 GeometryPass + SkyboxPass + ParticlePass
             for (auto& pass : m_SceneRenderer.GetPassQueue())
             {
-                if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass"))
+                if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "ParticlePass"))
                     pass.ExecuteFn(m_SceneRenderer.GetContext());
             }
 

@@ -96,6 +96,34 @@ namespace Engine
             s_RendererAPI->BindFramebufferByID(id);
         }
 
+        static void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1)
+        {
+            s_RendererAPI->DispatchCompute(groupsX, groupsY, groupsZ);
+        }
+
+        static void MemoryBarrier(uint32_t barriers)
+        {
+            s_RendererAPI->MemoryBarrier(barriers);
+        }
+
+        static void DrawArraysIndirect(uint32_t bufferID)
+        {
+            s_RendererAPI->DrawArraysIndirect(bufferID);
+
+            auto& stats = PerformanceMonitor::Get().GetStats();
+            stats.DrawCalls++;
+        }
+
+        static void SetDepthMask(bool enable)
+        {
+            s_RendererAPI->SetDepthMask(enable);
+        }
+
+        static void SetBlendFunc(BlendFactor src, BlendFactor dst)
+        {
+            s_RendererAPI->SetBlendFunc(src, dst);
+        }
+
     private:
         static Scope<RendererAPI> s_RendererAPI;
     };
