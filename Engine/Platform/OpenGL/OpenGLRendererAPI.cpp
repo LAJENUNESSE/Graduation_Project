@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLRendererAPI.h"
+#include "Core/Assert.h"
 
 #include <glad/gl.h>
 
@@ -144,6 +145,7 @@ namespace Engine
         case BlendFactor::DstAlpha:          return GL_DST_ALPHA;
         case BlendFactor::OneMinusDstAlpha:  return GL_ONE_MINUS_DST_ALPHA;
         }
+        ENGINE_CORE_ASSERT(false, "Unknown BlendFactor");
         return GL_ONE;
     }
 

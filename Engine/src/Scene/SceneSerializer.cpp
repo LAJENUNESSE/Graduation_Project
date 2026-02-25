@@ -458,7 +458,7 @@ namespace Engine
                 shadow.Enabled = shadowNode["Enabled"].as<bool>();
             if (shadowNode["MapResolution"])
             {
-                int res = shadowNode["MapResolution"].as<float>();
+                int res = shadowNode["MapResolution"].as<int>();
                 // 范围校验：256 ~ 8192
                 if (res < 256) res = 256;
                 if (res > 8192) res = 8192;
@@ -486,14 +486,14 @@ namespace Engine
                 outRenderSettings->PostProcessing.BloomStrength = renderNode["BloomStrength"].as<float>();
             if (renderNode["BloomIterations"])
             {
-                int iters = renderNode["BloomIterations"].as<float>();
+                int iters = renderNode["BloomIterations"].as<int>();
                 if (iters < 1) iters = 1;
                 if (iters > 20) iters = 20;
                 outRenderSettings->PostProcessing.BloomIterations = iters;
             }
             if (renderNode["ToneMappingMode"])
             {
-                int mode = renderNode["ToneMappingMode"].as<float>();
+                int mode = renderNode["ToneMappingMode"].as<int>();
                 if (mode < 0 || mode > 3)
                 {
                     ENGINE_CORE_WARN("Invalid ToneMappingMode {0}, falling back to 0", mode);
@@ -516,7 +516,7 @@ namespace Engine
             }
             if (renderNode["PhysicsBackend"])
             {
-                int backend = renderNode["PhysicsBackend"].as<float>();
+                int backend = renderNode["PhysicsBackend"].as<int>();
                 if (backend < 0 || backend > 1)
                 {
                     ENGINE_CORE_WARN("Invalid PhysicsBackend {0}, falling back to 0 (Custom)", backend);
@@ -658,7 +658,7 @@ namespace Engine
                 if (lightComponent)
                 {
                     auto& lc = deserializedEntity.AddComponent<LightComponent>();
-                    int typeVal = lightComponent["Type"] ? lightComponent["Type"].as<float>() : 0;
+                    int typeVal = lightComponent["Type"] ? lightComponent["Type"].as<int>() : 0;
                     if (typeVal < 0 || typeVal > 2)
                         typeVal = 0;
                     lc.Type = static_cast<LightComponent::LightType>(typeVal);
@@ -688,7 +688,7 @@ namespace Engine
 
                     if (cameraComponent["ProjectionType"])
                         cc.Camera.SetProjectionType(
-                            static_cast<SceneCamera::ProjectionType>(cameraComponent["ProjectionType"].as<float>()));
+                            static_cast<SceneCamera::ProjectionType>(cameraComponent["ProjectionType"].as<int>()));
                     if (cameraComponent["PerspectiveFOV"])
                         cc.Camera.SetPerspectiveVerticalFOV(cameraComponent["PerspectiveFOV"].as<float>());
                     if (cameraComponent["PerspectiveNear"])
@@ -712,7 +712,7 @@ namespace Engine
                 if (rigidBodyComponent)
                 {
                     auto& rb = deserializedEntity.AddComponent<RigidBodyComponent>();
-                    int typeVal = rigidBodyComponent["Type"] ? rigidBodyComponent["Type"].as<float>() : 0;
+                    int typeVal = rigidBodyComponent["Type"] ? rigidBodyComponent["Type"].as<int>() : 0;
                     if (typeVal < 0 || typeVal > 2) typeVal = 0;
                     rb.Type = static_cast<RigidBodyComponent::BodyType>(typeVal);
                     if (rigidBodyComponent["Mass"])
@@ -811,7 +811,10 @@ namespace Engine
                     if (particleEmitterComponent["SPH_PCISPHEnabled"])
                         pe.SPH_PCISPHEnabled = particleEmitterComponent["SPH_PCISPHEnabled"].as<bool>();
                     if (particleEmitterComponent["SPH_PCISPHIterations"])
-                        pe.SPH_PCISPHIterations = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
+                    {
+                        int iters = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
+                        pe.SPH_PCISPHIterations = std::clamp(iters, 1, 8);
+                    }
                     if (particleEmitterComponent["SPH_PCISPHDelta"])
                         pe.SPH_PCISPHDelta = particleEmitterComponent["SPH_PCISPHDelta"].as<float>();
                     if (particleEmitterComponent["SPH_SurfaceTension"])

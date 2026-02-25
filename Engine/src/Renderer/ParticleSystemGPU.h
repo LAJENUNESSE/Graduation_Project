@@ -72,6 +72,7 @@ namespace Engine
         uint32_t UploadRigidBodies(entt::registry* registry);
 
         float m_EmitAccumulator = 0.0f;
+        float m_TotalTime = 0.0f;
 
         // 上一帧的活跃粒子数（用于 SPH dispatch）
         uint32_t m_LastAliveCount = 0;

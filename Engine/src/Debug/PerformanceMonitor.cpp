@@ -90,10 +90,11 @@ namespace Engine
                       << std::setprecision(3) << m_FrameTimeMs << ","
                       << std::setprecision(1) << m_FPS << ","
                       << std::setprecision(3) << m_ShadowPassCpuMs << ","
-                      << m_SceneRenderCpuMs << ","
-                      << m_ImGuiCpuMs << ","
-                      << m_ShadowPassGPU.GetElapsedMs() << ","
-                      << m_SceneRenderGPU.GetElapsedMs() << ","
+                      << std::setprecision(3) << m_SceneRenderCpuMs << ","
+                      << std::setprecision(3) << m_ImGuiCpuMs << ","
+                      << std::setprecision(3) << m_ShadowPassGPU.GetElapsedMs() << ","
+                      << std::setprecision(3) << m_SceneRenderGPU.GetElapsedMs() << ","
+                      << std::defaultfloat
                       << m_Stats.DrawCalls << ","
                       << m_Stats.Vertices << ","
                       << m_Stats.Triangles << "\n";

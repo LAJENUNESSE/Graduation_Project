@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLStorageBuffer.h"
+#include "Core/Assert.h"
 
 #include <glad/gl.h>
 
@@ -43,6 +44,7 @@ namespace Engine
 
     void OpenGLStorageBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
     {
+        ENGINE_CORE_ASSERT(offset + size <= m_Size, "StorageBuffer::SetData out of bounds");
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RendererID);
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
@@ -50,6 +52,7 @@ namespace Engine
 
     void OpenGLStorageBuffer::GetData(void* data, uint32_t size, uint32_t offset) const
     {
+        ENGINE_CORE_ASSERT(offset + size <= m_Size, "StorageBuffer::GetData out of bounds");
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RendererID);
         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
