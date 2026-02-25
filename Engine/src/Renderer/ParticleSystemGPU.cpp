@@ -3,11 +3,24 @@
 #include "Scene/Components.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
+#include "Core/Log.h"
+
+#include <glad/gl.h>
 
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 namespace Engine
 {
+
+    namespace
+    {
+        bool ContainsToken(const char* str, const char* token)
+        {
+            return str && token && std::strstr(str, token) != nullptr;
+        }
+    } // namespace
 
     // Must match GLSL struct layout: 5 x vec4 = 80 bytes
     struct GPUParticleData
@@ -105,6 +118,30 @@ namespace Engine
         // Empty VAO for billboard rendering
         m_EmptyVAO = VertexArray::Create();
 
+        const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+
+        // VMware SVGA has known instability with advanced compute/indirect paths.
+        bool vmwareDriver = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
+        m_VMwareCompatMode = vmwareDriver;
+
+        const char* forceDirect = std::getenv("ENGINE_PARTICLE_DIRECT_DRAW");
+        bool envForceDirect = forceDirect && forceDirect[0] == '1';
+
+        m_UseIndirectDraw = !(vmwareDriver || envForceDirect);
+        if (!m_UseIndirectDraw)
+        {
+            ENGINE_WARN("[Particle] Using direct instanced draw fallback (VMware compatibility mode).");
+        }
+
+        const char* allowSPHEnv = std::getenv("ENGINE_ENABLE_SPH_ON_VMWARE");
+        bool allowSPHOnVMware = allowSPHEnv && allowSPHEnv[0] == '1';
+        m_DisableSPHOnDriver = vmwareDriver && !allowSPHOnVMware;
+        if (m_DisableSPHOnDriver)
+        {
+            ENGINE_WARN("[Particle] SPH/PCISPH disabled on VMware for stability. Set ENGINE_ENABLE_SPH_ON_VMWARE=1 to force-enable.");
+        }
+
         m_Initialized = true;
     }
 
@@ -187,6 +224,13 @@ namespace Engine
     {
         if (!m_Initialized) return;
 
+        const bool sphEnabled = emitter.SPHEnabled && !m_DisableSPHOnDriver;
+        if (emitter.SPHEnabled && m_DisableSPHOnDriver && !m_SPHDisableLogged)
+        {
+            ENGINE_WARN("[Particle] SPH component detected but runtime SPH is disabled in VMware compatibility mode.");
+            m_SPHDisableLogged = true;
+        }
+
         // ---- CPU-side: reset aliveCount, set emitCount ----
         uint32_t zero = 0;
         m_CounterBuffer->SetData(&zero, sizeof(uint32_t), 4);  // aliveCount = 0
@@ -197,13 +241,26 @@ namespace Engine
         uint32_t emitCount = static_cast<uint32_t>(m_EmitAccumulator);
         m_EmitAccumulator -= static_cast<float>(emitCount);
 
-        // Add burst (user-set + collision-triggered)
-        int totalBurst = emitter.BurstCount + emitter.CollisionBurstCount;
+        // Add burst (user-triggered + collision-triggered)
+        int totalBurst = emitter.PendingBurst + emitter.CollisionBurstCount;
         if (totalBurst > 0)
+        {
+            ENGINE_INFO("[Particle] Burst triggered: PendingBurst={0}, CollisionBurst={1}, totalBurst={2}, emitCountBefore={3}",
+                        emitter.PendingBurst, emitter.CollisionBurstCount, totalBurst, emitCount);
             emitCount += static_cast<uint32_t>(totalBurst);
+        }
 
         // Clamp to MaxParticles — prevent shader atomic underflow
         emitCount = std::min(emitCount, m_MaxParticles);
+
+        // DEBUG: 每秒打印一次关键状态
+        m_DebugTimer += dt;
+        if (m_DebugTimer >= 1.0f)
+        {
+            ENGINE_INFO("[Particle] Status: EmitRate={0:.1f}, BurstCount={1}, PendingBurst={2}, CollisionBurst={3}, emitCount={4}, MaxParticles={5}",
+                        emitter.EmitRate, emitter.BurstCount, emitter.PendingBurst, emitter.CollisionBurstCount, emitCount, m_MaxParticles);
+            m_DebugTimer = 0.0f;
+        }
 
         m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8);  // emitCount
 
@@ -229,6 +286,7 @@ namespace Engine
             m_EmitShader->SetFloat("u_SizeEnd", emitter.SizeEnd);
             m_EmitShader->SetFloat4("u_StartColor", emitter.ColorStart);
             m_EmitShader->SetFloat4("u_EndColor", emitter.ColorEnd);
+            m_EmitShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
 
             // Time-based seed for RNG
             m_TotalTime += dt;
@@ -240,7 +298,7 @@ namespace Engine
         }
 
         // ---- SPH passes (only when SPHEnabled) ----
-        if (emitter.SPHEnabled)
+        if (sphEnabled)
         {
             // Lazy-init spatial hash grid
             if (!m_SPHInitialized)
@@ -383,7 +441,7 @@ namespace Engine
 
         // ---- Pass 3: Simulate (gravity + damping + alive/dead management) ----
         // PCISPH handles gravity internally, so pass zero gravity to simulate pass
-        glm::vec3 simGravity = (emitter.SPHEnabled && emitter.SPH_PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;
+        glm::vec3 simGravity = (sphEnabled && emitter.SPH_PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;
         float simulateDt = std::min(dt, 0.05f);
         m_SimulateShader->Bind();
         m_SimulateShader->SetFloat("u_DeltaTime", simulateDt);
@@ -400,12 +458,42 @@ namespace Engine
         RenderCommand::DispatchCompute(1);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
 
-        // Read back aliveCount for next frame's SPH dispatch
-        if (emitter.SPHEnabled)
+        // Read back counters when needed:
+        // - SPH needs aliveCount for next frame's dispatch.
+        // - Direct-draw fallback needs aliveCount for DrawArraysInstanced.
+        if (sphEnabled || !m_UseIndirectDraw)
         {
             CounterData counters{};
             m_CounterBuffer->GetData(&counters, sizeof(CounterData), 0);
-            m_LastAliveCount = counters.aliveCount;
+
+            CounterData sanitized = counters;
+            bool corrected = false;
+
+            if (sanitized.deadCount > m_MaxParticles)
+            {
+                sanitized.deadCount = m_MaxParticles;
+                corrected = true;
+            }
+            if (sanitized.aliveCount > m_MaxParticles)
+            {
+                sanitized.aliveCount = m_MaxParticles;
+                corrected = true;
+            }
+
+            if (corrected)
+            {
+                ENGINE_WARN("[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); clamping to safe range.",
+                            counters.deadCount, counters.aliveCount, m_MaxParticles);
+                m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
+            }
+
+            if (sphEnabled)
+                m_LastAliveCount = sanitized.aliveCount;
+            else
+                m_LastAliveCount = 0;
+
+            if (!m_UseIndirectDraw)
+                m_AliveCountForDirectDraw = sanitized.aliveCount;
         }
     }
 
@@ -425,7 +513,10 @@ namespace Engine
         RenderCommand::SetDepthMask(false);
 
         m_EmptyVAO->Bind();
-        RenderCommand::DrawArraysIndirect(m_IndirectArgs->GetRendererID());
+        if (m_UseIndirectDraw)
+            RenderCommand::DrawArraysIndirect(m_IndirectArgs->GetRendererID());
+        else
+            RenderCommand::DrawArraysInstanced(6, m_AliveCountForDirectDraw);
 
         // Restore depth write
         RenderCommand::SetDepthMask(true);

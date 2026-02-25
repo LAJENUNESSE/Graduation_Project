@@ -38,6 +38,7 @@ namespace Engine
         float m_ElapsedMs = 0.0f;
         bool m_QueryActive = false;    // Is there an active query in End() waiting?
         int m_FrameCount = 0;          // Track frames to know when results are available
+        bool m_Disabled = false;       // Disabled on unstable drivers (e.g., VMware) or env override
     };
 
 } // namespace Engine

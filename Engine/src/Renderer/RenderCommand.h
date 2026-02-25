@@ -46,6 +46,16 @@ namespace Engine
             s_RendererAPI->DrawArrays(count, first);
         }
 
+        static void DrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t first = 0)
+        {
+            s_RendererAPI->DrawArraysInstanced(count, instanceCount, first);
+
+            auto& stats = PerformanceMonitor::Get().GetStats();
+            stats.DrawCalls++;
+            stats.Vertices += count * instanceCount;
+            stats.Triangles += (count / 3) * instanceCount;
+        }
+
         static void DrawLines(uint32_t count, uint32_t first = 0)
         {
             s_RendererAPI->DrawLines(count, first);

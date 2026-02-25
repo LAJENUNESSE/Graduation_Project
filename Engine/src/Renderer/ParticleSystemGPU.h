@@ -73,6 +73,15 @@ namespace Engine
 
         float m_EmitAccumulator = 0.0f;
         float m_TotalTime = 0.0f;
+        float m_DebugTimer = 0.0f;  // DEBUG: 每秒打印状态
+
+        // VMware/Mesa compatibility fallback:
+        // use direct instanced draw instead of DrawArraysIndirect.
+        bool m_UseIndirectDraw = true;
+        bool m_VMwareCompatMode = false;
+        bool m_DisableSPHOnDriver = false;
+        bool m_SPHDisableLogged = false;
+        uint32_t m_AliveCountForDirectDraw = 0;
 
         // 上一帧的活跃粒子数（用于 SPH dispatch）
         uint32_t m_LastAliveCount = 0;

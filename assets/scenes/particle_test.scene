@@ -1,0 +1,85 @@
+Scene: Untitled
+ShadowSettings:
+  Enabled: false
+  MapResolution: 1024
+  Bias: 0.005
+  OrthoSize: 20
+  NearPlane: 0.1
+  FarPlane: 50
+RenderSettings:
+  BloomEnabled: true
+  BloomThreshold: 1
+  BloomStrength: 0.3
+  BloomIterations: 5
+  ToneMappingMode: 1
+  GammaCorrection: true
+  MSAASamples: 1
+  PhysicsBackend: 0
+Entities:
+  - Entity: 16413205803997442280
+    TagComponent:
+      Tag: Cube
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.8, 0.2, 0.3, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+  - Entity: 2160909806334670220
+    TagComponent:
+      Tag: 方向光
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [-0.7853982, 0.5235988, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 0
+      Color: [1, 0.95, 0.9]
+      Intensity: 1
+      Constant: 1
+      Linear: 0.09
+      Quadratic: 0.032
+      InnerCutoff: 0.21816616
+      OuterCutoff: 0.30543262
+      CastShadows: true
+  - Entity: 3053518724433923165
+    TagComponent:
+      Tag: 空实体
+    TransformComponent:
+      Translation: [0, 1.2757385, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    ParticleEmitterComponent:
+      Preset: 1
+      EmitRate: 200
+      BurstCount: 0
+      MaxParticles: 100000
+      LifeMin: 0.5
+      LifeMax: 1.5
+      SpeedMin: 1
+      SpeedMax: 3
+      SizeStart: 0.1
+      SizeEnd: 0.3
+      EmitDirection: [0, 1, 0]
+      EmitAngle: 15
+      ColorStart: [2, 1.2, 0.2, 1]
+      ColorEnd: [0.5, 0.05, 0, 0]
+      Gravity: [0, 0.5, 0]
+      Damping: 0.96
+      BlendMode: 0
+      SPHEnabled: false
+      SPH_RestDensity: 1000
+      SPH_GasConstant: 2000
+      SPH_Viscosity: 0.018
+      SPH_SmoothingRadius: 0.1
+      SPH_ParticleMass: 0.02

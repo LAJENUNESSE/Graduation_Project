@@ -34,6 +34,7 @@ uniform float u_SizeEnd;
 uniform vec4  u_StartColor;
 uniform vec4  u_EndColor;
 uniform float u_Time;
+uniform int   u_MaxParticles;
 
 // PCG hash for pseudo-random number generation
 uint pcg_hash(uint v)
@@ -63,7 +64,14 @@ void main()
         return;
     }
     uint deadSlot = oldDead - 1u;
+    if (deadSlot >= uint(u_MaxParticles))
+    {
+        atomicAdd(counters.deadCount, 1u); // undo
+        return;
+    }
     uint particleIdx = deadIndices[deadSlot];
+    if (particleIdx >= uint(u_MaxParticles))
+        return;
 
     // Generate random seeds
     uint seed = pcg_hash(gid + uint(u_Time * 1000.0) * 1099u);
