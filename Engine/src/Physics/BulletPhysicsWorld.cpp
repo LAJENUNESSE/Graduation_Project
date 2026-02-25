@@ -125,7 +125,8 @@ namespace Engine
 
             auto* body = new btRigidBody(rbInfo);
 
-            // 存储 entity ID 到 Bullet userPointer，用于碰撞回调
+            // 存储 entity ID 到 Bullet userIndex（int 范围足够，entt::entity 为 uint32_t）
+            static_assert(sizeof(entt::entity) <= sizeof(int), "entt::entity exceeds int range");
             body->setUserIndex(static_cast<int>(entityId));
 
             // Kinematic 设置

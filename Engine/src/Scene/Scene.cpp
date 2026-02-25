@@ -67,9 +67,15 @@ namespace Engine
                     if (!trigger.Enabled) return;
                     if (event.Impulse < trigger.MinImpulse) return;
 
-                    // 按冲量比例缩放爆发数
-                    float scale = std::min(event.Impulse / trigger.MinImpulse, 5.0f);
-                    emitter.CollisionBurstCount += static_cast<int>(trigger.BurstOnCollision * scale);
+                    // 按冲量比例缩放爆发数（MinImpulse 最小 0.001 防除零）
+                    float safeMinImpulse = std::max(trigger.MinImpulse, 0.001f);
+                    float scale = std::min(event.Impulse / safeMinImpulse, 5.0f);
+                    int burst = static_cast<int>(trigger.BurstOnCollision * scale);
+                    emitter.CollisionBurstCount += burst;
+
+                    // 限制总碰撞爆发不超过粒子池容量
+                    emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
+                        static_cast<int>(emitter.MaxParticles));
 
                     if (trigger.UseCollisionNormal)
                         emitter.EmitDirection = normal;
@@ -153,7 +159,12 @@ namespace Engine
                 newEntity.AddComponent<SphereColliderComponent>(srcReg.get<SphereColliderComponent>(srcEntity));
 
             if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))
-                newEntity.AddComponent<ParticleEmitterComponent>(srcReg.get<ParticleEmitterComponent>(srcEntity));
+            {
+                auto pe = srcReg.get<ParticleEmitterComponent>(srcEntity);
+                pe.RuntimeParticleSystem = nullptr;  // 清除裸指针，避免双重释放
+                pe.CollisionBurstCount = 0;
+                newEntity.AddComponent<ParticleEmitterComponent>(pe);
+            }
 
             if (srcReg.all_of<CollisionParticleTriggerComponent>(srcEntity))
                 newEntity.AddComponent<CollisionParticleTriggerComponent>(srcReg.get<CollisionParticleTriggerComponent>(srcEntity));

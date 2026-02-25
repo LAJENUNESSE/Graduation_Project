@@ -36,22 +36,23 @@ void main()
 
     float life = particles[idx].posAndLife.w;
 
-    // Skip already-dead particles
+    // Skip already-dead particles (life == 0 means already recycled)
     if (life <= 0.0)
         return;
 
     // Decrease life
     life -= u_DeltaTime;
-    particles[idx].posAndLife.w = life;
 
     if (life <= 0.0)
     {
-        // Particle just died -> push to dead list
+        // Particle just died -> set life=0, push to dead list
+        particles[idx].posAndLife.w = 0.0;
         uint slot = atomicAdd(counters.deadCount, 1u);
         deadIndices[slot] = idx;
     }
     else
     {
+        particles[idx].posAndLife.w = life;
         // Apply gravity
         vec3 vel = particles[idx].velAndMaxLife.xyz;
         vel += u_Gravity * u_DeltaTime;

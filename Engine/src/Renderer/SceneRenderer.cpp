@@ -63,6 +63,8 @@ namespace Engine
         }});
 
         m_PassQueue.push_back({"ParticlePass", [this](RenderContext& ctx) {
+            if (!ctx.ActiveScene) return;
+
             auto view = ctx.ActiveScene->GetRegistry().view<TransformComponent, ParticleEmitterComponent>();
 
             for (auto entity : view)

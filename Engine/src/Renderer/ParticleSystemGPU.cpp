@@ -231,9 +231,8 @@ namespace Engine
             m_EmitShader->SetFloat4("u_EndColor", emitter.ColorEnd);
 
             // Time-based seed for RNG
-            static float totalTime = 0.0f;
-            totalTime += dt;
-            m_EmitShader->SetFloat("u_Time", totalTime);
+            m_TotalTime += dt;
+            m_EmitShader->SetFloat("u_Time", m_TotalTime);
 
             uint32_t groups = (emitCount + 63) / 64;
             RenderCommand::DispatchCompute(groups);
