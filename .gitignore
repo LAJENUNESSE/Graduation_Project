@@ -47,3 +47,9 @@ scripts/
 
 # Temp
 temp/
+
+# Chache
+.cache/
+
+# other Repositories
+vendor/

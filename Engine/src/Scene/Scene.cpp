@@ -2,6 +2,8 @@
 #include "Scene/Scene.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
+#include "Script/NativeScriptComponent.h"
+#include "Reflection/ComponentRegistry.h"
 #include "Renderer/SceneRenderer.h"
 #include "Renderer/EditorCamera.h"
 #include "Physics/PhysicsWorld.h"
@@ -12,6 +14,7 @@ namespace Engine
 
     Scene::Scene()
     {
+        ComponentRegistry::EnsureRegistered();
     }
 
     Scene::~Scene()
@@ -47,6 +50,17 @@ namespace Engine
 
     void Scene::OnUpdateRuntime(Timestep ts, EditorCamera& camera)
     {
+        // NativeScript OnUpdate（物理之前）
+        {
+            auto view = m_Registry.view<NativeScriptComponent>();
+            for (auto entity : view)
+            {
+                auto& nsc = view.get<NativeScriptComponent>(entity);
+                if (nsc.Instance)
+                    nsc.Instance->OnUpdate(ts);
+            }
+        }
+
         // Physics step
         if (m_PhysicsBackend == PhysicsBackend::Custom && m_PhysicsWorld)
             m_PhysicsWorld->Step(ts, m_Registry);
@@ -102,10 +116,42 @@ namespace Engine
             m_BulletPhysicsWorld->Init();
             m_BulletPhysicsWorld->CreateBodies(m_Registry);
         }
+
+        // NativeScript OnCreate
+        {
+            auto view = m_Registry.view<NativeScriptComponent>();
+            for (auto entity : view)
+            {
+                auto& nsc = view.get<NativeScriptComponent>(entity);
+                if (nsc.InstantiateScript)
+                {
+                    nsc.InstantiateScript(nsc);
+                    if (nsc.Instance)
+                    {
+                        nsc.Instance->m_Entity = Entity{entity, this};
+                        nsc.Instance->OnCreate();
+                    }
+                }
+            }
+        }
     }
 
     void Scene::OnRuntimeStop()
     {
+        // NativeScript OnDestroy
+        {
+            auto view = m_Registry.view<NativeScriptComponent>();
+            for (auto entity : view)
+            {
+                auto& nsc = view.get<NativeScriptComponent>(entity);
+                if (nsc.Instance)
+                {
+                    nsc.Instance->OnDestroy();
+                    nsc.Instance.reset();
+                }
+            }
+        }
+
         m_PhysicsWorld.reset();
         if (m_BulletPhysicsWorld)
         {
@@ -143,20 +189,17 @@ namespace Engine
             if (srcReg.all_of<MeshRendererComponent>(srcEntity))
                 newEntity.AddComponent<MeshRendererComponent>(srcReg.get<MeshRendererComponent>(srcEntity));
 
-            if (srcReg.all_of<LightComponent>(srcEntity))
-                newEntity.AddComponent<LightComponent>(srcReg.get<LightComponent>(srcEntity));
-
             if (srcReg.all_of<CameraComponent>(srcEntity))
                 newEntity.AddComponent<CameraComponent>(srcReg.get<CameraComponent>(srcEntity));
 
-            if (srcReg.all_of<RigidBodyComponent>(srcEntity))
-                newEntity.AddComponent<RigidBodyComponent>(srcReg.get<RigidBodyComponent>(srcEntity));
-
-            if (srcReg.all_of<BoxColliderComponent>(srcEntity))
-                newEntity.AddComponent<BoxColliderComponent>(srcReg.get<BoxColliderComponent>(srcEntity));
-
-            if (srcReg.all_of<SphereColliderComponent>(srcEntity))
-                newEntity.AddComponent<SphereColliderComponent>(srcReg.get<SphereColliderComponent>(srcEntity));
+            // 反射注册的组件通过 ComponentRegistry 自动拷贝
+            uint32_t srcId = static_cast<uint32_t>(srcEntity);
+            uint32_t dstId = static_cast<uint32_t>(static_cast<entt::entity>(newEntity));
+            for (auto& meta : ComponentRegistry::Instance().GetAll())
+            {
+                if (meta.Has(*src, srcId))
+                    meta.Copy(*src, srcId, *newScene, dstId);
+            }
 
             if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))
             {
@@ -166,8 +209,16 @@ namespace Engine
                 newEntity.AddComponent<ParticleEmitterComponent>(pe);
             }
 
-            if (srcReg.all_of<CollisionParticleTriggerComponent>(srcEntity))
-                newEntity.AddComponent<CollisionParticleTriggerComponent>(srcReg.get<CollisionParticleTriggerComponent>(srcEntity));
+            // NativeScriptComponent: 只拷贝 ScriptName，不拷运行时实例
+            if (srcReg.all_of<NativeScriptComponent>(srcEntity))
+            {
+                auto& srcNsc = srcReg.get<NativeScriptComponent>(srcEntity);
+                auto& dstNsc = newEntity.AddComponent<NativeScriptComponent>();
+                dstNsc.ScriptName = srcNsc.ScriptName;
+                dstNsc.InstantiateScript = srcNsc.InstantiateScript;
+                dstNsc.DestroyScript = srcNsc.DestroyScript;
+                // Instance 不拷贝（运行时创建）
+            }
         }
 
         return newScene;
