@@ -73,7 +73,6 @@ namespace Engine
 
         float m_EmitAccumulator = 0.0f;
         float m_TotalTime = 0.0f;
-        float m_DebugTimer = 0.0f;  // DEBUG: 每秒打印状态
 
         // VMware/Mesa compatibility fallback:
         // use direct instanced draw instead of DrawArraysIndirect.

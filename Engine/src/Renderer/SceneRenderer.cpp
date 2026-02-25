@@ -8,7 +8,6 @@
 #include "Scene/Components.h"
 #include "Scene/Systems/MeshRenderSystem.h"
 #include "Debug/PerformanceMonitor.h"
-#include "Core/Log.h"
 
 namespace Engine
 {
@@ -82,21 +81,7 @@ namespace Engine
                     system->Init();
                 }
 
-                // DEBUG: 在 Update 前打印爆发状态
-                if (emitter.PendingBurst > 0 || emitter.CollisionBurstCount > 0)
-                {
-                    ENGINE_INFO("[SceneRenderer] PRE-Update: entity={0}, BurstCount={1}, PendingBurst={2}, CollisionBurst={3}",
-                                eid, emitter.BurstCount, emitter.PendingBurst, emitter.CollisionBurstCount);
-                }
-
                 system->Update(ctx.DeltaTime, transform.Translation, emitter, &ctx.ActiveScene->GetRegistry());
-
-                // DEBUG: 在 Update 后、清零前打印
-                if (emitter.PendingBurst > 0 || emitter.CollisionBurstCount > 0)
-                {
-                    ENGINE_INFO("[SceneRenderer] POST-Update: entity={0}, PendingBurst={1}, CollisionBurst={2} (about to clear)",
-                                eid, emitter.PendingBurst, emitter.CollisionBurstCount);
-                }
 
                 if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
                     RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
