@@ -244,23 +244,10 @@ namespace Engine
         // Add burst (user-triggered + collision-triggered)
         int totalBurst = emitter.PendingBurst + emitter.CollisionBurstCount;
         if (totalBurst > 0)
-        {
-            ENGINE_INFO("[Particle] Burst triggered: PendingBurst={0}, CollisionBurst={1}, totalBurst={2}, emitCountBefore={3}",
-                        emitter.PendingBurst, emitter.CollisionBurstCount, totalBurst, emitCount);
             emitCount += static_cast<uint32_t>(totalBurst);
-        }
 
         // Clamp to MaxParticles — prevent shader atomic underflow
         emitCount = std::min(emitCount, m_MaxParticles);
-
-        // DEBUG: 每秒打印一次关键状态
-        m_DebugTimer += dt;
-        if (m_DebugTimer >= 1.0f)
-        {
-            ENGINE_INFO("[Particle] Status: EmitRate={0:.1f}, BurstCount={1}, PendingBurst={2}, CollisionBurst={3}, emitCount={4}, MaxParticles={5}",
-                        emitter.EmitRate, emitter.BurstCount, emitter.PendingBurst, emitter.CollisionBurstCount, emitCount, m_MaxParticles);
-            m_DebugTimer = 0.0f;
-        }
 
         m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8);  // emitCount
 
