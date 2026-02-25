@@ -3,6 +3,7 @@
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
 #include "Core/FileDialogs.h"
+#include "Core/Log.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -611,7 +612,11 @@ namespace Engine
             {
                 auto preset = static_cast<ParticleEmitterComponent::Preset>(presetIdx);
                 if (preset != ParticleEmitterComponent::Preset::Custom)
+                {
                     ParticleEmitterComponent::ApplyPreset(component, preset);
+                    ENGINE_INFO("[UI] Preset applied: idx={0}, BurstCount={1}, PendingBurst={2}, EmitRate={3:.1f}",
+                                presetIdx, component.BurstCount, component.PendingBurst, component.EmitRate);
+                }
                 else
                     component.CurrentPreset = ParticleEmitterComponent::Preset::Custom;
             }
@@ -626,6 +631,13 @@ namespace Engine
             ImGui::SameLine();
             ImGui::TextDisabled("粒子/秒");
             changed |= ImGui::DragInt("爆发数量", &component.BurstCount, 1, 0, 10000);
+            ImGui::SameLine();
+            if (ImGui::Button("触发爆发"))
+            {
+                component.PendingBurst = component.BurstCount;
+                ENGINE_INFO("[UI] '触发爆发' clicked: BurstCount={0}, PendingBurst set to {1}",
+                            component.BurstCount, component.PendingBurst);
+            }
 
             int maxP = static_cast<int>(component.MaxParticles);
             if (ImGui::DragInt("最大粒子数", &maxP, 100, 100, 1000000))

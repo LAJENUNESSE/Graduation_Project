@@ -48,6 +48,8 @@ namespace Engine
 
         // 供 MSAA 重绘只走渲染（不重复收集光照/阴影）
         void RenderGeometryAndSkybox();
+        // 供 MSAA 解析后单独绘制粒子，避免颜色被 blit 覆盖
+        void RenderParticlePass();
 
         ShadowSystem& GetShadowSystem() { return m_ShadowSystem; }
         SkyboxSystem& GetSkyboxSystem() { return m_SkyboxSystem; }

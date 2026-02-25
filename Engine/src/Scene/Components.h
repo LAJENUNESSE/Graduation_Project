@@ -227,6 +227,7 @@ namespace Engine
         // 运行时（不序列化）
         void* RuntimeParticleSystem = nullptr;  // ParticleSystemGPU*
         int CollisionBurstCount = 0;            // 碰撞触发的爆发（帧末自动清零）
+        int PendingBurst = 0;                   // 本帧待发射的爆发数（帧末自动清零，不序列化）
 
         ParticleEmitterComponent() = default;
         ParticleEmitterComponent(const ParticleEmitterComponent&) = default;
@@ -242,6 +243,7 @@ namespace Engine
             case Preset::Fire:
                 emitter.EmitRate = 200.0f;
                 emitter.BurstCount = 0;
+                emitter.PendingBurst = 0;
                 emitter.LifeMin = 0.5f;  emitter.LifeMax = 1.5f;
                 emitter.SpeedMin = 1.0f; emitter.SpeedMax = 3.0f;
                 emitter.SizeStart = 0.1f; emitter.SizeEnd = 0.3f;
@@ -256,6 +258,7 @@ namespace Engine
             case Preset::Smoke:
                 emitter.EmitRate = 50.0f;
                 emitter.BurstCount = 0;
+                emitter.PendingBurst = 0;
                 emitter.LifeMin = 2.0f;  emitter.LifeMax = 5.0f;
                 emitter.SpeedMin = 0.3f; emitter.SpeedMax = 1.0f;
                 emitter.SizeStart = 0.2f; emitter.SizeEnd = 0.8f;
@@ -270,6 +273,7 @@ namespace Engine
             case Preset::Explosion:
                 emitter.EmitRate = 0.0f;
                 emitter.BurstCount = 500;
+                emitter.PendingBurst = 500;
                 emitter.LifeMin = 0.3f;  emitter.LifeMax = 1.0f;
                 emitter.SpeedMin = 3.0f; emitter.SpeedMax = 10.0f;
                 emitter.SizeStart = 0.05f; emitter.SizeEnd = 0.15f;
@@ -284,6 +288,7 @@ namespace Engine
             case Preset::Sparks:
                 emitter.EmitRate = 300.0f;
                 emitter.BurstCount = 0;
+                emitter.PendingBurst = 0;
                 emitter.LifeMin = 0.2f;  emitter.LifeMax = 0.8f;
                 emitter.SpeedMin = 2.0f; emitter.SpeedMax = 8.0f;
                 emitter.SizeStart = 0.01f; emitter.SizeEnd = 0.03f;

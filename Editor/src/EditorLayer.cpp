@@ -148,17 +148,24 @@ namespace Engine
             RenderCommand::Clear();
             m_HDRFramebuffer->ClearAttachment(1, -1);
 
-            // 执行 GeometryPass + SkyboxPass + ParticlePass
+            const bool msaaEnabled = m_HDRFramebuffer->IsMSAAEnabled();
+
+            // 执行 GeometryPass + SkyboxPass (+ ParticlePass when MSAA is off)
+            // MSAA 开启时，粒子会在 Resolve 后再绘制，避免被 Blit 覆盖。
             for (auto& pass : m_SceneRenderer.GetPassQueue())
             {
-                if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "ParticlePass"))
+                bool runPass = pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass");
+                if (!msaaEnabled && pass.Enabled && pass.Name == "ParticlePass")
+                    runPass = true;
+
+                if (runPass)
                     pass.ExecuteFn(m_SceneRenderer.GetContext());
             }
 
             m_HDRFramebuffer->Unbind();
 
             // MSAA: re-render geometry+skybox to MSAA FBO, then blit
-            if (m_HDRFramebuffer->IsMSAAEnabled())
+            if (msaaEnabled)
             {
                 m_HDRFramebuffer->BindMSAA();
                 RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
@@ -167,6 +174,11 @@ namespace Engine
                 m_SceneRenderer.RenderGeometryAndSkybox();
 
                 m_HDRFramebuffer->BlitMSAA();
+
+                // Resolve 后单独绘制粒子，避免被 MSAA blit 覆盖掉。
+                m_HDRFramebuffer->Bind();
+                m_SceneRenderer.RenderParticlePass();
+                m_HDRFramebuffer->Unbind();
             }
 
             // 物理碰撞体调试绘制

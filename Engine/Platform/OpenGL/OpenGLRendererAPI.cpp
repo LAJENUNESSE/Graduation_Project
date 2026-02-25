@@ -45,6 +45,11 @@ namespace Engine
         glDrawArrays(GL_TRIANGLES, first, count);
     }
 
+    void OpenGLRendererAPI::DrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t first)
+    {
+        glDrawArraysInstanced(GL_TRIANGLES, first, count, instanceCount);
+    }
+
     void OpenGLRendererAPI::DrawLines(uint32_t count, uint32_t first)
     {
         glDrawArrays(GL_LINES, first, count);

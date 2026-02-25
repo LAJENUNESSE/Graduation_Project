@@ -32,5 +32,6 @@ void main()
     uint pos = atomicAdd(cellStart[h], 1u);
 
     // Write the alive-list index so SPH can look up the actual particle
-    sortedIndices[pos] = gid;
+    if (pos < uint(u_AliveCount))
+        sortedIndices[pos] = gid;
 }

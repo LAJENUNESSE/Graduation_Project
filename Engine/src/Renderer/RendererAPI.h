@@ -39,6 +39,7 @@ namespace Engine
         virtual void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
 
         virtual void DrawArrays(uint32_t count, uint32_t first = 0) = 0;
+        virtual void DrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t first = 0) = 0;
         virtual void DrawLines(uint32_t count, uint32_t first = 0) = 0;
         virtual void SetDepthTest(bool enable) = 0;
         virtual void SetDepthFunc(DepthFunc func) = 0;

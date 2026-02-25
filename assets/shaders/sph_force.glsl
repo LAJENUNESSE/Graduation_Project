@@ -119,12 +119,14 @@ void main()
         uint cCount = cellCount[cellIdx];
         if (cCount == 0u) continue;
         // scatter 后: CellStart[h] = original_start + CellCount[h]
-        uint cEnd   = cellStart[cellIdx];
-        uint cBegin = cEnd - cCount;
+        uint cEndRaw = cellStart[cellIdx];
+        uint cEnd = min(cEndRaw, uint(u_AliveCount));
+        uint cBegin = (cCount > cEnd) ? 0u : (cEnd - cCount);
 
         for (uint s = cBegin; s < cEnd; s++)
         {
             uint neighborAliveIdx = sortedIndices[s];
+            if (neighborAliveIdx >= uint(u_AliveCount)) continue;
             uint neighborParticleIdx = aliveIndices[neighborAliveIdx];
 
             if (neighborParticleIdx == myParticleIdx) continue;

@@ -8,6 +8,7 @@
 #include "Scene/Components.h"
 #include "Scene/Systems/MeshRenderSystem.h"
 #include "Debug/PerformanceMonitor.h"
+#include "Core/Log.h"
 
 namespace Engine
 {
@@ -81,7 +82,21 @@ namespace Engine
                     system->Init();
                 }
 
+                // DEBUG: 在 Update 前打印爆发状态
+                if (emitter.PendingBurst > 0 || emitter.CollisionBurstCount > 0)
+                {
+                    ENGINE_INFO("[SceneRenderer] PRE-Update: entity={0}, BurstCount={1}, PendingBurst={2}, CollisionBurst={3}",
+                                eid, emitter.BurstCount, emitter.PendingBurst, emitter.CollisionBurstCount);
+                }
+
                 system->Update(ctx.DeltaTime, transform.Translation, emitter, &ctx.ActiveScene->GetRegistry());
+
+                // DEBUG: 在 Update 后、清零前打印
+                if (emitter.PendingBurst > 0 || emitter.CollisionBurstCount > 0)
+                {
+                    ENGINE_INFO("[SceneRenderer] POST-Update: entity={0}, PendingBurst={1}, CollisionBurst={2} (about to clear)",
+                                eid, emitter.PendingBurst, emitter.CollisionBurstCount);
+                }
 
                 if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
                     RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
@@ -92,7 +107,8 @@ namespace Engine
 
                 RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
-                // 只重置碰撞触发的爆发（用户设的 BurstCount 保持不变）
+                // 重置本帧触发的爆发（用户配置的 BurstCount 保持不变）
+                emitter.PendingBurst = 0;
                 emitter.CollisionBurstCount = 0;
             }
         }});
@@ -138,6 +154,15 @@ namespace Engine
         for (auto& pass : m_PassQueue)
         {
             if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass"))
+                pass.ExecuteFn(m_Context);
+        }
+    }
+
+    void SceneRenderer::RenderParticlePass()
+    {
+        for (auto& pass : m_PassQueue)
+        {
+            if (pass.Enabled && pass.Name == "ParticlePass")
                 pass.ExecuteFn(m_Context);
         }
     }

@@ -48,7 +48,8 @@ void main()
         // Particle just died -> set life=0, push to dead list
         particles[idx].posAndLife.w = 0.0;
         uint slot = atomicAdd(counters.deadCount, 1u);
-        deadIndices[slot] = idx;
+        if (slot < uint(u_MaxParticles))
+            deadIndices[slot] = idx;
     }
     else
     {
@@ -67,6 +68,7 @@ void main()
 
         // Push to alive list for rendering
         uint slot = atomicAdd(counters.aliveCount, 1u);
-        aliveIndices[slot] = idx;
+        if (slot < uint(u_MaxParticles))
+            aliveIndices[slot] = idx;
     }
 }

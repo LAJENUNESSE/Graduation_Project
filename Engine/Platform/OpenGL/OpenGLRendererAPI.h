@@ -15,6 +15,7 @@ namespace Engine
         void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) override;
 
         void DrawArrays(uint32_t count, uint32_t first = 0) override;
+        void DrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t first = 0) override;
         void DrawLines(uint32_t count, uint32_t first = 0) override;
         void SetDepthTest(bool enable) override;
         void SetDepthFunc(DepthFunc func) override;
