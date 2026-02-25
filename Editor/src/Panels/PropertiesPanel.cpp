@@ -4,6 +4,10 @@
 #include "Renderer/Texture.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Reflection/AutoInspector.h"
+#include "Script/NativeScriptComponent.h"
+#include "Script/ScriptRegistry.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -130,6 +134,49 @@ namespace Engine
         ImGui::PopID();
     }
 
+    void PropertiesPanel::DrawComponent_Auto(const std::string& name, Entity entity,
+                                              const ComponentMeta& meta, AutoInspector::DrawVec3Fn drawVec3)
+    {
+        const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
+                                                 ImGuiTreeNodeFlags_SpanAvailWidth |
+                                                 ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
+
+        auto* scene = entity.GetScene();
+        uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+        if (!scene || !meta.Has(*scene, entityId))
+            return;
+
+        void* component = meta.Get(*scene, entityId);
+        ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
+        float lineHeight = ImGui::GetFrameHeight();
+        ImGui::Separator();
+        bool open = ImGui::TreeNodeEx(meta.TypeName, treeNodeFlags, "%s", name.c_str());
+        ImGui::PopStyleVar();
+
+        bool removeComponent = false;
+        ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
+        if (ImGui::Button("+", ImVec2{lineHeight, lineHeight}))
+            ImGui::OpenPopup("ComponentSettings");
+
+        if (ImGui::BeginPopup("ComponentSettings"))
+        {
+            if (ImGui::MenuItem("Remove Component"))
+                removeComponent = true;
+            ImGui::EndPopup();
+        }
+
+        if (open)
+        {
+            AutoInspector::Draw(meta, component, drawVec3);
+            ImGui::TreePop();
+        }
+
+        if (removeComponent)
+            meta.Remove(*scene, entityId);
+    }
+
     void PropertiesPanel::OnImGuiRender(Entity selectedEntity)
     {
         ImGui::Begin("属性");
@@ -183,39 +230,20 @@ namespace Engine
                 }
             }
 
-            if (!entity.HasComponent<LightComponent>())
+            // 反射组件自动添加菜单
             {
-                if (ImGui::MenuItem("灯光"))
+                auto* scene = entity.GetScene();
+                uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+                for (auto& meta : ComponentRegistry::Instance().GetAll())
                 {
-                    entity.AddComponent<LightComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-
-            if (!entity.HasComponent<RigidBodyComponent>())
-            {
-                if (ImGui::MenuItem("刚体"))
-                {
-                    entity.AddComponent<RigidBodyComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-
-            if (!entity.HasComponent<BoxColliderComponent>())
-            {
-                if (ImGui::MenuItem("盒碰撞器"))
-                {
-                    entity.AddComponent<BoxColliderComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-
-            if (!entity.HasComponent<SphereColliderComponent>())
-            {
-                if (ImGui::MenuItem("球碰撞器"))
-                {
-                    entity.AddComponent<SphereColliderComponent>();
-                    ImGui::CloseCurrentPopup();
+                    if (scene && !meta.Has(*scene, entityId))
+                    {
+                        if (ImGui::MenuItem(meta.DisplayName))
+                        {
+                            meta.Add(*scene, entityId);
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
                 }
             }
 
@@ -228,11 +256,11 @@ namespace Engine
                 }
             }
 
-            if (!entity.HasComponent<CollisionParticleTriggerComponent>())
+            if (!entity.HasComponent<NativeScriptComponent>())
             {
-                if (ImGui::MenuItem("碰撞粒子触发器"))
+                if (ImGui::MenuItem("脚本"))
                 {
-                    entity.AddComponent<CollisionParticleTriggerComponent>();
+                    entity.AddComponent<NativeScriptComponent>();
                     ImGui::CloseCurrentPopup();
                 }
             }
@@ -323,59 +351,11 @@ namespace Engine
             }
         });
 
-        // Light
-        DrawComponent<LightComponent>("灯光", entity, [](auto& component)
-        {
-            const char* lightTypeStrings[] = {"方向光", "点光源", "聚光灯"};
-            const char* currentLightTypeString = lightTypeStrings[static_cast<int>(component.Type)];
-
-            if (ImGui::BeginCombo("灯光类型", currentLightTypeString))
-            {
-                for (int i = 0; i < 3; i++)
-                {
-                    bool isSelected = (static_cast<int>(component.Type) == i);
-                    if (ImGui::Selectable(lightTypeStrings[i], isSelected))
-                        component.Type = static_cast<LightComponent::LightType>(i);
-                    if (isSelected)
-                        ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::ColorEdit3("颜色", glm::value_ptr(component.Color));
-            ImGui::DragFloat("强度", &component.Intensity, 0.05f, 0.0f, 100.0f, "%.2f");
-
-            if (component.Type == LightComponent::LightType::Directional)
-            {
-                ImGui::Separator();
-                ImGui::Checkbox("投射阴影", &component.CastShadows);
-            }
-
-            if (component.Type == LightComponent::LightType::Point ||
-                component.Type == LightComponent::LightType::Spot)
-            {
-                ImGui::Separator();
-                ImGui::Text("衰减");
-                ImGui::DragFloat("常数项", &component.Constant, 0.01f, 0.001f, 10.0f, "%.3f");
-                ImGui::DragFloat("线性项", &component.Linear, 0.001f, 0.0f, 1.0f, "%.4f");
-                ImGui::DragFloat("二次项", &component.Quadratic, 0.001f, 0.0f, 1.0f, "%.4f");
-            }
-
-            if (component.Type == LightComponent::LightType::Spot)
-            {
-                ImGui::Separator();
-                ImGui::Text("锥角");
-                float innerDeg = glm::degrees(component.InnerCutoff);
-                float outerDeg = glm::degrees(component.OuterCutoff);
-                if (ImGui::DragFloat("内锥角", &innerDeg, 0.1f, 0.0f, 89.0f, "%.1f°"))
-                    component.InnerCutoff = glm::radians(innerDeg);
-                if (ImGui::DragFloat("外锥角", &outerDeg, 0.1f, 0.0f, 89.0f, "%.1f°"))
-                    component.OuterCutoff = glm::radians(outerDeg);
-                // Clamp: outer >= inner
-                if (component.OuterCutoff < component.InnerCutoff)
-                    component.OuterCutoff = component.InnerCutoff;
-            }
-        });
+        // Light — 通过反射自动绘制（见下方统一循环）
+        // RigidBody — 通过反射自动绘制
+        // BoxCollider — 通过反射自动绘制
+        // SphereCollider — 通过反射自动绘制
+        // CollisionParticleTrigger — 通过反射自动绘制
 
         // Mesh Renderer
         DrawComponent<MeshRendererComponent>("网格渲染器", entity, [](auto& component)
@@ -558,49 +538,11 @@ namespace Engine
             }
         });
 
-        // RigidBody
-        DrawComponent<RigidBodyComponent>("刚体", entity, [](auto& component)
-        {
-            const char* bodyTypeStrings[] = {"静态", "动态", "运动学"};
-            const char* currentBodyTypeString = bodyTypeStrings[static_cast<int>(component.Type)];
+        // RigidBody — 通过反射自动绘制（见下方统一循环）
 
-            if (ImGui::BeginCombo("类型", currentBodyTypeString))
-            {
-                for (int i = 0; i < 3; i++)
-                {
-                    bool isSelected = (static_cast<int>(component.Type) == i);
-                    if (ImGui::Selectable(bodyTypeStrings[i], isSelected))
-                        component.Type = static_cast<RigidBodyComponent::BodyType>(i);
-                    if (isSelected)
-                        ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
-            }
+        // BoxCollider — 通过反射自动绘制
 
-            if (component.Type == RigidBodyComponent::BodyType::Dynamic)
-            {
-                ImGui::DragFloat("质量", &component.Mass, 0.1f, 0.01f, 1000.0f, "%.2f");
-            }
-
-            ImGui::DragFloat("弹性系数", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f");
-            ImGui::DragFloat("摩擦系数", &component.Friction, 0.01f, 0.0f, 1.0f, "%.2f");
-            ImGui::DragFloat("重力缩放", &component.GravityScale, 0.1f, -10.0f, 10.0f, "%.1f");
-            ImGui::Checkbox("固定旋转", &component.FixedRotation);
-        });
-
-        // BoxCollider
-        DrawComponent<BoxColliderComponent>("盒碰撞器", entity, [this](auto& component)
-        {
-            DrawVec3Control("半尺寸", component.HalfExtents, 0.5f);
-            DrawVec3Control("偏移", component.Offset);
-        });
-
-        // SphereCollider
-        DrawComponent<SphereColliderComponent>("球碰撞器", entity, [this](auto& component)
-        {
-            ImGui::DragFloat("半径", &component.Radius, 0.01f, 0.01f, 100.0f, "%.2f");
-            DrawVec3Control("偏移", component.Offset);
-        });
+        // SphereCollider — 通过反射自动绘制
 
         // ParticleEmitter
         DrawComponent<ParticleEmitterComponent>("粒子发射器", entity, [this](auto& component)
@@ -720,13 +662,72 @@ namespace Engine
             }
         });
 
-        // CollisionParticleTrigger
-        DrawComponent<CollisionParticleTriggerComponent>("碰撞粒子触发器", entity, [](auto& component)
+        // CollisionParticleTrigger — 通过反射自动绘制
+
+        // ---- 反射组件统一绘制 ----
         {
-            ImGui::Checkbox("启用", &component.Enabled);
-            ImGui::DragInt("爆发粒子数", &component.BurstOnCollision, 1, 1, 1000);
-            ImGui::DragFloat("最小冲量", &component.MinImpulse, 0.1f, 0.0f, 100.0f, "%.1f");
-            ImGui::Checkbox("使用碰撞法线", &component.UseCollisionNormal);
+            // DrawVec3Control 适配函数（包装成 AutoInspector 需要的签名）
+            static PropertiesPanel* s_Panel = nullptr;
+            s_Panel = this;
+            auto drawVec3Wrapper = [](const char* label, float* values, float resetValue) {
+                s_Panel->DrawVec3Control(label, *reinterpret_cast<glm::vec3*>(values), resetValue);
+            };
+
+            auto* scene = entity.GetScene();
+            uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+
+            for (auto& meta : ComponentRegistry::Instance().GetAll())
+            {
+                if (scene && meta.Has(*scene, entityId))
+                {
+                    DrawComponent_Auto(meta.DisplayName, entity, meta, drawVec3Wrapper);
+                }
+            }
+        }
+
+        // ---- NativeScript 组件 ----
+        DrawComponent<NativeScriptComponent>("脚本", entity, [](auto& component)
+        {
+            auto& scripts = ScriptRegistry::Instance().GetAll();
+            const char* currentName = component.ScriptName.empty() ? "(无)" : component.ScriptName.c_str();
+
+            // 查找当前脚本的显示名
+            for (auto& [name, entry] : scripts)
+            {
+                if (name == component.ScriptName)
+                {
+                    currentName = entry.DisplayName;
+                    break;
+                }
+            }
+
+            if (ImGui::BeginCombo("脚本类", currentName))
+            {
+                // 空选项
+                if (ImGui::Selectable("(无)", component.ScriptName.empty()))
+                {
+                    component.ScriptName.clear();
+                    component.InstantiateScript = nullptr;
+                    component.DestroyScript = nullptr;
+                    if (component.Instance)
+                    {
+                        component.Instance.reset();
+                    }
+                }
+
+                for (auto& [name, entry] : scripts)
+                {
+                    bool selected = (name == component.ScriptName);
+                    if (ImGui::Selectable(entry.DisplayName, selected))
+                    {
+                        component.Instance.reset();
+                        ScriptRegistry::Instance().Bind(component, name);
+                    }
+                    if (selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
         });
     }
 

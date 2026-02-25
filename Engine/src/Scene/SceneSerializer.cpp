@@ -4,6 +4,10 @@
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
+#include "Script/NativeScriptComponent.h"
+#include "Script/ScriptRegistry.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Reflection/AutoSerializer.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
 #include "Core/Log.h"
@@ -201,25 +205,7 @@ namespace Engine
             out << YAML::EndMap;
         }
 
-        // LightComponent
-        if (entity.HasComponent<LightComponent>())
-        {
-            out << YAML::Key << "LightComponent";
-            out << YAML::BeginMap;
-            auto& lc = entity.GetComponent<LightComponent>();
-            out << YAML::Key << "Type" << YAML::Value << static_cast<int>(lc.Type);
-            out << YAML::Key << "Color" << YAML::Value << lc.Color;
-            out << YAML::Key << "Intensity" << YAML::Value << lc.Intensity;
-            out << YAML::Key << "Constant" << YAML::Value << lc.Constant;
-            out << YAML::Key << "Linear" << YAML::Value << lc.Linear;
-            out << YAML::Key << "Quadratic" << YAML::Value << lc.Quadratic;
-            out << YAML::Key << "InnerCutoff" << YAML::Value << lc.InnerCutoff;
-            out << YAML::Key << "OuterCutoff" << YAML::Value << lc.OuterCutoff;
-            out << YAML::Key << "CastShadows" << YAML::Value << lc.CastShadows;
-            out << YAML::EndMap;
-        }
-
-        // CameraComponent
+        // CameraComponent（手写：使用 getter/setter）
         if (entity.HasComponent<CameraComponent>())
         {
             out << YAML::Key << "CameraComponent";
@@ -240,40 +226,30 @@ namespace Engine
             out << YAML::EndMap;
         }
 
-        // RigidBodyComponent
-        if (entity.HasComponent<RigidBodyComponent>())
+        // LightComponent, RigidBodyComponent, BoxColliderComponent,
+        // SphereColliderComponent, CollisionParticleTriggerComponent
+        // 统一通过反射系统自动序列化
+        for (auto& meta : ComponentRegistry::Instance().GetAll())
         {
-            out << YAML::Key << "RigidBodyComponent";
-            out << YAML::BeginMap;
-            auto& rb = entity.GetComponent<RigidBodyComponent>();
-            out << YAML::Key << "Type" << YAML::Value << static_cast<int>(rb.Type);
-            out << YAML::Key << "Mass" << YAML::Value << rb.Mass;
-            out << YAML::Key << "Restitution" << YAML::Value << rb.Restitution;
-            out << YAML::Key << "Friction" << YAML::Value << rb.Friction;
-            out << YAML::Key << "GravityScale" << YAML::Value << rb.GravityScale;
-            out << YAML::Key << "FixedRotation" << YAML::Value << rb.FixedRotation;
-            out << YAML::EndMap;
+            uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+            auto* scene = entity.GetScene();
+            if (scene && meta.Has(*scene, entityId))
+            {
+                void* comp = meta.Get(*scene, entityId);
+                out << YAML::Key << meta.TypeName;
+                out << YAML::BeginMap;
+                AutoSerializer::Serialize(out, meta, comp);
+                out << YAML::EndMap;
+            }
         }
 
-        // BoxColliderComponent
-        if (entity.HasComponent<BoxColliderComponent>())
+        // NativeScriptComponent
+        if (entity.HasComponent<NativeScriptComponent>())
         {
-            out << YAML::Key << "BoxColliderComponent";
+            out << YAML::Key << "NativeScriptComponent";
             out << YAML::BeginMap;
-            auto& bc = entity.GetComponent<BoxColliderComponent>();
-            out << YAML::Key << "HalfExtents" << YAML::Value << bc.HalfExtents;
-            out << YAML::Key << "Offset" << YAML::Value << bc.Offset;
-            out << YAML::EndMap;
-        }
-
-        // SphereColliderComponent
-        if (entity.HasComponent<SphereColliderComponent>())
-        {
-            out << YAML::Key << "SphereColliderComponent";
-            out << YAML::BeginMap;
-            auto& sc = entity.GetComponent<SphereColliderComponent>();
-            out << YAML::Key << "Radius" << YAML::Value << sc.Radius;
-            out << YAML::Key << "Offset" << YAML::Value << sc.Offset;
+            auto& nsc = entity.GetComponent<NativeScriptComponent>();
+            out << YAML::Key << "ScriptName" << YAML::Value << nsc.ScriptName;
             out << YAML::EndMap;
         }
 
@@ -313,19 +289,6 @@ namespace Engine
             out << YAML::Key << "SPH_RigidBodyCoupling" << YAML::Value << pe.SPH_RigidBodyCoupling;
             out << YAML::Key << "SPH_BoundaryStiffness" << YAML::Value << pe.SPH_BoundaryStiffness;
             out << YAML::Key << "SPH_BoundaryDamping" << YAML::Value << pe.SPH_BoundaryDamping;
-            out << YAML::EndMap;
-        }
-
-        // CollisionParticleTriggerComponent
-        if (entity.HasComponent<CollisionParticleTriggerComponent>())
-        {
-            out << YAML::Key << "CollisionParticleTriggerComponent";
-            out << YAML::BeginMap;
-            auto& ct = entity.GetComponent<CollisionParticleTriggerComponent>();
-            out << YAML::Key << "Enabled" << YAML::Value << ct.Enabled;
-            out << YAML::Key << "BurstOnCollision" << YAML::Value << ct.BurstOnCollision;
-            out << YAML::Key << "MinImpulse" << YAML::Value << ct.MinImpulse;
-            out << YAML::Key << "UseCollisionNormal" << YAML::Value << ct.UseCollisionNormal;
             out << YAML::EndMap;
         }
 
@@ -653,34 +616,7 @@ namespace Engine
                                     mrc.AOTexturePath, mrc.AOTexture);
                 }
 
-                // LightComponent
-                auto lightComponent = entityNode["LightComponent"];
-                if (lightComponent)
-                {
-                    auto& lc = deserializedEntity.AddComponent<LightComponent>();
-                    int typeVal = lightComponent["Type"] ? lightComponent["Type"].as<int>() : 0;
-                    if (typeVal < 0 || typeVal > 2)
-                        typeVal = 0;
-                    lc.Type = static_cast<LightComponent::LightType>(typeVal);
-                    if (lightComponent["Color"])
-                        lc.Color = lightComponent["Color"].as<glm::vec3>();
-                    if (lightComponent["Intensity"])
-                        lc.Intensity = lightComponent["Intensity"].as<float>();
-                    if (lightComponent["Constant"])
-                        lc.Constant = lightComponent["Constant"].as<float>();
-                    if (lightComponent["Linear"])
-                        lc.Linear = lightComponent["Linear"].as<float>();
-                    if (lightComponent["Quadratic"])
-                        lc.Quadratic = lightComponent["Quadratic"].as<float>();
-                    if (lightComponent["InnerCutoff"])
-                        lc.InnerCutoff = lightComponent["InnerCutoff"].as<float>();
-                    if (lightComponent["OuterCutoff"])
-                        lc.OuterCutoff = lightComponent["OuterCutoff"].as<float>();
-                    if (lightComponent["CastShadows"])
-                        lc.CastShadows = lightComponent["CastShadows"].as<bool>();
-                }
-
-                // CameraComponent
+                // CameraComponent（手写：getter/setter API）
                 auto cameraComponent = entityNode["CameraComponent"];
                 if (cameraComponent)
                 {
@@ -707,46 +643,17 @@ namespace Engine
                         cc.FixedAspectRatio = cameraComponent["FixedAspectRatio"].as<bool>();
                 }
 
-                // RigidBodyComponent
-                auto rigidBodyComponent = entityNode["RigidBodyComponent"];
-                if (rigidBodyComponent)
+                // 反射组件自动反序列化
+                for (auto& meta : ComponentRegistry::Instance().GetAll())
                 {
-                    auto& rb = deserializedEntity.AddComponent<RigidBodyComponent>();
-                    int typeVal = rigidBodyComponent["Type"] ? rigidBodyComponent["Type"].as<int>() : 0;
-                    if (typeVal < 0 || typeVal > 2) typeVal = 0;
-                    rb.Type = static_cast<RigidBodyComponent::BodyType>(typeVal);
-                    if (rigidBodyComponent["Mass"])
-                        rb.Mass = rigidBodyComponent["Mass"].as<float>();
-                    if (rigidBodyComponent["Restitution"])
-                        rb.Restitution = rigidBodyComponent["Restitution"].as<float>();
-                    if (rigidBodyComponent["Friction"])
-                        rb.Friction = rigidBodyComponent["Friction"].as<float>();
-                    if (rigidBodyComponent["GravityScale"])
-                        rb.GravityScale = rigidBodyComponent["GravityScale"].as<float>();
-                    if (rigidBodyComponent["FixedRotation"])
-                        rb.FixedRotation = rigidBodyComponent["FixedRotation"].as<bool>();
-                }
-
-                // BoxColliderComponent
-                auto boxColliderComponent = entityNode["BoxColliderComponent"];
-                if (boxColliderComponent)
-                {
-                    auto& bc = deserializedEntity.AddComponent<BoxColliderComponent>();
-                    if (boxColliderComponent["HalfExtents"])
-                        bc.HalfExtents = boxColliderComponent["HalfExtents"].as<glm::vec3>();
-                    if (boxColliderComponent["Offset"])
-                        bc.Offset = boxColliderComponent["Offset"].as<glm::vec3>();
-                }
-
-                // SphereColliderComponent
-                auto sphereColliderComponent = entityNode["SphereColliderComponent"];
-                if (sphereColliderComponent)
-                {
-                    auto& sc = deserializedEntity.AddComponent<SphereColliderComponent>();
-                    if (sphereColliderComponent["Radius"])
-                        sc.Radius = sphereColliderComponent["Radius"].as<float>();
-                    if (sphereColliderComponent["Offset"])
-                        sc.Offset = sphereColliderComponent["Offset"].as<glm::vec3>();
+                    auto compNode = entityNode[meta.TypeName];
+                    if (compNode)
+                    {
+                        uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(deserializedEntity));
+                        meta.Add(*m_Scene, entityId);
+                        void* comp = meta.Get(*m_Scene, entityId);
+                        AutoSerializer::Deserialize(compNode, meta, comp);
+                    }
                 }
 
                 // ParticleEmitterComponent
@@ -827,19 +734,18 @@ namespace Engine
                         pe.SPH_BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
                 }
 
-                // CollisionParticleTriggerComponent
-                auto collisionTriggerComponent = entityNode["CollisionParticleTriggerComponent"];
-                if (collisionTriggerComponent)
+                // NativeScriptComponent
+                auto nativeScriptNode = entityNode["NativeScriptComponent"];
+                if (nativeScriptNode)
                 {
-                    auto& ct = deserializedEntity.AddComponent<CollisionParticleTriggerComponent>();
-                    if (collisionTriggerComponent["Enabled"])
-                        ct.Enabled = collisionTriggerComponent["Enabled"].as<bool>();
-                    if (collisionTriggerComponent["BurstOnCollision"])
-                        ct.BurstOnCollision = collisionTriggerComponent["BurstOnCollision"].as<int>();
-                    if (collisionTriggerComponent["MinImpulse"])
-                        ct.MinImpulse = collisionTriggerComponent["MinImpulse"].as<float>();
-                    if (collisionTriggerComponent["UseCollisionNormal"])
-                        ct.UseCollisionNormal = collisionTriggerComponent["UseCollisionNormal"].as<bool>();
+                    auto& nsc = deserializedEntity.AddComponent<NativeScriptComponent>();
+                    if (nativeScriptNode["ScriptName"])
+                    {
+                        std::string scriptName = nativeScriptNode["ScriptName"].as<std::string>();
+                        nsc.ScriptName = scriptName;
+                        if (!scriptName.empty())
+                            ScriptRegistry::Instance().Bind(nsc, scriptName);
+                    }
                 }
             }
             catch (const YAML::Exception& e)

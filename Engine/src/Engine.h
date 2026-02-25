@@ -36,6 +36,19 @@
 #include "Scene/Entity.h"
 #include "Scene/SceneSerializer.h"
 
+// Reflection
+#include "Reflection/PropertyTypes.h"
+#include "Reflection/PropertyInfo.h"
+#include "Reflection/ComponentMeta.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Reflection/AutoSerializer.h"
+#include "Reflection/AutoInspector.h"
+
+// Script
+#include "Script/ScriptableEntity.h"
+#include "Script/NativeScriptComponent.h"
+#include "Script/ScriptRegistry.h"
+
 // Debug / Performance
 #include "Debug/ProfileTimer.h"
 #include "Debug/GPUTimerQuery.h"
