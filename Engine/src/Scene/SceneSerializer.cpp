@@ -245,6 +245,38 @@ namespace Engine
             out << YAML::EndMap;
         }
 
+        // TerrainComponent
+        if (entity.HasComponent<TerrainComponent>())
+        {
+            out << YAML::Key << "TerrainComponent" << YAML::BeginMap;
+            auto& tc = entity.GetComponent<TerrainComponent>();
+            out << YAML::Key << "HeightmapPath" << YAML::Value << tc.HeightmapPath;
+            out << YAML::Key << "HeightScale" << YAML::Value << tc.HeightScale;
+            out << YAML::Key << "TerrainSize" << YAML::Value << tc.TerrainSize;
+            out << YAML::Key << "SplatmapPath" << YAML::Value << tc.SplatmapPath;
+            for (int i = 0; i < 4; i++)
+            {
+                std::string p = "Layer" + std::to_string(i);
+                out << YAML::Key << (p + "Texture") << YAML::Value << AssetManager::GetPath<Texture2D>(tc.LayerTextures[i]);
+                out << YAML::Key << (p + "NormalMap") << YAML::Value << AssetManager::GetPath<Texture2D>(tc.LayerNormalMaps[i]);
+                out << YAML::Key << (p + "Tiling") << YAML::Value << tc.LayerTiling[i];
+                out << YAML::Key << (p + "Metallic") << YAML::Value << tc.LayerMetallic[i];
+                out << YAML::Key << (p + "Roughness") << YAML::Value << tc.LayerRoughness[i];
+            }
+            out << YAML::Key << "Friction" << YAML::Value << tc.Friction;
+            out << YAML::Key << "Restitution" << YAML::Value << tc.Restitution;
+            out << YAML::Key << "LODLevels" << YAML::Value << tc.LODLevels;
+            out << YAML::Key << "LODDistance1" << YAML::Value << tc.LODDistance1;
+            out << YAML::Key << "LODDistance2" << YAML::Value << tc.LODDistance2;
+            out << YAML::Key << "GrassEnabled" << YAML::Value << tc.GrassEnabled;
+            out << YAML::Key << "GrassDensity" << YAML::Value << tc.GrassDensity;
+            out << YAML::Key << "GrassHeight" << YAML::Value << tc.GrassHeight;
+            out << YAML::Key << "GrassWidth" << YAML::Value << tc.GrassWidth;
+            out << YAML::Key << "GrassWindStrength" << YAML::Value << tc.GrassWindStrength;
+            out << YAML::Key << "GrassTexture" << YAML::Value << AssetManager::GetPath<Texture2D>(tc.GrassTexture);
+            out << YAML::EndMap;
+        }
+
         // ParticleEmitterComponent
         if (entity.HasComponent<ParticleEmitterComponent>())
         {
@@ -642,6 +674,52 @@ namespace Engine
                         void* comp = meta.Get(*m_Scene, entityId);
                         AutoSerializer::Deserialize(compNode, meta, comp);
                     }
+                }
+
+                // TerrainComponent
+                auto terrainNode = entityNode["TerrainComponent"];
+                if (terrainNode)
+                {
+                    auto& tc = deserializedEntity.AddComponent<TerrainComponent>();
+
+                    auto loadSafePath = [](const YAML::Node& n, const std::string& k) -> std::string {
+                        if (!n[k]) return "";
+                        std::string p = n[k].as<std::string>();
+                        return PathUtils::IsSafeAssetPath(p) ? p : "";
+                    };
+
+                    tc.HeightmapPath = loadSafePath(terrainNode, "HeightmapPath");
+                    if (terrainNode["HeightScale"]) tc.HeightScale = terrainNode["HeightScale"].as<float>();
+                    if (terrainNode["TerrainSize"]) tc.TerrainSize = terrainNode["TerrainSize"].as<float>();
+                    tc.SplatmapPath = loadSafePath(terrainNode, "SplatmapPath");
+
+                    auto loadSafeTexHandle = [&](const YAML::Node& n, const std::string& k) -> AssetHandle {
+                        std::string p = loadSafePath(n, k);
+                        return p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
+                    };
+
+                    for (int i = 0; i < 4; i++)
+                    {
+                        std::string p = "Layer" + std::to_string(i);
+                        tc.LayerTextures[i] = loadSafeTexHandle(terrainNode, p + "Texture");
+                        tc.LayerNormalMaps[i] = loadSafeTexHandle(terrainNode, p + "NormalMap");
+                        if (terrainNode[p + "Tiling"]) tc.LayerTiling[i] = terrainNode[p + "Tiling"].as<float>();
+                        if (terrainNode[p + "Metallic"]) tc.LayerMetallic[i] = terrainNode[p + "Metallic"].as<float>();
+                        if (terrainNode[p + "Roughness"]) tc.LayerRoughness[i] = terrainNode[p + "Roughness"].as<float>();
+                    }
+
+                    if (terrainNode["Friction"]) tc.Friction = terrainNode["Friction"].as<float>();
+                    if (terrainNode["Restitution"]) tc.Restitution = terrainNode["Restitution"].as<float>();
+                    if (terrainNode["LODLevels"]) tc.LODLevels = std::clamp(terrainNode["LODLevels"].as<int>(), 1, 3);
+                    if (terrainNode["LODDistance1"]) tc.LODDistance1 = terrainNode["LODDistance1"].as<float>();
+                    if (terrainNode["LODDistance2"]) tc.LODDistance2 = terrainNode["LODDistance2"].as<float>();
+                    if (terrainNode["GrassEnabled"]) tc.GrassEnabled = terrainNode["GrassEnabled"].as<bool>();
+                    if (terrainNode["GrassDensity"]) tc.GrassDensity = terrainNode["GrassDensity"].as<float>();
+                    if (terrainNode["GrassHeight"]) tc.GrassHeight = terrainNode["GrassHeight"].as<float>();
+                    if (terrainNode["GrassWidth"]) tc.GrassWidth = terrainNode["GrassWidth"].as<float>();
+                    if (terrainNode["GrassWindStrength"]) tc.GrassWindStrength = terrainNode["GrassWindStrength"].as<float>();
+                    tc.GrassTexture = loadSafeTexHandle(terrainNode, "GrassTexture");
+                    tc.MeshDirty = true;
                 }
 
                 // ParticleEmitterComponent

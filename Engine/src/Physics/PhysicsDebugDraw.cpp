@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "Scene/Components.h"
+#include "Terrain/TerrainMeshGenerator.h"
 #include "Renderer/Shader.h"
 #include "Renderer/EditorCamera.h"
 #include "Renderer/RenderCommand.h"
@@ -23,7 +24,7 @@ namespace Engine
         m_LineShader = Shader::Create("assets/shaders/PhysicsDebugLine.glsl");
 
         // 创建动态 VBO（预分配空间，后续用 SetData 更新）
-        m_LineVBO = VertexBuffer::Create(sizeof(LineVertex) * 4096);
+        m_LineVBO = VertexBuffer::Create(sizeof(LineVertex) * 65536);
         m_LineVBO->SetLayout({
             {ShaderDataType::Float3, "a_Position"},
             {ShaderDataType::Float3, "a_Color"},
@@ -72,6 +73,17 @@ namespace Engine
                 float maxScale = std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
                 float radius = sphere.Radius * maxScale;
                 DrawSphere(center, radius, sphereColor);
+            }
+        }
+
+        // 地形碰撞器
+        {
+            glm::vec3 terrainColor = {1.0f, 0.6f, 0.0f}; // 橙色
+            auto view = reg.view<TransformComponent, TerrainComponent>();
+            for (auto entity : view)
+            {
+                auto& transform = view.get<TransformComponent>(entity);
+                DrawTerrainWireframe(transform.Translation, reg, entity);
             }
         }
 
@@ -145,6 +157,58 @@ namespace Engine
                 center + glm::vec3(0, std::cos(a0) * radius, std::sin(a0) * radius),
                 center + glm::vec3(0, std::cos(a1) * radius, std::sin(a1) * radius),
                 color);
+        }
+    }
+
+    void PhysicsDebugDraw::DrawTerrainWireframe(const glm::vec3& translation, entt::registry& reg, entt::entity entity)
+    {
+        auto& tc = reg.get<TerrainComponent>(entity);
+        auto* meshData = static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+        if (!meshData || meshData->HeightData.empty())
+            return;
+
+        glm::vec3 color = {1.0f, 0.6f, 0.0f}; // 橙色
+
+        int hmW = meshData->HeightmapWidth;
+        int hmH = meshData->HeightmapHeight;
+        float size = tc.TerrainSize;
+        float heightScale = tc.HeightScale;
+        float halfSize = size * 0.5f;
+
+        // 简化线框: 每隔 step 个网格点画一条线（避免线太多）
+        int step = std::max(1, std::max(hmW, hmH) / 32);
+
+        auto getWorldPos = [&](int ix, int iy) -> glm::vec3
+        {
+            float u = static_cast<float>(ix) / static_cast<float>(hmW - 1);
+            float v = static_cast<float>(iy) / static_cast<float>(hmH - 1);
+            int idx = std::min(iy, hmH - 1) * hmW + std::min(ix, hmW - 1);
+            float h = meshData->HeightData[idx];
+            return translation + glm::vec3(
+                u * size - halfSize,
+                h * heightScale,
+                v * size - halfSize
+            );
+        };
+
+        // 画 X 方向线
+        for (int j = 0; j < hmH; j += step)
+        {
+            for (int i = 0; i < hmW - 1; i += step)
+            {
+                int nextI = std::min(i + step, hmW - 1);
+                DrawLine(getWorldPos(i, j), getWorldPos(nextI, j), color);
+            }
+        }
+
+        // 画 Z 方向线
+        for (int i = 0; i < hmW; i += step)
+        {
+            for (int j = 0; j < hmH - 1; j += step)
+            {
+                int nextJ = std::min(j + step, hmH - 1);
+                DrawLine(getWorldPos(i, j), getWorldPos(i, nextJ), color);
+            }
         }
     }
 

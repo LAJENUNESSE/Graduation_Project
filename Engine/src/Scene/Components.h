@@ -316,4 +316,46 @@ namespace Engine
         CollisionParticleTriggerComponent(const CollisionParticleTriggerComponent&) = default;
     };
 
+    struct TerrainComponent
+    {
+        // 高度图
+        std::string HeightmapPath;                  // 相对路径 PNG (R 通道 0-255→0.0-1.0)
+        float HeightScale = 50.0f;                  // 高度振幅
+        float TerrainSize = 100.0f;                 // XZ 平面边长（正方形）
+
+        // Splat Map (RGBA → 4 层权重)
+        std::string SplatmapPath;
+
+        // 4 层纹理
+        AssetHandle LayerTextures[4];               // 漫反射贴图
+        AssetHandle LayerNormalMaps[4];             // 法线贴图（可选）
+        float LayerTiling[4]    = {10, 10, 10, 10}; // 各层 UV 平铺
+        float LayerMetallic[4]  = {0, 0, 0, 0};
+        float LayerRoughness[4] = {0.8f, 0.7f, 0.9f, 0.6f};
+
+        // 物理
+        float Friction    = 0.8f;
+        float Restitution = 0.1f;
+
+        // LOD
+        int   LODLevels    = 3;                     // 1-3
+        float LODDistance1  = 50.0f;
+        float LODDistance2  = 100.0f;
+
+        // 草地
+        bool  GrassEnabled    = false;
+        float GrassDensity    = 5.0f;               // 每平方米草片数
+        float GrassHeight     = 0.4f;
+        float GrassWidth      = 0.1f;
+        float GrassWindStrength = 0.3f;
+        AssetHandle GrassTexture;
+
+        // 运行时（不序列化）
+        bool  MeshDirty = true;
+        void* RuntimeMeshData = nullptr;            // TerrainMeshData*
+
+        TerrainComponent() = default;
+        TerrainComponent(const TerrainComponent&) = default;
+    };
+
 } // namespace Engine

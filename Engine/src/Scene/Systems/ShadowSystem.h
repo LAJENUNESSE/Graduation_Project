@@ -35,6 +35,8 @@ namespace Engine
         ShadowData Execute(entt::registry& reg, const LightEnvironment& lights);
         void ResizeShadowMap(int resolution);
         ShadowSettings& GetSettings() { return m_Settings; }
+        Ref<Shader> GetDepthShader() { return m_DepthShader; }
+        Ref<Framebuffer> GetShadowMapFBO() { return m_ShadowMapFBO; }
 
     private:
         ShadowSettings m_Settings;
