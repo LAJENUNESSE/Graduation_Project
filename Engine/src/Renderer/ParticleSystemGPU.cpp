@@ -67,6 +67,14 @@ namespace Engine
     {
     }
 
+    ParticleSystemGPU::~ParticleSystemGPU()
+    {
+        if (m_ReadbackFence)
+            glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
+        if (m_ReadbackBuffer)
+            glDeleteBuffers(1, &m_ReadbackBuffer);
+    }
+
     void ParticleSystemGPU::Init()
     {
         if (m_Initialized) return;
@@ -117,6 +125,12 @@ namespace Engine
 
         // Empty VAO for billboard rendering
         m_EmptyVAO = VertexArray::Create();
+
+        // 异步回读缓冲：用于避免 glGetBufferSubData 的同步阻塞
+        glGenBuffers(1, &m_ReadbackBuffer);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, m_ReadbackBuffer);
+        glBufferData(GL_COPY_WRITE_BUFFER, sizeof(CounterData), nullptr, GL_STREAM_READ);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 
         const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
         const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
@@ -450,37 +464,71 @@ namespace Engine
         // - Direct-draw fallback needs aliveCount for DrawArraysInstanced.
         if (sphEnabled || !m_UseIndirectDraw)
         {
-            CounterData counters{};
-            m_CounterBuffer->GetData(&counters, sizeof(CounterData), 0);
-
-            CounterData sanitized = counters;
-            bool corrected = false;
-
-            if (sanitized.deadCount > m_MaxParticles)
+            // ---- 异步回读：先收上一帧的结果（零等待） ----
+            if (m_ReadbackPending && m_ReadbackFence)
             {
-                sanitized.deadCount = m_MaxParticles;
-                corrected = true;
+                GLenum result = glClientWaitSync(
+                    static_cast<GLsync>(m_ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+
+                if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED)
+                {
+                    // GPU 已完成，无阻塞读取回读缓冲
+                    CounterData counters{};
+                    glBindBuffer(GL_COPY_READ_BUFFER, m_ReadbackBuffer);
+                    glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(CounterData), &counters);
+                    glBindBuffer(GL_COPY_READ_BUFFER, 0);
+
+                    CounterData sanitized = counters;
+                    bool corrected = false;
+
+                    if (sanitized.deadCount > m_MaxParticles)
+                    {
+                        sanitized.deadCount = m_MaxParticles;
+                        corrected = true;
+                    }
+                    if (sanitized.aliveCount > m_MaxParticles)
+                    {
+                        sanitized.aliveCount = m_MaxParticles;
+                        corrected = true;
+                    }
+
+                    if (corrected)
+                    {
+                        ENGINE_WARN("[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); clamping to safe range.",
+                                    counters.deadCount, counters.aliveCount, m_MaxParticles);
+                        m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
+                    }
+
+                    if (sphEnabled)
+                        m_LastAliveCount = sanitized.aliveCount;
+                    else
+                        m_LastAliveCount = 0;
+
+                    if (!m_UseIndirectDraw)
+                        m_AliveCountForDirectDraw = sanitized.aliveCount;
+
+                    m_ReadbackPending = false;
+                }
+                // GL_TIMEOUT_EXPIRED: GPU 还没完成，跳过本帧回读，用旧值
             }
-            if (sanitized.aliveCount > m_MaxParticles)
+
+            // ---- 发起本帧的异步拷贝 ----
+            if (m_ReadbackFence)
             {
-                sanitized.aliveCount = m_MaxParticles;
-                corrected = true;
+                glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
+                m_ReadbackFence = nullptr;
             }
 
-            if (corrected)
-            {
-                ENGINE_WARN("[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); clamping to safe range.",
-                            counters.deadCount, counters.aliveCount, m_MaxParticles);
-                m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
-            }
+            // 将 Counter SSBO 拷贝到回读缓冲
+            glBindBuffer(GL_COPY_READ_BUFFER, m_CounterBuffer->GetRendererID());
+            glBindBuffer(GL_COPY_WRITE_BUFFER, m_ReadbackBuffer);
+            glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(CounterData));
+            glBindBuffer(GL_COPY_READ_BUFFER, 0);
+            glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 
-            if (sphEnabled)
-                m_LastAliveCount = sanitized.aliveCount;
-            else
-                m_LastAliveCount = 0;
-
-            if (!m_UseIndirectDraw)
-                m_AliveCountForDirectDraw = sanitized.aliveCount;
+            // 插入栅栏：下一帧检查时拷贝已完成
+            m_ReadbackFence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            m_ReadbackPending = true;
         }
     }
 

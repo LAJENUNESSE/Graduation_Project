@@ -18,7 +18,7 @@ namespace Engine
     {
     public:
         ParticleSystemGPU(uint32_t maxParticles);
-        ~ParticleSystemGPU() = default;
+        ~ParticleSystemGPU();
 
         void Init();
         void Update(float dt, const glm::vec3& emitterPos, const ParticleEmitterComponent& emitter, entt::registry* registry = nullptr);
@@ -84,6 +84,11 @@ namespace Engine
 
         // 上一帧的活跃粒子数（用于 SPH dispatch）
         uint32_t m_LastAliveCount = 0;
+
+        // 异步回读（避免 glGetBufferSubData 同步阻塞）
+        uint32_t m_ReadbackBuffer = 0;    // GL buffer for async copy
+        void*    m_ReadbackFence = nullptr; // GLsync fence
+        bool     m_ReadbackPending = false;
 
         void InitSPH(float smoothingRadius);
     };
