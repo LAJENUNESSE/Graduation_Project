@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Core/UUID.h"
+#include "Asset/AssetHandle.h"
 #include "Scene/SceneCamera.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -63,34 +64,30 @@ namespace Engine
         }
     };
 
+    // MeshType 标识原始类型，用于序列化和 UI
+    enum class MeshType { Cube = 0, Plane, Sphere, Model };
+
     struct MeshRendererComponent
     {
-        Ref<Mesh> MeshData;
+        MeshType Type = MeshType::Cube;
+        AssetHandle MeshAsset;                   // → AssetManager::Get<Mesh>()
         glm::vec4 Color = {1.0f, 1.0f, 1.0f, 1.0f};
 
-        // 材质属性
-        Ref<Texture2D> DiffuseTexture;        // null = 纯色 (Albedo)
-        std::string TexturePath;              // 用于序列化
-        glm::vec2 Tiling = {1.0f, 1.0f};     // 纹理平铺
-        float Shininess = 32.0f;              // 高光指数 (Phong fallback, unused in PBR)
+        // 纹理句柄（通过 AssetManager 解析）
+        AssetHandle DiffuseTextureAsset;         // Albedo
+        glm::vec2 Tiling = {1.0f, 1.0f};
+        float Shininess = 32.0f;
 
-        // 法线贴图
-        Ref<Texture2D> NormalMapTexture;      // null = 不使用法线贴图
-        std::string NormalMapPath;            // 用于序列化
+        AssetHandle NormalMapAsset;              // 法线贴图
 
-        // PBR 参数 (Metallic-Roughness 工作流)
-        float Metallic = 0.0f;                // 金属度 0-1
-        float Roughness = 0.5f;               // 粗糙度 0-1
-        Ref<Texture2D> MetallicTexture;       // 可选金属度贴图
-        std::string MetallicTexturePath;
-        Ref<Texture2D> RoughnessTexture;      // 可选粗糙度贴图
-        std::string RoughnessTexturePath;
-        Ref<Texture2D> AOTexture;             // 可选环境遮蔽贴图
-        std::string AOTexturePath;
+        // PBR 参数
+        float Metallic = 0.0f;
+        float Roughness = 0.5f;
+        AssetHandle MetallicTextureAsset;
+        AssetHandle RoughnessTextureAsset;
+        AssetHandle AOTextureAsset;
 
-        std::string ModelPath;                // 模型文件相对路径（Model 类型时非空）
-
-        Ref<Material> MaterialInstance;       // 可选，运行时构建的 Material 实例
+        Ref<Material> MaterialInstance;          // 运行时构建的 Material 实例
 
         MeshRendererComponent() = default;
         MeshRendererComponent(const MeshRendererComponent&) = default;

@@ -49,6 +49,13 @@
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptRegistry.h"
 
+// Asset
+#include "Asset/AssetHandle.h"
+#include "Asset/AssetType.h"
+#include "Asset/SlotMap.h"
+#include "Asset/AssetRef.h"
+#include "Asset/AssetManager.h"
+
 // Debug / Performance
 #include "Debug/ProfileTimer.h"
 #include "Debug/GPUTimerQuery.h"

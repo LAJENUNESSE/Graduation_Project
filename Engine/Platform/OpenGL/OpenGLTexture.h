@@ -13,6 +13,7 @@ namespace Engine
     public:
         OpenGLTexture2D(uint32_t width, uint32_t height);
         OpenGLTexture2D(const std::string& path);
+        OpenGLTexture2D(const void* data, uint32_t width, uint32_t height);
         ~OpenGLTexture2D() override;
 
         uint32_t GetWidth() const override { return m_Width; }

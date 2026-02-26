@@ -3,6 +3,7 @@
 #include "Scene/Components.h"
 #include "Renderer/Material.h"
 #include "Renderer/Mesh.h"
+#include "Asset/AssetManager.h"
 
 namespace Engine
 {
@@ -18,10 +19,11 @@ namespace Engine
         {
             auto [transform, meshRenderer] = meshView.get<TransformComponent, MeshRendererComponent>(entity);
 
-            if (!meshRenderer.MeshData)
+            Mesh* mesh = AssetManager::Get<Mesh>(meshRenderer.MeshAsset);
+            if (!mesh)
                 continue;
 
-            for (const auto& subMesh : meshRenderer.MeshData->GetSubMeshes())
+            for (const auto& subMesh : mesh->GetSubMeshes())
             {
                 auto mat = CreateRef<Material>(pbrShader);
 
@@ -32,7 +34,9 @@ namespace Engine
                 mat->Set("u_Roughness", meshRenderer.Roughness);
 
                 // Diffuse texture: per-submesh > component > white fallback
-                Ref<Texture2D> tex = subMesh.DiffuseTexture ? subMesh.DiffuseTexture : meshRenderer.DiffuseTexture;
+                Ref<Texture2D> tex = AssetManager::GetRef<Texture2D>(subMesh.DiffuseTextureAsset);
+                if (!tex)
+                    tex = AssetManager::GetRef<Texture2D>(meshRenderer.DiffuseTextureAsset);
                 if (tex)
                 {
                     mat->SetTexture(0, tex);
@@ -46,7 +50,9 @@ namespace Engine
                 mat->Set("u_DiffuseTexture", 0);
 
                 // Normal map: per-submesh > component > none
-                Ref<Texture2D> normalTex = subMesh.NormalTexture ? subMesh.NormalTexture : meshRenderer.NormalMapTexture;
+                Ref<Texture2D> normalTex = AssetManager::GetRef<Texture2D>(subMesh.NormalTextureAsset);
+                if (!normalTex)
+                    normalTex = AssetManager::GetRef<Texture2D>(meshRenderer.NormalMapAsset);
                 if (normalTex)
                 {
                     mat->SetTexture(2, normalTex);
@@ -59,9 +65,10 @@ namespace Engine
                 mat->Set("u_NormalMap", 2);
 
                 // Metallic map (unit 3)
-                if (meshRenderer.MetallicTexture)
+                Ref<Texture2D> metallicTex = AssetManager::GetRef<Texture2D>(meshRenderer.MetallicTextureAsset);
+                if (metallicTex)
                 {
-                    mat->SetTexture(3, meshRenderer.MetallicTexture);
+                    mat->SetTexture(3, metallicTex);
                     mat->Set("u_HasMetallicMap", 1);
                 }
                 else
@@ -71,9 +78,10 @@ namespace Engine
                 mat->Set("u_MetallicMap", 3);
 
                 // Roughness map (unit 4)
-                if (meshRenderer.RoughnessTexture)
+                Ref<Texture2D> roughnessTex = AssetManager::GetRef<Texture2D>(meshRenderer.RoughnessTextureAsset);
+                if (roughnessTex)
                 {
-                    mat->SetTexture(4, meshRenderer.RoughnessTexture);
+                    mat->SetTexture(4, roughnessTex);
                     mat->Set("u_HasRoughnessMap", 1);
                 }
                 else
@@ -83,9 +91,10 @@ namespace Engine
                 mat->Set("u_RoughnessMap", 4);
 
                 // AO map (unit 5)
-                if (meshRenderer.AOTexture)
+                Ref<Texture2D> aoTex = AssetManager::GetRef<Texture2D>(meshRenderer.AOTextureAsset);
+                if (aoTex)
                 {
-                    mat->SetTexture(5, meshRenderer.AOTexture);
+                    mat->SetTexture(5, aoTex);
                     mat->Set("u_HasAOMap", 1);
                 }
                 else

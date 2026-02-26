@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Asset/AssetHandle.h"
 #include "Renderer/VertexArray.h"
-#include "Renderer/Texture.h"
 
 #include <cstdint>
 #include <string>
@@ -16,9 +16,9 @@ namespace Engine
         Ref<VertexArray> VAO;
         uint32_t IndexCount = 0;
         std::string DiffuseTexturePath;   // relative path (extracted from model)
-        Ref<Texture2D> DiffuseTexture;    // loaded texture, null if none
+        AssetHandle DiffuseTextureAsset;  // loaded texture handle
         std::string NormalTexturePath;    // relative path (extracted from model)
-        Ref<Texture2D> NormalTexture;     // loaded normal map, null if none
+        AssetHandle NormalTextureAsset;   // loaded normal map handle
     };
 
     class Mesh
