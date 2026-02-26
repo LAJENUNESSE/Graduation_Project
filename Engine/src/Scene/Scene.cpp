@@ -8,6 +8,7 @@
 #include "Renderer/EditorCamera.h"
 #include "Physics/PhysicsWorld.h"
 #include "Physics/BulletPhysicsWorld.h"
+#include "Terrain/TerrainMeshGenerator.h"
 
 namespace Engine
 {
@@ -114,6 +115,23 @@ namespace Engine
         {
             m_BulletPhysicsWorld = std::make_unique<BulletPhysicsWorld>();
             m_BulletPhysicsWorld->Init();
+
+            // 在创建物理体之前，确保地形网格数据已生成（Scene::Copy 会清空 RuntimeMeshData）
+            {
+                auto terrainView = m_Registry.view<TransformComponent, TerrainComponent>();
+                for (auto entity : terrainView)
+                {
+                    auto& tc = m_Registry.get<TerrainComponent>(entity);
+                    if (!tc.RuntimeMeshData && !tc.HeightmapPath.empty())
+                    {
+                        auto meshData = TerrainMeshGenerator::Generate(
+                            tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
+                        tc.RuntimeMeshData = new TerrainMeshData(std::move(meshData));
+                        tc.MeshDirty = false;
+                    }
+                }
+            }
+
             m_BulletPhysicsWorld->CreateBodies(m_Registry);
         }
 
@@ -203,6 +221,14 @@ namespace Engine
             {
                 if (meta.Has(*src, srcId))
                     meta.Copy(*src, srcId, *newScene, dstId);
+            }
+
+            if (srcReg.all_of<TerrainComponent>(srcEntity))
+            {
+                auto tc = srcReg.get<TerrainComponent>(srcEntity);
+                tc.RuntimeMeshData = nullptr;  // 清除运行时指针
+                tc.MeshDirty = true;           // 新场景重建网格
+                newEntity.AddComponent<TerrainComponent>(tc);
             }
 
             if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))

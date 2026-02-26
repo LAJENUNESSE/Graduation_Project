@@ -1,9 +1,11 @@
 #include "engpch.h"
 #include "Physics/BulletPhysicsWorld.h"
 #include "Scene/Components.h"
+#include "Terrain/TerrainMeshGenerator.h"
 #include "Core/Log.h"
 
 #include <btBulletDynamicsCommon.h>
+#include <BulletCollision/CollisionShapes/btHeightfieldTerrainShape.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -77,6 +79,10 @@ namespace Engine
         auto view = reg.view<TransformComponent, RigidBodyComponent>();
         for (auto entity : view)
         {
+            // 有 TerrainComponent 的实体由下方地形循环专门处理（使用 btHeightfieldTerrainShape）
+            if (reg.all_of<TerrainComponent>(entity))
+                continue;
+
             auto& transform = view.get<TransformComponent>(entity);
             auto& rb = view.get<RigidBodyComponent>(entity);
 
@@ -151,6 +157,53 @@ namespace Engine
             info.body = body;
             info.shape = shape;
             info.motionState = motionState;
+            m_Bodies[entityId] = info;
+        }
+
+        // 地形碰撞体（Static, mass=0）
+        auto terrainView = reg.view<TransformComponent, TerrainComponent>();
+        for (auto entity : terrainView)
+        {
+            auto& transform = terrainView.get<TransformComponent>(entity);
+            auto& terrain = terrainView.get<TerrainComponent>(entity);
+            uint32_t entityId = static_cast<uint32_t>(entity);
+
+            auto* meshData = static_cast<TerrainMeshData*>(terrain.RuntimeMeshData);
+            if (!meshData || meshData->HeightData.empty())
+                continue;
+
+            auto* terrainShape = new btHeightfieldTerrainShape(
+                meshData->HeightmapWidth,
+                meshData->HeightmapHeight,
+                meshData->HeightData.data(),   // float* 必须持续有效
+                1.0f,                          // heightScale 参数（Bullet 内部乘数）
+                meshData->MinHeight,
+                meshData->MaxHeight,
+                1,            // upAxis = Y
+                PHY_FLOAT,
+                true);        // flipQuadEdges
+
+            // localScaling 缩放到世界尺寸
+            float cellSizeX = terrain.TerrainSize / (meshData->HeightmapWidth - 1);
+            float cellSizeZ = terrain.TerrainSize / (meshData->HeightmapHeight - 1);
+            terrainShape->setLocalScaling(btVector3(cellSizeX, terrain.HeightScale, cellSizeZ));
+
+            // btHeightfieldTerrainShape 中心在 (0, (min+max)/2, 0)
+            float midH = (meshData->MinHeight + meshData->MaxHeight) * 0.5f * terrain.HeightScale;
+            btTransform startTransform;
+            startTransform.setIdentity();
+            startTransform.setOrigin(ToBt(transform.Translation) + btVector3(0, midH, 0));
+
+            auto* motionState = new btDefaultMotionState(startTransform);
+            btRigidBody::btRigidBodyConstructionInfo rbInfo(0.0f, motionState, terrainShape, btVector3(0, 0, 0));
+            rbInfo.m_friction = terrain.Friction;
+            rbInfo.m_restitution = terrain.Restitution;
+
+            auto* body = new btRigidBody(rbInfo);
+            body->setUserIndex(static_cast<int>(entityId));
+            m_DynamicsWorld->addRigidBody(body);
+
+            BodyInfo info{body, terrainShape, motionState};
             m_Bodies[entityId] = info;
         }
     }

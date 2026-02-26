@@ -248,6 +248,15 @@ namespace Engine
                 }
             }
 
+            if (!entity.HasComponent<TerrainComponent>())
+            {
+                if (ImGui::MenuItem("地形"))
+                {
+                    entity.AddComponent<TerrainComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             if (!entity.HasComponent<ParticleEmitterComponent>())
             {
                 if (ImGui::MenuItem("粒子发射器"))
@@ -550,6 +559,165 @@ namespace Engine
         // BoxCollider — 通过反射自动绘制
 
         // SphereCollider — 通过反射自动绘制
+
+        // Terrain
+        DrawComponent<TerrainComponent>("地形", entity, [this](auto& component)
+        {
+            // ---- 高度图 ----
+            ImGui::Text("高度图");
+            {
+                char buf[256];
+                memset(buf, 0, sizeof(buf));
+                std::strncpy(buf, component.HeightmapPath.c_str(), sizeof(buf) - 1);
+                if (ImGui::InputText("高度图路径", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    component.HeightmapPath = std::string(buf);
+                    component.MeshDirty = true;
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("浏览##Heightmap"))
+            {
+                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.bmp;*.tga", "高度图");
+                if (!absPath.empty())
+                {
+                    std::error_code ec;
+                    auto relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
+                    std::string relStr = ec ? absPath : relative.string();
+                    if (relStr.find("..") == std::string::npos)
+                    {
+                        component.HeightmapPath = relStr;
+                        component.MeshDirty = true;
+                    }
+                }
+            }
+
+            if (ImGui::Button("重新生成网格"))
+                component.MeshDirty = true;
+
+            if (ImGui::DragFloat("高度缩放", &component.HeightScale, 0.5f, 0.1f, 500.0f, "%.1f"))
+                component.MeshDirty = true;
+            if (ImGui::DragFloat("地形尺寸", &component.TerrainSize, 1.0f, 1.0f, 1000.0f, "%.1f"))
+                component.MeshDirty = true;
+
+            ImGui::Separator();
+
+            // ---- Splatmap ----
+            ImGui::Text("Splat Map");
+            {
+                char buf[256];
+                memset(buf, 0, sizeof(buf));
+                std::strncpy(buf, component.SplatmapPath.c_str(), sizeof(buf) - 1);
+                if (ImGui::InputText("Splatmap 路径", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue))
+                    component.SplatmapPath = std::string(buf);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("浏览##Splatmap"))
+            {
+                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.bmp;*.tga", "Splatmap");
+                if (!absPath.empty())
+                {
+                    std::error_code ec;
+                    auto relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
+                    std::string relStr = ec ? absPath : relative.string();
+                    if (relStr.find("..") == std::string::npos)
+                        component.SplatmapPath = relStr;
+                }
+            }
+
+            ImGui::Separator();
+
+            // ---- 4 层纹理 ----
+            const char* layerNames[] = {"层0 (草地)", "层1 (泥土)", "层2 (岩石)", "层3 (雪地)"};
+            for (int i = 0; i < 4; i++)
+            {
+                ImGui::PushID(i);
+                if (ImGui::TreeNode(layerNames[i]))
+                {
+                    // Albedo 贴图路径 + 浏览按钮
+                    const std::string& texPath = AssetManager::GetPath<Texture2D>(component.LayerTextures[i]);
+                    char texBuf[256];
+                    memset(texBuf, 0, sizeof(texBuf));
+                    std::strncpy(texBuf, texPath.c_str(), sizeof(texBuf) - 1);
+                    if (ImGui::InputText("反照率", texBuf, sizeof(texBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                    {
+                        std::string p(texBuf);
+                        component.LayerTextures[i] = p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
+                    }
+                    ImGui::SameLine();
+                    std::string browseId = "浏览##LayerTex" + std::to_string(i);
+                    if (ImGui::Button(browseId.c_str()))
+                    {
+                        std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.bmp;*.tga", "贴图");
+                        if (!absPath.empty())
+                        {
+                            std::error_code ec;
+                            auto rel = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
+                            std::string relStr = ec ? absPath : rel.string();
+                            if (relStr.find("..") == std::string::npos)
+                                component.LayerTextures[i] = AssetManager::Load<Texture2D>(relStr);
+                        }
+                    }
+
+                    // 法线贴图
+                    const std::string& normPath = AssetManager::GetPath<Texture2D>(component.LayerNormalMaps[i]);
+                    char normBuf[256];
+                    memset(normBuf, 0, sizeof(normBuf));
+                    std::strncpy(normBuf, normPath.c_str(), sizeof(normBuf) - 1);
+                    if (ImGui::InputText("法线", normBuf, sizeof(normBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                    {
+                        std::string p(normBuf);
+                        component.LayerNormalMaps[i] = p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
+                    }
+
+                    ImGui::DragFloat("平铺", &component.LayerTiling[i], 0.5f, 0.1f, 100.0f, "%.1f");
+                    ImGui::DragFloat("金属度", &component.LayerMetallic[i], 0.01f, 0.0f, 1.0f, "%.2f");
+                    ImGui::DragFloat("粗糙度", &component.LayerRoughness[i], 0.01f, 0.0f, 1.0f, "%.2f");
+
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::Separator();
+
+            // ---- 物理参数 ----
+            ImGui::Text("物理");
+            ImGui::DragFloat("摩擦力", &component.Friction, 0.01f, 0.0f, 2.0f, "%.2f");
+            ImGui::DragFloat("弹性", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f");
+
+            ImGui::Separator();
+
+            // ---- LOD ----
+            ImGui::Text("细节层次 (LOD)");
+            if (ImGui::SliderInt("LOD 层数", &component.LODLevels, 1, 3))
+                component.MeshDirty = true;
+            ImGui::DragFloat("LOD1 距离", &component.LODDistance1, 1.0f, 10.0f, 500.0f, "%.0f");
+            ImGui::DragFloat("LOD2 距离", &component.LODDistance2, 1.0f, 20.0f, 1000.0f, "%.0f");
+
+            ImGui::Separator();
+
+            // ---- 草地 ----
+            ImGui::Text("草地");
+            ImGui::Checkbox("启用草地", &component.GrassEnabled);
+            if (component.GrassEnabled)
+            {
+                ImGui::DragFloat("草密度", &component.GrassDensity, 0.5f, 0.1f, 50.0f, "%.1f 片/m²");
+                ImGui::DragFloat("草高度", &component.GrassHeight, 0.01f, 0.01f, 2.0f, "%.2f");
+                ImGui::DragFloat("草宽度", &component.GrassWidth, 0.01f, 0.01f, 1.0f, "%.2f");
+                ImGui::DragFloat("风力", &component.GrassWindStrength, 0.01f, 0.0f, 2.0f, "%.2f");
+                // 草地贴图
+                const std::string& grassPath = AssetManager::GetPath<Texture2D>(component.GrassTexture);
+                char grassBuf[256];
+                memset(grassBuf, 0, sizeof(grassBuf));
+                std::strncpy(grassBuf, grassPath.c_str(), sizeof(grassBuf) - 1);
+                if (ImGui::InputText("草贴图", grassBuf, sizeof(grassBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    std::string p(grassBuf);
+                    component.GrassTexture = p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
+                }
+            }
+        });
 
         // ParticleEmitter
         DrawComponent<ParticleEmitterComponent>("粒子发射器", entity, [this](auto& component)

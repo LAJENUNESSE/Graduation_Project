@@ -23,6 +23,7 @@ namespace Engine
 
         m_ShadowSystem.Init();
         m_SkyboxSystem.Init();
+        m_TerrainSystem.Init();
 
         m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx) {
             m_LightEnv = LightSystem::CollectLights(ctx.ActiveScene->GetRegistry());
@@ -30,6 +31,25 @@ namespace Engine
 
         m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx) {
             m_ShadowData = m_ShadowSystem.Execute(ctx.ActiveScene->GetRegistry(), m_LightEnv);
+
+            // 地形阴影深度渲染
+            if (m_ShadowData.HasValidShadowCaster)
+            {
+                m_ShadowSystem.GetShadowMapFBO()->Bind();
+                RenderCommand::SetCullFaceMode(CullFaceMode::Front);
+                auto depthShader = m_ShadowSystem.GetDepthShader();
+                depthShader->Bind();
+                depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
+                m_TerrainSystem.RenderDepth(ctx.ActiveScene->GetRegistry(), depthShader);
+                RenderCommand::SetCullFaceMode(CullFaceMode::Back);
+                m_ShadowSystem.GetShadowMapFBO()->Unbind();
+            }
+        }});
+
+        m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx) {
+            m_TerrainSystem.UpdateTerrainMeshes(ctx.ActiveScene->GetRegistry());
+            m_TerrainSystem.Render(ctx.ActiveScene->GetRegistry(), *ctx.Camera,
+                m_LightEnv, m_ShadowData, m_ShadowSystem.GetSettings());
         }});
 
         m_PassQueue.push_back({"GeometryPass", [this](RenderContext& ctx) {
@@ -139,7 +159,7 @@ namespace Engine
     {
         for (auto& pass : m_PassQueue)
         {
-            if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass"))
+            if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass"))
                 pass.ExecuteFn(m_Context);
         }
     }
