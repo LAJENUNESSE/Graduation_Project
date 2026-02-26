@@ -2,6 +2,7 @@
 #include "Scene/SceneCamera.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
+#include "Asset/AssetManager.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
 #include "Reflection/ComponentRegistry.h"
@@ -363,30 +364,26 @@ namespace Engine
             ImGui::ColorEdit4("颜色", glm::value_ptr(component.Color));
 
             // Mesh primitive selection
-            const char* currentMeshLabel = "None";
-            if (component.MeshData)
-            {
-                const std::string& meshType = component.MeshData->GetMeshType();
-                if (!meshType.empty())
-                    currentMeshLabel = meshType.c_str();
-            }
+            const char* meshTypeLabels[] = {"Cube", "Plane", "Sphere", "Model"};
+            int currentIdx = static_cast<int>(component.Type);
+            if (currentIdx > 3) currentIdx = 0;
 
-            if (ImGui::BeginCombo("网格", currentMeshLabel))
+            if (ImGui::BeginCombo("网格", meshTypeLabels[currentIdx]))
             {
-                if (ImGui::Selectable("Cube", component.MeshData && component.MeshData->GetMeshType() == "Cube"))
+                if (ImGui::Selectable("Cube", component.Type == MeshType::Cube))
                 {
-                    component.MeshData = Mesh::CreateCube();
-                    component.ModelPath.clear();
+                    component.Type = MeshType::Cube;
+                    component.MeshAsset = AssetManager::Load<Mesh>("builtin:Cube");
                 }
-                if (ImGui::Selectable("Plane", component.MeshData && component.MeshData->GetMeshType() == "Plane"))
+                if (ImGui::Selectable("Plane", component.Type == MeshType::Plane))
                 {
-                    component.MeshData = Mesh::CreatePlane();
-                    component.ModelPath.clear();
+                    component.Type = MeshType::Plane;
+                    component.MeshAsset = AssetManager::Load<Mesh>("builtin:Plane");
                 }
-                if (ImGui::Selectable("Sphere", component.MeshData && component.MeshData->GetMeshType() == "Sphere"))
+                if (ImGui::Selectable("Sphere", component.Type == MeshType::Sphere))
                 {
-                    component.MeshData = Mesh::CreateSphere();
-                    component.ModelPath.clear();
+                    component.Type = MeshType::Sphere;
+                    component.MeshAsset = AssetManager::Load<Mesh>("builtin:Sphere");
                 }
                 ImGui::EndCombo();
             }
@@ -407,27 +404,27 @@ namespace Engine
                     }
                     else
                     {
-                        auto mesh = Mesh::CreateFromFile(relStr);
-                        if (mesh)
+                        auto meshHandle = AssetManager::Load<Mesh>(relStr);
+                        if (meshHandle.IsValid())
                         {
-                            component.MeshData = mesh;
-                            component.ModelPath = relStr;
+                            component.Type = MeshType::Model;
+                            component.MeshAsset = meshHandle;
 
                             // Auto-detect: if model has submesh textures, clear the component-level texture
-                            // so per-submesh textures take effect
-                            bool hasSubMeshTex = false;
-                            for (const auto& sub : mesh->GetSubMeshes())
+                            Mesh* mesh = AssetManager::Get<Mesh>(meshHandle);
+                            if (mesh)
                             {
-                                if (sub.DiffuseTexture)
+                                bool hasSubMeshTex = false;
+                                for (const auto& sub : mesh->GetSubMeshes())
                                 {
-                                    hasSubMeshTex = true;
-                                    break;
+                                    if (sub.DiffuseTextureAsset.IsValid())
+                                    {
+                                        hasSubMeshTex = true;
+                                        break;
+                                    }
                                 }
-                            }
-                            if (hasSubMeshTex)
-                            {
-                                component.DiffuseTexture.reset();
-                                component.TexturePath.clear();
+                                if (hasSubMeshTex)
+                                    component.DiffuseTextureAsset = {};
                             }
                         }
                     }
@@ -435,10 +432,11 @@ namespace Engine
             }
 
             // Show model path if loaded
-            if (component.MeshData && component.MeshData->GetMeshType() == "Model")
+            if (component.Type == MeshType::Model && component.MeshAsset.IsValid())
             {
                 ImGui::SameLine();
-                ImGui::TextDisabled("(%s)", component.MeshData->GetModelPath().c_str());
+                const std::string& modelPath = AssetManager::GetPath<Mesh>(component.MeshAsset);
+                ImGui::TextDisabled("(%s)", modelPath.c_str());
             }
 
             ImGui::Separator();
@@ -446,13 +444,20 @@ namespace Engine
             ImGui::DragFloat("金属度", &component.Metallic, 0.01f, 0.0f, 1.0f, "%.2f");
             ImGui::DragFloat("粗糙度", &component.Roughness, 0.01f, 0.0f, 1.0f, "%.2f");
 
-            // Texture path
-            char texPathBuf[256];
-            memset(texPathBuf, 0, sizeof(texPathBuf));
-            std::strncpy(texPathBuf, component.TexturePath.c_str(), sizeof(texPathBuf) - 1);
-            if (ImGui::InputText("纹理路径", texPathBuf, sizeof(texPathBuf)))
+            // Texture path display + edit
             {
-                component.TexturePath = std::string(texPathBuf);
+                const std::string& texPath = AssetManager::GetPath<Texture2D>(component.DiffuseTextureAsset);
+                char texPathBuf[256];
+                memset(texPathBuf, 0, sizeof(texPathBuf));
+                std::strncpy(texPathBuf, texPath.c_str(), sizeof(texPathBuf) - 1);
+                if (ImGui::InputText("纹理路径", texPathBuf, sizeof(texPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    std::string newPath(texPathBuf);
+                    if (!newPath.empty())
+                        component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(newPath);
+                    else
+                        component.DiffuseTextureAsset = {};
+                }
             }
             ImGui::SameLine();
             if (ImGui::Button("浏览..."))
@@ -464,31 +469,27 @@ namespace Engine
                     std::filesystem::path relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
                     std::string relStr = ec ? absPath : relative.string();
 
-                    // Reject paths that escape project root (contain "..")
                     if (relStr.find("..") != std::string::npos)
                     {
                         ENGINE_WARN("纹理必须位于项目目录内: {0}", relStr);
                     }
                     else
                     {
-                        component.TexturePath = relStr;
-                        component.DiffuseTexture = Texture2D::Create(component.TexturePath);
+                        component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(relStr);
                     }
                 }
             }
 
             if (ImGui::Button("加载纹理"))
             {
-                if (!component.TexturePath.empty())
-                {
-                    component.DiffuseTexture = Texture2D::Create(component.TexturePath);
-                }
+                const std::string& texPath = AssetManager::GetPath<Texture2D>(component.DiffuseTextureAsset);
+                if (!texPath.empty())
+                    component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(texPath);
             }
             ImGui::SameLine();
             if (ImGui::Button("清除纹理"))
             {
-                component.DiffuseTexture.reset();
-                component.TexturePath.clear();
+                component.DiffuseTextureAsset = {};
             }
 
             ImGui::DragFloat("平铺 X", &component.Tiling.x, 0.1f, 0.01f, 100.0f, "%.2f");
@@ -496,12 +497,19 @@ namespace Engine
 
             ImGui::Separator();
             ImGui::Text("法线贴图");
-            char normalPathBuf[256];
-            memset(normalPathBuf, 0, sizeof(normalPathBuf));
-            std::strncpy(normalPathBuf, component.NormalMapPath.c_str(), sizeof(normalPathBuf) - 1);
-            if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf)))
             {
-                component.NormalMapPath = std::string(normalPathBuf);
+                const std::string& normalPath = AssetManager::GetPath<Texture2D>(component.NormalMapAsset);
+                char normalPathBuf[256];
+                memset(normalPathBuf, 0, sizeof(normalPathBuf));
+                std::strncpy(normalPathBuf, normalPath.c_str(), sizeof(normalPathBuf) - 1);
+                if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    std::string newPath(normalPathBuf);
+                    if (!newPath.empty())
+                        component.NormalMapAsset = AssetManager::Load<Texture2D>(newPath);
+                    else
+                        component.NormalMapAsset = {};
+                }
             }
             ImGui::SameLine();
             if (ImGui::Button("浏览##NormalMap"))
@@ -519,22 +527,21 @@ namespace Engine
                     }
                     else
                     {
-                        component.NormalMapPath = relStr;
-                        component.NormalMapTexture = Texture2D::Create(component.NormalMapPath);
+                        component.NormalMapAsset = AssetManager::Load<Texture2D>(relStr);
                     }
                 }
             }
 
             if (ImGui::Button("加载法线贴图"))
             {
-                if (!component.NormalMapPath.empty())
-                    component.NormalMapTexture = Texture2D::Create(component.NormalMapPath);
+                const std::string& normalPath = AssetManager::GetPath<Texture2D>(component.NormalMapAsset);
+                if (!normalPath.empty())
+                    component.NormalMapAsset = AssetManager::Load<Texture2D>(normalPath);
             }
             ImGui::SameLine();
             if (ImGui::Button("清除法线贴图"))
             {
-                component.NormalMapTexture.reset();
-                component.NormalMapPath.clear();
+                component.NormalMapAsset = {};
             }
         });
 

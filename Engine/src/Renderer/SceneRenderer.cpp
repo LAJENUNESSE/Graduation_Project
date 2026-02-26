@@ -4,6 +4,7 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
 #include "Renderer/EditorCamera.h"
+#include "Asset/AssetManager.h"
 #include "Scene/Scene.h"
 #include "Scene/Components.h"
 #include "Scene/Systems/MeshRenderSystem.h"
@@ -16,9 +17,8 @@ namespace Engine
     {
         m_PBRShader = Shader::Create("assets/shaders/PBR.glsl");
 
-        m_WhiteTexture = Texture2D::Create(1, 1);
-        uint32_t whiteData = 0xFFFFFFFF;
-        m_WhiteTexture->SetData(&whiteData, sizeof(uint32_t));
+        m_WhiteTextureHandle = AssetManager::Load<Texture2D>("builtin:white");
+        m_WhiteTexture = AssetManager::GetRef<Texture2D>(m_WhiteTextureHandle);
 
         m_ShadowSystem.Init();
         m_SkyboxSystem.Init();

@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Renderer/Mesh.h"
+#include "Asset/AssetManager.h"
 
 #include "Renderer/Buffer.h"
 #include "Core/Log.h"
@@ -364,7 +365,7 @@ namespace Engine
                             if (relStr.find("..") == std::string::npos)
                             {
                                 sub.DiffuseTexturePath = relStr;
-                                sub.DiffuseTexture = Texture2D::Create(relStr);
+                                sub.DiffuseTextureAsset = AssetManager::Load<Texture2D>(relStr);
                             }
                         }
                     }
@@ -391,7 +392,7 @@ namespace Engine
                             if (relStr2.find("..") == std::string::npos)
                             {
                                 sub.NormalTexturePath = relStr2;
-                                sub.NormalTexture = Texture2D::Create(relStr2);
+                                sub.NormalTextureAsset = AssetManager::Load<Texture2D>(relStr2);
                             }
                         }
                     }

@@ -6,6 +6,7 @@
 #include "Events/ApplicationEvent.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Renderer/Renderer.h"
+#include "Asset/AssetManager.h"
 #include "Debug/PerformanceMonitor.h"
 #include "Debug/ProfileTimer.h"
 
@@ -34,6 +35,7 @@ namespace Engine
         m_Window->SetEventCallback([this](Event& e) { OnEvent(e); });
 
         Renderer::Init();
+        AssetManager::Init();
         PerformanceMonitor::Get().Init();
 
         m_ImGuiLayer = new ImGuiLayer();
@@ -43,6 +45,7 @@ namespace Engine
     Application::~Application()
     {
         PerformanceMonitor::Get().Shutdown();
+        AssetManager::Shutdown();
         Renderer::Shutdown();
         s_Instance = nullptr;
     }

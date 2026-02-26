@@ -6,6 +6,7 @@
 #include "Renderer/Texture.h"
 #include "Renderer/RenderQueue.h"
 #include "Renderer/ParticleSystemGPU.h"
+#include "Asset/AssetHandle.h"
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Systems/ShadowSystem.h"
 #include "Scene/Systems/SkyboxSystem.h"
@@ -71,6 +72,7 @@ namespace Engine
 
         Ref<Shader> m_PBRShader;
         Ref<Texture2D> m_WhiteTexture;
+        AssetHandle m_WhiteTextureHandle;
 
         // Particle systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<ParticleSystemGPU>> m_ParticleSystems;

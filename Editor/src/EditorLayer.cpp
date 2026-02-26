@@ -8,6 +8,7 @@
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Mesh.h"
+#include "Asset/AssetManager.h"
 #include "Debug/PerformanceMonitor.h"
 #include "Debug/ProfileTimer.h"
 
@@ -64,7 +65,8 @@ namespace Engine
 
         Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
         auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
-        meshRenderer.MeshData = Mesh::CreateCube();
+        meshRenderer.Type = MeshType::Cube;
+        meshRenderer.MeshAsset = AssetManager::Load<Mesh>("builtin:Cube");
         meshRenderer.Color = {0.8f, 0.2f, 0.3f, 1.0f};
 
         Entity lightEntity = m_ActiveScene->CreateEntity("\xe6\x96\xb9\xe5\x90\x91\xe5\x85\x89");
@@ -109,6 +111,9 @@ namespace Engine
         }
 
         m_EditorCamera.OnUpdate(ts, m_ViewportHovered);
+
+        // 更新 AssetManager（异步加载轮询 + 热重载检测）
+        AssetManager::Update(ts);
 
         // 物理更新（仅运行时）
         switch (m_SceneState)

@@ -10,6 +10,7 @@
 #include "Reflection/AutoSerializer.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
+#include "Asset/AssetManager.h"
 #include "Core/Log.h"
 
 #include <yaml-cpp/yaml.h>
@@ -186,22 +187,34 @@ namespace Engine
             out << YAML::Key << "MeshRendererComponent";
             out << YAML::BeginMap;
             auto& mrc = entity.GetComponent<MeshRendererComponent>();
-            std::string meshType = "Cube";
-            if (mrc.MeshData)
-                meshType = mrc.MeshData->GetMeshType();
-            out << YAML::Key << "MeshType" << YAML::Value << meshType;
-            if (meshType == "Model" && mrc.MeshData)
-                out << YAML::Key << "ModelPath" << YAML::Value << mrc.MeshData->GetModelPath();
+
+            // MeshType
+            const char* meshTypeStr = "Cube";
+            switch (mrc.Type)
+            {
+            case MeshType::Cube:   meshTypeStr = "Cube";   break;
+            case MeshType::Plane:  meshTypeStr = "Plane";  break;
+            case MeshType::Sphere: meshTypeStr = "Sphere"; break;
+            case MeshType::Model:  meshTypeStr = "Model";  break;
+            }
+            out << YAML::Key << "MeshType" << YAML::Value << meshTypeStr;
+
+            if (mrc.Type == MeshType::Model)
+            {
+                const std::string& modelPath = AssetManager::GetPath<Mesh>(mrc.MeshAsset);
+                out << YAML::Key << "ModelPath" << YAML::Value << modelPath;
+            }
+
             out << YAML::Key << "Color" << YAML::Value << mrc.Color;
-            out << YAML::Key << "TexturePath" << YAML::Value << mrc.TexturePath;
+            out << YAML::Key << "TexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.DiffuseTextureAsset);
             out << YAML::Key << "Tiling" << YAML::Value << mrc.Tiling;
             out << YAML::Key << "Shininess" << YAML::Value << mrc.Shininess;
-            out << YAML::Key << "NormalMapPath" << YAML::Value << mrc.NormalMapPath;
+            out << YAML::Key << "NormalMapPath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.NormalMapAsset);
             out << YAML::Key << "Metallic" << YAML::Value << mrc.Metallic;
             out << YAML::Key << "Roughness" << YAML::Value << mrc.Roughness;
-            out << YAML::Key << "MetallicTexturePath" << YAML::Value << mrc.MetallicTexturePath;
-            out << YAML::Key << "RoughnessTexturePath" << YAML::Value << mrc.RoughnessTexturePath;
-            out << YAML::Key << "AOTexturePath" << YAML::Value << mrc.AOTexturePath;
+            out << YAML::Key << "MetallicTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.MetallicTextureAsset);
+            out << YAML::Key << "RoughnessTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.RoughnessTextureAsset);
+            out << YAML::Key << "AOTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.AOTextureAsset);
             out << YAML::EndMap;
         }
 
@@ -373,22 +386,30 @@ namespace Engine
         return true;
     }
 
-    static Ref<Mesh> CreateMeshFromType(const std::string& meshType, const std::string& modelPath = "")
+    static AssetHandle CreateMeshHandleFromType(const std::string& meshType, const std::string& modelPath = "")
     {
         if (meshType == "Cube")
-            return Mesh::CreateCube();
+            return AssetManager::Load<Mesh>("builtin:Cube");
         if (meshType == "Plane")
-            return Mesh::CreatePlane();
+            return AssetManager::Load<Mesh>("builtin:Plane");
         if (meshType == "Sphere")
-            return Mesh::CreateSphere();
+            return AssetManager::Load<Mesh>("builtin:Sphere");
         if (meshType == "Model" && !modelPath.empty())
         {
-            auto mesh = Mesh::CreateFromFile(modelPath);
-            if (mesh)
-                return mesh;
+            auto h = AssetManager::Load<Mesh>(modelPath);
+            if (h.IsValid())
+                return h;
             ENGINE_CORE_WARN("Failed to load model '{0}', falling back to Cube", modelPath);
         }
-        return Mesh::CreateCube();
+        return AssetManager::Load<Mesh>("builtin:Cube");
+    }
+
+    static MeshType MeshTypeFromString(const std::string& str)
+    {
+        if (str == "Plane")  return MeshType::Plane;
+        if (str == "Sphere") return MeshType::Sphere;
+        if (str == "Model")  return MeshType::Model;
+        return MeshType::Cube;
     }
 
     bool SceneSerializer::Deserialize(const std::string& filepath, EditorRenderSettings* outRenderSettings)
@@ -543,7 +564,6 @@ namespace Engine
                     if (meshType == "Model" && meshRendererComponent["ModelPath"])
                     {
                         modelPath = meshRendererComponent["ModelPath"].as<std::string>();
-                        // Security: reject unsafe paths
                         if (!IsSafeAssetPath(modelPath))
                         {
                             ENGINE_CORE_WARN("Rejected unsafe model path: {0}", modelPath);
@@ -551,22 +571,17 @@ namespace Engine
                         }
                     }
 
-                    mrc.MeshData = CreateMeshFromType(meshType, modelPath);
-                    mrc.ModelPath = modelPath;
+                    mrc.Type = MeshTypeFromString(meshType);
+                    mrc.MeshAsset = CreateMeshHandleFromType(meshType, modelPath);
                     mrc.Color = meshRendererComponent["Color"].as<glm::vec4>();
 
                     if (meshRendererComponent["TexturePath"])
                     {
                         std::string texPath = meshRendererComponent["TexturePath"].as<std::string>();
                         if (IsSafeAssetPath(texPath))
-                        {
-                            mrc.TexturePath = texPath;
-                            mrc.DiffuseTexture = Texture2D::Create(mrc.TexturePath);
-                        }
+                            mrc.DiffuseTextureAsset = AssetManager::Load<Texture2D>(texPath);
                         else if (!texPath.empty())
-                        {
                             ENGINE_CORE_WARN("Rejected unsafe texture path: {0}", texPath);
-                        }
                     }
                     if (meshRendererComponent["Tiling"])
                         mrc.Tiling = meshRendererComponent["Tiling"].as<glm::vec2>();
@@ -577,14 +592,9 @@ namespace Engine
                     {
                         std::string normalPath = meshRendererComponent["NormalMapPath"].as<std::string>();
                         if (IsSafeAssetPath(normalPath))
-                        {
-                            mrc.NormalMapPath = normalPath;
-                            mrc.NormalMapTexture = Texture2D::Create(mrc.NormalMapPath);
-                        }
+                            mrc.NormalMapAsset = AssetManager::Load<Texture2D>(normalPath);
                         else if (!normalPath.empty())
-                        {
                             ENGINE_CORE_WARN("Rejected unsafe normal map path: {0}", normalPath);
-                        }
                     }
 
                     // PBR parameters
@@ -593,27 +603,19 @@ namespace Engine
                     if (meshRendererComponent["Roughness"])
                         mrc.Roughness = meshRendererComponent["Roughness"].as<float>();
 
-                    auto loadSafeTexture = [](const YAML::Node& node, const std::string& key,
-                                              std::string& outPath, Ref<Texture2D>& outTex) {
-                        if (!node[key]) return;
+                    auto loadSafeTextureHandle = [](const YAML::Node& node, const std::string& key) -> AssetHandle {
+                        if (!node[key]) return {};
                         std::string path = node[key].as<std::string>();
                         if (IsSafeAssetPath(path))
-                        {
-                            outPath = path;
-                            outTex = Texture2D::Create(path);
-                        }
-                        else if (!path.empty())
-                        {
+                            return AssetManager::Load<Texture2D>(path);
+                        if (!path.empty())
                             ENGINE_CORE_WARN("Rejected unsafe texture path: {0}", path);
-                        }
+                        return {};
                     };
 
-                    loadSafeTexture(meshRendererComponent, "MetallicTexturePath",
-                                    mrc.MetallicTexturePath, mrc.MetallicTexture);
-                    loadSafeTexture(meshRendererComponent, "RoughnessTexturePath",
-                                    mrc.RoughnessTexturePath, mrc.RoughnessTexture);
-                    loadSafeTexture(meshRendererComponent, "AOTexturePath",
-                                    mrc.AOTexturePath, mrc.AOTexture);
+                    mrc.MetallicTextureAsset = loadSafeTextureHandle(meshRendererComponent, "MetallicTexturePath");
+                    mrc.RoughnessTextureAsset = loadSafeTextureHandle(meshRendererComponent, "RoughnessTexturePath");
+                    mrc.AOTextureAsset = loadSafeTextureHandle(meshRendererComponent, "AOTexturePath");
                 }
 
                 // CameraComponent（手写：getter/setter API）

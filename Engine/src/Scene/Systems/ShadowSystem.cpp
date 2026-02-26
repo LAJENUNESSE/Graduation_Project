@@ -3,6 +3,7 @@
 #include "Scene/Components.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Mesh.h"
+#include "Asset/AssetManager.h"
 #include "Debug/PerformanceMonitor.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -83,10 +84,11 @@ namespace Engine
         for (auto entity : meshView)
         {
             auto [transform, meshRenderer] = meshView.get<TransformComponent, MeshRendererComponent>(entity);
-            if (meshRenderer.MeshData)
+            Mesh* mesh = AssetManager::Get<Mesh>(meshRenderer.MeshAsset);
+            if (mesh)
             {
                 m_DepthShader->SetMat4("u_Transform", transform.GetTransform());
-                for (const auto& subMesh : meshRenderer.MeshData->GetSubMeshes())
+                for (const auto& subMesh : mesh->GetSubMeshes())
                 {
                     subMesh.VAO->Bind();
                     RenderCommand::DrawIndexed(subMesh.VAO);

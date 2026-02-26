@@ -5,6 +5,8 @@ file(GLOB_RECURSE ENGINE_SOURCES
 
 add_library(Engine STATIC ${ENGINE_SOURCES})
 
+find_package(Threads REQUIRED)
+
 target_include_directories(Engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -26,6 +28,7 @@ target_link_libraries(Engine PUBLIC
     BulletDynamics
     BulletCollision
     LinearMath
+    Threads::Threads
 )
 
 if(UNIX AND NOT APPLE)
