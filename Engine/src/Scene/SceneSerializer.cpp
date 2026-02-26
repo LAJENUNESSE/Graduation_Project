@@ -11,6 +11,7 @@
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
 #include "Asset/AssetManager.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 
 #include <yaml-cpp/yaml.h>
@@ -100,28 +101,6 @@ namespace YAML
 
 namespace Engine
 {
-
-    // 统一路径安全校验：拒绝绝对路径（POSIX/Windows/UNC）与目录穿越
-    static bool IsSafeAssetPath(const std::string& path)
-    {
-        if (path.empty())
-            return false;
-
-        // 使用 std::filesystem 判断绝对路径（跨平台：覆盖 /xxx, C:\xxx, \\server\xxx）
-        std::filesystem::path p(path);
-        if (p.is_absolute())
-            return false;
-
-        // 拒绝目录穿越（.. 和反斜杠变体）
-        if (path.find("..") != std::string::npos)
-            return false;
-
-        // 拒绝含反斜杠的路径（防止 Windows 风格穿越如 ..\secret）
-        if (path.find('\\') != std::string::npos)
-            return false;
-
-        return true;
-    }
 
     static YAML::Emitter& operator<<(YAML::Emitter& out, const glm::vec3& v)
     {
@@ -533,11 +512,13 @@ namespace Engine
             Entity deserializedEntity;
             try
             {
-                uint64_t uuid = entityNode["Entity"].as<uint64_t>();
+                uint64_t uuid = entityNode["Entity"]
+                    ? entityNode["Entity"].as<uint64_t>()
+                    : static_cast<uint64_t>(UUID());
 
                 std::string name;
                 auto tagComponent = entityNode["TagComponent"];
-                if (tagComponent)
+                if (tagComponent && tagComponent["Tag"])
                     name = tagComponent["Tag"].as<std::string>();
 
                 deserializedEntity = m_Scene->CreateEntityWithUUID(UUID(uuid), name);
@@ -547,9 +528,12 @@ namespace Engine
                 if (transformComponent)
                 {
                     auto& tc = deserializedEntity.GetComponent<TransformComponent>();
-                    tc.Translation = transformComponent["Translation"].as<glm::vec3>();
-                    tc.Rotation = transformComponent["Rotation"].as<glm::vec3>();
-                    tc.Scale = transformComponent["Scale"].as<glm::vec3>();
+                    if (transformComponent["Translation"])
+                        tc.Translation = transformComponent["Translation"].as<glm::vec3>();
+                    if (transformComponent["Rotation"])
+                        tc.Rotation = transformComponent["Rotation"].as<glm::vec3>();
+                    if (transformComponent["Scale"])
+                        tc.Scale = transformComponent["Scale"].as<glm::vec3>();
                 }
 
                 // MeshRendererComponent
@@ -557,14 +541,15 @@ namespace Engine
                 if (meshRendererComponent)
                 {
                     auto& mrc = deserializedEntity.AddComponent<MeshRendererComponent>();
-                    std::string meshType = meshRendererComponent["MeshType"].as<std::string>();
+                    std::string meshType = meshRendererComponent["MeshType"]
+                        ? meshRendererComponent["MeshType"].as<std::string>() : "Cube";
 
                     // Read model path for Model type
                     std::string modelPath;
                     if (meshType == "Model" && meshRendererComponent["ModelPath"])
                     {
                         modelPath = meshRendererComponent["ModelPath"].as<std::string>();
-                        if (!IsSafeAssetPath(modelPath))
+                        if (!PathUtils::IsSafeAssetPath(modelPath))
                         {
                             ENGINE_CORE_WARN("Rejected unsafe model path: {0}", modelPath);
                             modelPath.clear();
@@ -573,12 +558,13 @@ namespace Engine
 
                     mrc.Type = MeshTypeFromString(meshType);
                     mrc.MeshAsset = CreateMeshHandleFromType(meshType, modelPath);
-                    mrc.Color = meshRendererComponent["Color"].as<glm::vec4>();
+                    if (meshRendererComponent["Color"])
+                        mrc.Color = meshRendererComponent["Color"].as<glm::vec4>();
 
                     if (meshRendererComponent["TexturePath"])
                     {
                         std::string texPath = meshRendererComponent["TexturePath"].as<std::string>();
-                        if (IsSafeAssetPath(texPath))
+                        if (PathUtils::IsSafeAssetPath(texPath))
                             mrc.DiffuseTextureAsset = AssetManager::Load<Texture2D>(texPath);
                         else if (!texPath.empty())
                             ENGINE_CORE_WARN("Rejected unsafe texture path: {0}", texPath);
@@ -591,7 +577,7 @@ namespace Engine
                     if (meshRendererComponent["NormalMapPath"])
                     {
                         std::string normalPath = meshRendererComponent["NormalMapPath"].as<std::string>();
-                        if (IsSafeAssetPath(normalPath))
+                        if (PathUtils::IsSafeAssetPath(normalPath))
                             mrc.NormalMapAsset = AssetManager::Load<Texture2D>(normalPath);
                         else if (!normalPath.empty())
                             ENGINE_CORE_WARN("Rejected unsafe normal map path: {0}", normalPath);
@@ -606,7 +592,7 @@ namespace Engine
                     auto loadSafeTextureHandle = [](const YAML::Node& node, const std::string& key) -> AssetHandle {
                         if (!node[key]) return {};
                         std::string path = node[key].as<std::string>();
-                        if (IsSafeAssetPath(path))
+                        if (PathUtils::IsSafeAssetPath(path))
                             return AssetManager::Load<Texture2D>(path);
                         if (!path.empty())
                             ENGINE_CORE_WARN("Rejected unsafe texture path: {0}", path);

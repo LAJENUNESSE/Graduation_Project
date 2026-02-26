@@ -3,6 +3,7 @@
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
+#include "Renderer/RendererCapabilities.h"
 #include "Renderer/EditorCamera.h"
 #include "Asset/AssetManager.h"
 #include "Scene/Scene.h"
@@ -145,6 +146,9 @@ namespace Engine
 
     void SceneRenderer::RenderParticlePass()
     {
+        if (!RendererCapabilities::Get().SupportsComputeShaders)
+            return;
+
         for (auto& pass : m_PassQueue)
         {
             if (pass.Enabled && pass.Name == "ParticlePass")

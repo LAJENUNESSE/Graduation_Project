@@ -1,29 +1,14 @@
 #include "engpch.h"
 #include "Reflection/AutoSerializer.h"
 #include "Reflection/ComponentMeta.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 
 #include <yaml-cpp/yaml.h>
 #include <glm/glm.hpp>
-#include <filesystem>
 
 namespace Engine
 {
-
-    // 路径安全校验（与 SceneSerializer 逻辑一致）
-    static bool IsSafeAssetPath(const std::string& path)
-    {
-        if (path.empty())
-            return false;
-        std::filesystem::path p(path);
-        if (p.is_absolute())
-            return false;
-        if (path.find("..") != std::string::npos)
-            return false;
-        if (path.find('\\') != std::string::npos)
-            return false;
-        return true;
-    }
 
     void AutoSerializer::Serialize(YAML::Emitter& out, const ComponentMeta& meta, void* component)
     {
@@ -117,7 +102,7 @@ namespace Engine
                 case PropertyType::AssetPath:
                 {
                     std::string path = fieldNode.as<std::string>();
-                    if (path.empty() || IsSafeAssetPath(path))
+                    if (path.empty() || PathUtils::IsSafeAssetPath(path))
                         *static_cast<std::string*>(ptr) = path;
                     else
                         ENGINE_CORE_WARN("AutoSerializer: 拒绝不安全路径 {0}", path);

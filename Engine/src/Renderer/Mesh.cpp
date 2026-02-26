@@ -4,6 +4,7 @@
 
 #include "Renderer/Buffer.h"
 #include "Core/Log.h"
+#include "Asset/PathUtils.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -359,7 +360,8 @@ namespace Engine
                             // Convert to path relative to working directory
                             std::error_code ec;
                             std::filesystem::path relPath = std::filesystem::relative(fullTexPath, std::filesystem::current_path(), ec);
-                            std::string relStr = ec ? fullTexPath.string() : relPath.string();
+                            std::string relStr = PathUtils::NormalizeSeparators(
+                                ec ? fullTexPath.string() : relPath.string());
 
                             // Safety: reject paths that escape project root
                             if (relStr.find("..") == std::string::npos)
@@ -387,7 +389,8 @@ namespace Engine
                         {
                             std::error_code ec2;
                             std::filesystem::path relPath2 = std::filesystem::relative(fullTexPath, std::filesystem::current_path(), ec2);
-                            std::string relStr2 = ec2 ? fullTexPath.string() : relPath2.string();
+                            std::string relStr2 = PathUtils::NormalizeSeparators(
+                                ec2 ? fullTexPath.string() : relPath2.string());
 
                             if (relStr2.find("..") == std::string::npos)
                             {

@@ -38,6 +38,7 @@ namespace Engine
         LayerStack m_LayerStack;
         bool m_Running = true;
         bool m_Minimized = false;
+        bool m_Initialized = false;
         float m_LastFrameTime = 0.0f;
 
         static Application* s_Instance;
