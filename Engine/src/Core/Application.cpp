@@ -40,12 +40,17 @@ namespace Engine
 
         m_ImGuiLayer = new ImGuiLayer();
         PushOverlay(m_ImGuiLayer);
+
+        m_Initialized = true;
     }
 
     Application::~Application()
     {
-        PerformanceMonitor::Get().Shutdown();
-        AssetManager::Shutdown();
+        if (m_Initialized)
+        {
+            PerformanceMonitor::Get().Shutdown();
+            AssetManager::Shutdown();
+        }
         Renderer::Shutdown();
         s_Instance = nullptr;
     }

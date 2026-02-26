@@ -8,8 +8,6 @@ namespace Engine
 
     PostProcessing::PostProcessing()
     {
-        CreateShaders();
-        CreateFullscreenQuad();
     }
 
     void PostProcessing::CreateFullscreenQuad()
@@ -47,6 +45,12 @@ namespace Engine
 
     void PostProcessing::Init(uint32_t width, uint32_t height)
     {
+        if (!m_QuadVAO)
+        {
+            CreateShaders();
+            CreateFullscreenQuad();
+        }
+
         m_Width = width;
         m_Height = height;
 

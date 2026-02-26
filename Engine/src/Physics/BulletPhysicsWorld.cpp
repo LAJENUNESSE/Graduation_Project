@@ -160,6 +160,7 @@ namespace Engine
         if (!m_DynamicsWorld)
             return;
 
+        SyncFromECS(reg);  // Kinematic: ECS → Bullet（stepSimulation 前）
         m_DynamicsWorld->stepSimulation(dt, 10, 1.0f / 60.0f);
         SyncToECS(reg);
         CollectCollisionEvents(reg);
@@ -201,6 +202,30 @@ namespace Engine
         }
     }
 
+    void BulletPhysicsWorld::SyncFromECS(entt::registry& reg)
+    {
+        for (auto& [entityId, info] : m_Bodies)
+        {
+            auto entity = static_cast<entt::entity>(entityId);
+            if (!reg.valid(entity))
+                continue;
+
+            if (!reg.all_of<TransformComponent, RigidBodyComponent>(entity))
+                continue;
+
+            auto& rb = reg.get<RigidBodyComponent>(entity);
+            if (rb.Type != RigidBodyComponent::BodyType::Kinematic)
+                continue;
+
+            auto& transform = reg.get<TransformComponent>(entity);
+            btTransform btTrans;
+            btTrans.setIdentity();
+            btTrans.setOrigin(ToBt(transform.Translation));
+            btTrans.setRotation(EulerToBtQuat(transform.Rotation));
+            info.motionState->setWorldTransform(btTrans);
+        }
+    }
+
     void BulletPhysicsWorld::SyncToECS(entt::registry& reg)
     {
         for (auto& [entityId, info] : m_Bodies)
@@ -213,7 +238,7 @@ namespace Engine
                 continue;
 
             auto& rb = reg.get<RigidBodyComponent>(entity);
-            if (rb.Type == RigidBodyComponent::BodyType::Static)
+            if (rb.Type != RigidBodyComponent::BodyType::Dynamic)
                 continue;
 
             auto& transform = reg.get<TransformComponent>(entity);

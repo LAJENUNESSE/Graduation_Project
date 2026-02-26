@@ -19,7 +19,11 @@ namespace Engine
         auto now = std::chrono::system_clock::now();
         auto time = std::chrono::system_clock::to_time_t(now);
         std::tm tm{};
-        localtime_r(&time, &tm);
+#ifdef _MSC_VER
+        localtime_s(&tm, &time);    // MSVC: 参数顺序相反
+#else
+        localtime_r(&time, &tm);    // POSIX
+#endif
 
         std::ostringstream filename;
         filename << "logs/perf_"

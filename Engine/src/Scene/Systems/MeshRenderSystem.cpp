@@ -23,9 +23,21 @@ namespace Engine
             if (!mesh)
                 continue;
 
-            for (const auto& subMesh : mesh->GetSubMeshes())
+            const auto& subMeshes = mesh->GetSubMeshes();
+            auto& cachedMats = meshRenderer.CachedMaterials;
+
+            // 首次或 SubMesh 数量变化时重建缓存
+            if (cachedMats.size() != subMeshes.size())
             {
-                auto mat = CreateRef<Material>(pbrShader);
+                cachedMats.resize(subMeshes.size());
+                for (auto& m : cachedMats)
+                    m = CreateRef<Material>(pbrShader);
+            }
+
+            for (size_t i = 0; i < subMeshes.size(); ++i)
+            {
+                auto& mat = cachedMats[i];
+                const auto& subMesh = subMeshes[i];
 
                 mat->Set("u_Color", meshRenderer.Color);
                 mat->Set("u_EntityID", static_cast<int>(entity));

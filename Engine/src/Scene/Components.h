@@ -11,6 +11,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -87,7 +88,7 @@ namespace Engine
         AssetHandle RoughnessTextureAsset;
         AssetHandle AOTextureAsset;
 
-        Ref<Material> MaterialInstance;          // 运行时构建的 Material 实例
+        std::vector<Ref<Material>> CachedMaterials;  // 运行时构建，每 SubMesh 一个
 
         MeshRendererComponent() = default;
         MeshRendererComponent(const MeshRendererComponent&) = default;

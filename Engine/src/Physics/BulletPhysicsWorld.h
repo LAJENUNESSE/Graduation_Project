@@ -45,6 +45,8 @@ namespace Engine
         void DestroyBody(entt::entity entity);
         // 将 Bullet 状态同步回 ECS
         void SyncToECS(entt::registry& reg);
+        // Kinematic 体：从 ECS Transform 同步到 Bullet
+        void SyncFromECS(entt::registry& reg);
 
         // 获取本帧碰撞事件（Step 后有效）
         const std::vector<CollisionEvent>& GetCollisionEvents() const { return m_CollisionEvents; }

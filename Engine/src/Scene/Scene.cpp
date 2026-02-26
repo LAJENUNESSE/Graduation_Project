@@ -187,7 +187,11 @@ namespace Engine
                 newEntity.GetComponent<TransformComponent>() = srcReg.get<TransformComponent>(srcEntity);
 
             if (srcReg.all_of<MeshRendererComponent>(srcEntity))
-                newEntity.AddComponent<MeshRendererComponent>(srcReg.get<MeshRendererComponent>(srcEntity));
+            {
+                auto mrc = srcReg.get<MeshRendererComponent>(srcEntity);
+                mrc.CachedMaterials.clear();  // 避免拷贝场景与原场景共享 Material
+                newEntity.AddComponent<MeshRendererComponent>(mrc);
+            }
 
             if (srcReg.all_of<CameraComponent>(srcEntity))
                 newEntity.AddComponent<CameraComponent>(srcReg.get<CameraComponent>(srcEntity));
