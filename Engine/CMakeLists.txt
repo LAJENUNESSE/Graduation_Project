@@ -5,6 +5,11 @@ file(GLOB_RECURSE ENGINE_SOURCES
 
 add_library(Engine STATIC ${ENGINE_SOURCES})
 
+# MSVC: treat source and execution charset as UTF-8 so Chinese literals work correctly
+if(MSVC)
+    target_compile_options(Engine PRIVATE /utf-8)
+endif()
+
 find_package(Threads REQUIRED)
 
 target_include_directories(Engine PUBLIC
