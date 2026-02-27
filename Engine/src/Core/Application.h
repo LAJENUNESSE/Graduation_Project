@@ -27,6 +27,11 @@ namespace Engine
         ImGuiLayer* GetImGuiLayer() { return m_ImGuiLayer; }
         Window& GetWindow() { return *m_Window; }
 
+        void SetTargetFrameRate(float fps) { m_TargetFrameRate = fps; }
+        float GetTargetFrameRate() const { return m_TargetFrameRate; }
+        void SetFrameRateLimitEnabled(bool enabled) { m_FrameRateLimitEnabled = enabled; }
+        bool IsFrameRateLimitEnabled() const { return m_FrameRateLimitEnabled; }
+
         static Application& Get() { return *s_Instance; }
 
     private:
@@ -40,6 +45,8 @@ namespace Engine
         bool m_Minimized = false;
         bool m_Initialized = false;
         float m_LastFrameTime = 0.0f;
+        float m_TargetFrameRate = 144.0f;
+        bool  m_FrameRateLimitEnabled = true;
 
         static Application* s_Instance;
     };

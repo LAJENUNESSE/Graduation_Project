@@ -10,6 +10,9 @@ namespace Engine
     public:
         OpenGLStorageBuffer(uint32_t size, uint32_t binding);
         OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding);
+        // GPU-only immutable storage
+        OpenGLStorageBuffer(uint32_t size, uint32_t binding, bool gpuOnly);
+        OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding, bool gpuOnly);
         ~OpenGLStorageBuffer() override;
 
         void Bind(uint32_t binding) const override;
@@ -24,6 +27,7 @@ namespace Engine
     private:
         uint32_t m_RendererID = 0;
         uint32_t m_Size = 0;
+        bool m_Immutable = false;
     };
 
 } // namespace Engine

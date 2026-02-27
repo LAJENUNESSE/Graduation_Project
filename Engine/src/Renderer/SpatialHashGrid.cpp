@@ -3,8 +3,8 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
 
+#include <glad/gl.h>
 #include <cmath>
-#include <vector>
 
 namespace Engine
 {
@@ -25,14 +25,14 @@ namespace Engine
         m_PrefixSumShader = Shader::Create("assets/shaders/grid_prefix_sum.glsl");
         m_ScatterShader   = Shader::Create("assets/shaders/grid_scatter.glsl");
 
-        // Allocate SSBOs
+        // Allocate SSBOs (GPU-only immutable: only compute shaders read/write after init)
         // Binding 1 & 4 are shared with DeadList & IndirectArgs respectively.
         // Grid passes temporarily reuse these slots; caller rebinds originals afterward.
-        m_CellHash       = ShaderStorageBuffer::Create(maxParticles * sizeof(uint32_t), 1);
-        m_CellCount      = ShaderStorageBuffer::Create(totalCells * sizeof(uint32_t), 6);
-        m_CellStart      = ShaderStorageBuffer::Create(totalCells * sizeof(uint32_t), 5);
-        m_SortedIndices  = ShaderStorageBuffer::Create(maxParticles * sizeof(uint32_t), 7);
-        m_BlockSums      = ShaderStorageBuffer::Create(numBlocks * sizeof(uint32_t), 4);
+        m_CellHash       = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 1);
+        m_CellCount      = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 6);
+        m_CellStart      = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 5);
+        m_SortedIndices  = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 7);
+        m_BlockSums      = ShaderStorageBuffer::CreateGPUOnly(numBlocks * sizeof(uint32_t), 4);
 
         m_Initialized = true;
     }
@@ -50,9 +50,10 @@ namespace Engine
         m_SortedIndices->Bind(7);
         m_BlockSums->Bind(4);
 
-        // Clear CellCount to zero
-        std::vector<uint32_t> zeros(totalCells, 0);
-        m_CellCount->SetData(zeros.data(), totalCells * sizeof(uint32_t), 0);
+        // Clear CellCount to zero (GPU-side, no CPU allocation or upload)
+        GLuint zero = 0;
+        glClearNamedBufferData(m_CellCount->GetRendererID(),
+                               GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
 
         // ---- Pass A: Hash + Atomic Scatter Count ----
         m_HashShader->Bind();

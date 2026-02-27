@@ -29,17 +29,15 @@ uniform float u_RestDensity;       // ρ_0
 uniform float u_GasConstant;       // k
 uniform int   u_GridSize;
 uniform float u_CellSize;
+uniform float u_Poly6Coeff;        // 315 / (64 * π * h^9), CPU 预计算
 
-// Poly6 kernel: W(r, h) = 315 / (64 * π * h^9) * (h² - r²)³
-const float PI = 3.14159265359;
-
+// Poly6 kernel: W(r, h) = u_Poly6Coeff * (h² - r²)³
 float poly6(float r2, float h)
 {
     float h2 = h * h;
     if (r2 >= h2) return 0.0;
     float diff = h2 - r2;
-    float h9 = h2 * h2 * h2 * h2 * h; // h^9
-    return 315.0 / (64.0 * PI * h9) * diff * diff * diff;
+    return u_Poly6Coeff * diff * diff * diff;
 }
 
 // 空间哈希：将 3D 坐标映射到 1D cell index

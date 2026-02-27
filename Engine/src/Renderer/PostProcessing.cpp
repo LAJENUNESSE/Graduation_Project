@@ -54,22 +54,25 @@ namespace Engine
         m_Width = width;
         m_Height = height;
 
-        // Brightness extraction FBO (RGBA16F, no depth)
+        uint32_t halfW = std::max(width / 2, 1u);
+        uint32_t halfH = std::max(height / 2, 1u);
+
+        // Brightness extraction FBO (half-res RGBA16F, no depth)
         {
             FramebufferSpecification spec;
             spec.Attachments = {FramebufferTextureFormat::RGBA16F};
-            spec.Width = width;
-            spec.Height = height;
+            spec.Width = halfW;
+            spec.Height = halfH;
             m_BrightnessFBO = Framebuffer::Create(spec);
         }
 
-        // Ping-pong FBOs for Gaussian blur (RGBA16F, no depth)
+        // Ping-pong FBOs for Gaussian blur (half-res RGBA16F, no depth)
         for (int i = 0; i < 2; i++)
         {
             FramebufferSpecification spec;
             spec.Attachments = {FramebufferTextureFormat::RGBA16F};
-            spec.Width = width;
-            spec.Height = height;
+            spec.Width = halfW;
+            spec.Height = halfH;
             m_PingPongFBO[i] = Framebuffer::Create(spec);
         }
     }
@@ -84,9 +87,12 @@ namespace Engine
         m_Width = width;
         m_Height = height;
 
-        m_BrightnessFBO->Resize(width, height);
-        m_PingPongFBO[0]->Resize(width, height);
-        m_PingPongFBO[1]->Resize(width, height);
+        uint32_t halfW = std::max(width / 2, 1u);
+        uint32_t halfH = std::max(height / 2, 1u);
+
+        m_BrightnessFBO->Resize(halfW, halfH);
+        m_PingPongFBO[0]->Resize(halfW, halfH);
+        m_PingPongFBO[1]->Resize(halfW, halfH);
     }
 
     void PostProcessing::RenderFullscreenQuad()

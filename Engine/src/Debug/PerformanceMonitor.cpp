@@ -35,6 +35,7 @@ namespace Engine
         {
             m_CsvFile << "Frame,Timestamp_s,FrameTime_ms,FPS,"
                       << "ShadowPass_CPU_ms,SceneRender_CPU_ms,ImGui_CPU_ms,"
+                      << "PollEvents_CPU_ms,SwapBuffers_CPU_ms,"
                       << "ShadowPass_GPU_ms,SceneRender_GPU_ms,"
                       << "DrawCalls,Vertices,Triangles\n";
             ENGINE_CORE_INFO("Performance CSV: {}", filename.str());
@@ -96,6 +97,8 @@ namespace Engine
                       << std::setprecision(3) << m_ShadowPassCpuMs << ","
                       << std::setprecision(3) << m_SceneRenderCpuMs << ","
                       << std::setprecision(3) << m_ImGuiCpuMs << ","
+                      << std::setprecision(3) << m_PollEventsCpuMs << ","
+                      << std::setprecision(3) << m_SwapBuffersCpuMs << ","
                       << std::setprecision(3) << m_ShadowPassGPU.GetElapsedMs() << ","
                       << std::setprecision(3) << m_SceneRenderGPU.GetElapsedMs() << ","
                       << std::defaultfloat

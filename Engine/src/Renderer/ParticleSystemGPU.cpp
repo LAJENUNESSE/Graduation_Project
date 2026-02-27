@@ -100,28 +100,30 @@ namespace Engine
         // start with life=0.0 (properly dead). Undefined buffer data may contain
         // NaN or positive life values, causing simulate to treat uninitialized
         // particles as alive and permanently corrupting the dead/alive counters.
+        // GPU-only immutable storage: after init, only GPU reads/writes this buffer.
         uint32_t particleSize = sizeof(GPUParticleData); // 80 bytes
         uint32_t totalBytes = m_MaxParticles * particleSize;
         std::vector<uint8_t> zeroData(totalBytes, 0);
-        m_ParticleBuffer = ShaderStorageBuffer::Create(zeroData.data(), totalBytes, 0);
+        m_ParticleBuffer = ShaderStorageBuffer::CreateGPUOnly(zeroData.data(), totalBytes, 0);
 
         // Fill dead list with indices [0, 1, 2, ..., MAX-1]
         std::vector<uint32_t> deadIndices(m_MaxParticles);
         for (uint32_t i = 0; i < m_MaxParticles; i++)
             deadIndices[i] = i;
-        m_DeadList = ShaderStorageBuffer::Create(deadIndices.data(),
+        m_DeadList = ShaderStorageBuffer::CreateGPUOnly(deadIndices.data(),
                                                   m_MaxParticles * sizeof(uint32_t), 1);
 
         // Alive list (empty at start)
-        m_AliveList = ShaderStorageBuffer::Create(m_MaxParticles * sizeof(uint32_t), 2);
+        m_AliveList = ShaderStorageBuffer::CreateGPUOnly(m_MaxParticles * sizeof(uint32_t), 2);
 
         // Counter buffer: deadCount=MAX, aliveCount=0, emitCount=0, pad=0
+        // Kept as DYNAMIC — CPU writes aliveCount/emitCount every frame
         CounterData counters{m_MaxParticles, 0, 0, 0};
         m_CounterBuffer = ShaderStorageBuffer::Create(&counters, sizeof(CounterData), 3);
 
         // Indirect draw args: count=6, instanceCount=0, first=0, baseInstance=0
         IndirectDrawCommand cmd{6, 0, 0, 0};
-        m_IndirectArgs = ShaderStorageBuffer::Create(&cmd, sizeof(IndirectDrawCommand), 4);
+        m_IndirectArgs = ShaderStorageBuffer::CreateGPUOnly(&cmd, sizeof(IndirectDrawCommand), 4);
 
         // Empty VAO for billboard rendering
         m_EmptyVAO = VertexArray::Create();
@@ -175,7 +177,7 @@ namespace Engine
     {
         if (m_PCISPHInitialized) return;
         // PCISPHData: 3 × vec4 = 48 bytes per particle
-        m_PCISPHBuffer = ShaderStorageBuffer::Create(m_MaxParticles * 48, 1);
+        m_PCISPHBuffer = ShaderStorageBuffer::CreateGPUOnly(m_MaxParticles * 48, 1);
         m_PCISPHInitialized = true;
     }
 
@@ -312,6 +314,14 @@ namespace Engine
                 float cellSize = m_Grid.GetCellSize();
                 int gridSize = static_cast<int>(m_Grid.GetGridSize());
 
+                // CPU 侧预计算 SPH kernel 常量（避免 GPU 每粒子每邻居重复计算）
+                float h = emitter.SPH_SmoothingRadius;
+                float h2 = h * h;
+                float h6 = h2 * h2 * h2;
+                float h9 = h6 * h2 * h;
+                float poly6Coeff = 315.0f / (64.0f * glm::pi<float>() * h9);
+                float spikyCoeff = -45.0f / (glm::pi<float>() * h6);
+
                 // Pass 2a: Build Spatial Hash Grid
                 m_Grid.Build(m_LastAliveCount);
 
@@ -324,6 +334,7 @@ namespace Engine
                 m_SPHDensityShader->SetFloat("u_GasConstant", emitter.SPH_GasConstant);
                 m_SPHDensityShader->SetInt("u_GridSize", gridSize);
                 m_SPHDensityShader->SetFloat("u_CellSize", cellSize);
+                m_SPHDensityShader->SetFloat("u_Poly6Coeff", poly6Coeff);
 
                 uint32_t sphGroups = (m_LastAliveCount + 255) / 256;
                 RenderCommand::DispatchCompute(sphGroups);
@@ -356,52 +367,63 @@ namespace Engine
                     m_PCISPHInitShader->SetFloat("u_CellSize", cellSize);
                     m_PCISPHInitShader->SetFloat3("u_Gravity", emitter.Gravity);
                     m_PCISPHInitShader->SetFloat("u_SurfaceTension", emitter.SPH_SurfaceTension);
+                    m_PCISPHInitShader->SetFloat("u_SpikyCoeff", spikyCoeff);
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-                    // Iterative correction
+                    // 循环前一次性设置所有三个 shader 的 uniform（跨 glUseProgram 保持）
                     int iterations = std::clamp(emitter.SPH_PCISPHIterations, 1, 8);
-                    for (int i = 0; i < iterations; i++)
-                    {
-                        // Predict
-                        m_PCISPHPredictShader->Bind();
-                        m_PCISPHPredictShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_PCISPHPredictShader->SetFloat("u_DeltaTime", clampedDt);
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-                        // Density prediction
-                        m_PCISPHDensityShader->Bind();
-                        m_PCISPHDensityShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_PCISPHDensityShader->SetFloat("u_SmoothingRadius", emitter.SPH_SmoothingRadius);
-                        m_PCISPHDensityShader->SetFloat("u_ParticleMass", emitter.SPH_ParticleMass);
-                        m_PCISPHDensityShader->SetFloat("u_RestDensity", emitter.SPH_RestDensity);
-                        m_PCISPHDensityShader->SetFloat("u_PCISPHDelta", emitter.SPH_PCISPHDelta);
-                        m_PCISPHDensityShader->SetInt("u_GridSize", gridSize);
-                        m_PCISPHDensityShader->SetFloat("u_CellSize", cellSize);
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+                    m_PCISPHPredictShader->Bind();
+                    m_PCISPHPredictShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_PCISPHPredictShader->SetFloat("u_DeltaTime", clampedDt);
 
-                        // Force
-                        m_PCISPHForceShader->Bind();
-                        m_PCISPHForceShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_PCISPHForceShader->SetFloat("u_SmoothingRadius", emitter.SPH_SmoothingRadius);
-                        m_PCISPHForceShader->SetFloat("u_ParticleMass", emitter.SPH_ParticleMass);
-                        m_PCISPHForceShader->SetFloat("u_DeltaTime", clampedDt);
-                        m_PCISPHForceShader->SetInt("u_GridSize", gridSize);
-                        m_PCISPHForceShader->SetFloat("u_CellSize", cellSize);
-                        m_PCISPHForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
-                        m_PCISPHForceShader->SetFloat("u_BoundaryStiffness", emitter.SPH_BoundaryStiffness);
-                        m_PCISPHForceShader->SetFloat("u_BoundaryDamping", emitter.SPH_BoundaryDamping);
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-                    }
+                    m_PCISPHDensityShader->Bind();
+                    m_PCISPHDensityShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_PCISPHDensityShader->SetFloat("u_SmoothingRadius", emitter.SPH_SmoothingRadius);
+                    m_PCISPHDensityShader->SetFloat("u_ParticleMass", emitter.SPH_ParticleMass);
+                    m_PCISPHDensityShader->SetFloat("u_RestDensity", emitter.SPH_RestDensity);
+                    m_PCISPHDensityShader->SetFloat("u_PCISPHDelta", emitter.SPH_PCISPHDelta);
+                    m_PCISPHDensityShader->SetInt("u_GridSize", gridSize);
+                    m_PCISPHDensityShader->SetFloat("u_CellSize", cellSize);
+                    m_PCISPHDensityShader->SetFloat("u_Poly6Coeff", poly6Coeff);
 
-                    // Apply v* to particles
-                    m_PCISPHApplyShader->Bind();
-                    m_PCISPHApplyShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_PCISPHForceShader->Bind();
+                    m_PCISPHForceShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_PCISPHForceShader->SetFloat("u_SmoothingRadius", emitter.SPH_SmoothingRadius);
+                    m_PCISPHForceShader->SetFloat("u_ParticleMass", emitter.SPH_ParticleMass);
+                    m_PCISPHForceShader->SetFloat("u_DeltaTime", clampedDt);
+                    m_PCISPHForceShader->SetInt("u_GridSize", gridSize);
+                    m_PCISPHForceShader->SetFloat("u_CellSize", cellSize);
+                    m_PCISPHForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
+                    m_PCISPHForceShader->SetFloat("u_BoundaryStiffness", emitter.SPH_BoundaryStiffness);
+                    m_PCISPHForceShader->SetFloat("u_BoundaryDamping", emitter.SPH_BoundaryDamping);
+                    m_PCISPHForceShader->SetFloat("u_SpikyCoeff", spikyCoeff);
+
+                    // 帧间分摊：每帧只做 1 次 predict→density→force 迭代
+                    m_PCISPHPredictShader->Bind();
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                    m_PCISPHDensityShader->Bind();
+                    RenderCommand::DispatchCompute(sphGroups);
+                    RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                    m_PCISPHForceShader->Bind();
+                    RenderCommand::DispatchCompute(sphGroups);
+                    RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                    m_PCISPHIterationIndex++;
+                    if (m_PCISPHIterationIndex >= iterations)
+                    {
+                        // 最后一次迭代完成，apply v* → particle.vel
+                        m_PCISPHApplyShader->Bind();
+                        m_PCISPHApplyShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                        RenderCommand::DispatchCompute(sphGroups);
+                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                        m_PCISPHIterationIndex = 0;
+                    }
                 }
                 else
                 {
@@ -416,6 +438,7 @@ namespace Engine
                     m_SPHForceShader->SetFloat("u_CellSize", cellSize);
                     // 表面张力 + 刚体耦合 uniform
                     m_SPHForceShader->SetFloat("u_SurfaceTension", emitter.SPH_SurfaceTension);
+                    m_SPHForceShader->SetFloat("u_SpikyCoeff", spikyCoeff);
 
                     uint32_t rigidBodyCount = 0;
                     if (emitter.SPH_RigidBodyCoupling && registry)

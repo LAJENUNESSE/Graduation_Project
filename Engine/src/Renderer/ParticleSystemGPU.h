@@ -66,6 +66,7 @@ namespace Engine
         Ref<ShaderStorageBuffer> m_RigidBodyBuffer;    // binding 3 during SPH, 112B × MAX_RIGID_BODIES
         static constexpr uint32_t MAX_RIGID_BODIES = 64;
         bool m_PCISPHInitialized = false;
+        int  m_PCISPHIterationIndex = 0;  // 帧间分摊 PCISPH 迭代
 
         void InitPCISPH();
         void InitRigidBodyBuffer();

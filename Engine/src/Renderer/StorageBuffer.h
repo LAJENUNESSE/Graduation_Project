@@ -23,6 +23,10 @@ namespace Engine
 
         static Ref<ShaderStorageBuffer> Create(uint32_t size, uint32_t binding);
         static Ref<ShaderStorageBuffer> Create(const void* data, uint32_t size, uint32_t binding);
+
+        // GPU-only immutable storage (glBufferStorage, no CPU read/write after init)
+        static Ref<ShaderStorageBuffer> CreateGPUOnly(uint32_t size, uint32_t binding);
+        static Ref<ShaderStorageBuffer> CreateGPUOnly(const void* data, uint32_t size, uint32_t binding);
     };
 
 } // namespace Engine
