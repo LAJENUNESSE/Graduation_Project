@@ -11,6 +11,12 @@
 #include "Debug/ProfileTimer.h"
 
 #include <GLFW/glfw3.h>
+#include <thread>
+
+#ifdef _WIN32
+#include <windows.h>
+#pragma comment(lib, "winmm.lib")
+#endif
 
 namespace Engine
 {
@@ -42,10 +48,17 @@ namespace Engine
         PushOverlay(m_ImGuiLayer);
 
         m_Initialized = true;
+
+#ifdef _WIN32
+        timeBeginPeriod(1);
+#endif
     }
 
     Application::~Application()
     {
+#ifdef _WIN32
+        timeEndPeriod(1);
+#endif
         if (m_Initialized)
         {
             PerformanceMonitor::Get().Shutdown();
@@ -132,9 +145,18 @@ namespace Engine
                 m_ImGuiLayer->End();
             }
 
+            m_Window->OnUpdate();
+
             PerformanceMonitor::Get().EndFrame();
 
-            m_Window->OnUpdate();
+            if (m_FrameRateLimitEnabled && !m_Window->IsVSync() && m_TargetFrameRate > 0.0f)
+            {
+                float targetFrameTime = 1.0f / m_TargetFrameRate;
+                float elapsed = static_cast<float>(glfwGetTime()) - m_LastFrameTime;
+                float sleepTime = targetFrameTime - elapsed;
+                if (sleepTime > 0.001f)
+                    std::this_thread::sleep_for(std::chrono::duration<float>(sleepTime - 0.001f));
+            }
         }
     }
 
