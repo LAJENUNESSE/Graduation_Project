@@ -38,25 +38,23 @@ uniform int   u_GridSize;
 uniform float u_CellSize;
 uniform vec3  u_Gravity;
 uniform float u_SurfaceTension;    // γ, 0=关闭
+uniform float u_SpikyCoeff;        // -45 / (π * h^6), CPU 预计算
 
 const float PI = 3.14159265359;
 
-// Spiky kernel gradient: ∇W_spiky(r, h) = -45 / (π * h^6) * (h - |r|)² * (r/|r|)
+// Spiky kernel gradient: ∇W_spiky = u_SpikyCoeff * (h - |r|)² * (r/|r|)
 vec3 spikyGrad(vec3 diff, float dist, float h)
 {
     if (dist <= 0.0 || dist >= h) return vec3(0.0);
-    float h6 = h * h * h * h * h * h;
-    float coeff = -45.0 / (PI * h6);
     float hd = h - dist;
-    return coeff * hd * hd * (diff / dist);
+    return u_SpikyCoeff * hd * hd * (diff / dist);
 }
 
-// Viscosity kernel Laplacian: ∇²W_visc(r, h) = 45 / (π * h^6) * (h - |r|)
+// Viscosity kernel Laplacian: ∇²W_visc = -u_SpikyCoeff * (h - |r|)
 float viscLaplacian(float dist, float h)
 {
     if (dist >= h) return 0.0;
-    float h6 = h * h * h * h * h * h;
-    return 45.0 / (PI * h6) * (h - dist);
+    return -u_SpikyCoeff * (h - dist);
 }
 
 // Akinci 表面张力 C_spline

@@ -11,6 +11,8 @@
 #include "Events/KeyEvent.h"
 #include "Events/MouseEvent.h"
 
+#include "Debug/PerformanceMonitor.h"
+
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
@@ -128,7 +130,7 @@ namespace Engine
         m_Context->Init();
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
-        SetVSync(true);
+        SetVSync(false);
 
         // Set GLFW callbacks
         glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
@@ -241,8 +243,16 @@ namespace Engine
         if (!m_Window)
             return;
 
+        auto& pm = PerformanceMonitor::Get();
+
+        auto t0 = std::chrono::high_resolution_clock::now();
         glfwPollEvents();
+        auto t1 = std::chrono::high_resolution_clock::now();
         m_Context->SwapBuffers();
+        auto t2 = std::chrono::high_resolution_clock::now();
+
+        pm.SetPollEventsCPU(std::chrono::duration<float, std::milli>(t1 - t0).count());
+        pm.SetSwapBuffersCPU(std::chrono::duration<float, std::milli>(t2 - t1).count());
     }
 
     void GLFWWindowImpl::SetVSync(bool enabled)

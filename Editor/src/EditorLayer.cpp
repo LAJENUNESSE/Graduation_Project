@@ -420,6 +420,24 @@ namespace Engine
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("right/left/top/bottom/front/back + .jpg/.png");
 
+            // 帧率控制
+            ImGui::Separator();
+            ImGui::Text("\xe5\xb8\xa7\xe7\x8e\x87\xe6\x8e\xa7\xe5\x88\xb6");
+            {
+                auto& app = Application::Get();
+                bool vsync = app.GetWindow().IsVSync();
+                if (ImGui::Checkbox("VSync", &vsync))
+                    app.GetWindow().SetVSync(vsync);
+
+                bool fpsLimit = app.IsFrameRateLimitEnabled();
+                if (ImGui::Checkbox("\xe5\xb8\xa7\xe7\x8e\x87\xe9\x99\x90\xe5\x88\xb6", &fpsLimit))
+                    app.SetFrameRateLimitEnabled(fpsLimit);
+
+                float targetFps = app.GetTargetFrameRate();
+                if (ImGui::DragFloat("\xe7\x9b\xae\xe6\xa0\x87 FPS", &targetFps, 1.0f, 15.0f, 300.0f, "%.0f"))
+                    app.SetTargetFrameRate(targetFps);
+            }
+
             // 物理设置
             ImGui::Separator();
             ImGui::Text("\xe7\x89\xa9\xe7\x90\x86\xe8\xae\xbe\xe7\xbd\xae");
@@ -451,6 +469,8 @@ namespace Engine
             ImGui::Text("  \xe9\x98\xb4\xe5\xbd\xb1Pass:  %.3f ms", pm.GetShadowPassCpuMs());
             ImGui::Text("  \xe5\x9c\xba\xe6\x99\xaf\xe6\xb8\xb2\xe6\x9f\x93:  %.3f ms", pm.GetSceneRenderCpuMs());
             ImGui::Text("  ImGui:     %.3f ms", pm.GetImGuiCpuMs());
+            ImGui::Text("  PollEvents:  %.3f ms", pm.GetPollEventsCpuMs());
+            ImGui::Text("  SwapBuffers: %.3f ms", pm.GetSwapBuffersCpuMs());
 
             ImGui::Separator();
             ImGui::Text("GPU \xe8\x80\x97\xe6\x97\xb6 (\xe4\xb8\x8a\xe4\xb8\x80\xe5\xb8\xa7):");

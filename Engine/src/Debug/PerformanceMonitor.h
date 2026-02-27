@@ -37,6 +37,8 @@ namespace Engine
         void SetShadowPassCPU(float ms) { m_ShadowPassCpuMs = ms; }
         void SetSceneRenderCPU(float ms) { m_SceneRenderCpuMs = ms; }
         void SetImGuiCPU(float ms) { m_ImGuiCpuMs = ms; }
+        void SetPollEventsCPU(float ms) { m_PollEventsCpuMs = ms; }
+        void SetSwapBuffersCPU(float ms) { m_SwapBuffersCpuMs = ms; }
 
         // GPU timer queries (owned by monitor, used by Scene)
         GPUTimerQuery& GetShadowPassGPUTimer() { return m_ShadowPassGPU; }
@@ -52,6 +54,8 @@ namespace Engine
         float GetShadowPassCpuMs() const { return m_ShadowPassCpuMs; }
         float GetSceneRenderCpuMs() const { return m_SceneRenderCpuMs; }
         float GetImGuiCpuMs() const { return m_ImGuiCpuMs; }
+        float GetPollEventsCpuMs() const { return m_PollEventsCpuMs; }
+        float GetSwapBuffersCpuMs() const { return m_SwapBuffersCpuMs; }
         float GetShadowPassGpuMs() const { return m_ShadowPassGPU.GetElapsedMs(); }
         float GetSceneRenderGpuMs() const { return m_SceneRenderGPU.GetElapsedMs(); }
 
@@ -80,6 +84,8 @@ namespace Engine
         float m_ShadowPassCpuMs = 0.0f;
         float m_SceneRenderCpuMs = 0.0f;
         float m_ImGuiCpuMs = 0.0f;
+        float m_PollEventsCpuMs = 0.0f;
+        float m_SwapBuffersCpuMs = 0.0f;
 
         // GPU timers
         GPUTimerQuery m_ShadowPassGPU;

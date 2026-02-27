@@ -49,17 +49,14 @@ uniform float u_CellSize;
 uniform int   u_RigidBodyCount;
 uniform float u_BoundaryStiffness;
 uniform float u_BoundaryDamping;
+uniform float u_SpikyCoeff;         // -45 / (π * h^6), CPU 预计算
 
-const float PI = 3.14159265359;
-
-// Spiky kernel gradient: ∇W_spiky(r, h) = -45 / (π * h^6) * (h - |r|)² * (r/|r|)
+// Spiky kernel gradient: ∇W_spiky = u_SpikyCoeff * (h - |r|)² * (r/|r|)
 vec3 spikyGrad(vec3 diff, float dist, float h)
 {
     if (dist <= 0.0 || dist >= h) return vec3(0.0);
-    float h6 = h * h * h * h * h * h;
-    float coeff = -45.0 / (PI * h6);
     float hd = h - dist;
-    return coeff * hd * hd * (diff / dist);
+    return u_SpikyCoeff * hd * hd * (diff / dist);
 }
 
 // 空间哈希
