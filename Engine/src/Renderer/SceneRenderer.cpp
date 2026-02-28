@@ -25,6 +25,8 @@ namespace Engine
         m_SkyboxSystem.Init();
         m_TerrainSystem.Init();
         m_GrassSystem.Init();
+        m_AudioSystem.Init();
+        m_VideoSystem.Init();
 
         m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx) {
             m_LightEnv = LightSystem::CollectLights(ctx.ActiveScene->GetRegistry());
@@ -129,6 +131,8 @@ namespace Engine
 
     void SceneRenderer::Shutdown()
     {
+        m_VideoSystem.Shutdown();
+        m_AudioSystem.Shutdown();
         m_PassQueue.clear();
         m_GrassSystem.Shutdown();
         m_ParticleSystems.clear();
