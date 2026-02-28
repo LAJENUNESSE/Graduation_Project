@@ -159,7 +159,7 @@ namespace Engine
             // MSAA 开启时，粒子会在 Resolve 后再绘制，避免被 Blit 覆盖。
             for (auto& pass : m_SceneRenderer.GetPassQueue())
             {
-                bool runPass = pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass");
+                bool runPass = pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass" || pass.Name == "GrassPass");
                 if (!msaaEnabled && pass.Enabled && pass.Name == "ParticlePass")
                     runPass = true;
 

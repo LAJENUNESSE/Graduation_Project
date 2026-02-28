@@ -1,6 +1,6 @@
 Scene: Untitled
 ShadowSettings:
-  Enabled: false
+  Enabled: true
   MapResolution: 1024
   Bias: 0.005
   OrthoSize: 20
@@ -16,74 +16,49 @@ RenderSettings:
   MSAASamples: 1
   PhysicsBackend: 1
 Entities:
-  - Entity: 842761609386082698
+  - Entity: 5054856694885365321
     TagComponent:
-      Tag: 111
+      Tag: 地形
     TransformComponent:
-      Translation: [9.313226e-10, -0.2816831, 1.4347645]
+      Translation: [0, -1.5128031, 0]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [1, 1, 1, 1]
-      TexturePath: assets/textures/CD001.jpg
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.5
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    NativeScriptComponent:
-      ScriptName: ""
-  - Entity: 3053518724433923165
-    TagComponent:
-      Tag: 空实体
-    TransformComponent:
-      Translation: [0, 1.2757385, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    NativeScriptComponent:
-      ScriptName: PlayerController
-    ParticleEmitterComponent:
-      Preset: 0
-      EmitRate: 50000
-      BurstCount: 0
-      MaxParticles: 100000
-      LifeMin: 0.2
-      LifeMax: 0.8
-      SpeedMin: 2
-      SpeedMax: 8
-      SizeStart: 0.01
-      SizeEnd: 0.03
-      EmitDirection: [0, 1, 0]
-      EmitAngle: 45
-      ColorStart: [3, 2.5, 0.5, 1]
-      ColorEnd: [1, 0.3, 0, 0]
-      Gravity: [0, -9.81, 0]
-      Damping: 0.97
-      BlendMode: 0
-      SPHEnabled: true
-      SPH_RestDensity: 1000
-      SPH_GasConstant: 2000
-      SPH_Viscosity: 0.018
-      SPH_SmoothingRadius: 0.1
-      SPH_ParticleMass: 0.02
-      SPH_PCISPHEnabled: true
-      SPH_PCISPHIterations: 3
-      SPH_PCISPHDelta: 0.3
-      SPH_SurfaceTension: 0
-      SPH_RigidBodyCoupling: false
-      SPH_BoundaryStiffness: 5000
-      SPH_BoundaryDamping: 0.5
-  - Entity: 2160909806334670220
-    TagComponent:
-      Tag: 方向光
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [-0.7853982, 0.5235988, 0]
-      Scale: [1, 1, 1]
+    TerrainComponent:
+      HeightmapPath: assets\terrain\test_heightmap.tga
+      HeightScale: 1
+      TerrainSize: 10
+      SplatmapPath: ""
+      Layer0Texture: ""
+      Layer0NormalMap: ""
+      Layer0Tiling: 10
+      Layer0Metallic: 0
+      Layer0Roughness: 0.8
+      Layer1Texture: ""
+      Layer1NormalMap: ""
+      Layer1Tiling: 10
+      Layer1Metallic: 0
+      Layer1Roughness: 0.7
+      Layer2Texture: ""
+      Layer2NormalMap: ""
+      Layer2Tiling: 10
+      Layer2Metallic: 0
+      Layer2Roughness: 0.9
+      Layer3Texture: ""
+      Layer3NormalMap: ""
+      Layer3Tiling: 10
+      Layer3Metallic: 0
+      Layer3Roughness: 0.6
+      Friction: 0.8
+      Restitution: 0.1
+      LODLevels: 3
+      LODDistance1: 50
+      LODDistance2: 100
+      GrassEnabled: true
+      GrassDensity: 5
+      GrassHeight: 0.4
+      GrassWidth: 0.1
+      GrassWindStrength: 0.3
+      GrassTexture: assets\textures\CD001.jpg
   - Entity: 16413205803997442280
     TagComponent:
       Tag: Cube
@@ -105,3 +80,71 @@ Entities:
       AOTexturePath: ""
     NativeScriptComponent:
       ScriptName: PlayerController
+  - Entity: 2160909806334670220
+    TagComponent:
+      Tag: 方向光
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [-0.7853982, 0.5235988, 0]
+      Scale: [1, 1, 1]
+  - Entity: 3053518724433923165
+    TagComponent:
+      Tag: 粒子
+    TransformComponent:
+      Translation: [0, 1.2757385, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    NativeScriptComponent:
+      ScriptName: PlayerController
+    ParticleEmitterComponent:
+      Preset: 0
+      EmitRate: 0
+      BurstCount: 705032704
+      MaxParticles: 100
+      LifeMin: 0.3
+      LifeMax: 1
+      SpeedMin: 3
+      SpeedMax: 10
+      SizeStart: 0.05
+      SizeEnd: 0.15
+      EmitDirection: [0, 1, 0]
+      EmitAngle: 180
+      ColorStart: [4, 3, 1, 1]
+      ColorEnd: [0.5, 0.05, 0, 0]
+      Gravity: [0, -4, 0]
+      Damping: 0.95
+      BlendMode: 0
+      SPHEnabled: false
+      SPH_RestDensity: 1000
+      SPH_GasConstant: 2000
+      SPH_Viscosity: 0.018
+      SPH_SmoothingRadius: 0.1
+      SPH_ParticleMass: 0.02
+      SPH_PCISPHEnabled: true
+      SPH_PCISPHIterations: 3
+      SPH_PCISPHDelta: 0.3
+      SPH_SurfaceTension: 0
+      SPH_RigidBodyCoupling: false
+      SPH_BoundaryStiffness: 5000
+      SPH_BoundaryDamping: 0.5
+  - Entity: 842761609386082698
+    TagComponent:
+      Tag: 111
+    TransformComponent:
+      Translation: [0, -0.2816831, 1.4347645]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [1, 1, 1, 1]
+      TexturePath: assets/textures/CD001.jpg
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    NativeScriptComponent:
+      ScriptName: ""

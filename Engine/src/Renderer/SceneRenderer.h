@@ -11,6 +11,7 @@
 #include "Scene/Systems/ShadowSystem.h"
 #include "Scene/Systems/SkyboxSystem.h"
 #include "Scene/Systems/TerrainRenderSystem.h"
+#include "Scene/Systems/GrassRenderSystem.h"
 
 #include <glm/glm.hpp>
 #include <string>
@@ -56,6 +57,7 @@ namespace Engine
         ShadowSystem& GetShadowSystem() { return m_ShadowSystem; }
         SkyboxSystem& GetSkyboxSystem() { return m_SkyboxSystem; }
         TerrainRenderSystem& GetTerrainSystem() { return m_TerrainSystem; }
+        GrassRenderSystem& GetGrassSystem() { return m_GrassSystem; }
 
         // 供 EditorLayer 精细控制 pass 执行
         std::vector<RenderPassConfig>& GetPassQueue() { return m_PassQueue; }
@@ -71,6 +73,7 @@ namespace Engine
         ShadowSystem m_ShadowSystem;
         SkyboxSystem m_SkyboxSystem;
         TerrainRenderSystem m_TerrainSystem;
+        GrassRenderSystem m_GrassSystem;
         RenderQueue m_RenderQueue;
 
         Ref<Shader> m_PBRShader;
@@ -80,6 +83,7 @@ namespace Engine
         // Particle systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<ParticleSystemGPU>> m_ParticleSystems;
         Scene* m_LastScene = nullptr;
+        float m_TotalTime = 0.0f;
     };
 
 } // namespace Engine
