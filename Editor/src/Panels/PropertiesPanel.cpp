@@ -275,6 +275,33 @@ namespace Engine
                 }
             }
 
+            if (!entity.HasComponent<AudioSourceComponent>())
+            {
+                if (ImGui::MenuItem("音频源"))
+                {
+                    entity.AddComponent<AudioSourceComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<AudioListenerComponent>())
+            {
+                if (ImGui::MenuItem("音频监听器"))
+                {
+                    entity.AddComponent<AudioListenerComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            if (!entity.HasComponent<VideoPlayerComponent>())
+            {
+                if (ImGui::MenuItem("视频播放器"))
+                {
+                    entity.AddComponent<VideoPlayerComponent>();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
             ImGui::EndPopup();
         }
         ImGui::PopItemWidth();
@@ -838,6 +865,99 @@ namespace Engine
         });
 
         // CollisionParticleTrigger — 通过反射自动绘制
+
+        // AudioSource
+        DrawComponent<AudioSourceComponent>("音频源", entity, [](auto& component)
+        {
+            // 音频文件路径
+            char pathBuf[256];
+            memset(pathBuf, 0, sizeof(pathBuf));
+            std::strncpy(pathBuf, component.AudioPath.c_str(), sizeof(pathBuf) - 1);
+            if (ImGui::InputText("音频文件", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+            {
+                component.AudioPath = std::string(pathBuf);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("浏览##Audio"))
+            {
+                std::string absPath = FileDialogs::OpenFile("*.wav", "WAV 音频文件");
+                if (!absPath.empty())
+                {
+                    std::error_code ec;
+                    auto relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
+                    std::string relStr = ec ? absPath : relative.string();
+                    if (relStr.find("..") == std::string::npos)
+                        component.AudioPath = relStr;
+                }
+            }
+
+            ImGui::SliderFloat("音量", &component.Volume, 0.0f, 2.0f, "%.2f");
+            ImGui::SliderFloat("音调", &component.Pitch, 0.1f, 3.0f, "%.2f");
+
+            ImGui::Separator();
+            ImGui::Text("3D 空间音效");
+            ImGui::Checkbox("空间化", &component.Spatial);
+            if (component.Spatial)
+            {
+                ImGui::DragFloat("最小距离", &component.MinDistance, 0.1f, 0.1f, 100.0f, "%.1f");
+                ImGui::DragFloat("最大距离", &component.MaxDistance, 1.0f, 1.0f, 500.0f, "%.0f");
+            }
+
+            ImGui::Separator();
+            ImGui::Checkbox("循环", &component.Loop);
+            ImGui::Checkbox("启动时播放", &component.PlayOnStart);
+
+            // 运行时状态显示
+            if (component.RuntimeSource != 0)
+            {
+                ImGui::Separator();
+                ImGui::Text("状态: %s", component.IsPlaying ? "播放中" : "已停止");
+            }
+        });
+
+        // AudioListener
+        DrawComponent<AudioListenerComponent>("音频监听器", entity, [](auto& component)
+        {
+            ImGui::Checkbox("激活", &component.Active);
+            ImGui::TextWrapped("场景中只有一个监听器应当激活。监听器位置跟随实体变换。");
+        });
+
+        // VideoPlayer
+        DrawComponent<VideoPlayerComponent>("视频播放器", entity, [](auto& component)
+        {
+            // 流地址
+            char urlBuf[512];
+            memset(urlBuf, 0, sizeof(urlBuf));
+            std::strncpy(urlBuf, component.StreamURL.c_str(), sizeof(urlBuf) - 1);
+            if (ImGui::InputText("流地址", urlBuf, sizeof(urlBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+            {
+                component.StreamURL = std::string(urlBuf);
+            }
+            ImGui::TextWrapped("支持 rtmp:// 或本地文件路径");
+
+            ImGui::SliderFloat("音量##Video", &component.Volume, 0.0f, 2.0f, "%.2f");
+            ImGui::Checkbox("启动时播放##Video", &component.PlayOnStart);
+            ImGui::Checkbox("循环##Video", &component.Loop);
+
+            // 视频预览
+            if (component.RuntimeTexture)
+            {
+                ImGui::Separator();
+                ImGui::Text("视频预览");
+                float w = ImGui::GetContentRegionAvail().x;
+                float aspect = (float)component.RuntimeTexture->GetWidth() / (float)component.RuntimeTexture->GetHeight();
+                float h = w / aspect;
+                ImGui::Image((ImTextureID)(uintptr_t)component.RuntimeTexture->GetRendererID(),
+                    ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
+            }
+
+            // 运行时状态显示
+            if (component.RuntimeDecoder)
+            {
+                ImGui::Separator();
+                ImGui::Text("状态: %s", component.IsPlaying ? "播放中" : "已停止");
+            }
+        });
 
         // ---- 反射组件统一绘制 ----
         {

@@ -277,6 +277,46 @@ namespace Engine
             out << YAML::EndMap;
         }
 
+        // AudioSourceComponent
+        if (entity.HasComponent<AudioSourceComponent>())
+        {
+            out << YAML::Key << "AudioSourceComponent";
+            out << YAML::BeginMap;
+            auto& asc = entity.GetComponent<AudioSourceComponent>();
+            out << YAML::Key << "AudioPath" << YAML::Value << asc.AudioPath;
+            out << YAML::Key << "Volume" << YAML::Value << asc.Volume;
+            out << YAML::Key << "Pitch" << YAML::Value << asc.Pitch;
+            out << YAML::Key << "MinDistance" << YAML::Value << asc.MinDistance;
+            out << YAML::Key << "MaxDistance" << YAML::Value << asc.MaxDistance;
+            out << YAML::Key << "Loop" << YAML::Value << asc.Loop;
+            out << YAML::Key << "PlayOnStart" << YAML::Value << asc.PlayOnStart;
+            out << YAML::Key << "Spatial" << YAML::Value << asc.Spatial;
+            out << YAML::EndMap;
+        }
+
+        // AudioListenerComponent
+        if (entity.HasComponent<AudioListenerComponent>())
+        {
+            out << YAML::Key << "AudioListenerComponent";
+            out << YAML::BeginMap;
+            auto& alc = entity.GetComponent<AudioListenerComponent>();
+            out << YAML::Key << "Active" << YAML::Value << alc.Active;
+            out << YAML::EndMap;
+        }
+
+        // VideoPlayerComponent
+        if (entity.HasComponent<VideoPlayerComponent>())
+        {
+            out << YAML::Key << "VideoPlayerComponent";
+            out << YAML::BeginMap;
+            auto& vpc = entity.GetComponent<VideoPlayerComponent>();
+            out << YAML::Key << "StreamURL" << YAML::Value << vpc.StreamURL;
+            out << YAML::Key << "PlayOnStart" << YAML::Value << vpc.PlayOnStart;
+            out << YAML::Key << "Loop" << YAML::Value << vpc.Loop;
+            out << YAML::Key << "Volume" << YAML::Value << vpc.Volume;
+            out << YAML::EndMap;
+        }
+
         // ParticleEmitterComponent
         if (entity.HasComponent<ParticleEmitterComponent>())
         {
@@ -812,6 +852,59 @@ namespace Engine
                         if (!scriptName.empty())
                             ScriptRegistry::Instance().Bind(nsc, scriptName);
                     }
+                }
+
+                // AudioSourceComponent
+                auto audioSourceNode = entityNode["AudioSourceComponent"];
+                if (audioSourceNode)
+                {
+                    auto& asc = deserializedEntity.AddComponent<AudioSourceComponent>();
+                    if (audioSourceNode["AudioPath"])
+                    {
+                        std::string path = audioSourceNode["AudioPath"].as<std::string>();
+                        if (PathUtils::IsSafeAssetPath(path))
+                            asc.AudioPath = path;
+                        else if (!path.empty())
+                            ENGINE_CORE_WARN("拒绝不安全的音频路径: {0}", path);
+                    }
+                    if (audioSourceNode["Volume"])
+                        asc.Volume = audioSourceNode["Volume"].as<float>();
+                    if (audioSourceNode["Pitch"])
+                        asc.Pitch = audioSourceNode["Pitch"].as<float>();
+                    if (audioSourceNode["MinDistance"])
+                        asc.MinDistance = audioSourceNode["MinDistance"].as<float>();
+                    if (audioSourceNode["MaxDistance"])
+                        asc.MaxDistance = audioSourceNode["MaxDistance"].as<float>();
+                    if (audioSourceNode["Loop"])
+                        asc.Loop = audioSourceNode["Loop"].as<bool>();
+                    if (audioSourceNode["PlayOnStart"])
+                        asc.PlayOnStart = audioSourceNode["PlayOnStart"].as<bool>();
+                    if (audioSourceNode["Spatial"])
+                        asc.Spatial = audioSourceNode["Spatial"].as<bool>();
+                }
+
+                // AudioListenerComponent
+                auto audioListenerNode = entityNode["AudioListenerComponent"];
+                if (audioListenerNode)
+                {
+                    auto& alc = deserializedEntity.AddComponent<AudioListenerComponent>();
+                    if (audioListenerNode["Active"])
+                        alc.Active = audioListenerNode["Active"].as<bool>();
+                }
+
+                // VideoPlayerComponent
+                auto videoPlayerNode = entityNode["VideoPlayerComponent"];
+                if (videoPlayerNode)
+                {
+                    auto& vpc = deserializedEntity.AddComponent<VideoPlayerComponent>();
+                    if (videoPlayerNode["StreamURL"])
+                        vpc.StreamURL = videoPlayerNode["StreamURL"].as<std::string>();
+                    if (videoPlayerNode["PlayOnStart"])
+                        vpc.PlayOnStart = videoPlayerNode["PlayOnStart"].as<bool>();
+                    if (videoPlayerNode["Loop"])
+                        vpc.Loop = videoPlayerNode["Loop"].as<bool>();
+                    if (videoPlayerNode["Volume"])
+                        vpc.Volume = videoPlayerNode["Volume"].as<float>();
                 }
             }
             catch (const YAML::Exception& e)

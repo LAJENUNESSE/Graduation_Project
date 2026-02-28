@@ -101,6 +101,13 @@ namespace Engine
             }
         }
 
+        // Audio + Video 系统更新（物理之后）
+        if (m_SceneRenderer)
+        {
+            m_SceneRenderer->GetAudioSystem().OnUpdate(m_Registry, ts);
+            m_SceneRenderer->GetVideoSystem().OnUpdate(m_Registry, ts);
+        }
+
         // 运行时渲染由 EditorLayer 通过 SceneRenderer 驱动
     }
 
@@ -152,10 +159,24 @@ namespace Engine
                 }
             }
         }
+
+        // Audio + Video 系统启动
+        if (m_SceneRenderer)
+        {
+            m_SceneRenderer->GetAudioSystem().OnRuntimeStart(m_Registry);
+            m_SceneRenderer->GetVideoSystem().OnRuntimeStart(m_Registry);
+        }
     }
 
     void Scene::OnRuntimeStop()
     {
+        // Audio + Video 系统停止（先于脚本销毁）
+        if (m_SceneRenderer)
+        {
+            m_SceneRenderer->GetVideoSystem().OnRuntimeStop(m_Registry);
+            m_SceneRenderer->GetAudioSystem().OnRuntimeStop(m_Registry);
+        }
+
         // NativeScript OnDestroy
         {
             auto view = m_Registry.view<NativeScriptComponent>();
@@ -248,6 +269,32 @@ namespace Engine
                 dstNsc.InstantiateScript = srcNsc.InstantiateScript;
                 dstNsc.DestroyScript = srcNsc.DestroyScript;
                 // Instance 不拷贝（运行时创建）
+            }
+
+            // AudioSourceComponent: 拷贝配置，清除运行时状态
+            if (srcReg.all_of<AudioSourceComponent>(srcEntity))
+            {
+                auto asc = srcReg.get<AudioSourceComponent>(srcEntity);
+                asc.RuntimeSource = 0;
+                asc.RuntimeBuffer = 0;
+                asc.IsPlaying = false;
+                newEntity.AddComponent<AudioSourceComponent>(asc);
+            }
+
+            // AudioListenerComponent
+            if (srcReg.all_of<AudioListenerComponent>(srcEntity))
+                newEntity.AddComponent<AudioListenerComponent>(srcReg.get<AudioListenerComponent>(srcEntity));
+
+            // VideoPlayerComponent: 拷贝配置，清除运行时状态
+            if (srcReg.all_of<VideoPlayerComponent>(srcEntity))
+            {
+                auto vpc = srcReg.get<VideoPlayerComponent>(srcEntity);
+                vpc.RuntimeDecoder = nullptr;
+                vpc.RuntimeAudioSource = 0;
+                vpc.RuntimeTexture = nullptr;
+                vpc.RuntimeAudioBuffers.clear();
+                vpc.IsPlaying = false;
+                newEntity.AddComponent<VideoPlayerComponent>(vpc);
             }
         }
 
