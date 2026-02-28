@@ -11,6 +11,8 @@
 #include "Scene/Systems/ShadowSystem.h"
 #include "Scene/Systems/SkyboxSystem.h"
 #include "Scene/Systems/TerrainRenderSystem.h"
+#include "Scene/Systems/AudioSystem.h"
+#include "Scene/Systems/VideoSystem.h"
 
 #include <glm/glm.hpp>
 #include <string>
@@ -56,6 +58,8 @@ namespace Engine
         ShadowSystem& GetShadowSystem() { return m_ShadowSystem; }
         SkyboxSystem& GetSkyboxSystem() { return m_SkyboxSystem; }
         TerrainRenderSystem& GetTerrainSystem() { return m_TerrainSystem; }
+        AudioSystem& GetAudioSystem() { return m_AudioSystem; }
+        VideoSystem& GetVideoSystem() { return m_VideoSystem; }
 
         // 供 EditorLayer 精细控制 pass 执行
         std::vector<RenderPassConfig>& GetPassQueue() { return m_PassQueue; }
@@ -72,6 +76,8 @@ namespace Engine
         SkyboxSystem m_SkyboxSystem;
         TerrainRenderSystem m_TerrainSystem;
         RenderQueue m_RenderQueue;
+        AudioSystem m_AudioSystem;
+        VideoSystem m_VideoSystem;
 
         Ref<Shader> m_PBRShader;
         Ref<Texture2D> m_WhiteTexture;

@@ -19,6 +19,7 @@ namespace Engine
     class Mesh;
     class Texture2D;
     class Material;
+    class FFmpegDecoder;
 
     struct IDComponent
     {
@@ -356,6 +357,52 @@ namespace Engine
 
         TerrainComponent() = default;
         TerrainComponent(const TerrainComponent&) = default;
+    };
+
+    struct AudioSourceComponent
+    {
+        std::string AudioPath;          // WAV 文件路径
+        float Volume = 1.0f;
+        float Pitch = 1.0f;
+        float MinDistance = 1.0f;       // 3D 衰减最小距离
+        float MaxDistance = 50.0f;      // 3D 衰减最大距离
+        bool Loop = false;
+        bool PlayOnStart = true;
+        bool Spatial = true;            // true=3D空间音效, false=2D
+
+        // 运行时状态（不序列化）
+        uint32_t RuntimeSource = 0;
+        uint32_t RuntimeBuffer = 0;
+        bool IsPlaying = false;
+
+        AudioSourceComponent() = default;
+        AudioSourceComponent(const AudioSourceComponent&) = default;
+    };
+
+    struct AudioListenerComponent
+    {
+        bool Active = true;             // 场景中只有一个激活的 Listener
+
+        AudioListenerComponent() = default;
+        AudioListenerComponent(const AudioListenerComponent&) = default;
+    };
+
+    struct VideoPlayerComponent
+    {
+        std::string StreamURL;          // rtmp://... 或本地文件路径
+        bool PlayOnStart = true;
+        bool Loop = false;              // 仅本地文件有效
+        float Volume = 1.0f;           // 视频音轨音量
+
+        // 运行时状态（不序列化）
+        FFmpegDecoder* RuntimeDecoder = nullptr;
+        uint32_t RuntimeAudioSource = 0;
+        Ref<Texture2D> RuntimeTexture = nullptr;
+        std::vector<uint32_t> RuntimeAudioBuffers;
+        bool IsPlaying = false;
+
+        VideoPlayerComponent() = default;
+        VideoPlayerComponent(const VideoPlayerComponent&) = default;
     };
 
 } // namespace Engine
