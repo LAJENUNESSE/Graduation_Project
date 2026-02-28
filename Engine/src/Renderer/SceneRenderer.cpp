@@ -24,6 +24,7 @@ namespace Engine
         m_ShadowSystem.Init();
         m_SkyboxSystem.Init();
         m_TerrainSystem.Init();
+        m_GrassSystem.Init();
 
         m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx) {
             m_LightEnv = LightSystem::CollectLights(ctx.ActiveScene->GetRegistry());
@@ -50,6 +51,12 @@ namespace Engine
             m_TerrainSystem.UpdateTerrainMeshes(ctx.ActiveScene->GetRegistry());
             m_TerrainSystem.Render(ctx.ActiveScene->GetRegistry(), *ctx.Camera,
                 m_LightEnv, m_ShadowData, m_ShadowSystem.GetSettings());
+        }});
+
+        m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx) {
+            m_GrassSystem.UpdateGrassData(ctx.ActiveScene->GetRegistry(), m_TotalTime);
+            m_GrassSystem.Render(ctx.ActiveScene->GetRegistry(), *ctx.Camera,
+                m_LightEnv, m_ShadowData, m_ShadowSystem.GetSettings(), m_TotalTime);
         }});
 
         m_PassQueue.push_back({"GeometryPass", [this](RenderContext& ctx) {
@@ -123,6 +130,7 @@ namespace Engine
     void SceneRenderer::Shutdown()
     {
         m_PassQueue.clear();
+        m_GrassSystem.Shutdown();
         m_ParticleSystems.clear();
     }
 
@@ -131,12 +139,14 @@ namespace Engine
         if (m_LastScene != scene)
         {
             m_ParticleSystems.clear();
+            m_GrassSystem.Shutdown();
             m_LastScene = scene;
         }
 
         m_Context.Camera = const_cast<EditorCamera*>(&camera);
         m_Context.ActiveScene = scene;
         m_Context.DeltaTime = deltaTime;
+        m_TotalTime += deltaTime;
     }
 
     void SceneRenderer::Render()
@@ -159,7 +169,7 @@ namespace Engine
     {
         for (auto& pass : m_PassQueue)
         {
-            if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass"))
+            if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass" || pass.Name == "GrassPass"))
                 pass.ExecuteFn(m_Context);
         }
     }
