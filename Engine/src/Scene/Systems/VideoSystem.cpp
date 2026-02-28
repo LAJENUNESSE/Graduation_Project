@@ -29,8 +29,6 @@ namespace Engine
 
     void VideoSystem::OnRuntimeStart(entt::registry& reg)
     {
-        auto& audio = OpenALAudioEngine::Get();
-
         auto view = reg.view<VideoPlayerComponent>();
         for (auto entity : view)
         {
@@ -39,62 +37,21 @@ namespace Engine
             if (vp.StreamURL.empty())
                 continue;
 
-            // 创建解码器
+            // 创建解码器（先保存引用，Open 在后台线程执行）
             FFmpegDecoder* decoder = new FFmpegDecoder();
-            if (!decoder->Open(vp.StreamURL))
-            {
-                ENGINE_CORE_ERROR("[VideoSystem] 无法打开视频流: {}", vp.StreamURL);
-                delete decoder;
-                continue;
-            }
-
             vp.RuntimeDecoder = decoder;
+            vp.IsPlaying = false;  // OnUpdate 中检测连接完成后再设为 true
 
-            // 视频流：创建纹理
-            if (decoder->HasVideoStream())
-            {
-                int w = decoder->GetVideoWidth();
-                int h = decoder->GetVideoHeight();
-                if (w > 0 && h > 0)
+            // 后台线程打开流，避免阻塞主线程
+            std::string url = vp.StreamURL;
+            std::thread([decoder, url]() {
+                if (!decoder->Open(url))
                 {
-                    vp.RuntimeTexture = Texture2D::Create(static_cast<uint32_t>(w),
-                                                          static_cast<uint32_t>(h));
-                    ENGINE_CORE_INFO("[VideoSystem] 创建视频纹理 {}x{}", w, h);
+                    ENGINE_CORE_ERROR("[VideoSystem] 无法打开视频流: {}", url);
                 }
-            }
+            }).detach();
 
-            // 音频流：创建源和流式缓冲区
-            if (decoder->HasAudioStream())
-            {
-                vp.RuntimeAudioSource = audio.CreateSource();
-                audio.SetSourceVolume(vp.RuntimeAudioSource, vp.Volume);
-                audio.SetSourceSpatial(vp.RuntimeAudioSource, false); // 视频音频不做空间化
-
-                // 创建流式音频缓冲区
-                vp.RuntimeAudioBuffers.resize(kStreamingBufferCount);
-                for (int i = 0; i < kStreamingBufferCount; i++)
-                {
-                    // 创建一个空的初始缓冲区
-                    AudioClip emptyClip;
-                    emptyClip.SampleRate = static_cast<uint32_t>(decoder->GetAudioSampleRate());
-                    emptyClip.Channels = 2;
-                    emptyClip.BitsPerSample = 16;
-                    emptyClip.ALFormat = kALFormatStereo16;
-                    // 最小可用的静音缓冲区（1个采样点 × 2通道 × 2字节）
-                    emptyClip.Data.resize(4, 0);
-                    vp.RuntimeAudioBuffers[i] = audio.CreateBuffer(emptyClip);
-                }
-
-                // 先将所有缓冲区入队并开始播放
-                for (int i = 0; i < kStreamingBufferCount; i++)
-                {
-                    audio.QueueBuffer(vp.RuntimeAudioSource, vp.RuntimeAudioBuffers[i]);
-                }
-                audio.Resume(vp.RuntimeAudioSource);
-            }
-
-            vp.IsPlaying = true;
-            ENGINE_CORE_INFO("[VideoSystem] 视频流已启动: {}", vp.StreamURL);
+            ENGINE_CORE_INFO("[VideoSystem] 正在后台连接视频流: {}", vp.StreamURL);
         }
     }
 
@@ -156,7 +113,54 @@ namespace Engine
         {
             auto& vp = view.get<VideoPlayerComponent>(entity);
 
-            if (!vp.RuntimeDecoder || !vp.IsPlaying)
+            if (!vp.RuntimeDecoder)
+                continue;
+
+            // === 延迟初始化：后台 Open() 完成后在主线程创建 GPU 资源 ===
+            if (!vp.IsPlaying && vp.RuntimeDecoder->IsOpen())
+            {
+                // 视频纹理（必须在主线程创建 OpenGL 对象）
+                if (vp.RuntimeDecoder->HasVideoStream())
+                {
+                    int w = vp.RuntimeDecoder->GetVideoWidth();
+                    int h = vp.RuntimeDecoder->GetVideoHeight();
+                    if (w > 0 && h > 0)
+                    {
+                        vp.RuntimeTexture = Texture2D::Create(static_cast<uint32_t>(w),
+                                                              static_cast<uint32_t>(h));
+                        ENGINE_CORE_INFO("[VideoSystem] 创建视频纹理 {}x{}", w, h);
+                    }
+                }
+
+                // 音频流
+                if (vp.RuntimeDecoder->HasAudioStream())
+                {
+                    vp.RuntimeAudioSource = audio.CreateSource();
+                    audio.SetSourceVolume(vp.RuntimeAudioSource, vp.Volume);
+                    audio.SetSourceSpatial(vp.RuntimeAudioSource, false);
+
+                    vp.RuntimeAudioBuffers.resize(kStreamingBufferCount);
+                    for (int i = 0; i < kStreamingBufferCount; i++)
+                    {
+                        AudioClip emptyClip;
+                        emptyClip.SampleRate = static_cast<uint32_t>(vp.RuntimeDecoder->GetAudioSampleRate());
+                        emptyClip.Channels = 2;
+                        emptyClip.BitsPerSample = 16;
+                        emptyClip.ALFormat = kALFormatStereo16;
+                        emptyClip.Data.resize(4, 0);
+                        vp.RuntimeAudioBuffers[i] = audio.CreateBuffer(emptyClip);
+                    }
+                    for (int i = 0; i < kStreamingBufferCount; i++)
+                        audio.QueueBuffer(vp.RuntimeAudioSource, vp.RuntimeAudioBuffers[i]);
+                    audio.Resume(vp.RuntimeAudioSource);
+                }
+
+                vp.IsPlaying = true;
+                ENGINE_CORE_INFO("[VideoSystem] 视频流已就绪: 视频={}x{}",
+                    vp.RuntimeDecoder->GetVideoWidth(), vp.RuntimeDecoder->GetVideoHeight());
+            }
+
+            if (!vp.IsPlaying)
                 continue;
 
             // === 视频帧更新 ===
