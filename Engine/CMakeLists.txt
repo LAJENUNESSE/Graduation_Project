@@ -12,17 +12,17 @@ endif()
 
 find_package(Threads REQUIRED)
 
-# FFmpeg + OpenAL
-include(FindPkgConfig)
-pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale libswresample)
-pkg_check_modules(OPENAL REQUIRED openal)
+# FFmpeg (vcpkg)
+find_package(FFMPEG REQUIRED)
+
+# OpenAL (vcpkg)
+find_package(OpenAL CONFIG REQUIRED)
 
 target_include_directories(Engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/vendor/bullet3/src
     ${FFMPEG_INCLUDE_DIRS}
-    ${OPENAL_INCLUDE_DIRS}
 )
 
 target_link_libraries(Engine PUBLIC
@@ -42,8 +42,10 @@ target_link_libraries(Engine PUBLIC
     LinearMath
     Threads::Threads
     ${FFMPEG_LIBRARIES}
-    ${OPENAL_LIBRARIES}
+    OpenAL::OpenAL
 )
+
+target_link_directories(Engine PUBLIC ${FFMPEG_LIBRARY_DIRS})
 
 if(UNIX AND NOT APPLE)
     find_package(X11 REQUIRED)

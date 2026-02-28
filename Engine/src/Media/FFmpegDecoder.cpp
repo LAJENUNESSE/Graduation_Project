@@ -28,8 +28,23 @@ namespace Engine
             Close();
         }
 
-        // 1. Open input
-        int ret = avformat_open_input(&m_FormatCtx, url.c_str(), nullptr, nullptr);
+        // 1. Open input (with timeout for network streams)
+        AVDictionary* opts = nullptr;
+        bool isNetworkStream = url.find("rtsp://") == 0 || url.find("rtmp://") == 0
+                            || url.find("rtp://")  == 0 || url.find("udp://")  == 0
+                            || url.find("http://") == 0 || url.find("https://") == 0;
+        if (isNetworkStream)
+        {
+            av_dict_set(&opts, "rtsp_transport", "tcp", 0);       // RTSP 强制 TCP（避免 WSL2 UDP 问题）
+            av_dict_set(&opts, "stimeout",   "5000000", 0);       // RTSP 连接超时 5秒（微秒）
+            av_dict_set(&opts, "timeout",    "5000000", 0);       // 通用超时 5秒
+            av_dict_set(&opts, "fflags",     "nobuffer", 0);      // 禁用输入缓冲，降低延迟
+            av_dict_set(&opts, "analyzeduration", "1000000", 0);  // 探测时间 1秒
+            av_dict_set(&opts, "probesize",  "500000", 0);        // 探测数据量 500KB
+        }
+        ENGINE_CORE_INFO("FFmpegDecoder::Open — 正在打开: {}", url);
+        int ret = avformat_open_input(&m_FormatCtx, url.c_str(), nullptr, &opts);
+        av_dict_free(&opts);
         if (ret < 0)
         {
             char errBuf[AV_ERROR_MAX_STRING_SIZE];
