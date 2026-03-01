@@ -45,8 +45,19 @@ namespace Engine
                 mat->Set("u_Metallic", meshRenderer.Metallic);
                 mat->Set("u_Roughness", meshRenderer.Roughness);
 
-                // Diffuse texture: per-submesh > component > white fallback
-                Ref<Texture2D> tex = AssetManager::GetRef<Texture2D>(subMesh.DiffuseTextureAsset);
+                // Diffuse texture: video > per-submesh > component > white fallback
+                Ref<Texture2D> tex;
+
+                // 优先使用视频纹理
+                if (reg.any_of<VideoPlayerComponent>(entity))
+                {
+                    auto& vc = reg.get<VideoPlayerComponent>(entity);
+                    if (vc.RuntimeTexture && vc.IsPlaying)
+                        tex = vc.RuntimeTexture;
+                }
+
+                if (!tex)
+                    tex = AssetManager::GetRef<Texture2D>(subMesh.DiffuseTextureAsset);
                 if (!tex)
                     tex = AssetManager::GetRef<Texture2D>(meshRenderer.DiffuseTextureAsset);
                 if (tex)

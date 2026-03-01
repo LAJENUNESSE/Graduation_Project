@@ -86,6 +86,7 @@ namespace Engine
         float m_Distance = 10.0f;
         float m_Pitch = 0.0f;
         float m_Yaw = 0.0f;
+        bool m_ViewMatrixDirty = false;
 
         glm::vec2 m_InitialMousePosition = {0.0f, 0.0f};
 
