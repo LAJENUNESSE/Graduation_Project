@@ -98,7 +98,10 @@ namespace Engine
             m_InitialMousePosition = Input::GetMousePosition();
         }
 
-        UpdateView();
+        if (m_ViewMatrixDirty)
+            m_ViewMatrixDirty = false;
+        else
+            UpdateView();
     }
 
     void EditorCamera::OnEvent(Event& e)
@@ -154,10 +157,28 @@ namespace Engine
     void EditorCamera::SetViewMatrix(const glm::mat4& viewMatrix)
     {
         m_ViewMatrix = viewMatrix;
+        m_ViewMatrixDirty = true;
+
         glm::mat4 invView = glm::inverse(viewMatrix);
         m_Position = glm::vec3(invView[3]);
         glm::vec3 forward = -glm::normalize(glm::vec3(invView[2]));
-        m_Pitch = std::asin(-forward.y);
+        glm::vec3 up = glm::normalize(glm::vec3(invView[1]));
+
+        // 全范围 pitch 提取：通过 up 向量判断是否 "翻过顶部"
+        float sinPitch = glm::clamp(-forward.y, -1.0f, 1.0f);
+        if (up.y >= 0.0f)
+        {
+            // 正常范围 [-π/2, π/2]
+            m_Pitch = std::asin(sinPitch);
+        }
+        else
+        {
+            // 相机翻转（过顶/过底），pitch 在 [π/2, π] 或 [-π, -π/2]
+            m_Pitch = (sinPitch >= 0.0f)
+                ? glm::pi<float>() - std::asin(sinPitch)
+                : -glm::pi<float>() - std::asin(sinPitch);
+        }
+
         m_Yaw = std::atan2(forward.x, -forward.z);
         m_FocalPoint = m_Position + forward * m_Distance;
     }
