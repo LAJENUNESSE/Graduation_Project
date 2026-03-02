@@ -464,30 +464,32 @@ namespace Engine
         }
 
         // ---- Pass 3: Simulate (gravity + damping + alive/dead management) ----
-        // PCISPH handles gravity internally, so pass zero gravity to simulate pass
-        glm::vec3 simGravity = (sphEnabled && emitter.SPH_PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;
-        float simulateDt = std::min(dt, 0.05f);
-        m_SimulateShader->Bind();
-        m_SimulateShader->SetFloat("u_DeltaTime", simulateDt);
-        m_SimulateShader->SetFloat3("u_Gravity", simGravity);
-        m_SimulateShader->SetFloat("u_Damping", emitter.Damping);
-        m_SimulateShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
+        // 使用上一帧回读的存活数来优化 dispatch，避免在粒子很少时仍调度全部 workgroup
+        uint32_t aliveEstimate = m_LastAliveCount + emitCount;
+        if (aliveEstimate > 0)
+        {
+            // PCISPH handles gravity internally, so pass zero gravity to simulate pass
+            glm::vec3 simGravity = (sphEnabled && emitter.SPH_PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;
+            float simulateDt = std::min(dt, 0.05f);
+            m_SimulateShader->Bind();
+            m_SimulateShader->SetFloat("u_DeltaTime", simulateDt);
+            m_SimulateShader->SetFloat3("u_Gravity", simGravity);
+            m_SimulateShader->SetFloat("u_Damping", emitter.Damping);
+            m_SimulateShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
 
-        uint32_t simGroups = (m_MaxParticles + 255) / 256;
-        RenderCommand::DispatchCompute(simGroups);
-        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+            uint32_t simGroups = (m_MaxParticles + 255) / 256;
+            RenderCommand::DispatchCompute(simGroups);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+        }
 
         // ---- Pass 4: Render Args ----
         m_RenderArgsShader->Bind();
         RenderCommand::DispatchCompute(1);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
 
-        // Read back counters when needed:
-        // - SPH needs aliveCount for next frame's dispatch.
-        // - Direct-draw fallback needs aliveCount for DrawArraysInstanced.
-        if (sphEnabled || !m_UseIndirectDraw)
+        // ---- 异步回读：始终执行，用于 simulate 按存活数 dispatch + SPH + direct-draw ----
         {
-            // ---- 异步回读：先收上一帧的结果（零等待） ----
+            // ---- 先收上一帧的结果（零等待） ----
             if (m_ReadbackPending && m_ReadbackFence)
             {
                 GLenum result = glClientWaitSync(
@@ -522,10 +524,8 @@ namespace Engine
                         m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
                     }
 
-                    if (sphEnabled)
-                        m_LastAliveCount = sanitized.aliveCount;
-                    else
-                        m_LastAliveCount = 0;
+                    // 始终更新存活数，用于下一帧 simulate dispatch 和 SPH
+                    m_LastAliveCount = sanitized.aliveCount;
 
                     if (!m_UseIndirectDraw)
                         m_AliveCountForDirectDraw = sanitized.aliveCount;

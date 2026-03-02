@@ -34,6 +34,15 @@ namespace Engine
                     m = CreateRef<Material>(pbrShader);
             }
 
+            // 在 submesh 循环之前检查 VideoPlayerComponent，避免每个 submesh 重复查询
+            Ref<Texture2D> videoTex;
+            if (reg.any_of<VideoPlayerComponent>(entity))
+            {
+                auto& vc = reg.get<VideoPlayerComponent>(entity);
+                if (vc.RuntimeTexture && vc.IsPlaying)
+                    videoTex = vc.RuntimeTexture;
+            }
+
             for (size_t i = 0; i < subMeshes.size(); ++i)
             {
                 auto& mat = cachedMats[i];
@@ -46,15 +55,7 @@ namespace Engine
                 mat->Set("u_Roughness", meshRenderer.Roughness);
 
                 // Diffuse texture: video > per-submesh > component > white fallback
-                Ref<Texture2D> tex;
-
-                // 优先使用视频纹理
-                if (reg.any_of<VideoPlayerComponent>(entity))
-                {
-                    auto& vc = reg.get<VideoPlayerComponent>(entity);
-                    if (vc.RuntimeTexture && vc.IsPlaying)
-                        tex = vc.RuntimeTexture;
-                }
+                Ref<Texture2D> tex = videoTex;
 
                 if (!tex)
                     tex = AssetManager::GetRef<Texture2D>(subMesh.DiffuseTextureAsset);

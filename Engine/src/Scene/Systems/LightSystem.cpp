@@ -56,40 +56,126 @@ namespace Engine
 
     void LightSystem::UploadToShader(const Ref<Shader>& shader, const LightEnvironment& env)
     {
+        // 预生成的 uniform 名称数组，避免每帧循环内的字符串拼接和临时分配
+
+        // DirLights (max 2)
+        static const char* s_DirLightDirection[] = {
+            "u_DirLights[0].direction", "u_DirLights[1].direction"
+        };
+        static const char* s_DirLightColor[] = {
+            "u_DirLights[0].color", "u_DirLights[1].color"
+        };
+        static const char* s_DirLightIntensity[] = {
+            "u_DirLights[0].intensity", "u_DirLights[1].intensity"
+        };
+
+        // PointLights (max 8)
+        static const char* s_PointLightPosition[] = {
+            "u_PointLights[0].position", "u_PointLights[1].position",
+            "u_PointLights[2].position", "u_PointLights[3].position",
+            "u_PointLights[4].position", "u_PointLights[5].position",
+            "u_PointLights[6].position", "u_PointLights[7].position"
+        };
+        static const char* s_PointLightColor[] = {
+            "u_PointLights[0].color", "u_PointLights[1].color",
+            "u_PointLights[2].color", "u_PointLights[3].color",
+            "u_PointLights[4].color", "u_PointLights[5].color",
+            "u_PointLights[6].color", "u_PointLights[7].color"
+        };
+        static const char* s_PointLightIntensity[] = {
+            "u_PointLights[0].intensity", "u_PointLights[1].intensity",
+            "u_PointLights[2].intensity", "u_PointLights[3].intensity",
+            "u_PointLights[4].intensity", "u_PointLights[5].intensity",
+            "u_PointLights[6].intensity", "u_PointLights[7].intensity"
+        };
+        static const char* s_PointLightConstant[] = {
+            "u_PointLights[0].constant", "u_PointLights[1].constant",
+            "u_PointLights[2].constant", "u_PointLights[3].constant",
+            "u_PointLights[4].constant", "u_PointLights[5].constant",
+            "u_PointLights[6].constant", "u_PointLights[7].constant"
+        };
+        static const char* s_PointLightLinear[] = {
+            "u_PointLights[0].linear", "u_PointLights[1].linear",
+            "u_PointLights[2].linear", "u_PointLights[3].linear",
+            "u_PointLights[4].linear", "u_PointLights[5].linear",
+            "u_PointLights[6].linear", "u_PointLights[7].linear"
+        };
+        static const char* s_PointLightQuadratic[] = {
+            "u_PointLights[0].quadratic", "u_PointLights[1].quadratic",
+            "u_PointLights[2].quadratic", "u_PointLights[3].quadratic",
+            "u_PointLights[4].quadratic", "u_PointLights[5].quadratic",
+            "u_PointLights[6].quadratic", "u_PointLights[7].quadratic"
+        };
+
+        // SpotLights (max 4)
+        static const char* s_SpotLightPosition[] = {
+            "u_SpotLights[0].position", "u_SpotLights[1].position",
+            "u_SpotLights[2].position", "u_SpotLights[3].position"
+        };
+        static const char* s_SpotLightDirection[] = {
+            "u_SpotLights[0].direction", "u_SpotLights[1].direction",
+            "u_SpotLights[2].direction", "u_SpotLights[3].direction"
+        };
+        static const char* s_SpotLightColor[] = {
+            "u_SpotLights[0].color", "u_SpotLights[1].color",
+            "u_SpotLights[2].color", "u_SpotLights[3].color"
+        };
+        static const char* s_SpotLightIntensity[] = {
+            "u_SpotLights[0].intensity", "u_SpotLights[1].intensity",
+            "u_SpotLights[2].intensity", "u_SpotLights[3].intensity"
+        };
+        static const char* s_SpotLightConstant[] = {
+            "u_SpotLights[0].constant", "u_SpotLights[1].constant",
+            "u_SpotLights[2].constant", "u_SpotLights[3].constant"
+        };
+        static const char* s_SpotLightLinear[] = {
+            "u_SpotLights[0].linear", "u_SpotLights[1].linear",
+            "u_SpotLights[2].linear", "u_SpotLights[3].linear"
+        };
+        static const char* s_SpotLightQuadratic[] = {
+            "u_SpotLights[0].quadratic", "u_SpotLights[1].quadratic",
+            "u_SpotLights[2].quadratic", "u_SpotLights[3].quadratic"
+        };
+        static const char* s_SpotLightInnerCutoff[] = {
+            "u_SpotLights[0].innerCutoff", "u_SpotLights[1].innerCutoff",
+            "u_SpotLights[2].innerCutoff", "u_SpotLights[3].innerCutoff"
+        };
+        static const char* s_SpotLightOuterCutoff[] = {
+            "u_SpotLights[0].outerCutoff", "u_SpotLights[1].outerCutoff",
+            "u_SpotLights[2].outerCutoff", "u_SpotLights[3].outerCutoff"
+        };
+
         int numDirLights = static_cast<int>(env.DirLights.size());
         for (int i = 0; i < numDirLights; i++)
         {
-            std::string prefix = "u_DirLights[" + std::to_string(i) + "]";
-            shader->SetFloat3(prefix + ".direction", env.DirLights[i].Direction);
-            shader->SetFloat3(prefix + ".color", env.DirLights[i].Color);
-            shader->SetFloat(prefix + ".intensity", env.DirLights[i].Intensity);
+            shader->SetFloat3(s_DirLightDirection[i], env.DirLights[i].Direction);
+            shader->SetFloat3(s_DirLightColor[i], env.DirLights[i].Color);
+            shader->SetFloat(s_DirLightIntensity[i], env.DirLights[i].Intensity);
         }
 
         int numPointLights = static_cast<int>(env.PointLights.size());
         for (int i = 0; i < numPointLights; i++)
         {
-            std::string prefix = "u_PointLights[" + std::to_string(i) + "]";
-            shader->SetFloat3(prefix + ".position", env.PointLights[i].Position);
-            shader->SetFloat3(prefix + ".color", env.PointLights[i].Color);
-            shader->SetFloat(prefix + ".intensity", env.PointLights[i].Intensity);
-            shader->SetFloat(prefix + ".constant", env.PointLights[i].Constant);
-            shader->SetFloat(prefix + ".linear", env.PointLights[i].Linear);
-            shader->SetFloat(prefix + ".quadratic", env.PointLights[i].Quadratic);
+            shader->SetFloat3(s_PointLightPosition[i], env.PointLights[i].Position);
+            shader->SetFloat3(s_PointLightColor[i], env.PointLights[i].Color);
+            shader->SetFloat(s_PointLightIntensity[i], env.PointLights[i].Intensity);
+            shader->SetFloat(s_PointLightConstant[i], env.PointLights[i].Constant);
+            shader->SetFloat(s_PointLightLinear[i], env.PointLights[i].Linear);
+            shader->SetFloat(s_PointLightQuadratic[i], env.PointLights[i].Quadratic);
         }
 
         int numSpotLights = static_cast<int>(env.SpotLights.size());
         for (int i = 0; i < numSpotLights; i++)
         {
-            std::string prefix = "u_SpotLights[" + std::to_string(i) + "]";
-            shader->SetFloat3(prefix + ".position", env.SpotLights[i].Position);
-            shader->SetFloat3(prefix + ".direction", env.SpotLights[i].Direction);
-            shader->SetFloat3(prefix + ".color", env.SpotLights[i].Color);
-            shader->SetFloat(prefix + ".intensity", env.SpotLights[i].Intensity);
-            shader->SetFloat(prefix + ".constant", env.SpotLights[i].Constant);
-            shader->SetFloat(prefix + ".linear", env.SpotLights[i].Linear);
-            shader->SetFloat(prefix + ".quadratic", env.SpotLights[i].Quadratic);
-            shader->SetFloat(prefix + ".innerCutoff", env.SpotLights[i].InnerCutoff);
-            shader->SetFloat(prefix + ".outerCutoff", env.SpotLights[i].OuterCutoff);
+            shader->SetFloat3(s_SpotLightPosition[i], env.SpotLights[i].Position);
+            shader->SetFloat3(s_SpotLightDirection[i], env.SpotLights[i].Direction);
+            shader->SetFloat3(s_SpotLightColor[i], env.SpotLights[i].Color);
+            shader->SetFloat(s_SpotLightIntensity[i], env.SpotLights[i].Intensity);
+            shader->SetFloat(s_SpotLightConstant[i], env.SpotLights[i].Constant);
+            shader->SetFloat(s_SpotLightLinear[i], env.SpotLights[i].Linear);
+            shader->SetFloat(s_SpotLightQuadratic[i], env.SpotLights[i].Quadratic);
+            shader->SetFloat(s_SpotLightInnerCutoff[i], env.SpotLights[i].InnerCutoff);
+            shader->SetFloat(s_SpotLightOuterCutoff[i], env.SpotLights[i].OuterCutoff);
         }
 
         shader->SetInt("u_NumDirLights", numDirLights);
