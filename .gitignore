@@ -19,8 +19,8 @@ imgui.ini
 
 # Claude Code
 AGENTS.md
-CLAUDE.md
-.claude
+CLAUDE.local.md
+.claude/settings.local.json
 
 # Compiled
 *.o
