@@ -6,6 +6,8 @@
 #include "Renderer/Texture.h"
 #include "Renderer/RenderQueue.h"
 #include "Renderer/ParticleSystemGPU.h"
+#include "Renderer/FluidSystemGPU.h"
+#include "Renderer/FluidRenderer.h"
 #include "Asset/AssetHandle.h"
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Systems/ShadowSystem.h"
@@ -32,6 +34,10 @@ namespace Engine
         EditorCamera* Camera = nullptr;
         Scene* ActiveScene = nullptr;
         float DeltaTime = 0.0f;
+
+        // 供 FluidPass 使用
+        uint32_t SceneColorTexID = 0;
+        uint32_t SceneDepthTexID = 0;
     };
 
     struct RenderPassConfig
@@ -62,6 +68,10 @@ namespace Engine
         GrassRenderSystem& GetGrassSystem() { return m_GrassSystem; }
         AudioSystem& GetAudioSystem() { return m_AudioSystem; }
         VideoSystem& GetVideoSystem() { return m_VideoSystem; }
+        FluidRenderer& GetFluidRenderer() { return m_FluidRenderer; }
+
+        // 供 MSAA 解析后单独绘制流体，避免颜色被 blit 覆盖
+        void RenderFluidPass();
 
         // 供 EditorLayer 精细控制 pass 执行
         std::vector<RenderPassConfig>& GetPassQueue() { return m_PassQueue; }
@@ -88,6 +98,10 @@ namespace Engine
 
         // Particle systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<ParticleSystemGPU>> m_ParticleSystems;
+
+        // Fluid systems keyed by entity ID
+        std::unordered_map<uint32_t, Ref<FluidSystemGPU>> m_FluidSystems;
+        FluidRenderer m_FluidRenderer;
         Scene* m_LastScene = nullptr;
         float m_TotalTime = 0.0f;
     };

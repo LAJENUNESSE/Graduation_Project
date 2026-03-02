@@ -16,6 +16,8 @@ namespace Engine
         RGBA8,
         RGBA16F,
         RED_INTEGER,
+        R32F,
+        R16F,
 
         // Depth/stencil
         DEPTH24STENCIL8,

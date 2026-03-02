@@ -48,7 +48,7 @@ namespace Engine
         // HDR framebuffer for scene rendering (RGBA16F for HDR values)
         FramebufferSpecification hdrSpec;
         hdrSpec.Attachments = {FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RED_INTEGER,
-                               FramebufferTextureFormat::DEPTH24STENCIL8};
+                               FramebufferTextureFormat::DEPTH_COMPONENT};
         hdrSpec.Width = 1280;
         hdrSpec.Height = 720;
         m_HDRFramebuffer = Framebuffer::Create(hdrSpec);
@@ -104,6 +104,8 @@ namespace Engine
                                          static_cast<uint32_t>(m_ViewportSize.y));
                 m_PostProcessing.Resize(static_cast<uint32_t>(m_ViewportSize.x),
                                         static_cast<uint32_t>(m_ViewportSize.y));
+                m_SceneRenderer.GetFluidRenderer().Resize(static_cast<uint32_t>(m_ViewportSize.x),
+                                                           static_cast<uint32_t>(m_ViewportSize.y));
                 m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
                 m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
                                                 static_cast<uint32_t>(m_ViewportSize.y));
@@ -183,6 +185,21 @@ namespace Engine
                 // Resolve 后单独绘制粒子，避免被 MSAA blit 覆盖掉。
                 m_HDRFramebuffer->Bind();
                 m_SceneRenderer.RenderParticlePass();
+                m_HDRFramebuffer->Unbind();
+            }
+
+            // FluidPass: 在粒子绘制完成后、后处理之前执行
+            // 需要读取 HDR FBO 的颜色和深度纹理
+            {
+                m_HDRFramebuffer->Bind();
+
+                m_SceneRenderer.GetContext().SceneColorTexID =
+                    m_HDRFramebuffer->GetColorAttachmentRendererID(0);
+                m_SceneRenderer.GetContext().SceneDepthTexID =
+                    m_HDRFramebuffer->GetDepthAttachmentRendererID();
+
+                m_SceneRenderer.RenderFluidPass();
+
                 m_HDRFramebuffer->Unbind();
             }
 

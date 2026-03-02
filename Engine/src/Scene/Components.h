@@ -405,4 +405,56 @@ namespace Engine
         VideoPlayerComponent(const VideoPlayerComponent&) = default;
     };
 
+    struct FluidEmitterComponent
+    {
+        // 发射参数
+        uint32_t ParticleCount = 5000;
+        float ParticleRadius = 0.02f;
+        glm::vec3 EmitExtents = {0.3f, 0.3f, 0.3f};
+        glm::vec3 InitialVelocity = {0.0f, 0.0f, 0.0f};
+
+        // SPH 参数
+        float RestDensity = 1000.0f;
+        float GasConstant = 50.0f;
+        float Viscosity = 3.5f;
+        float SmoothingRadius = 0.1f;
+        float ParticleMass = 0.02f;
+        glm::vec3 Gravity = {0.0f, -9.81f, 0.0f};
+        float Damping = 0.998f;
+
+        // PCISPH
+        bool PCISPHEnabled = true;
+        int PCISPHIterations = 3;
+        float PCISPHDelta = 0.3f;
+        float SurfaceTension = 0.0f;
+
+        // 刚体耦合
+        bool RigidBodyCoupling = true;
+        float BoundaryStiffness = 5000.0f;
+        float BoundaryDamping = 0.5f;
+
+        // 边界盒
+        bool UseBoundary = true;
+        glm::vec3 BoundaryMin = {-1.0f, -1.0f, -1.0f};
+        glm::vec3 BoundaryMax = {1.0f, 1.0f, 1.0f};
+
+        // 渲染参数
+        glm::vec3 FluidColor = {0.1f, 0.4f, 0.8f};
+        glm::vec3 AbsorptionColor = {0.5f, 0.2f, 0.05f};
+        float AbsorptionScale = 5.0f;
+        float FresnelPower = 3.0f;
+        float RefractionStrength = 0.05f;
+        float Reflectivity = 0.04f;
+        int SmoothIterations = 2;
+        float SmoothFilterRadius = 5.0f;
+        float SmoothDepthFalloff = 100.0f;
+
+        // 运行时（不序列化）
+        void* RuntimeFluidSystem = nullptr;  // FluidSystemGPU*
+        bool Emitted = false;
+
+        FluidEmitterComponent() = default;
+        FluidEmitterComponent(const FluidEmitterComponent&) = default;
+    };
+
 } // namespace Engine
