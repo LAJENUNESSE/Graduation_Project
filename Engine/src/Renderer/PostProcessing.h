@@ -13,7 +13,7 @@ namespace Engine
         bool BloomEnabled = true;
         float BloomThreshold = 1.0f;
         float BloomStrength = 0.3f;
-        int BloomIterations = 5;
+        int BloomIterations = 3;
 
         // Tone Mapping: 0 = Reinhard, 1 = ACES
         int ToneMappingMode = 1;

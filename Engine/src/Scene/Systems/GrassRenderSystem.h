@@ -49,6 +49,11 @@ namespace Engine
             Ref<ShaderStorageBuffer> CounterBuffer;  // binding 3 - grassCount
             Ref<ShaderStorageBuffer> IndirectArgs;   // binding 4 - DrawArraysIndirectCommand
             uint32_t GrassCount = 0;                 // fallback 用
+
+            // 异步回读（避免 glGetBufferSubData 同步阻塞）
+            uint32_t ReadbackBuffer = 0;    // PBO，用于异步拷贝
+            void*    ReadbackFence = nullptr; // GLsync 栅栏
+            bool     ReadbackPending = false;
         };
 
         struct GrassCache

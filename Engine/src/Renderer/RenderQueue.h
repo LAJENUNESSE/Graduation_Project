@@ -6,6 +6,7 @@
 
 #include <glm/glm.hpp>
 #include <vector>
+#include <algorithm>
 
 namespace Engine
 {
@@ -16,6 +17,9 @@ namespace Engine
         Ref<Material> Mat;
         glm::mat4 Transform{1.0f};
         int EntityID = -1;
+
+        // 排序键：基于 Shader 指针地址，用于按材质/shader 分组以减少状态切换
+        uintptr_t SortKey = 0;
     };
 
     class RenderQueue

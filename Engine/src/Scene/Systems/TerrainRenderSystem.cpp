@@ -159,15 +159,23 @@ namespace Engine
                 }
             }
 
+            // 预生成的 uniform 名称数组，避免每帧循环内的字符串拼接
+            static const char* s_LayerTiling[] = {
+                "u_LayerTiling[0]", "u_LayerTiling[1]", "u_LayerTiling[2]", "u_LayerTiling[3]"
+            };
+            static const char* s_LayerMetallic[] = {
+                "u_LayerMetallic[0]", "u_LayerMetallic[1]", "u_LayerMetallic[2]", "u_LayerMetallic[3]"
+            };
+            static const char* s_LayerRoughness[] = {
+                "u_LayerRoughness[0]", "u_LayerRoughness[1]", "u_LayerRoughness[2]", "u_LayerRoughness[3]"
+            };
+
             // 上传数组 uniform
             for (int i = 0; i < 4; i++)
             {
-                std::string tilingName = "u_LayerTiling[" + std::to_string(i) + "]";
-                std::string metallicName = "u_LayerMetallic[" + std::to_string(i) + "]";
-                std::string roughnessName = "u_LayerRoughness[" + std::to_string(i) + "]";
-                m_TerrainShader->SetFloat(tilingName, tilings[i]);
-                m_TerrainShader->SetFloat(metallicName, metallics[i]);
-                m_TerrainShader->SetFloat(roughnessName, roughnesses[i]);
+                m_TerrainShader->SetFloat(s_LayerTiling[i], tilings[i]);
+                m_TerrainShader->SetFloat(s_LayerMetallic[i], metallics[i]);
+                m_TerrainShader->SetFloat(s_LayerRoughness[i], roughnesses[i]);
             }
 
             // 绘制
