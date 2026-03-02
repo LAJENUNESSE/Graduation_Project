@@ -120,6 +120,105 @@ namespace Engine
     REGISTER_COMPONENT_PROPERTY(LightComponent, CastShadows)
     REGISTER_COMPONENT_END(LightComponent)
 
+    // ---- FluidEmitterComponent 反射 ----
+
+    ENGINE_COMPONENT(FluidEmitterComponent, "流体发射器")
+
+    // 发射参数
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleCount, "粒子数量", UInt32,
+        hints.Speed = 100.0f; hints.Min = 100.0f; hints.Max = 100000.0f)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleRadius, "粒子半径", Float,
+        hints.Speed = 0.001f; hints.Min = 0.001f; hints.Max = 1.0f; hints.Format = "%.3f")
+    ENGINE_PROPERTY(FluidEmitterComponent, EmitExtents, "发射区域半尺寸", Vec3)
+    ENGINE_PROPERTY(FluidEmitterComponent, InitialVelocity, "初始速度", Vec3)
+
+    // SPH 参数
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, RestDensity, "静止密度", Float,
+        hints.Speed = 1.0f; hints.Min = 1.0f; hints.Max = 10000.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, GasConstant, "气体常数", Float,
+        hints.Speed = 0.5f; hints.Min = 0.0f; hints.Max = 500.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, Viscosity, "粘性系数", Float,
+        hints.Speed = 0.1f; hints.Min = 0.0f; hints.Max = 100.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothingRadius, "光滑核半径", Float,
+        hints.Speed = 0.005f; hints.Min = 0.01f; hints.Max = 1.0f; hints.Format = "%.3f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleMass, "粒子质量", Float,
+        hints.Speed = 0.001f; hints.Min = 0.001f; hints.Max = 1.0f; hints.Format = "%.3f")
+    ENGINE_PROPERTY(FluidEmitterComponent, Gravity, "重力", Vec3)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, Damping, "速度阻尼", Float,
+        hints.Speed = 0.001f; hints.Min = 0.9f; hints.Max = 1.0f; hints.Format = "%.3f")
+
+    // PCISPH
+    ENGINE_PROPERTY(FluidEmitterComponent, PCISPHEnabled, "PCISPH 启用", Bool)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, PCISPHIterations, "PCISPH 迭代次数", Int,
+        hints.Speed = 1.0f; hints.Min = 1.0f; hints.Max = 8.0f)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, PCISPHDelta, "PCISPH Delta", Float,
+        hints.Speed = 0.01f; hints.Min = 0.01f; hints.Max = 1.0f; hints.Format = "%.2f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, SurfaceTension, "表面张力", Float,
+        hints.Speed = 0.01f; hints.Min = 0.0f; hints.Max = 10.0f; hints.Format = "%.2f")
+
+    // 刚体耦合
+    ENGINE_PROPERTY(FluidEmitterComponent, RigidBodyCoupling, "刚体耦合", Bool)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, BoundaryStiffness, "边界刚度", Float,
+        hints.Speed = 100.0f; hints.Min = 0.0f; hints.Max = 50000.0f; hints.Format = "%.0f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, BoundaryDamping, "边界阻尼", Float,
+        hints.Speed = 0.01f; hints.Min = 0.0f; hints.Max = 1.0f; hints.Format = "%.2f")
+
+    // 边界盒
+    ENGINE_PROPERTY(FluidEmitterComponent, UseBoundary, "使用边界盒", Bool)
+    ENGINE_PROPERTY(FluidEmitterComponent, BoundaryMin, "边界最小值", Vec3)
+    ENGINE_PROPERTY(FluidEmitterComponent, BoundaryMax, "边界最大值", Vec3)
+
+    // 渲染参数
+    ENGINE_PROPERTY(FluidEmitterComponent, FluidColor, "流体颜色", Color3)
+    ENGINE_PROPERTY(FluidEmitterComponent, AbsorptionColor, "吸收颜色", Color3)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, AbsorptionScale, "吸收强度", Float,
+        hints.Speed = 0.1f; hints.Min = 0.0f; hints.Max = 20.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, FresnelPower, "Fresnel 指数", Float,
+        hints.Speed = 0.1f; hints.Min = 0.1f; hints.Max = 10.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, RefractionStrength, "折射强度", Float,
+        hints.Speed = 0.01f; hints.Min = 0.0f; hints.Max = 1.0f; hints.Format = "%.2f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, Reflectivity, "反射率", Float,
+        hints.Speed = 0.01f; hints.Min = 0.0f; hints.Max = 1.0f; hints.Format = "%.2f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothIterations, "平滑迭代次数", Int,
+        hints.Speed = 1.0f; hints.Min = 0.0f; hints.Max = 10.0f)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothFilterRadius, "平滑核半径", Float,
+        hints.Speed = 0.5f; hints.Min = 1.0f; hints.Max = 30.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothDepthFalloff, "深度衰减", Float,
+        hints.Speed = 1.0f; hints.Min = 1.0f; hints.Max = 500.0f; hints.Format = "%.0f")
+
+    REGISTER_COMPONENT_BEGIN(FluidEmitterComponent)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleCount)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleRadius)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, EmitExtents)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, InitialVelocity)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, RestDensity)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, GasConstant)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, Viscosity)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothingRadius)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleMass)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, Gravity)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, Damping)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, PCISPHEnabled)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, PCISPHIterations)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, PCISPHDelta)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SurfaceTension)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, RigidBodyCoupling)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryStiffness)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryDamping)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, UseBoundary)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryMin)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryMax)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, FluidColor)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, AbsorptionColor)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, AbsorptionScale)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, FresnelPower)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, RefractionStrength)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, Reflectivity)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothIterations)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothFilterRadius)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothDepthFalloff)
+    REGISTER_COMPONENT_END(FluidEmitterComponent)
+
     // 强制链接：引用所有注册变量，防止链接器丢弃
     void ComponentRegistry::EnsureRegistered()
     {
@@ -128,6 +227,7 @@ namespace Engine
         (void)s_Registered_CollisionParticleTriggerComponent;
         (void)s_Registered_RigidBodyComponent;
         (void)s_Registered_LightComponent;
+        (void)s_Registered_FluidEmitterComponent;
     }
 
 } // namespace Engine

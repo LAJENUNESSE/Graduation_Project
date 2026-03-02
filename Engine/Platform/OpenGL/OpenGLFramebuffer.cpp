@@ -154,6 +154,14 @@ namespace Engine
                         Utils::AttachColorTexture(m_ColorAttachments[i], GL_R32I, GL_RED_INTEGER, GL_INT,
                                                   m_Specification.Width, m_Specification.Height, static_cast<int>(i));
                         break;
+                    case FramebufferTextureFormat::R32F:
+                        Utils::AttachColorTexture(m_ColorAttachments[i], GL_R32F, GL_RED, GL_FLOAT,
+                                                  m_Specification.Width, m_Specification.Height, static_cast<int>(i));
+                        break;
+                    case FramebufferTextureFormat::R16F:
+                        Utils::AttachColorTexture(m_ColorAttachments[i], GL_R16F, GL_RED, GL_FLOAT,
+                                                  m_Specification.Width, m_Specification.Height, static_cast<int>(i));
+                        break;
                     default:
                         break;
                     }

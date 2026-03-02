@@ -127,6 +127,49 @@ namespace Engine
                 emitter.CollisionBurstCount = 0;
             }
         }});
+
+        m_PassQueue.push_back({"FluidPass", [this](RenderContext& ctx) {
+            if (!ctx.ActiveScene) return;
+
+            auto fluidView = ctx.ActiveScene->GetRegistry().view<TransformComponent, FluidEmitterComponent>();
+
+            for (auto entity : fluidView)
+            {
+                auto& transform = fluidView.get<TransformComponent>(entity);
+                auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
+
+                uint32_t eid = static_cast<uint32_t>(entity);
+                auto& system = m_FluidSystems[eid];
+
+                if (!system || system->GetParticleCount() != emitter.ParticleCount)
+                {
+                    system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
+                    system->Init();
+                    emitter.Emitted = false;  // 重建后需要重新发射
+                }
+
+                // 首次发射
+                if (!emitter.Emitted)
+                {
+                    system->Emit(transform.Translation, emitter);
+                    emitter.Emitted = true;
+                }
+
+                // 每帧模拟
+                system->Update(ctx.DeltaTime, transform.Translation, emitter,
+                               &ctx.ActiveScene->GetRegistry());
+
+                // Screen-Space Fluid 渲染
+                m_FluidRenderer.Render(
+                    system->GetParticleBuffer(), system->GetEmptyVAO(),
+                    emitter.ParticleCount, emitter.ParticleRadius,
+                    ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection(),
+                    ctx.SceneColorTexID, ctx.SceneDepthTexID,
+                    emitter);
+            }
+        }});
+
+        m_FluidRenderer.Init(1280, 720);
     }
 
     void SceneRenderer::Shutdown()
@@ -136,6 +179,8 @@ namespace Engine
         m_PassQueue.clear();
         m_GrassSystem.Shutdown();
         m_ParticleSystems.clear();
+        m_FluidSystems.clear();
+        m_FluidRenderer.Shutdown();
     }
 
     void SceneRenderer::BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime)
@@ -143,6 +188,7 @@ namespace Engine
         if (m_LastScene != scene)
         {
             m_ParticleSystems.clear();
+            m_FluidSystems.clear();
             m_GrassSystem.Shutdown();
             m_LastScene = scene;
         }
@@ -186,6 +232,18 @@ namespace Engine
         for (auto& pass : m_PassQueue)
         {
             if (pass.Enabled && pass.Name == "ParticlePass")
+                pass.ExecuteFn(m_Context);
+        }
+    }
+
+    void SceneRenderer::RenderFluidPass()
+    {
+        if (!RendererCapabilities::Get().SupportsComputeShaders)
+            return;
+
+        for (auto& pass : m_PassQueue)
+        {
+            if (pass.Enabled && pass.Name == "FluidPass")
                 pass.ExecuteFn(m_Context);
         }
     }
