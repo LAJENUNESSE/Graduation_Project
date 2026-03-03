@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace Engine
 {
@@ -20,6 +21,7 @@ namespace Engine
     class Texture2D;
     class Material;
     class FFmpegDecoder;
+    struct TerrainMeshData;
 
     struct IDComponent
     {
@@ -224,7 +226,6 @@ namespace Engine
         float SPH_BoundaryDamping = 0.5f;
 
         // 运行时（不序列化）
-        void* RuntimeParticleSystem = nullptr;  // ParticleSystemGPU*
         int CollisionBurstCount = 0;            // 碰撞触发的爆发（帧末自动清零）
         int PendingBurst = 0;                   // 本帧待发射的爆发数（帧末自动清零，不序列化）
 
@@ -312,6 +313,7 @@ namespace Engine
         int BurstOnCollision = 50;           // 碰撞时爆发粒子数
         float MinImpulse = 1.0f;             // 最小触发冲量
         bool UseCollisionNormal = true;      // 是否用碰撞法线作为发射方向
+        int MaxBurstPerFrame = 500;          // 每帧最大碰撞爆发数
 
         CollisionParticleTriggerComponent() = default;
         CollisionParticleTriggerComponent(const CollisionParticleTriggerComponent&) = default;
@@ -353,7 +355,7 @@ namespace Engine
 
         // 运行时（不序列化）
         bool  MeshDirty = true;
-        void* RuntimeMeshData = nullptr;            // TerrainMeshData*
+        TerrainMeshData* RuntimeMeshData = nullptr;
 
         TerrainComponent() = default;
         TerrainComponent(const TerrainComponent&) = default;
@@ -395,14 +397,16 @@ namespace Engine
         float Volume = 1.0f;           // 视频音轨音量
 
         // 运行时状态（不序列化）
-        FFmpegDecoder* RuntimeDecoder = nullptr;
+        std::unique_ptr<FFmpegDecoder> RuntimeDecoder = nullptr;
         uint32_t RuntimeAudioSource = 0;
         Ref<Texture2D> RuntimeTexture = nullptr;
         std::vector<uint32_t> RuntimeAudioBuffers;
         bool IsPlaying = false;
 
-        VideoPlayerComponent() = default;
-        VideoPlayerComponent(const VideoPlayerComponent&) = default;
+        VideoPlayerComponent();
+        ~VideoPlayerComponent();
+        VideoPlayerComponent(VideoPlayerComponent&&) noexcept;
+        VideoPlayerComponent& operator=(VideoPlayerComponent&&) noexcept;
     };
 
     struct FluidEmitterComponent
@@ -450,7 +454,6 @@ namespace Engine
         float SmoothDepthFalloff = 100.0f;
 
         // 运行时（不序列化）
-        void* RuntimeFluidSystem = nullptr;  // FluidSystemGPU*
         bool Emitted = false;
 
         FluidEmitterComponent() = default;

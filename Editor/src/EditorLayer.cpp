@@ -57,7 +57,8 @@ namespace Engine
         m_PostProcessing.Init(1280, 720);
 
         // Initialize scene renderer
-        m_SceneRenderer.Init();
+        m_SceneRenderer.Init(static_cast<uint32_t>(m_ViewportSize.x),
+                             static_cast<uint32_t>(m_ViewportSize.y));
 
         // Create scene and a default entity
         m_ActiveScene = CreateRef<Scene>();

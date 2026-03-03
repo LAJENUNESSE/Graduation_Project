@@ -168,7 +168,7 @@ namespace Engine
             auto& terrain = terrainView.get<TerrainComponent>(entity);
             uint32_t entityId = static_cast<uint32_t>(entity);
 
-            auto* meshData = static_cast<TerrainMeshData*>(terrain.RuntimeMeshData);
+            auto* meshData = terrain.RuntimeMeshData;
             if (!meshData || meshData->HeightData.empty())
                 continue;
 

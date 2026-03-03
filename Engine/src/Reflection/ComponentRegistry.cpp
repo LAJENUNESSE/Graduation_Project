@@ -40,12 +40,15 @@ namespace Engine
     ENGINE_PROPERTY_EX(CollisionParticleTriggerComponent, MinImpulse, "最小冲量", Float,
         hints.Speed = 0.1f; hints.Min = 0.0f; hints.Max = 100.0f; hints.Format = "%.1f")
     ENGINE_PROPERTY(CollisionParticleTriggerComponent, UseCollisionNormal, "使用碰撞法线", Bool)
+    ENGINE_PROPERTY_EX(CollisionParticleTriggerComponent, MaxBurstPerFrame, "每帧最大爆发", Int,
+        hints.Speed = 10.0f; hints.Min = 1.0f; hints.Max = 10000.0f)
 
     REGISTER_COMPONENT_BEGIN(CollisionParticleTriggerComponent)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, Enabled)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, BurstOnCollision)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, MinImpulse)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, UseCollisionNormal)
+    REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, MaxBurstPerFrame)
     REGISTER_COMPONENT_END(CollisionParticleTriggerComponent)
 
     // ---- RigidBodyComponent 反射 ----

@@ -39,7 +39,7 @@ namespace Engine
                 // 释放旧数据
                 if (tc.RuntimeMeshData)
                 {
-                    delete static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+                    delete tc.RuntimeMeshData;
                     tc.RuntimeMeshData = nullptr;
                 }
 
@@ -67,7 +67,7 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+            auto* meshData = tc.RuntimeMeshData;
             if (!meshData || meshData->LODs.empty())
                 continue;
 
@@ -194,7 +194,7 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+            auto* meshData = tc.RuntimeMeshData;
             if (!meshData || meshData->LODs.empty())
                 continue;
 

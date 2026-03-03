@@ -14,7 +14,7 @@
 namespace Engine
 {
 
-    void SceneRenderer::Init()
+    void SceneRenderer::Init(uint32_t viewportWidth, uint32_t viewportHeight)
     {
         m_PBRShader = Shader::Create("assets/shaders/PBR.glsl");
 
@@ -169,7 +169,7 @@ namespace Engine
             }
         }});
 
-        m_FluidRenderer.Init(1280, 720);
+        m_FluidRenderer.Init(viewportWidth, viewportHeight);
     }
 
     void SceneRenderer::Shutdown()
