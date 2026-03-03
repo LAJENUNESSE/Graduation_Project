@@ -10,6 +10,8 @@
 #include "Physics/BulletPhysicsWorld.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
+#include <set>
+
 namespace Engine
 {
 
@@ -69,15 +71,24 @@ namespace Engine
         {
             m_BulletPhysicsWorld->Step(ts, m_Registry);
 
-            // 碰撞触发粒子爆发
+            // 碰撞触发粒子爆发（按 entity pair 去重，避免多接触点重复触发）
+            std::set<std::pair<uint32_t, uint32_t>> processedPairs;
             for (const auto& event : m_BulletPhysicsWorld->GetCollisionEvents())
             {
-                auto tryTriggerBurst = [&](entt::entity entity, const glm::vec3& normal) {
-                    if (!m_Registry.valid(entity)) return;
-                    if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(entity)) return;
+                auto tryTriggerBurst = [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal) {
+                    if (!m_Registry.valid(triggerEntity)) return;
+                    if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(triggerEntity)) return;
 
-                    auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(entity);
-                    auto& emitter = m_Registry.get<ParticleEmitterComponent>(entity);
+                    // entity pair 去重
+                    uint32_t a = static_cast<uint32_t>(triggerEntity);
+                    uint32_t b = static_cast<uint32_t>(otherEntity);
+                    auto key = std::make_pair(std::min(a, b), std::max(a, b));
+                    if (processedPairs.count(key))
+                        return;
+                    processedPairs.insert(key);
+
+                    auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(triggerEntity);
+                    auto& emitter = m_Registry.get<ParticleEmitterComponent>(triggerEntity);
 
                     if (!trigger.Enabled) return;
                     if (event.Impulse < trigger.MinImpulse) return;
@@ -88,6 +99,9 @@ namespace Engine
                     int burst = static_cast<int>(trigger.BurstOnCollision * scale);
                     emitter.CollisionBurstCount += burst;
 
+                    // 限制每帧碰撞爆发数
+                    emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
+                        trigger.MaxBurstPerFrame);
                     // 限制总碰撞爆发不超过粒子池容量
                     emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
                         static_cast<int>(emitter.MaxParticles));
@@ -96,8 +110,8 @@ namespace Engine
                         emitter.EmitDirection = normal;
                 };
 
-                tryTriggerBurst(event.EntityA, event.ContactNormal);
-                tryTriggerBurst(event.EntityB, -event.ContactNormal);
+                tryTriggerBurst(event.EntityA, event.EntityB, event.ContactNormal);
+                tryTriggerBurst(event.EntityB, event.EntityA, -event.ContactNormal);
             }
         }
 
@@ -255,7 +269,6 @@ namespace Engine
             if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))
             {
                 auto pe = srcReg.get<ParticleEmitterComponent>(srcEntity);
-                pe.RuntimeParticleSystem = nullptr;  // 清除裸指针，避免双重释放
                 pe.CollisionBurstCount = 0;
                 newEntity.AddComponent<ParticleEmitterComponent>(pe);
             }
@@ -285,16 +298,16 @@ namespace Engine
             if (srcReg.all_of<AudioListenerComponent>(srcEntity))
                 newEntity.AddComponent<AudioListenerComponent>(srcReg.get<AudioListenerComponent>(srcEntity));
 
-            // VideoPlayerComponent: 拷贝配置，清除运行时状态
+            // VideoPlayerComponent: 拷贝配置，清除运行时状态（move-only，手动构建）
             if (srcReg.all_of<VideoPlayerComponent>(srcEntity))
             {
-                auto vpc = srcReg.get<VideoPlayerComponent>(srcEntity);
-                vpc.RuntimeDecoder = nullptr;
-                vpc.RuntimeAudioSource = 0;
-                vpc.RuntimeTexture = nullptr;
-                vpc.RuntimeAudioBuffers.clear();
-                vpc.IsPlaying = false;
-                newEntity.AddComponent<VideoPlayerComponent>(vpc);
+                auto& srcVpc = srcReg.get<VideoPlayerComponent>(srcEntity);
+                auto& dstVpc = newEntity.AddComponent<VideoPlayerComponent>();
+                dstVpc.StreamURL = srcVpc.StreamURL;
+                dstVpc.PlayOnStart = srcVpc.PlayOnStart;
+                dstVpc.Loop = srcVpc.Loop;
+                dstVpc.Volume = srcVpc.Volume;
+                // 运行时状态保持默认（nullptr / 0 / false）
             }
         }
 

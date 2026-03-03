@@ -13,6 +13,12 @@
 namespace Engine
 {
 
+    // VideoPlayerComponent 特殊成员函数定义（需要 FFmpegDecoder 完整类型）
+    VideoPlayerComponent::VideoPlayerComponent() = default;
+    VideoPlayerComponent::~VideoPlayerComponent() = default;
+    VideoPlayerComponent::VideoPlayerComponent(VideoPlayerComponent&&) noexcept = default;
+    VideoPlayerComponent& VideoPlayerComponent::operator=(VideoPlayerComponent&&) noexcept = default;
+
     // AL_FORMAT_STEREO16 = 0x1103
     static constexpr uint32_t kALFormatStereo16 = 0x1103;
     static constexpr int kStreamingBufferCount = 4;
@@ -24,7 +30,13 @@ namespace Engine
 
     void VideoSystem::Shutdown()
     {
-        // 资源清理在 OnRuntimeStop 中完成
+        // 等待所有后台打开线程完成
+        for (auto& [id, t] : m_OpenThreads)
+        {
+            if (t.joinable())
+                t.join();
+        }
+        m_OpenThreads.clear();
     }
 
     void VideoSystem::OnRuntimeStart(entt::registry& reg)
@@ -37,19 +49,20 @@ namespace Engine
             if (vp.StreamURL.empty())
                 continue;
 
-            // 创建解码器（先保存引用，Open 在后台线程执行）
-            FFmpegDecoder* decoder = new FFmpegDecoder();
-            vp.RuntimeDecoder = decoder;
+            // 创建解码器（RAII，unique_ptr 管理生命周期）
+            vp.RuntimeDecoder = std::make_unique<FFmpegDecoder>();
             vp.IsPlaying = false;  // OnUpdate 中检测连接完成后再设为 true
 
             // 后台线程打开流，避免阻塞主线程
             std::string url = vp.StreamURL;
-            std::thread([decoder, url]() {
-                if (!decoder->Open(url))
+            FFmpegDecoder* rawDecoder = vp.RuntimeDecoder.get();
+            uint32_t eid = static_cast<uint32_t>(entity);
+            m_OpenThreads[eid] = std::thread([rawDecoder, url]() {
+                if (!rawDecoder->Open(url))
                 {
                     ENGINE_CORE_ERROR("[VideoSystem] 无法打开视频流: {}", url);
                 }
-            }).detach();
+            });
 
             ENGINE_CORE_INFO("[VideoSystem] 正在后台连接视频流: {}", vp.StreamURL);
         }
@@ -64,12 +77,20 @@ namespace Engine
         {
             auto& vp = view.get<VideoPlayerComponent>(entity);
 
+            // 先 join 后台打开线程，确保 Open() 已完成
+            uint32_t eid = static_cast<uint32_t>(entity);
+            if (auto it = m_OpenThreads.find(eid); it != m_OpenThreads.end())
+            {
+                if (it->second.joinable())
+                    it->second.join();
+                m_OpenThreads.erase(it);
+            }
+
             // 关闭并销毁解码器
             if (vp.RuntimeDecoder)
             {
                 vp.RuntimeDecoder->Close();
-                delete vp.RuntimeDecoder;
-                vp.RuntimeDecoder = nullptr;
+                vp.RuntimeDecoder.reset();
             }
 
             // 销毁音频源（必须先停止并反入队所有缓冲区）

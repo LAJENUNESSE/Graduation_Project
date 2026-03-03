@@ -174,7 +174,7 @@ namespace Engine
     void GrassRenderSystem::RebuildGrass(uint32_t eid, TerrainComponent& tc,
                                           const TransformComponent& transform)
     {
-        auto* meshData = static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+        auto* meshData = tc.RuntimeMeshData;
         if (!meshData || meshData->HeightData.empty())
         {
             ENGINE_WARN("[Grass] Entity {} has no terrain mesh data, skipping grass rebuild.", eid);

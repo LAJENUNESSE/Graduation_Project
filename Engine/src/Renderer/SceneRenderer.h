@@ -50,7 +50,7 @@ namespace Engine
     class SceneRenderer
     {
     public:
-        void Init();
+        void Init(uint32_t viewportWidth = 1280, uint32_t viewportHeight = 720);
         void Shutdown();
 
         void BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime);

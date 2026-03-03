@@ -163,7 +163,7 @@ namespace Engine
     void PhysicsDebugDraw::DrawTerrainWireframe(const glm::vec3& translation, entt::registry& reg, entt::entity entity)
     {
         auto& tc = reg.get<TerrainComponent>(entity);
-        auto* meshData = static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+        auto* meshData = tc.RuntimeMeshData;
         if (!meshData || meshData->HeightData.empty())
             return;
 
