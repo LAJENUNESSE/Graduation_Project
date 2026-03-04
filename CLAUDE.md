@@ -11,21 +11,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # First-time setup: initialize git submodules (vendors are submodules)
 git submodule update --init --recursive
-
-# Configure (Ninja generator, or omit -G for default)
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
-
-# Build all targets
-cmake --build build
-
-# Build a specific target
-cmake --build build --target Editor
-cmake --build build --target Sandbox
 ```
+
+### Linux / VM (Ninja)
+
+```bash
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build --target Editor
+# Run
+./build/Editor/Editor.exe
+```
+
+### Windows (VS 2022 Build Tools + vcpkg)
+
+cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
+
+> **⚠️ 禁止使用 `find`/`ls`/`where`/`which` 等命令搜索 cmake 路径。** 下方路径是唯一正确路径，直接复制使用即可：
+
+```bash
+CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
+
+# 配置（使用 CMakePresets.json 中的 default preset，含 vcpkg 工具链）
+"$CMAKE" --preset default
+
+# 构建（Visual Studio 生成器需指定 --config）
+"$CMAKE" --build build --config RelWithDebInfo --target Editor
+
+# Run
+./build/Editor/RelWithDebInfo/Editor.exe
+```
+
+> **注意：** Linux/Ninja 输出路径无配置子目录，Windows/VS 生成器输出路径含 `RelWithDebInfo/` 子目录。
 
 **Build targets:** `Engine` (static lib), `Editor` (exe), `Sandbox` (exe)
 
-**Run:** `./build/Editor/RelWithDebInfo/Editor.exe` — the exe auto-detects the project root at startup so it can be launched from any directory.
+**Run:** exe 启动时会自动检测项目根目录，因此可从任意目录启动。
 
 ## Architecture
 

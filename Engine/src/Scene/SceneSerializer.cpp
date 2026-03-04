@@ -148,6 +148,16 @@ namespace Engine
             out << YAML::EndMap;
         }
 
+        // RelationshipComponent（父子层级）
+        if (entity.HasComponent<RelationshipComponent>())
+        {
+            auto& rel = entity.GetComponent<RelationshipComponent>();
+            if (static_cast<uint64_t>(rel.ParentID) != 0)
+            {
+                out << YAML::Key << "ParentID" << YAML::Value << static_cast<uint64_t>(rel.ParentID);
+            }
+        }
+
         // TransformComponent
         if (entity.HasComponent<TransformComponent>())
         {
@@ -376,6 +386,9 @@ namespace Engine
             out << YAML::Key << "OrthoSize" << YAML::Value << shadow.OrthoSize;
             out << YAML::Key << "NearPlane" << YAML::Value << shadow.NearPlane;
             out << YAML::Key << "FarPlane" << YAML::Value << shadow.FarPlane;
+            out << YAML::Key << "CSMEnabled" << YAML::Value << shadow.CSMEnabled;
+            out << YAML::Key << "CascadeCount" << YAML::Value << shadow.CascadeCount;
+            out << YAML::Key << "CascadeSplitLambda" << YAML::Value << shadow.CascadeSplitLambda;
             out << YAML::EndMap;
         }
 
@@ -391,6 +404,11 @@ namespace Engine
             out << YAML::Key << "GammaCorrection" << YAML::Value << renderSettings.PostProcessing.GammaCorrection;
             out << YAML::Key << "MSAASamples" << YAML::Value << renderSettings.MSAASamples;
             out << YAML::Key << "PhysicsBackend" << YAML::Value << renderSettings.PhysicsBackend;
+            out << YAML::Key << "SSAOEnabled" << YAML::Value << renderSettings.SSAOEnabled;
+            out << YAML::Key << "SSAORadius" << YAML::Value << renderSettings.SSAORadius;
+            out << YAML::Key << "SSAOBias" << YAML::Value << renderSettings.SSAOBias;
+            out << YAML::Key << "SSAOKernelSize" << YAML::Value << renderSettings.SSAOKernelSize;
+            out << YAML::Key << "SSAOIntensity" << YAML::Value << renderSettings.SSAOIntensity;
             out << YAML::EndMap;
         }
 
@@ -399,9 +417,26 @@ namespace Engine
             const auto& skyboxPaths = m_Scene->GetSkyboxFacePaths();
             if (!skyboxPaths.empty())
             {
+                // 保存时将绝对路径转为相对路径
+                std::vector<std::string> relativePaths;
+                std::filesystem::path cwd = std::filesystem::current_path();
+                for (const auto& p : skyboxPaths)
+                {
+                    std::filesystem::path fp(p);
+                    if (fp.is_absolute())
+                    {
+                        auto rel = std::filesystem::relative(fp, cwd);
+                        relativePaths.push_back(PathUtils::NormalizeSeparators(rel.string()));
+                    }
+                    else
+                    {
+                        relativePaths.push_back(PathUtils::NormalizeSeparators(p));
+                    }
+                }
+
                 out << YAML::Key << "Skybox";
                 out << YAML::BeginMap;
-                out << YAML::Key << "Faces" << YAML::Value << YAML::Flow << skyboxPaths;
+                out << YAML::Key << "Faces" << YAML::Value << YAML::Flow << relativePaths;
                 out << YAML::EndMap;
             }
         }
@@ -507,6 +542,12 @@ namespace Engine
                 shadow.NearPlane = shadowNode["NearPlane"].as<float>();
             if (shadowNode["FarPlane"])
                 shadow.FarPlane = shadowNode["FarPlane"].as<float>();
+            if (shadowNode["CSMEnabled"])
+                shadow.CSMEnabled = shadowNode["CSMEnabled"].as<bool>();
+            if (shadowNode["CascadeCount"])
+                shadow.CascadeCount = std::clamp(shadowNode["CascadeCount"].as<int>(), 1, 4);
+            if (shadowNode["CascadeSplitLambda"])
+                shadow.CascadeSplitLambda = shadowNode["CascadeSplitLambda"].as<float>();
         }
 
         // Deserialize render settings
@@ -559,6 +600,16 @@ namespace Engine
                 }
                 outRenderSettings->PhysicsBackend = backend;
             }
+            if (renderNode["SSAOEnabled"])
+                outRenderSettings->SSAOEnabled = renderNode["SSAOEnabled"].as<bool>();
+            if (renderNode["SSAORadius"])
+                outRenderSettings->SSAORadius = renderNode["SSAORadius"].as<float>();
+            if (renderNode["SSAOBias"])
+                outRenderSettings->SSAOBias = renderNode["SSAOBias"].as<float>();
+            if (renderNode["SSAOKernelSize"])
+                outRenderSettings->SSAOKernelSize = std::clamp(renderNode["SSAOKernelSize"].as<int>(), 4, 64);
+            if (renderNode["SSAOIntensity"])
+                outRenderSettings->SSAOIntensity = renderNode["SSAOIntensity"].as<float>();
         }
 
         // Deserialize skybox
@@ -594,6 +645,13 @@ namespace Engine
                     name = tagComponent["Tag"].as<std::string>();
 
                 deserializedEntity = m_Scene->CreateEntityWithUUID(UUID(uuid), name);
+
+                // ParentID（父子层级，向后兼容：无该字段默认为根节点）
+                if (entityNode["ParentID"])
+                {
+                    auto& rel = deserializedEntity.GetComponent<RelationshipComponent>();
+                    rel.ParentID = UUID(entityNode["ParentID"].as<uint64_t>());
+                }
 
                 // TransformComponent
                 auto transformComponent = entityNode["TransformComponent"];
@@ -914,6 +972,30 @@ namespace Engine
                 if (deserializedEntity)
                     m_Scene->DestroyEntity(deserializedEntity);
                 continue;
+            }
+        }
+
+        // 第二遍：根据 ParentID 重建 Children 列表
+        {
+            auto view = m_Scene->GetAllEntitiesWith<IDComponent, RelationshipComponent>();
+            for (auto entity : view)
+            {
+                auto& rel = m_Scene->GetRegistry().get<RelationshipComponent>(entity);
+                if (static_cast<uint64_t>(rel.ParentID) != 0)
+                {
+                    Entity parent = m_Scene->FindEntityByUUID(rel.ParentID);
+                    if (parent && parent.HasComponent<RelationshipComponent>())
+                    {
+                        auto& parentRel = parent.GetComponent<RelationshipComponent>();
+                        UUID childUUID = m_Scene->GetRegistry().get<IDComponent>(entity).ID;
+                        parentRel.Children.push_back(childUUID);
+                    }
+                    else
+                    {
+                        // 父实体不存在，重置为根节点
+                        rel.ParentID = 0;
+                    }
+                }
             }
         }
 

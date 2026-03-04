@@ -60,12 +60,23 @@ namespace Engine
         {
         }
 
+        // 获取本地变换矩阵
         glm::mat4 GetTransform() const
         {
             glm::mat4 rotation = glm::toMat4(glm::quat(Rotation));
 
             return glm::translate(glm::mat4(1.0f), Translation) * rotation * glm::scale(glm::mat4(1.0f), Scale);
         }
+    };
+
+    // 父子层级关系组件
+    struct RelationshipComponent
+    {
+        UUID ParentID = 0;                  // 父实体 UUID，0 = 根节点
+        std::vector<UUID> Children;         // 子实体 UUID 列表
+
+        RelationshipComponent() = default;
+        RelationshipComponent(const RelationshipComponent&) = default;
     };
 
     // MeshType 标识原始类型，用于序列化和 UI
@@ -160,6 +171,7 @@ namespace Engine
     {
         glm::vec3 HalfExtents = {0.5f, 0.5f, 0.5f};
         glm::vec3 Offset = {0, 0, 0};
+        bool IsTrigger = false;
 
         BoxColliderComponent() = default;
         BoxColliderComponent(const BoxColliderComponent&) = default;
@@ -169,9 +181,21 @@ namespace Engine
     {
         float Radius = 0.5f;
         glm::vec3 Offset = {0, 0, 0};
+        bool IsTrigger = false;
 
         SphereColliderComponent() = default;
         SphereColliderComponent(const SphereColliderComponent&) = default;
+    };
+
+    struct MeshColliderComponent
+    {
+        enum class ColliderType { Convex = 0, Static = 1 };
+        ColliderType Type = ColliderType::Convex;
+        std::string MeshPath;       // 指定模型路径（空 = 使用 MeshRendererComponent 的网格）
+        bool IsTrigger = false;
+
+        MeshColliderComponent() = default;
+        MeshColliderComponent(const MeshColliderComponent&) = default;
     };
 
     struct ParticleEmitterComponent
