@@ -7,7 +7,7 @@ ShadowSettings:
   NearPlane: 0.1
   FarPlane: 50
 Skybox:
-  Faces: [/home/liu/Graduation_Project/assets/textures/skybox/right.jpg, /home/liu/Graduation_Project/assets/textures/skybox/left.jpg, /home/liu/Graduation_Project/assets/textures/skybox/top.jpg, /home/liu/Graduation_Project/assets/textures/skybox/bottom.jpg, /home/liu/Graduation_Project/assets/textures/skybox/front.jpg, /home/liu/Graduation_Project/assets/textures/skybox/back.jpg]
+  Faces: [assets/textures/skybox/right.jpg, assets/textures/skybox/left.jpg, assets/textures/skybox/top.jpg, assets/textures/skybox/bottom.jpg, assets/textures/skybox/front.jpg, assets/textures/skybox/back.jpg]
 Entities:
   - Entity: 6011378084646293149
     TagComponent:

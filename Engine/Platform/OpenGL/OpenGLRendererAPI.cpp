@@ -100,6 +100,12 @@ namespace Engine
         glBindTexture(GL_TEXTURE_2D, textureID);
     }
 
+    void OpenGLRendererAPI::BindCubemapUnit(uint32_t slot, uint32_t textureID)
+    {
+        glActiveTexture(GL_TEXTURE0 + slot);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+    }
+
     void OpenGLRendererAPI::ClearColorOnly()
     {
         glClear(GL_COLOR_BUFFER_BIT);

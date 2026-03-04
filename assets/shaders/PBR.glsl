@@ -8,12 +8,14 @@ layout(location = 3) in vec3 a_Tangent;
 uniform mat4 u_ViewProjection;
 uniform mat4 u_Transform;
 uniform mat4 u_LightSpaceMatrix;
+uniform mat4 u_ViewMatrix;  // CSM: 用于计算 view-space Z
 
 out vec3 v_Normal;
 out vec3 v_FragPos;
 out vec2 v_TexCoord;
 out vec4 v_FragPosLightSpace;
 out mat3 v_TBN;
+out float v_ViewZ;  // CSM: view-space Z
 
 void main() {
     mat3 normalMatrix = mat3(transpose(inverse(u_Transform)));
@@ -21,6 +23,10 @@ void main() {
     v_FragPos = vec3(u_Transform * vec4(a_Position, 1.0));
     v_TexCoord = a_TexCoords;
     v_FragPosLightSpace = u_LightSpaceMatrix * vec4(v_FragPos, 1.0);
+
+    // CSM: 计算 view-space Z（负值，因为相机朝 -Z）
+    vec4 viewPos = u_ViewMatrix * vec4(v_FragPos, 1.0);
+    v_ViewZ = -viewPos.z;
 
     // TBN matrix for normal mapping
     vec3 T = normalize(normalMatrix * a_Tangent);
@@ -103,15 +109,35 @@ uniform sampler2D u_ShadowMap;       // unit 1
 uniform int u_ShadowEnabled;
 uniform float u_ShadowBias;
 
+// CSM (Cascaded Shadow Maps)
+#define CSM_MAX_CASCADES 4
+uniform int u_CSMEnabled;
+uniform int u_CascadeCount;
+uniform mat4 u_CascadeLightSpaceMatrices[CSM_MAX_CASCADES];
+uniform float u_CascadeSplitDepths[CSM_MAX_CASCADES];
+uniform sampler2D u_CascadeShadowMaps[CSM_MAX_CASCADES];  // unit 10~13
+
 // Normal mapping
 uniform sampler2D u_NormalMap;        // unit 2
 uniform int u_HasNormalMap;
+
+// IBL (Image-Based Lighting)
+uniform samplerCube u_IrradianceMap;  // unit 6
+uniform samplerCube u_PrefilterMap;   // unit 7
+uniform sampler2D u_BRDF_LUT;         // unit 8
+uniform int u_IBLEnabled;
+uniform float u_IBLIntensity;
+
+// SSAO
+uniform sampler2D u_SSAOTexture;      // unit 9
+uniform int u_SSAOEnabled;
 
 in vec3 v_Normal;
 in vec3 v_FragPos;
 in vec2 v_TexCoord;
 in vec4 v_FragPosLightSpace;
 in mat3 v_TBN;
+in float v_ViewZ;
 
 // ---- PBR Functions ----
 
@@ -150,6 +176,12 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// Fresnel-Schlick with roughness (用于 IBL 环境光)
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
 // ---- Shadow Function ----
 
 float CalcShadow(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
@@ -171,6 +203,47 @@ float CalcShadow(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
             shadow += (projCoords.z - bias > d) ? 1.0 : 0.0;
         }
     return shadow / 9.0;
+}
+
+// CSM 阴影计算：对指定级联纹理进行 PCF 采样
+float CalcCSMShadowForCascade(int cascadeIdx, vec3 fragPos, vec3 normal, vec3 lightDir)
+{
+    vec4 fragPosLS = u_CascadeLightSpaceMatrices[cascadeIdx] * vec4(fragPos, 1.0);
+    vec3 projCoords = fragPosLS.xyz / fragPosLS.w;
+    projCoords = projCoords * 0.5 + 0.5;
+
+    if (projCoords.z > 1.0) return 0.0;
+
+    float slopeFactor = 1.0 - dot(normal, lightDir);
+    float bias = u_ShadowBias + u_ShadowBias * 10.0 * slopeFactor;
+    // 远级联使用更大的 bias 以避免 acne
+    bias *= float(cascadeIdx + 1);
+
+    // 3x3 PCF
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(u_CascadeShadowMaps[cascadeIdx], 0);
+    for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+        {
+            float d = texture(u_CascadeShadowMaps[cascadeIdx], projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += (projCoords.z - bias > d) ? 1.0 : 0.0;
+        }
+    return shadow / 9.0;
+}
+
+// 选择合适的级联并计算阴影
+float CalcCSMShadow(vec3 fragPos, vec3 normal, vec3 lightDir)
+{
+    // 根据 view-space Z 选择级联
+    for (int i = 0; i < u_CascadeCount; i++)
+    {
+        if (v_ViewZ < u_CascadeSplitDepths[i])
+        {
+            return CalcCSMShadowForCascade(i, fragPos, normal, lightDir);
+        }
+    }
+    // 超出所有级联范围，无阴影
+    return 0.0;
 }
 
 // ---- Per-light PBR radiance ----
@@ -235,7 +308,14 @@ void main() {
     if (u_ShadowEnabled != 0 && u_NumDirLights > 0)
     {
         vec3 lightDir = normalize(-u_DirLights[0].direction);
-        shadow = CalcShadow(v_FragPosLightSpace, N, lightDir);
+        if (u_CSMEnabled != 0 && u_CascadeCount > 0)
+        {
+            shadow = CalcCSMShadow(v_FragPos, N, lightDir);
+        }
+        else
+        {
+            shadow = CalcShadow(v_FragPosLightSpace, N, lightDir);
+        }
     }
 
     // Accumulate lighting
@@ -274,8 +354,41 @@ void main() {
         Lo += CalcPBRLight(L, radiance, N, V, albedo, metallic, roughness, F0);
     }
 
-    // Ambient (simple, non-IBL)
-    vec3 ambient = vec3(u_AmbientStrength) * albedo * ao;
+    // Ambient (IBL or fallback)
+    vec3 ambient;
+
+    // SSAO 遮蔽因子
+    float ssaoFactor = 1.0;
+    if (u_SSAOEnabled != 0)
+    {
+        // 从屏幕空间坐标采样 SSAO 纹理
+        vec2 screenUV = gl_FragCoord.xy / vec2(textureSize(u_SSAOTexture, 0));
+        ssaoFactor = texture(u_SSAOTexture, screenUV).r;
+    }
+
+    if (u_IBLEnabled != 0)
+    {
+        // IBL 漫反射：从 irradiance map 采样
+        vec3 F = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+        vec3 kS = F;
+        vec3 kD = (1.0 - kS) * (1.0 - metallic);
+
+        vec3 irradiance = texture(u_IrradianceMap, N).rgb;
+        vec3 diffuse = irradiance * albedo;
+
+        // IBL 镜面反射：从 prefiltered env map 采样
+        vec3 R = reflect(-V, N);
+        const float MAX_REFLECTION_LOD = 4.0;
+        vec3 prefilteredColor = textureLod(u_PrefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
+        vec2 brdf = texture(u_BRDF_LUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+        vec3 specular = prefilteredColor * (F * brdf.x + brdf.y);
+
+        ambient = (kD * diffuse + specular) * ao * ssaoFactor * u_IBLIntensity;
+    }
+    else
+    {
+        ambient = vec3(u_AmbientStrength) * albedo * ao * ssaoFactor;
+    }
 
     // Output linear HDR (tone mapping + gamma done in post-processing)
     vec3 color = ambient + Lo;

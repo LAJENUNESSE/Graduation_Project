@@ -47,6 +47,7 @@ namespace Engine
         virtual void SetCullFaceMode(CullFaceMode mode) = 0;
         virtual void SetLineWidth(float width) = 0;
         virtual void BindTextureUnit(uint32_t slot, uint32_t textureID) = 0;
+        virtual void BindCubemapUnit(uint32_t slot, uint32_t textureID) = 0;
         virtual void ClearColorOnly() = 0;
         virtual int GetBoundFramebufferID() = 0;
         virtual void BindFramebufferByID(int id) = 0;

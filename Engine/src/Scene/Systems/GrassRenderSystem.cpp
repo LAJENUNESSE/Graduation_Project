@@ -17,6 +17,29 @@
 namespace Engine
 {
 
+    // 递归计算世界变换矩阵
+    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
+    {
+        auto& transform = reg.get<TransformComponent>(entity);
+        glm::mat4 localMatrix = transform.GetTransform();
+
+        if (reg.all_of<RelationshipComponent>(entity))
+        {
+            auto& rel = reg.get<RelationshipComponent>(entity);
+            if (static_cast<uint64_t>(rel.ParentID) != 0)
+            {
+                auto view = reg.view<IDComponent>();
+                for (auto e : view)
+                {
+                    if (view.get<IDComponent>(e).ID == rel.ParentID)
+                        return ComputeWorldTransform(reg, e) * localMatrix;
+                }
+            }
+        }
+
+        return localMatrix;
+    }
+
     namespace
     {
         bool ContainsToken(const char* str, const char* token)
@@ -315,7 +338,7 @@ namespace Engine
             auto& inst = it->second;
             auto& transform = view.get<TransformComponent>(entity);
 
-            m_BillboardShader->SetMat4("u_Transform", transform.GetTransform());
+            m_BillboardShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
             m_BillboardShader->SetInt("u_EntityID", static_cast<int>(eid));
 
             // 绑定草地纹理 (unit 2)

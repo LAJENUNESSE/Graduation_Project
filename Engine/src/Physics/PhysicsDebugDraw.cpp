@@ -76,6 +76,19 @@ namespace Engine
             }
         }
 
+        // 网格碰撞器（以紫色方框简易表示 AABB）
+        {
+            glm::vec3 meshColor = {0.8f, 0.2f, 0.8f}; // 紫色
+            auto view = reg.view<TransformComponent, MeshColliderComponent>();
+            for (auto entity : view)
+            {
+                auto& transform = view.get<TransformComponent>(entity);
+                // 网格碰撞器用 AABB 线框作简易可视化（实际碰撞形状由 Bullet 管理）
+                glm::vec3 halfExtents = transform.Scale * 0.5f;
+                DrawBox(transform.Translation, halfExtents, transform.Rotation, meshColor);
+            }
+        }
+
         // 地形碰撞器
         {
             glm::vec3 terrainColor = {1.0f, 0.6f, 0.0f}; // 橙色

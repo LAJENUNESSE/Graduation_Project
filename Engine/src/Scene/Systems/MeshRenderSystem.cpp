@@ -8,6 +8,30 @@
 namespace Engine
 {
 
+    // 递归计算世界变换矩阵
+    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
+    {
+        auto& transform = reg.get<TransformComponent>(entity);
+        glm::mat4 localMatrix = transform.GetTransform();
+
+        if (reg.all_of<RelationshipComponent>(entity))
+        {
+            auto& rel = reg.get<RelationshipComponent>(entity);
+            if (static_cast<uint64_t>(rel.ParentID) != 0)
+            {
+                // 查找父实体
+                auto view = reg.view<IDComponent>();
+                for (auto e : view)
+                {
+                    if (view.get<IDComponent>(e).ID == rel.ParentID)
+                        return ComputeWorldTransform(reg, e) * localMatrix;
+                }
+            }
+        }
+
+        return localMatrix;
+    }
+
     void MeshRenderSystem::SubmitRenderPackets(
         entt::registry& reg,
         RenderQueue& queue,
@@ -130,7 +154,7 @@ namespace Engine
                 RenderPacket packet;
                 packet.VAO = subMesh.VAO;
                 packet.Mat = mat;
-                packet.Transform = transform.GetTransform();
+                packet.Transform = ComputeWorldTransform(reg, entity);
                 packet.EntityID = static_cast<int>(entity);
 
                 queue.Submit(packet);
