@@ -23,6 +23,7 @@ namespace Engine
         void SetCullFaceMode(CullFaceMode mode) override;
         void SetLineWidth(float width) override;
         void BindTextureUnit(uint32_t slot, uint32_t textureID) override;
+        void BindCubemapUnit(uint32_t slot, uint32_t textureID) override;
         void ClearColorOnly() override;
         int GetBoundFramebufferID() override;
         void BindFramebufferByID(int id) override;

@@ -33,6 +33,15 @@ namespace Engine
         Entity CreateEntityWithUUID(UUID uuid, const std::string& name = "Entity");
         void DestroyEntity(Entity entity);
 
+        // 父子层级接口
+        void SetParent(Entity child, Entity parent);
+        void RemoveParent(Entity child);
+        std::vector<Entity> GetChildren(Entity parent);
+        Entity FindEntityByUUID(UUID uuid);
+        bool IsAncestorOf(Entity ancestor, Entity entity);
+        glm::mat4 GetWorldTransform(Entity entity);
+        std::vector<Entity> GetRootEntities();
+
         void OnUpdateEditor(Timestep ts, EditorCamera& camera);
         void OnUpdateRuntime(Timestep ts, EditorCamera& camera);
         void OnRuntimeStart();

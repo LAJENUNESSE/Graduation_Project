@@ -9,6 +9,7 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Mesh.h"
 #include "Asset/AssetManager.h"
+#include "Asset/PathUtils.h"
 #include "Debug/PerformanceMonitor.h"
 #include "Debug/ProfileTimer.h"
 
@@ -57,7 +58,8 @@ namespace Engine
         m_PostProcessing.Init(1280, 720);
 
         // Initialize scene renderer
-        m_SceneRenderer.Init();
+        m_SceneRenderer.Init(static_cast<uint32_t>(m_ViewportSize.x),
+                             static_cast<uint32_t>(m_ViewportSize.y));
 
         // Create scene and a default entity
         m_ActiveScene = CreateRef<Scene>();
@@ -78,6 +80,14 @@ namespace Engine
 
         // Initialize panels
         m_HierarchyPanel.SetContext(m_ActiveScene);
+        m_HierarchyPanel.SetCommandHistory(&m_CommandHistory);
+        m_AssetBrowserPanel.SetContext(m_ActiveScene);
+        m_AssetBrowserPanel.SetSceneOpenCallback([this](const std::string& path) {
+            OpenScene(path);
+        });
+
+        // 注册控制台 sink 到 spdlog
+        m_ConsolePanel.RegisterSink();
 
         // Initialize editor camera
         m_EditorCamera = EditorCamera(45.0f, 1280.0f / 720.0f, 0.1f, 1000.0f);
@@ -131,6 +141,10 @@ namespace Engine
         // 开始场景渲染
         m_SceneRenderer.BeginScene(m_EditorCamera, m_ActiveScene.get(), ts);
 
+        // 设置 SSAO 所需的深度和视口信息
+        m_SceneRenderer.GetContext().ViewportWidth = static_cast<uint32_t>(m_ViewportSize.x);
+        m_SceneRenderer.GetContext().ViewportHeight = static_cast<uint32_t>(m_ViewportSize.y);
+
         // Shadow pass (renders to its own FBO) — CPU profiled
         float shadowCpuMs = 0.0f;
         {
@@ -155,13 +169,18 @@ namespace Engine
             RenderCommand::Clear();
             m_HDRFramebuffer->ClearAttachment(1, -1);
 
+            // 设置 SSAO 深度纹理（使用上一帧 HDR FBO 的深度）
+            m_SceneRenderer.GetContext().SSAODepthTexID =
+                m_HDRFramebuffer->GetDepthAttachmentRendererID();
+
             const bool msaaEnabled = m_HDRFramebuffer->IsMSAAEnabled();
 
             // 执行 GeometryPass + SkyboxPass (+ ParticlePass when MSAA is off)
+            // SSAO 使用上一帧的深度缓冲（1帧延迟，不可察觉）
             // MSAA 开启时，粒子会在 Resolve 后再绘制，避免被 Blit 覆盖。
             for (auto& pass : m_SceneRenderer.GetPassQueue())
             {
-                bool runPass = pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass" || pass.Name == "GrassPass");
+                bool runPass = pass.Enabled && (pass.Name == "SSAOPass" || pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass" || pass.Name == "GrassPass");
                 if (!msaaEnabled && pass.Enabled && pass.Name == "ParticlePass")
                     runPass = true;
 
@@ -271,6 +290,28 @@ namespace Engine
                     Application::Get().Close();
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("\xe7\xbc\x96\xe8\xbe\x91")) // 编辑
+            {
+                // 撤销
+                {
+                    std::string undoLabel = "\xe6\x92\xa4\xe9\x94\x80"; // 撤销
+                    std::string undoDesc = m_CommandHistory.GetUndoDescription();
+                    if (!undoDesc.empty())
+                        undoLabel += " (" + undoDesc + ")";
+                    if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, m_CommandHistory.CanUndo()))
+                        m_CommandHistory.UndoCommand();
+                }
+                // 重做
+                {
+                    std::string redoLabel = "\xe9\x87\x8d\xe5\x81\x9a"; // 重做
+                    std::string redoDesc = m_CommandHistory.GetRedoDescription();
+                    if (!redoDesc.empty())
+                        redoLabel += " (" + redoDesc + ")";
+                    if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, m_CommandHistory.CanRedo()))
+                        m_CommandHistory.RedoCommand();
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("\xe8\xa7\x86\xe5\x9b\xbe"))
             {
                 ImGui::MenuItem("\xe6\x80\xa7\xe8\x83\xbd\xe7\x9b\x91\xe6\x8e\xa7", nullptr, &m_ShowStatsPanel);
@@ -322,6 +363,8 @@ namespace Engine
         m_HierarchyPanel.OnImGuiRender();
         m_SelectedEntity = m_HierarchyPanel.GetSelectedEntity();
         m_PropertiesPanel.OnImGuiRender(m_SelectedEntity);
+        m_ConsolePanel.OnImGuiRender();
+        m_AssetBrowserPanel.OnImGuiRender();
 
         // Rendering settings panel
         {
@@ -348,6 +391,26 @@ namespace Engine
 
             ImGui::DragFloat("\xe9\x98\xb4\xe5\xbd\xb1\xe5\x81\x8f\xe7\xa7\xbb", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
             ImGui::DragFloat("\xe9\x98\xb4\xe5\xbd\xb1\xe8\x8c\x83\xe5\x9b\xb4", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
+
+            // CSM 设置
+            ImGui::Checkbox("\xe7\xba\xa7\xe8\x81\x94\xe9\x98\xb4\xe5\xbd\xb1 (CSM)", &shadow.CSMEnabled);
+            if (shadow.CSMEnabled)
+            {
+                ImGui::DragInt("\xe7\xba\xa7\xe8\x81\x94\xe6\x95\xb0\xe9\x87\x8f", &shadow.CascadeCount, 1, 1, 4);
+                ImGui::DragFloat("\xe5\x88\x86\xe5\x89\xb2\xe5\x9b\xa0\xe5\xad\x90", &shadow.CascadeSplitLambda, 0.01f, 0.0f, 1.0f, "%.2f");
+            }
+
+            // SSAO 设置
+            ImGui::Separator();
+            ImGui::Text("SSAO");
+            ImGui::Checkbox("\xe5\x90\xaf\xe7\x94\xa8 SSAO", &m_SceneRenderer.GetSSAOEnabled());
+            if (m_SceneRenderer.GetSSAOEnabled())
+            {
+                ImGui::DragFloat("SSAO \xe5\x8d\x8a\xe5\xbe\x84", &m_SceneRenderer.GetSSAORadius(), 0.01f, 0.01f, 5.0f, "%.2f");
+                ImGui::DragFloat("SSAO \xe5\x81\x8f\xe7\xa7\xbb", &m_SceneRenderer.GetSSAOBias(), 0.001f, 0.0f, 0.5f, "%.3f");
+                ImGui::DragInt("SSAO \xe9\x87\x87\xe6\xa0\xb7\xe6\x95\xb0", &m_SceneRenderer.GetSSAOKernelSize(), 1, 4, 64);
+                ImGui::DragFloat("SSAO \xe5\xbc\xba\xe5\xba\xa6", &m_SceneRenderer.GetSSAOIntensity(), 0.05f, 0.1f, 5.0f, "%.2f");
+            }
 
             ImGui::Separator();
             ImGui::Checkbox("Gamma \xe6\xa0\xa1\xe6\xad\xa3", &m_PostProcessingSettings.GammaCorrection);
@@ -414,11 +477,16 @@ namespace Engine
                     std::vector<std::string> suffixes = {"right", "left", "top", "bottom", "front", "back"};
                     std::vector<std::string> faces;
                     bool allFound = true;
+                    std::filesystem::path cwd = std::filesystem::current_path();
                     for (const auto& s : suffixes)
                     {
                         std::filesystem::path facePath = folder / (s + ext);
                         if (std::filesystem::exists(facePath))
-                            faces.push_back(facePath.string());
+                        {
+                            // 存储为相对路径，确保跨平台可移植
+                            auto rel = std::filesystem::relative(facePath, cwd);
+                            faces.push_back(PathUtils::NormalizeSeparators(rel.string()));
+                        }
                         else
                         {
                             allFound = false;
@@ -528,15 +596,12 @@ namespace Engine
         ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
         m_ViewportSize = {std::max(viewportPanelSize.x, 32.0f), std::max(viewportPanelSize.y, 32.0f)};
 
-        // Mouse picking
+        // Mouse picking：仅在鼠标点击时读取像素（glReadPixels 会导致 GPU stall，
+        // 每帧在鼠标移动时调用会严重降低帧率）
         {
-            ImVec2 mousePos = ImGui::GetMousePos();
-            glm::vec2 currentMousePos = {mousePos.x, mousePos.y};
-            bool mouseMoved = (currentMousePos != m_LastMousePos);
-            m_LastMousePos = currentMousePos;
-
-            if (mouseMoved || ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
+                ImVec2 mousePos = ImGui::GetMousePos();
                 float mx = mousePos.x - m_ViewportBounds[0].x;
                 float my = mousePos.y - m_ViewportBounds[0].y;
                 glm::vec2 vpSize = m_ViewportBounds[1] - m_ViewportBounds[0];
@@ -566,14 +631,35 @@ namespace Engine
                           m_ViewportBounds[1].x - m_ViewportBounds[0].x,
                           m_ViewportBounds[1].y - m_ViewportBounds[0].y);
 
-        // Gizmos
+        // Gizmos（支持多选：主选中实体显示 Gizmo，移动时带动所有选中实体）
+        auto& selectedEntities = m_HierarchyPanel.GetSelectedEntities();
         if (m_SelectedEntity && m_GizmoType != -1 && m_SelectedEntity.HasComponent<TransformComponent>())
         {
             const glm::mat4& cameraView = m_EditorCamera.GetViewMatrix();
             const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
 
             auto& tc = m_SelectedEntity.GetComponent<TransformComponent>();
-            glm::mat4 transform = tc.GetTransform();
+
+            // 使用世界变换矩阵显示 Gizmo
+            glm::mat4 worldTransform = m_ActiveScene->GetWorldTransform(m_SelectedEntity);
+
+            // 计算父实体的世界变换（用于将 Gizmo 结果转回本地空间）
+            glm::mat4 parentWorldTransform(1.0f);
+            if (m_SelectedEntity.HasComponent<RelationshipComponent>())
+            {
+                auto& rel = m_SelectedEntity.GetComponent<RelationshipComponent>();
+                if (static_cast<uint64_t>(rel.ParentID) != 0)
+                {
+                    Entity parent = m_ActiveScene->FindEntityByUUID(rel.ParentID);
+                    if (parent)
+                        parentWorldTransform = m_ActiveScene->GetWorldTransform(parent);
+                }
+            }
+
+            // 记录操作前的世界位置（用于计算移动增量）
+            glm::vec3 prevWorldPos = glm::vec3(worldTransform[3]);
+
+            glm::mat4 transform = worldTransform;
 
             ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection),
                                  static_cast<ImGuizmo::OPERATION>(m_GizmoType), ImGuizmo::LOCAL,
@@ -581,14 +667,75 @@ namespace Engine
 
             if (ImGuizmo::IsUsing())
             {
+                // 捕获 Gizmo 拖拽开始时的 Transform 快照
+                if (!m_GizmoWasUsing)
+                {
+                    m_GizmoStartTranslation = tc.Translation;
+                    m_GizmoStartRotation = tc.Rotation;
+                    m_GizmoStartScale = tc.Scale;
+                    m_GizmoWasUsing = true;
+                }
+
+                // 将世界空间的 Gizmo 结果转回本地空间
+                glm::mat4 localTransform = glm::inverse(parentWorldTransform) * transform;
+
                 glm::vec3 translation, rotation, scale;
-                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform), glm::value_ptr(translation),
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(localTransform), glm::value_ptr(translation),
                                                       glm::value_ptr(rotation), glm::value_ptr(scale));
 
                 glm::vec3 deltaRotation = glm::radians(rotation) - tc.Rotation;
                 tc.Translation = translation;
                 tc.Rotation += deltaRotation;
                 tc.Scale = scale;
+
+                // 多选模式：平移操作时，将世界空间的移动增量应用到其他选中实体
+                if (selectedEntities.size() > 1 && m_GizmoType == ImGuizmo::TRANSLATE)
+                {
+                    glm::vec3 newWorldPos = glm::vec3(transform[3]);
+                    glm::vec3 worldDelta = newWorldPos - prevWorldPos;
+
+                    for (const auto& otherEntity : selectedEntities)
+                    {
+                        if (otherEntity == m_SelectedEntity || !otherEntity)
+                            continue;
+
+                        // 使用 registry 直接操作，避免 const Entity 的限制
+                        auto handle = static_cast<entt::entity>(otherEntity);
+                        auto& reg = m_ActiveScene->GetRegistry();
+
+                        if (!reg.all_of<TransformComponent>(handle))
+                            continue;
+
+                        auto& otherTc = reg.get<TransformComponent>(handle);
+
+                        // 将世界增量转换到其他实体的本地空间
+                        glm::mat4 otherParentWorld(1.0f);
+                        if (reg.all_of<RelationshipComponent>(handle))
+                        {
+                            auto& otherRel = reg.get<RelationshipComponent>(handle);
+                            if (static_cast<uint64_t>(otherRel.ParentID) != 0)
+                            {
+                                Entity otherParent = m_ActiveScene->FindEntityByUUID(otherRel.ParentID);
+                                if (otherParent)
+                                    otherParentWorld = m_ActiveScene->GetWorldTransform(otherParent);
+                            }
+                        }
+
+                        // 将世界空间增量旋转到本地空间
+                        glm::vec3 localDelta = glm::vec3(glm::inverse(otherParentWorld) * glm::vec4(worldDelta, 0.0f));
+                        otherTc.Translation += localDelta;
+                    }
+                }
+            }
+            else if (m_GizmoWasUsing)
+            {
+                // Gizmo 拖拽结束，创建 Undo 命令
+                m_GizmoWasUsing = false;
+                auto cmd = CreateRef<TransformChangeCommand>(
+                    m_SelectedEntity,
+                    m_GizmoStartTranslation, m_GizmoStartRotation, m_GizmoStartScale,
+                    tc.Translation, tc.Rotation, tc.Scale);
+                m_CommandHistory.PushCommand(cmd);
             }
         }
 
@@ -642,6 +789,16 @@ namespace Engine
                 SaveScene();
             break;
 
+        // Undo / Redo
+        case KeyCode::Z:
+            if (control)
+                m_CommandHistory.UndoCommand();
+            break;
+        case KeyCode::Y:
+            if (control)
+                m_CommandHistory.RedoCommand();
+            break;
+
         case KeyCode::Q:
             if (!ImGuizmo::IsUsing())
                 m_GizmoType = -1;
@@ -686,16 +843,21 @@ namespace Engine
         m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
                                         static_cast<uint32_t>(m_ViewportSize.y));
         m_HierarchyPanel.SetContext(m_ActiveScene);
+        m_AssetBrowserPanel.SetContext(m_ActiveScene);
         m_SelectedEntity = {};
         m_HoveredEntity = {};
+        m_CommandHistory.Clear();
     }
 
     void EditorLayer::OpenScene()
     {
         std::string filepath = FileDialogs::OpenFile("*.scene", "\xe5\x9c\xba\xe6\x99\xaf\xe6\x96\x87\xe4\xbb\xb6");
-        if (filepath.empty())
-            return;
+        if (!filepath.empty())
+            OpenScene(filepath);
+    }
 
+    void EditorLayer::OpenScene(const std::string& filepath)
+    {
         auto newScene = CreateRef<Scene>();
         newScene->SetSceneRenderer(&m_SceneRenderer);
         EditorRenderSettings renderSettings;
@@ -710,11 +872,20 @@ namespace Engine
         m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
                                         static_cast<uint32_t>(m_ViewportSize.y));
         m_HierarchyPanel.SetContext(m_ActiveScene);
+        m_AssetBrowserPanel.SetContext(m_ActiveScene);
         m_SelectedEntity = {};
         m_HoveredEntity = {};
+        m_CommandHistory.Clear();
 
         m_PostProcessingSettings = renderSettings.PostProcessing;
         m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
+
+        // 恢复 SSAO 设置
+        m_SceneRenderer.GetSSAOEnabled() = renderSettings.SSAOEnabled;
+        m_SceneRenderer.GetSSAORadius() = renderSettings.SSAORadius;
+        m_SceneRenderer.GetSSAOBias() = renderSettings.SSAOBias;
+        m_SceneRenderer.GetSSAOKernelSize() = renderSettings.SSAOKernelSize;
+        m_SceneRenderer.GetSSAOIntensity() = renderSettings.SSAOIntensity;
 
         if (renderSettings.MSAASamples != m_HDRFramebuffer->GetSpecification().Samples)
         {
@@ -734,6 +905,13 @@ namespace Engine
         renderSettings.PostProcessing = m_PostProcessingSettings;
         renderSettings.MSAASamples = m_HDRFramebuffer->GetSpecification().Samples;
         renderSettings.PhysicsBackend = static_cast<int>(m_ActiveScene->GetPhysicsBackend());
+
+        // 保存 SSAO 设置
+        renderSettings.SSAOEnabled = m_SceneRenderer.GetSSAOEnabled();
+        renderSettings.SSAORadius = m_SceneRenderer.GetSSAORadius();
+        renderSettings.SSAOBias = m_SceneRenderer.GetSSAOBias();
+        renderSettings.SSAOKernelSize = m_SceneRenderer.GetSSAOKernelSize();
+        renderSettings.SSAOIntensity = m_SceneRenderer.GetSSAOIntensity();
 
         SceneSerializer serializer(m_ActiveScene);
         if (serializer.Serialize(filepath, renderSettings))
@@ -767,6 +945,7 @@ namespace Engine
         m_SceneRenderer.GetShadowSystem().GetSettings() = m_ActiveScene->GetShadowSettings();
 
         m_HierarchyPanel.SetContext(m_ActiveScene);
+        m_AssetBrowserPanel.SetContext(m_ActiveScene);
         m_SelectedEntity = {};
         m_HoveredEntity = {};
     }

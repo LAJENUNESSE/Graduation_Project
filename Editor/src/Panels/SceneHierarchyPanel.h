@@ -4,8 +4,12 @@
 #include "Scene/Entity.h"
 #include "Core/Base.h"
 
+#include <vector>
+
 namespace Engine
 {
+
+    class CommandHistory;
 
     class SceneHierarchyPanel
     {
@@ -14,18 +18,27 @@ namespace Engine
         SceneHierarchyPanel(const Ref<Scene>& scene);
 
         void SetContext(const Ref<Scene>& scene);
+        void SetCommandHistory(CommandHistory* history) { m_CommandHistory = history; }
 
         void OnImGuiRender();
 
-        Entity GetSelectedEntity() const { return m_SelectionContext; }
-        void SetSelectedEntity(Entity entity) { m_SelectionContext = entity; }
+        // 单选兼容（返回主选中实体）
+        Entity GetSelectedEntity() const;
+        void SetSelectedEntity(Entity entity);
+
+        // 多选接口
+        const std::vector<Entity>& GetSelectedEntities() const { return m_SelectedEntities; }
+        void ClearSelection();
+        bool IsSelected(Entity entity) const;
 
     private:
         void DrawEntityNode(Entity entity, Entity& entityToDelete);
+        void SelectEntity(Entity entity, bool ctrlHeld);
 
     private:
         Ref<Scene> m_Context;
-        Entity m_SelectionContext;
+        std::vector<Entity> m_SelectedEntities;
+        CommandHistory* m_CommandHistory = nullptr;
     };
 
 } // namespace Engine

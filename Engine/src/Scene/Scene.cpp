@@ -3,12 +3,20 @@
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Script/NativeScriptComponent.h"
+#include "Script/ScriptableEntity.h"
 #include "Reflection/ComponentRegistry.h"
 #include "Renderer/SceneRenderer.h"
 #include "Renderer/EditorCamera.h"
 #include "Physics/PhysicsWorld.h"
 #include "Physics/BulletPhysicsWorld.h"
 #include "Terrain/TerrainMeshGenerator.h"
+
+#include <set>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 namespace Engine
 {
@@ -33,15 +41,220 @@ namespace Engine
         entity.AddComponent<IDComponent>(uuid);
         entity.AddComponent<TagComponent>(name);
         entity.AddComponent<TransformComponent>();
+        entity.AddComponent<RelationshipComponent>();
         return entity;
     }
 
     void Scene::DestroyEntity(Entity entity)
     {
+        // 递归销毁所有子实体
+        if (entity.HasComponent<RelationshipComponent>())
+        {
+            auto children = entity.GetComponent<RelationshipComponent>().Children;
+            for (auto childUUID : children)
+            {
+                Entity child = FindEntityByUUID(childUUID);
+                if (child)
+                    DestroyEntity(child);
+            }
+
+            // 从父实体的 Children 列表中移除自身
+            auto& rel = entity.GetComponent<RelationshipComponent>();
+            if (static_cast<uint64_t>(rel.ParentID) != 0)
+            {
+                Entity parent = FindEntityByUUID(rel.ParentID);
+                if (parent && parent.HasComponent<RelationshipComponent>())
+                {
+                    auto& parentChildren = parent.GetComponent<RelationshipComponent>().Children;
+                    UUID myUUID = entity.GetUUID();
+                    parentChildren.erase(
+                        std::remove_if(parentChildren.begin(), parentChildren.end(),
+                            [myUUID](UUID id) { return static_cast<uint64_t>(id) == static_cast<uint64_t>(myUUID); }),
+                        parentChildren.end());
+                }
+            }
+        }
+
         if (m_BulletPhysicsWorld)
             m_BulletPhysicsWorld->DestroyBody((entt::entity)entity);
 
         m_Registry.destroy(entity);
+    }
+
+    void Scene::SetParent(Entity child, Entity parent)
+    {
+        if (!child || !parent)
+            return;
+        if (child == parent)
+            return;
+
+        // 防止循环：parent 不能是 child 的后代
+        if (IsAncestorOf(child, parent))
+            return;
+
+        // 1. 记录子实体当前世界变换
+        glm::mat4 childWorldMatrix = GetWorldTransform(child);
+
+        // 2. 先解除旧的父子关系（不调用 RemoveParent 以避免变换转换）
+        if (child.HasComponent<RelationshipComponent>())
+        {
+            auto& oldChildRel = child.GetComponent<RelationshipComponent>();
+            if (static_cast<uint64_t>(oldChildRel.ParentID) != 0)
+            {
+                Entity oldParent = FindEntityByUUID(oldChildRel.ParentID);
+                if (oldParent && oldParent.HasComponent<RelationshipComponent>())
+                {
+                    auto& oldParentChildren = oldParent.GetComponent<RelationshipComponent>().Children;
+                    UUID childUUID = child.GetUUID();
+                    oldParentChildren.erase(
+                        std::remove_if(oldParentChildren.begin(), oldParentChildren.end(),
+                            [childUUID](UUID id) { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
+                        oldParentChildren.end());
+                }
+                oldChildRel.ParentID = 0;
+            }
+        }
+
+        // 3. 建立新的父子关系
+        auto& childRel = child.GetComponent<RelationshipComponent>();
+        auto& parentRel = parent.GetComponent<RelationshipComponent>();
+
+        childRel.ParentID = parent.GetUUID();
+        parentRel.Children.push_back(child.GetUUID());
+
+        // 4. 计算新父物体的世界变换，将子物体世界变换转为相对于新父的本地变换
+        glm::mat4 parentWorldMatrix = GetWorldTransform(parent);
+        glm::mat4 childLocalMatrix = glm::inverse(parentWorldMatrix) * childWorldMatrix;
+
+        // 5. 从本地矩阵分解出 Translation / Rotation / Scale 写回子实体
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(childLocalMatrix, scale, rotation, translation, skew, perspective);
+
+        auto& childTransform = child.GetComponent<TransformComponent>();
+        childTransform.Translation = translation;
+        childTransform.Rotation = glm::eulerAngles(rotation);
+        childTransform.Scale = scale;
+    }
+
+    void Scene::RemoveParent(Entity child)
+    {
+        if (!child || !child.HasComponent<RelationshipComponent>())
+            return;
+
+        auto& childRel = child.GetComponent<RelationshipComponent>();
+        if (static_cast<uint64_t>(childRel.ParentID) == 0)
+            return;
+
+        // 1. 记录子实体当前世界变换（解除前还有父物体）
+        glm::mat4 childWorldMatrix = GetWorldTransform(child);
+
+        // 2. 从父实体的 Children 列表中移除自身
+        Entity parent = FindEntityByUUID(childRel.ParentID);
+        if (parent && parent.HasComponent<RelationshipComponent>())
+        {
+            auto& parentChildren = parent.GetComponent<RelationshipComponent>().Children;
+            UUID childUUID = child.GetUUID();
+            parentChildren.erase(
+                std::remove_if(parentChildren.begin(), parentChildren.end(),
+                    [childUUID](UUID id) { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
+                parentChildren.end());
+        }
+
+        childRel.ParentID = 0;
+
+        // 3. 解除后成为根节点，世界变换 = 本地变换，需把之前的世界变换写回
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(childWorldMatrix, scale, rotation, translation, skew, perspective);
+
+        auto& childTransform = child.GetComponent<TransformComponent>();
+        childTransform.Translation = translation;
+        childTransform.Rotation = glm::eulerAngles(rotation);
+        childTransform.Scale = scale;
+    }
+
+    std::vector<Entity> Scene::GetChildren(Entity parent)
+    {
+        std::vector<Entity> result;
+        if (!parent || !parent.HasComponent<RelationshipComponent>())
+            return result;
+
+        auto& rel = parent.GetComponent<RelationshipComponent>();
+        for (auto childUUID : rel.Children)
+        {
+            Entity child = FindEntityByUUID(childUUID);
+            if (child)
+                result.push_back(child);
+        }
+        return result;
+    }
+
+    Entity Scene::FindEntityByUUID(UUID uuid)
+    {
+        auto view = m_Registry.view<IDComponent>();
+        for (auto entity : view)
+        {
+            if (view.get<IDComponent>(entity).ID == uuid)
+                return Entity{entity, this};
+        }
+        return {};
+    }
+
+    bool Scene::IsAncestorOf(Entity ancestor, Entity entity)
+    {
+        if (!entity || !entity.HasComponent<RelationshipComponent>())
+            return false;
+
+        auto& rel = entity.GetComponent<RelationshipComponent>();
+        if (static_cast<uint64_t>(rel.ParentID) == 0)
+            return false;
+
+        if (rel.ParentID == ancestor.GetUUID())
+            return true;
+
+        Entity parent = FindEntityByUUID(rel.ParentID);
+        return parent ? IsAncestorOf(ancestor, parent) : false;
+    }
+
+    glm::mat4 Scene::GetWorldTransform(Entity entity)
+    {
+        if (!entity || !entity.HasComponent<TransformComponent>())
+            return glm::mat4(1.0f);
+
+        glm::mat4 localTransform = entity.GetComponent<TransformComponent>().GetTransform();
+
+        if (entity.HasComponent<RelationshipComponent>())
+        {
+            auto& rel = entity.GetComponent<RelationshipComponent>();
+            if (static_cast<uint64_t>(rel.ParentID) != 0)
+            {
+                Entity parent = FindEntityByUUID(rel.ParentID);
+                if (parent)
+                    return GetWorldTransform(parent) * localTransform;
+            }
+        }
+
+        return localTransform;
+    }
+
+    std::vector<Entity> Scene::GetRootEntities()
+    {
+        std::vector<Entity> roots;
+        auto view = m_Registry.view<IDComponent, RelationshipComponent>();
+        for (auto entity : view)
+        {
+            auto& rel = view.get<RelationshipComponent>(entity);
+            if (static_cast<uint64_t>(rel.ParentID) == 0)
+                roots.push_back(Entity{entity, this});
+        }
+        return roots;
     }
 
     void Scene::OnUpdateEditor(Timestep ts, EditorCamera& camera)
@@ -69,35 +282,101 @@ namespace Engine
         {
             m_BulletPhysicsWorld->Step(ts, m_Registry);
 
-            // 碰撞触发粒子爆发
+            // 碰撞触发粒子爆发 + 碰撞回调分发
+            std::set<std::pair<uint32_t, uint32_t>> processedParticlePairs;
             for (const auto& event : m_BulletPhysicsWorld->GetCollisionEvents())
             {
-                auto tryTriggerBurst = [&](entt::entity entity, const glm::vec3& normal) {
-                    if (!m_Registry.valid(entity)) return;
-                    if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(entity)) return;
+                // 1) 碰撞粒子触发（仅 Enter 事件）
+                if (event.Type == CollisionEventType::Enter)
+                {
+                    auto tryTriggerBurst = [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal) {
+                        if (!m_Registry.valid(triggerEntity)) return;
+                        if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(triggerEntity)) return;
 
-                    auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(entity);
-                    auto& emitter = m_Registry.get<ParticleEmitterComponent>(entity);
+                        // entity pair 去重
+                        uint32_t a = static_cast<uint32_t>(triggerEntity);
+                        uint32_t b = static_cast<uint32_t>(otherEntity);
+                        auto key = std::make_pair(std::min(a, b), std::max(a, b));
+                        if (processedParticlePairs.count(key))
+                            return;
+                        processedParticlePairs.insert(key);
 
-                    if (!trigger.Enabled) return;
-                    if (event.Impulse < trigger.MinImpulse) return;
+                        auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(triggerEntity);
+                        auto& emitter = m_Registry.get<ParticleEmitterComponent>(triggerEntity);
 
-                    // 按冲量比例缩放爆发数（MinImpulse 最小 0.001 防除零）
-                    float safeMinImpulse = std::max(trigger.MinImpulse, 0.001f);
-                    float scale = std::min(event.Impulse / safeMinImpulse, 5.0f);
-                    int burst = static_cast<int>(trigger.BurstOnCollision * scale);
-                    emitter.CollisionBurstCount += burst;
+                        if (!trigger.Enabled) return;
+                        if (event.Impulse < trigger.MinImpulse) return;
 
-                    // 限制总碰撞爆发不超过粒子池容量
-                    emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
-                        static_cast<int>(emitter.MaxParticles));
+                        // 按冲量比例缩放爆发数（MinImpulse 最小 0.001 防除零）
+                        float safeMinImpulse = std::max(trigger.MinImpulse, 0.001f);
+                        float scale = std::min(event.Impulse / safeMinImpulse, 5.0f);
+                        int burst = static_cast<int>(trigger.BurstOnCollision * scale);
+                        emitter.CollisionBurstCount += burst;
 
-                    if (trigger.UseCollisionNormal)
-                        emitter.EmitDirection = normal;
+                        // 限制每帧碰撞爆发数
+                        emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
+                            trigger.MaxBurstPerFrame);
+                        // 限制总碰撞爆发不超过粒子池容量
+                        emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
+                            static_cast<int>(emitter.MaxParticles));
+
+                        if (trigger.UseCollisionNormal)
+                            emitter.EmitDirection = normal;
+                    };
+
+                    tryTriggerBurst(event.EntityA, event.EntityB, event.ContactNormal);
+                    tryTriggerBurst(event.EntityB, event.EntityA, -event.ContactNormal);
+                }
+
+                // 2) 碰撞回调分发到 NativeScript
+                auto dispatchCallback = [&](entt::entity selfEntity, entt::entity otherEntity,
+                                            const glm::vec3& contactNormal) {
+                    if (!m_Registry.valid(selfEntity)) return;
+                    if (!m_Registry.all_of<NativeScriptComponent>(selfEntity)) return;
+
+                    auto& nsc = m_Registry.get<NativeScriptComponent>(selfEntity);
+                    if (!nsc.Instance) return;
+
+                    Entity otherWrapped = {otherEntity, this};
+
+                    if (event.IsTrigger)
+                    {
+                        // 触发器回调
+                        if (event.Type == CollisionEventType::Enter)
+                            nsc.Instance->OnTriggerEnter(otherWrapped);
+                        else if (event.Type == CollisionEventType::Exit)
+                            nsc.Instance->OnTriggerExit(otherWrapped);
+                    }
+                    else
+                    {
+                        // 物理碰撞回调
+                        if (event.Type == CollisionEventType::Enter)
+                        {
+                            CollisionCallbackInfo info;
+                            info.OtherEntity = otherWrapped;
+                            info.ContactPoint = event.ContactPoint;
+                            info.ContactNormal = contactNormal;
+                            info.Impulse = event.Impulse;
+                            nsc.Instance->OnCollisionEnter(info);
+                        }
+                        else if (event.Type == CollisionEventType::Stay)
+                        {
+                            CollisionCallbackInfo info;
+                            info.OtherEntity = otherWrapped;
+                            info.ContactPoint = event.ContactPoint;
+                            info.ContactNormal = contactNormal;
+                            info.Impulse = event.Impulse;
+                            nsc.Instance->OnCollisionStay(info);
+                        }
+                        else if (event.Type == CollisionEventType::Exit)
+                        {
+                            nsc.Instance->OnCollisionExit(otherWrapped);
+                        }
+                    }
                 };
 
-                tryTriggerBurst(event.EntityA, event.ContactNormal);
-                tryTriggerBurst(event.EntityB, -event.ContactNormal);
+                dispatchCallback(event.EntityA, event.EntityB, event.ContactNormal);
+                dispatchCallback(event.EntityB, event.EntityA, -event.ContactNormal);
             }
         }
 
@@ -225,6 +504,10 @@ namespace Engine
             if (srcReg.all_of<TransformComponent>(srcEntity))
                 newEntity.GetComponent<TransformComponent>() = srcReg.get<TransformComponent>(srcEntity);
 
+            // RelationshipComponent: CreateEntityWithUUID 已添加默认的，直接覆盖数据
+            if (srcReg.all_of<RelationshipComponent>(srcEntity))
+                newEntity.GetComponent<RelationshipComponent>() = srcReg.get<RelationshipComponent>(srcEntity);
+
             if (srcReg.all_of<MeshRendererComponent>(srcEntity))
             {
                 auto mrc = srcReg.get<MeshRendererComponent>(srcEntity);
@@ -255,7 +538,6 @@ namespace Engine
             if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))
             {
                 auto pe = srcReg.get<ParticleEmitterComponent>(srcEntity);
-                pe.RuntimeParticleSystem = nullptr;  // 清除裸指针，避免双重释放
                 pe.CollisionBurstCount = 0;
                 newEntity.AddComponent<ParticleEmitterComponent>(pe);
             }
@@ -285,16 +567,16 @@ namespace Engine
             if (srcReg.all_of<AudioListenerComponent>(srcEntity))
                 newEntity.AddComponent<AudioListenerComponent>(srcReg.get<AudioListenerComponent>(srcEntity));
 
-            // VideoPlayerComponent: 拷贝配置，清除运行时状态
+            // VideoPlayerComponent: 拷贝配置，清除运行时状态（move-only，手动构建）
             if (srcReg.all_of<VideoPlayerComponent>(srcEntity))
             {
-                auto vpc = srcReg.get<VideoPlayerComponent>(srcEntity);
-                vpc.RuntimeDecoder = nullptr;
-                vpc.RuntimeAudioSource = 0;
-                vpc.RuntimeTexture = nullptr;
-                vpc.RuntimeAudioBuffers.clear();
-                vpc.IsPlaying = false;
-                newEntity.AddComponent<VideoPlayerComponent>(vpc);
+                auto& srcVpc = srcReg.get<VideoPlayerComponent>(srcEntity);
+                auto& dstVpc = newEntity.AddComponent<VideoPlayerComponent>();
+                dstVpc.StreamURL = srcVpc.StreamURL;
+                dstVpc.PlayOnStart = srcVpc.PlayOnStart;
+                dstVpc.Loop = srcVpc.Loop;
+                dstVpc.Volume = srcVpc.Volume;
+                // 运行时状态保持默认（nullptr / 0 / false）
             }
         }
 

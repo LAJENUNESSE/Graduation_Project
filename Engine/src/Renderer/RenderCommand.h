@@ -91,6 +91,11 @@ namespace Engine
             s_RendererAPI->BindTextureUnit(slot, textureID);
         }
 
+        static void BindCubemapUnit(uint32_t slot, uint32_t textureID)
+        {
+            s_RendererAPI->BindCubemapUnit(slot, textureID);
+        }
+
         static void ClearColorOnly()
         {
             s_RendererAPI->ClearColorOnly();

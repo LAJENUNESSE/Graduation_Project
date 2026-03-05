@@ -13,10 +13,12 @@ namespace Engine
     ENGINE_COMPONENT(BoxColliderComponent, "盒碰撞器")
     ENGINE_PROPERTY(BoxColliderComponent, HalfExtents, "半尺寸", Vec3)
     ENGINE_PROPERTY(BoxColliderComponent, Offset, "偏移", Vec3)
+    ENGINE_PROPERTY(BoxColliderComponent, IsTrigger, "触发器", Bool)
 
     REGISTER_COMPONENT_BEGIN(BoxColliderComponent)
     REGISTER_COMPONENT_PROPERTY(BoxColliderComponent, HalfExtents)
     REGISTER_COMPONENT_PROPERTY(BoxColliderComponent, Offset)
+    REGISTER_COMPONENT_PROPERTY(BoxColliderComponent, IsTrigger)
     REGISTER_COMPONENT_END(BoxColliderComponent)
 
     // ---- SphereColliderComponent 反射 ----
@@ -25,11 +27,30 @@ namespace Engine
     ENGINE_PROPERTY_EX(SphereColliderComponent, Radius, "半径", Float,
         hints.Speed = 0.01f; hints.Min = 0.01f; hints.Max = 100.0f; hints.Format = "%.2f")
     ENGINE_PROPERTY(SphereColliderComponent, Offset, "偏移", Vec3)
+    ENGINE_PROPERTY(SphereColliderComponent, IsTrigger, "触发器", Bool)
 
     REGISTER_COMPONENT_BEGIN(SphereColliderComponent)
     REGISTER_COMPONENT_PROPERTY(SphereColliderComponent, Radius)
     REGISTER_COMPONENT_PROPERTY(SphereColliderComponent, Offset)
+    REGISTER_COMPONENT_PROPERTY(SphereColliderComponent, IsTrigger)
     REGISTER_COMPONENT_END(SphereColliderComponent)
+
+    // ---- MeshColliderComponent 反射 ----
+
+    static const char* s_MeshColliderTypeNames[] = {"凸包", "静态三角网格"};
+
+    ENGINE_COMPONENT(MeshColliderComponent, "网格碰撞器")
+    ENGINE_PROPERTY_EX(MeshColliderComponent, Type, "碰撞类型", Enum,
+        hints.EnumNames = s_MeshColliderTypeNames; hints.EnumCount = 2)
+    ENGINE_PROPERTY_EX(MeshColliderComponent, MeshPath, "网格路径", AssetPath,
+        hints.FileFilter = "*.gltf;*.glb;*.obj;*.fbx"; hints.FileDesc = "3D 模型")
+    ENGINE_PROPERTY(MeshColliderComponent, IsTrigger, "触发器", Bool)
+
+    REGISTER_COMPONENT_BEGIN(MeshColliderComponent)
+    REGISTER_COMPONENT_PROPERTY(MeshColliderComponent, Type)
+    REGISTER_COMPONENT_PROPERTY(MeshColliderComponent, MeshPath)
+    REGISTER_COMPONENT_PROPERTY(MeshColliderComponent, IsTrigger)
+    REGISTER_COMPONENT_END(MeshColliderComponent)
 
     // ---- CollisionParticleTriggerComponent 反射 ----
 
@@ -40,12 +61,15 @@ namespace Engine
     ENGINE_PROPERTY_EX(CollisionParticleTriggerComponent, MinImpulse, "最小冲量", Float,
         hints.Speed = 0.1f; hints.Min = 0.0f; hints.Max = 100.0f; hints.Format = "%.1f")
     ENGINE_PROPERTY(CollisionParticleTriggerComponent, UseCollisionNormal, "使用碰撞法线", Bool)
+    ENGINE_PROPERTY_EX(CollisionParticleTriggerComponent, MaxBurstPerFrame, "每帧最大爆发", Int,
+        hints.Speed = 10.0f; hints.Min = 1.0f; hints.Max = 10000.0f)
 
     REGISTER_COMPONENT_BEGIN(CollisionParticleTriggerComponent)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, Enabled)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, BurstOnCollision)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, MinImpulse)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, UseCollisionNormal)
+    REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, MaxBurstPerFrame)
     REGISTER_COMPONENT_END(CollisionParticleTriggerComponent)
 
     // ---- RigidBodyComponent 反射 ----
@@ -224,6 +248,7 @@ namespace Engine
     {
         (void)s_Registered_BoxColliderComponent;
         (void)s_Registered_SphereColliderComponent;
+        (void)s_Registered_MeshColliderComponent;
         (void)s_Registered_CollisionParticleTriggerComponent;
         (void)s_Registered_RigidBodyComponent;
         (void)s_Registered_LightComponent;
