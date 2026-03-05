@@ -5,6 +5,9 @@
 #include "Scene/Entity.h"
 #include "Panels/SceneHierarchyPanel.h"
 #include "Panels/PropertiesPanel.h"
+#include "Panels/ConsolePanel.h"
+#include "Panels/AssetBrowserPanel.h"
+#include "UndoSystem.h"
 #include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderer.h"
 #include "Physics/PhysicsDebugDraw.h"
@@ -32,6 +35,7 @@ namespace Engine
 
         void NewScene();
         void OpenScene();
+        void OpenScene(const std::string& filepath);
         void SaveScene();
 
         void OnScenePlay();
@@ -55,6 +59,17 @@ namespace Engine
 
         SceneHierarchyPanel m_HierarchyPanel;
         PropertiesPanel m_PropertiesPanel;
+        ConsolePanel m_ConsolePanel;
+        AssetBrowserPanel m_AssetBrowserPanel;
+
+        // Undo/Redo 系统
+        CommandHistory m_CommandHistory;
+
+        // Gizmo 拖拽 Transform 快照（用于生成 undo 命令）
+        bool m_GizmoWasUsing = false;
+        glm::vec3 m_GizmoStartTranslation = {};
+        glm::vec3 m_GizmoStartRotation = {};
+        glm::vec3 m_GizmoStartScale = {};
 
         glm::vec2 m_ViewportSize = {1280.0f, 720.0f};
         glm::vec2 m_ViewportBounds[2] = {};

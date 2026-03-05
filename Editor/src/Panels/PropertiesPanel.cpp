@@ -475,6 +475,22 @@ namespace Engine
                 ImGui::TextDisabled("(%s)", modelPath.c_str());
             }
 
+            // 拖拽接收：从资产浏览器拖入模型文件
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL"))
+                {
+                    std::string droppedPath(static_cast<const char*>(payload->Data));
+                    auto meshHandle = AssetManager::Load<Mesh>(droppedPath);
+                    if (meshHandle.IsValid())
+                    {
+                        component.Type = MeshType::Model;
+                        component.MeshAsset = meshHandle;
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
             ImGui::Separator();
             ImGui::Text("PBR 材质");
             ImGui::DragFloat("金属度", &component.Metallic, 0.01f, 0.0f, 1.0f, "%.2f");
@@ -486,13 +502,23 @@ namespace Engine
                 char texPathBuf[256];
                 memset(texPathBuf, 0, sizeof(texPathBuf));
                 std::strncpy(texPathBuf, texPath.c_str(), sizeof(texPathBuf) - 1);
-                if (ImGui::InputText("纹理路径", texPathBuf, sizeof(texPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                if (ImGui::InputText("\xe7\xba\xb9\xe7\x90\x86\xe8\xb7\xaf\xe5\xbe\x84", texPathBuf, sizeof(texPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     std::string newPath(texPathBuf);
                     if (!newPath.empty())
                         component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(newPath);
                     else
                         component.DiffuseTextureAsset = {};
+                }
+                // 拖拽接收：从资产浏览器拖入纹理
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE"))
+                    {
+                        std::string droppedPath(static_cast<const char*>(payload->Data));
+                        component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(droppedPath);
+                    }
+                    ImGui::EndDragDropTarget();
                 }
             }
             ImGui::SameLine();
@@ -532,19 +558,29 @@ namespace Engine
             ImGui::DragFloat("平铺 Y", &component.Tiling.y, 0.1f, 0.01f, 100.0f, "%.2f");
 
             ImGui::Separator();
-            ImGui::Text("法线贴图");
+            ImGui::Text("\xe6\xb3\x95\xe7\xba\xbf\xe8\xb4\xb4\xe5\x9b\xbe");
             {
                 const std::string& normalPath = AssetManager::GetPath<Texture2D>(component.NormalMapAsset);
                 char normalPathBuf[256];
                 memset(normalPathBuf, 0, sizeof(normalPathBuf));
                 std::strncpy(normalPathBuf, normalPath.c_str(), sizeof(normalPathBuf) - 1);
-                if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                if (ImGui::InputText("\xe6\xb3\x95\xe7\xba\xbf\xe8\xb4\xb4\xe5\x9b\xbe\xe8\xb7\xaf\xe5\xbe\x84", normalPathBuf, sizeof(normalPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     std::string newPath(normalPathBuf);
                     if (!newPath.empty())
                         component.NormalMapAsset = AssetManager::Load<Texture2D>(newPath);
                     else
                         component.NormalMapAsset = {};
+                }
+                // 拖拽接收：从资产浏览器拖入法线贴图
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE"))
+                    {
+                        std::string droppedPath(static_cast<const char*>(payload->Data));
+                        component.NormalMapAsset = AssetManager::Load<Texture2D>(droppedPath);
+                    }
+                    ImGui::EndDragDropTarget();
                 }
             }
             ImGui::SameLine();
@@ -867,15 +903,24 @@ namespace Engine
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // AudioSource
-        DrawComponent<AudioSourceComponent>("音频源", entity, [](auto& component)
+        DrawComponent<AudioSourceComponent>("\xe9\x9f\xb3\xe9\xa2\x91\xe6\xba\x90", entity, [](auto& component)
         {
             // 音频文件路径
             char pathBuf[256];
             memset(pathBuf, 0, sizeof(pathBuf));
             std::strncpy(pathBuf, component.AudioPath.c_str(), sizeof(pathBuf) - 1);
-            if (ImGui::InputText("音频文件", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+            if (ImGui::InputText("\xe9\x9f\xb3\xe9\xa2\x91\xe6\x96\x87\xe4\xbb\xb6", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
             {
                 component.AudioPath = std::string(pathBuf);
+            }
+            // 拖拽接收：从资产浏览器拖入音频文件
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_AUDIO"))
+                {
+                    component.AudioPath = std::string(static_cast<const char*>(payload->Data));
+                }
+                ImGui::EndDragDropTarget();
             }
             ImGui::SameLine();
             if (ImGui::Button("浏览##Audio"))

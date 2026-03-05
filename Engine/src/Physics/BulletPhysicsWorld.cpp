@@ -2,13 +2,22 @@
 #include "Physics/BulletPhysicsWorld.h"
 #include "Scene/Components.h"
 #include "Terrain/TerrainMeshGenerator.h"
+#include "Renderer/Mesh.h"
+#include "Asset/AssetManager.h"
 #include "Core/Log.h"
 
 #include <btBulletDynamicsCommon.h>
 #include <BulletCollision/CollisionShapes/btHeightfieldTerrainShape.h>
+#include <BulletCollision/CollisionShapes/btConvexHullShape.h>
+#include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
+#include <BulletCollision/CollisionShapes/btTriangleMesh.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 namespace Engine
 {
@@ -36,6 +45,45 @@ namespace Engine
         return glm::eulerAngles(gq);
     }
 
+    // 从模型文件加载顶点和索引数据（用于 MeshCollider）
+    static bool LoadMeshData(const std::string& filepath,
+                             std::vector<glm::vec3>& outVertices,
+                             std::vector<uint32_t>& outIndices)
+    {
+        Assimp::Importer importer;
+        unsigned int flags = aiProcess_Triangulate
+                           | aiProcess_JoinIdenticalVertices;
+
+        const aiScene* scene = importer.ReadFile(filepath, flags);
+        if (!scene || !scene->mRootNode)
+        {
+            ENGINE_CORE_ERROR("MeshCollider: 无法加载模型 '{0}': {1}", filepath, importer.GetErrorString());
+            return false;
+        }
+
+        uint32_t vertexOffset = 0;
+        for (unsigned int m = 0; m < scene->mNumMeshes; m++)
+        {
+            aiMesh* aiM = scene->mMeshes[m];
+
+            for (unsigned int v = 0; v < aiM->mNumVertices; v++)
+            {
+                outVertices.push_back({aiM->mVertices[v].x, aiM->mVertices[v].y, aiM->mVertices[v].z});
+            }
+
+            for (unsigned int f = 0; f < aiM->mNumFaces; f++)
+            {
+                aiFace& face = aiM->mFaces[f];
+                for (unsigned int i = 0; i < face.mNumIndices; i++)
+                    outIndices.push_back(vertexOffset + face.mIndices[i]);
+            }
+
+            vertexOffset += aiM->mNumVertices;
+        }
+
+        return !outVertices.empty();
+    }
+
     BulletPhysicsWorld::BulletPhysicsWorld()
     {
     }
@@ -53,6 +101,9 @@ namespace Engine
         m_Solver = new btSequentialImpulseConstraintSolver();
         m_DynamicsWorld = new btDiscreteDynamicsWorld(m_Dispatcher, m_Broadphase, m_Solver, m_CollisionConfig);
         m_DynamicsWorld->setGravity(ToBt(gravity));
+
+        m_PreviousFrameContacts.clear();
+        m_CurrentFrameContacts.clear();
     }
 
     void BulletPhysicsWorld::Shutdown()
@@ -69,6 +120,23 @@ namespace Engine
         m_Dispatcher = nullptr;
         delete m_CollisionConfig;
         m_CollisionConfig = nullptr;
+
+        m_PreviousFrameContacts.clear();
+        m_CurrentFrameContacts.clear();
+    }
+
+    bool BulletPhysicsWorld::IsEntityTrigger(entt::registry& reg, entt::entity entity)
+    {
+        if (reg.all_of<BoxColliderComponent>(entity))
+            if (reg.get<BoxColliderComponent>(entity).IsTrigger)
+                return true;
+        if (reg.all_of<SphereColliderComponent>(entity))
+            if (reg.get<SphereColliderComponent>(entity).IsTrigger)
+                return true;
+        if (reg.all_of<MeshColliderComponent>(entity))
+            if (reg.get<MeshColliderComponent>(entity).IsTrigger)
+                return true;
+        return false;
     }
 
     void BulletPhysicsWorld::CreateBodies(entt::registry& reg)
@@ -90,16 +158,79 @@ namespace Engine
 
             // 确定碰撞形状
             btCollisionShape* shape = nullptr;
+            btTriangleMesh* triangleMesh = nullptr;
+            bool isTrigger = false;
 
-            if (reg.all_of<SphereColliderComponent>(entity))
+            if (reg.all_of<MeshColliderComponent>(entity))
+            {
+                // MeshCollider 优先
+                auto& mc = reg.get<MeshColliderComponent>(entity);
+                isTrigger = mc.IsTrigger;
+
+                // 确定网格数据来源
+                std::string meshPath = mc.MeshPath;
+                if (meshPath.empty() && reg.all_of<MeshRendererComponent>(entity))
+                {
+                    auto& mrc = reg.get<MeshRendererComponent>(entity);
+                    if (mrc.Type == MeshType::Model)
+                    {
+                        auto* mesh = AssetManager::Get<Mesh>(mrc.MeshAsset);
+                        if (mesh)
+                            meshPath = mesh->GetModelPath();
+                    }
+                }
+
+                std::vector<glm::vec3> vertices;
+                std::vector<uint32_t> indices;
+
+                bool loaded = false;
+                if (!meshPath.empty())
+                    loaded = LoadMeshData(meshPath, vertices, indices);
+
+                if (loaded && !vertices.empty())
+                {
+                    if (mc.Type == MeshColliderComponent::ColliderType::Convex)
+                    {
+                        // Convex Hull（适用于动态和静态物体）
+                        auto* convexShape = new btConvexHullShape();
+                        for (const auto& v : vertices)
+                        {
+                            convexShape->addPoint(ToBt(v * transform.Scale), false);
+                        }
+                        convexShape->recalcLocalAabb();
+                        shape = convexShape;
+                    }
+                    else
+                    {
+                        // Static BVH Triangle Mesh（仅适用于静态物体）
+                        triangleMesh = new btTriangleMesh();
+                        for (size_t i = 0; i + 2 < indices.size(); i += 3)
+                        {
+                            glm::vec3 v0 = vertices[indices[i]] * transform.Scale;
+                            glm::vec3 v1 = vertices[indices[i + 1]] * transform.Scale;
+                            glm::vec3 v2 = vertices[indices[i + 2]] * transform.Scale;
+                            triangleMesh->addTriangle(ToBt(v0), ToBt(v1), ToBt(v2));
+                        }
+                        shape = new btBvhTriangleMeshShape(triangleMesh, true);
+                    }
+                }
+                else
+                {
+                    ENGINE_CORE_WARN("MeshCollider: 无法加载网格数据，退回到默认盒碰撞体 (entity={0})", entityId);
+                    shape = new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
+                }
+            }
+            else if (reg.all_of<SphereColliderComponent>(entity))
             {
                 auto& sphere = reg.get<SphereColliderComponent>(entity);
+                isTrigger = sphere.IsTrigger;
                 float maxScale = std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
                 shape = new btSphereShape(sphere.Radius * maxScale);
             }
             else if (reg.all_of<BoxColliderComponent>(entity))
             {
                 auto& box = reg.get<BoxColliderComponent>(entity);
+                isTrigger = box.IsTrigger;
                 shape = new btBoxShape(ToBt(box.HalfExtents * transform.Scale));
             }
             else
@@ -112,6 +243,17 @@ namespace Engine
             float mass = 0.0f;
             if (rb.Type == RigidBodyComponent::BodyType::Dynamic)
                 mass = rb.Mass;
+
+            // 静态三角网格不支持 Dynamic（Bullet 限制）
+            if (reg.all_of<MeshColliderComponent>(entity))
+            {
+                auto& mc = reg.get<MeshColliderComponent>(entity);
+                if (mc.Type == MeshColliderComponent::ColliderType::Static && mass > 0.0f)
+                {
+                    ENGINE_CORE_WARN("MeshCollider (Static) 不支持 Dynamic 刚体，强制设为 Static (entity={0})", entityId);
+                    mass = 0.0f;
+                }
+            }
 
             btVector3 localInertia(0, 0, 0);
             if (mass > 0.0f)
@@ -142,6 +284,12 @@ namespace Engine
                 body->setActivationState(DISABLE_DEACTIVATION);
             }
 
+            // Trigger 设置：不产生物理响应，但仍然触发碰撞检测
+            if (isTrigger)
+            {
+                body->setCollisionFlags(body->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+            }
+
             // 固定旋转
             if (rb.FixedRotation)
             {
@@ -157,6 +305,8 @@ namespace Engine
             info.body = body;
             info.shape = shape;
             info.motionState = motionState;
+            info.triangleMesh = triangleMesh;
+            info.isTrigger = isTrigger;
             m_Bodies[entityId] = info;
         }
 
@@ -168,7 +318,7 @@ namespace Engine
             auto& terrain = terrainView.get<TerrainComponent>(entity);
             uint32_t entityId = static_cast<uint32_t>(entity);
 
-            auto* meshData = static_cast<TerrainMeshData*>(terrain.RuntimeMeshData);
+            auto* meshData = terrain.RuntimeMeshData;
             if (!meshData || meshData->HeightData.empty())
                 continue;
 
@@ -203,7 +353,7 @@ namespace Engine
             body->setUserIndex(static_cast<int>(entityId));
             m_DynamicsWorld->addRigidBody(body);
 
-            BodyInfo info{body, terrainShape, motionState};
+            BodyInfo info{body, terrainShape, motionState, nullptr, false};
             m_Bodies[entityId] = info;
         }
     }
@@ -226,6 +376,9 @@ namespace Engine
         if (!m_Dispatcher)
             return;
 
+        // 收集当前帧所有碰撞对
+        m_CurrentFrameContacts.clear();
+
         int numManifolds = m_Dispatcher->getNumManifolds();
         for (int i = 0; i < numManifolds; i++)
         {
@@ -234,25 +387,102 @@ namespace Engine
             const btCollisionObject* objB = manifold->getBody1();
 
             int numContacts = manifold->getNumContacts();
+            if (numContacts <= 0)
+                continue;
+
+            uint32_t idA = static_cast<uint32_t>(objA->getUserIndex());
+            uint32_t idB = static_cast<uint32_t>(objB->getUserIndex());
+
+            // 标准化碰撞对（小 ID 在前）
+            auto key = std::make_pair(std::min(idA, idB), std::max(idA, idB));
+
+            // 取第一个有效接触点的信息
+            float maxImpulse = 0.0f;
+            glm::vec3 bestContactPoint = {0, 0, 0};
+            glm::vec3 bestContactNormal = {0, 0, 0};
+
+            bool hasContact = false;
             for (int j = 0; j < numContacts; j++)
             {
                 btManifoldPoint& pt = manifold->getContactPoint(j);
+                // 只要距离够近就算碰撞（不仅看 impulse，因为 trigger 无 impulse）
+                if (pt.getDistance() <= 0.0f)
+                {
+                    hasContact = true;
+                    float impulse = pt.getAppliedImpulse();
+                    if (impulse > maxImpulse || !hasContact)
+                    {
+                        maxImpulse = impulse;
+                        bestContactPoint = ToGlm(pt.getPositionWorldOnB());
+                        bestContactNormal = ToGlm(pt.m_normalWorldOnB);
+                    }
+                }
+            }
 
-                // 只处理本帧新生碰撞（impulse > 0）
-                float impulse = pt.getAppliedImpulse();
-                if (impulse <= 0.0f)
-                    continue;
+            if (!hasContact)
+                continue;
 
+            // 判断是否为触发器碰撞
+            auto entityA = static_cast<entt::entity>(idA);
+            auto entityB = static_cast<entt::entity>(idB);
+            bool isTrigger = false;
+            if (reg.valid(entityA) && reg.valid(entityB))
+                isTrigger = IsEntityTrigger(reg, entityA) || IsEntityTrigger(reg, entityB);
+
+            ContactPairInfo pairInfo;
+            pairInfo.ContactPoint = bestContactPoint;
+            pairInfo.ContactNormal = bestContactNormal;
+            pairInfo.Impulse = maxImpulse;
+            pairInfo.IsTrigger = isTrigger;
+
+            m_CurrentFrameContacts[key] = pairInfo;
+        }
+
+        // 比较 previous vs current 生成 Enter/Stay/Exit 事件
+
+        // Enter + Stay：遍历当前帧碰撞对
+        for (auto& [key, info] : m_CurrentFrameContacts)
+        {
+            CollisionEvent event;
+            event.EntityA = static_cast<entt::entity>(key.first);
+            event.EntityB = static_cast<entt::entity>(key.second);
+            event.ContactPoint = info.ContactPoint;
+            event.ContactNormal = info.ContactNormal;
+            event.Impulse = info.Impulse;
+            event.IsTrigger = info.IsTrigger;
+
+            if (m_PreviousFrameContacts.find(key) == m_PreviousFrameContacts.end())
+            {
+                event.Type = CollisionEventType::Enter;
+            }
+            else
+            {
+                event.Type = CollisionEventType::Stay;
+            }
+
+            m_CollisionEvents.push_back(event);
+        }
+
+        // Exit：在上一帧有但当前帧没有的碰撞对
+        for (auto& [key, info] : m_PreviousFrameContacts)
+        {
+            if (m_CurrentFrameContacts.find(key) == m_CurrentFrameContacts.end())
+            {
                 CollisionEvent event;
-                event.EntityA = static_cast<entt::entity>(objA->getUserIndex());
-                event.EntityB = static_cast<entt::entity>(objB->getUserIndex());
-                event.ContactPoint = ToGlm(pt.getPositionWorldOnB());
-                event.ContactNormal = ToGlm(pt.m_normalWorldOnB);
-                event.Impulse = impulse;
+                event.Type = CollisionEventType::Exit;
+                event.EntityA = static_cast<entt::entity>(key.first);
+                event.EntityB = static_cast<entt::entity>(key.second);
+                event.ContactPoint = {0, 0, 0};
+                event.ContactNormal = {0, 0, 0};
+                event.Impulse = 0.0f;
+                event.IsTrigger = info.IsTrigger;
 
                 m_CollisionEvents.push_back(event);
             }
         }
+
+        // 交换：当前帧变为上一帧
+        m_PreviousFrameContacts = m_CurrentFrameContacts;
     }
 
     void BulletPhysicsWorld::SyncFromECS(entt::registry& reg)
@@ -327,6 +557,7 @@ namespace Engine
         }
         delete info.shape;
         delete info.motionState;
+        delete info.triangleMesh;
         m_Bodies.erase(it);
     }
 
@@ -344,6 +575,7 @@ namespace Engine
             }
             delete info.shape;
             delete info.motionState;
+            delete info.triangleMesh;
         }
         m_Bodies.clear();
     }

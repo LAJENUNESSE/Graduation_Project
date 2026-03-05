@@ -16,7 +16,7 @@ RenderSettings:
   MSAASamples: 4
   PhysicsBackend: 0
 Skybox:
-  Faces: [/home/liu/Graduation_Project/assets/textures/skybox/right.jpg, /home/liu/Graduation_Project/assets/textures/skybox/left.jpg, /home/liu/Graduation_Project/assets/textures/skybox/top.jpg, /home/liu/Graduation_Project/assets/textures/skybox/bottom.jpg, /home/liu/Graduation_Project/assets/textures/skybox/front.jpg, /home/liu/Graduation_Project/assets/textures/skybox/back.jpg]
+  Faces: [assets/textures/skybox/right.jpg, assets/textures/skybox/left.jpg, assets/textures/skybox/top.jpg, assets/textures/skybox/bottom.jpg, assets/textures/skybox/front.jpg, assets/textures/skybox/back.jpg]
 Entities:
   - Entity: 5714801137704381953
     TagComponent:

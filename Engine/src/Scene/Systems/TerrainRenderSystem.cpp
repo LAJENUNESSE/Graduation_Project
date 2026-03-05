@@ -11,6 +11,29 @@
 namespace Engine
 {
 
+    // 递归计算世界变换矩阵
+    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
+    {
+        auto& transform = reg.get<TransformComponent>(entity);
+        glm::mat4 localMatrix = transform.GetTransform();
+
+        if (reg.all_of<RelationshipComponent>(entity))
+        {
+            auto& rel = reg.get<RelationshipComponent>(entity);
+            if (static_cast<uint64_t>(rel.ParentID) != 0)
+            {
+                auto view = reg.view<IDComponent>();
+                for (auto e : view)
+                {
+                    if (view.get<IDComponent>(e).ID == rel.ParentID)
+                        return ComputeWorldTransform(reg, e) * localMatrix;
+                }
+            }
+        }
+
+        return localMatrix;
+    }
+
     void TerrainRenderSystem::Init()
     {
         m_TerrainShader = Shader::Create("assets/shaders/TerrainPBR.glsl");
@@ -39,7 +62,7 @@ namespace Engine
                 // 释放旧数据
                 if (tc.RuntimeMeshData)
                 {
-                    delete static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+                    delete tc.RuntimeMeshData;
                     tc.RuntimeMeshData = nullptr;
                 }
 
@@ -67,7 +90,7 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+            auto* meshData = tc.RuntimeMeshData;
             if (!meshData || meshData->LODs.empty())
                 continue;
 
@@ -100,7 +123,7 @@ namespace Engine
             else if (dist > tc.LODDistance1 && static_cast<int>(meshData->LODs.size()) >= 2) lod = 1;
 
             // 设置变换
-            m_TerrainShader->SetMat4("u_Transform", transform.GetTransform());
+            m_TerrainShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
             m_TerrainShader->SetMat4("u_ViewProjection", camera.GetViewProjection());
             m_TerrainShader->SetInt("u_EntityID", static_cast<int>(eid));
 
@@ -194,12 +217,12 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = static_cast<TerrainMeshData*>(tc.RuntimeMeshData);
+            auto* meshData = tc.RuntimeMeshData;
             if (!meshData || meshData->LODs.empty())
                 continue;
 
             auto& transform = view.get<TransformComponent>(entity);
-            depthShader->SetMat4("u_Transform", transform.GetTransform());
+            depthShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
 
             // 阴影用 LOD0（最高精度）
             meshData->LODs[0].VAO->Bind();

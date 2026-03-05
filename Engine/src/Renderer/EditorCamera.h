@@ -64,6 +64,11 @@ namespace Engine
 
         void SetViewMatrix(const glm::mat4& viewMatrix);
 
+        float GetNearClip() const { return m_NearClip; }
+        float GetFarClip() const { return m_FarClip; }
+        float GetFOV() const { return m_FOV; }
+        float GetAspectRatio() const { return m_AspectRatio; }
+
     private:
         void UpdateProjection();
         void UpdateView();

@@ -38,6 +38,11 @@ namespace Engine
         // 供 FluidPass 使用
         uint32_t SceneColorTexID = 0;
         uint32_t SceneDepthTexID = 0;
+
+        // 供 SSAO Pass 使用（由 EditorLayer 设置）
+        uint32_t SSAODepthTexID = 0;
+        uint32_t ViewportWidth = 0;
+        uint32_t ViewportHeight = 0;
     };
 
     struct RenderPassConfig
@@ -50,7 +55,7 @@ namespace Engine
     class SceneRenderer
     {
     public:
-        void Init();
+        void Init(uint32_t viewportWidth = 1280, uint32_t viewportHeight = 720);
         void Shutdown();
 
         void BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime);
@@ -69,6 +74,13 @@ namespace Engine
         AudioSystem& GetAudioSystem() { return m_AudioSystem; }
         VideoSystem& GetVideoSystem() { return m_VideoSystem; }
         FluidRenderer& GetFluidRenderer() { return m_FluidRenderer; }
+
+        // SSAO 设置
+        bool& GetSSAOEnabled() { return m_SSAOEnabled; }
+        float& GetSSAORadius() { return m_SSAORadius; }
+        float& GetSSAOBias() { return m_SSAOBias; }
+        int& GetSSAOKernelSize() { return m_SSAOKernelSize; }
+        float& GetSSAOIntensity() { return m_SSAOIntensity; }
 
         // 供 MSAA 解析后单独绘制流体，避免颜色被 blit 覆盖
         void RenderFluidPass();
@@ -95,6 +107,20 @@ namespace Engine
         Ref<Shader> m_PBRShader;
         Ref<Texture2D> m_WhiteTexture;
         AssetHandle m_WhiteTextureHandle;
+
+        // SSAO 资源
+        Ref<Shader> m_SSAOShader;
+        Ref<Shader> m_SSAOBlurShader;
+        Ref<Framebuffer> m_SSAOFBO;
+        Ref<Framebuffer> m_SSAOBlurFBO;
+        uint32_t m_SSAONoiseTexID = 0;
+        uint32_t m_SSAOBlurredTexID = 0;
+        bool m_SSAOEnabled = false;
+        float m_SSAORadius = 0.5f;
+        float m_SSAOBias = 0.025f;
+        int m_SSAOKernelSize = 32;
+        float m_SSAOIntensity = 1.5f;
+        Ref<VertexArray> m_FullscreenQuadVAO;
 
         // Particle systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<ParticleSystemGPU>> m_ParticleSystems;
