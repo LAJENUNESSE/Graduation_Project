@@ -6,7 +6,7 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
-
+#include "Asset/PathUtils.h"
 namespace Engine
 {
 
@@ -28,12 +28,13 @@ namespace Engine
         : m_Path(path), m_Width(0), m_Height(0), m_RendererID(0), m_InternalFormat(GL_RGBA8), m_DataFormat(GL_RGBA)
     {
         int width, height, channels;
+        const std::string resolvedPath = PathUtils::ResolvePathString(path);
         stbi_set_flip_vertically_on_load(1);
         // Force RGBA output — handles 1/2/3/4 channel images uniformly
-        stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+        stbi_uc* data = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
         if (!data)
         {
-            ENGINE_CORE_ERROR("Failed to load image: {0}", path);
+            ENGINE_CORE_ERROR("Failed to load image: {0}", resolvedPath);
             // Create 1x1 magenta fallback
             m_Width = 1;
             m_Height = 1;
@@ -139,7 +140,8 @@ namespace Engine
         for (int i = 0; i < 6; i++)
         {
             int width, height, channels;
-            stbi_uc* data = stbi_load(facePaths[i].c_str(), &width, &height, &channels, 4);
+            const std::string resolvedPath = PathUtils::ResolvePathString(facePaths[i]);
+            stbi_uc* data = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
             if (data)
             {
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8,
@@ -153,7 +155,7 @@ namespace Engine
             }
             else
             {
-                ENGINE_CORE_ERROR("Cubemap face failed to load: {}", facePaths[i]);
+                ENGINE_CORE_ERROR("Cubemap face failed to load: {}", resolvedPath);
                 // 1x1 magenta fallback for this face
                 uint32_t magenta = 0xFFFF00FF;
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8,

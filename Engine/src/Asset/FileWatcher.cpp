@@ -1,7 +1,7 @@
 #include "engpch.h"
 #include "Asset/FileWatcher.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
-
 namespace Engine
 {
 
@@ -11,8 +11,9 @@ namespace Engine
         if (path.find("builtin:") != std::string::npos)
             return;
 
+        const std::string resolvedPath = PathUtils::ResolvePathString(path);
         std::error_code ec;
-        auto lastWrite = std::filesystem::last_write_time(path, ec);
+        auto lastWrite = std::filesystem::last_write_time(resolvedPath, ec);
         if (ec)
             return;
 
@@ -21,13 +22,13 @@ namespace Engine
         {
             if (entry.Handle == handle)
             {
-                entry.Path = path;
+                entry.Path = resolvedPath;
                 entry.LastWrite = lastWrite;
                 return;
             }
         }
 
-        m_Entries.push_back({path, lastWrite, handle});
+        m_Entries.push_back({resolvedPath, lastWrite, handle});
     }
 
     void FileWatcher::Unwatch(AssetHandle handle)

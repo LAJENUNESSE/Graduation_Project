@@ -4,6 +4,7 @@
 #include "Terrain/TerrainMeshGenerator.h"
 #include "Renderer/Mesh.h"
 #include "Asset/AssetManager.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 
 #include <btBulletDynamicsCommon.h>
@@ -51,13 +52,14 @@ namespace Engine
                              std::vector<uint32_t>& outIndices)
     {
         Assimp::Importer importer;
+        const std::string resolvedFilepath = PathUtils::ResolvePathString(filepath);
         unsigned int flags = aiProcess_Triangulate
                            | aiProcess_JoinIdenticalVertices;
 
-        const aiScene* scene = importer.ReadFile(filepath, flags);
+        const aiScene* scene = importer.ReadFile(resolvedFilepath, flags);
         if (!scene || !scene->mRootNode)
         {
-            ENGINE_CORE_ERROR("MeshCollider: 无法加载模型 '{0}': {1}", filepath, importer.GetErrorString());
+            ENGINE_CORE_ERROR("MeshCollider: 无法加载模型 '{0}': {1}", resolvedFilepath, importer.GetErrorString());
             return false;
         }
 

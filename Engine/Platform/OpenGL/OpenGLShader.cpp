@@ -6,7 +6,7 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
-
+#include "Asset/PathUtils.h"
 namespace Engine
 {
 
@@ -56,7 +56,8 @@ namespace Engine
     std::string OpenGLShader::ReadFile(const std::string& filepath)
     {
         std::string result;
-        std::ifstream in(filepath, std::ios::in | std::ios::binary);
+        const std::string resolvedPath = PathUtils::ResolvePathString(filepath);
+        std::ifstream in(resolvedPath, std::ios::in | std::ios::binary);
         if (in)
         {
             in.seekg(0, std::ios::end);
@@ -69,12 +70,12 @@ namespace Engine
             }
             else
             {
-                ENGINE_CORE_ERROR("Could not read from file '{0}'", filepath);
+                ENGINE_CORE_ERROR("Could not read from file '{0}'", resolvedPath);
             }
         }
         else
         {
-            ENGINE_CORE_ERROR("Could not open file '{0}'", filepath);
+            ENGINE_CORE_ERROR("Could not open file '{0}'", resolvedPath);
         }
         return result;
     }

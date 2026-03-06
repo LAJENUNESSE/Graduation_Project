@@ -1,9 +1,9 @@
 #include "engpch.h"
 #include "Audio/AudioClip.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 
 #include <AL/al.h>
-
 namespace Engine
 {
 
@@ -20,9 +20,10 @@ namespace Engine
     AudioClip AudioClip::LoadFromFile(const std::string& path)
     {
         AudioClip clip;
+        const std::string resolvedPath = PathUtils::ResolvePathString(path);
 
         // 1. Open file in binary mode
-        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        std::ifstream file(resolvedPath, std::ios::binary | std::ios::ate);
         if (!file.is_open())
         {
             ENGINE_CORE_ERROR("AudioClip: 无法打开文件 '{}'", path);

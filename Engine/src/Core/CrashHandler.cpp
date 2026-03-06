@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Core/CrashHandler.h"
 #include "Core/Log.h"
+#include "Asset/PathUtils.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -32,7 +33,7 @@ namespace Engine
             LONG WINAPI HandleUnhandledException(EXCEPTION_POINTERS* exceptionPointers)
             {
                 std::error_code ec;
-                const auto dumpDirectory = std::filesystem::current_path(ec) / "logs" / "crash";
+                const auto dumpDirectory = PathUtils::GetLogsRoot() / "crash";
                 std::filesystem::create_directories(dumpDirectory, ec);
 
                 SYSTEMTIME now{};
@@ -93,4 +94,3 @@ namespace Engine
         }
     } // namespace CrashHandler
 } // namespace Engine
-

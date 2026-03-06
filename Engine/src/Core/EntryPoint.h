@@ -3,6 +3,7 @@
 #include "Core/Application.h"
 #include "Core/Log.h"
 #include "Core/CrashHandler.h"
+#include "Asset/PathUtils.h"
 
 #include <filesystem>
 #ifdef _WIN32
@@ -11,7 +12,7 @@
 
 extern Engine::Application* Engine::CreateApplication();
 
-static void SetWorkingDirectoryToProjectRoot()
+static void InitializeProjectRootFromExecutable()
 {
 #ifdef _WIN32
     wchar_t exePath[MAX_PATH];
@@ -19,28 +20,18 @@ static void SetWorkingDirectoryToProjectRoot()
         return;
 
     std::filesystem::path dir = std::filesystem::path(exePath).parent_path();
-
-    for (int i = 0; i < 10; ++i)
+    if (!Engine::PathUtils::DiscoverProjectRoot(dir))
     {
-        if (std::filesystem::exists(dir / "assets") &&
-            std::filesystem::exists(dir / "Editor"))
-        {
-            std::filesystem::current_path(dir);
-            printf("[EntryPoint] Set working directory to: %s\n", dir.string().c_str());
-            return;
-        }
-
-        auto parent = dir.parent_path();
-        if (parent == dir)
-            break;
-        dir = parent;
+        Engine::PathUtils::SetProjectRoot(dir);
+        printf("[EntryPoint] Failed to discover project root from executable, fallback to executable directory: %s\n",
+               Engine::PathUtils::GetProjectRoot().string().c_str());
     }
 #endif
 }
 
 int main(int argc, char** argv)
 {
-    SetWorkingDirectoryToProjectRoot();
+    InitializeProjectRootFromExecutable();
 
     Engine::Log::Init();
     Engine::CrashHandler::Install();

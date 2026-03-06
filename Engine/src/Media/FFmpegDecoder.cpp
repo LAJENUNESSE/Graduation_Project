@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Media/FFmpegDecoder.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 
 extern "C" {
@@ -10,7 +11,6 @@ extern "C" {
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
 }
-
 namespace Engine
 {
 
@@ -33,6 +33,7 @@ namespace Engine
         bool isNetworkStream = url.find("rtsp://") == 0 || url.find("rtmp://") == 0
                             || url.find("rtp://")  == 0 || url.find("udp://")  == 0
                             || url.find("http://") == 0 || url.find("https://") == 0;
+        const std::string sourcePath = isNetworkStream ? url : PathUtils::ResolvePathString(url);
         if (isNetworkStream)
         {
             av_dict_set(&opts, "rtsp_transport", "tcp", 0);       // RTSP 强制 TCP（避免 WSL2 UDP 问题）
@@ -43,13 +44,13 @@ namespace Engine
             av_dict_set(&opts, "probesize",  "500000", 0);        // 探测数据量 500KB
         }
         ENGINE_CORE_INFO("FFmpegDecoder::Open — 正在打开: {}", url);
-        int ret = avformat_open_input(&m_FormatCtx, url.c_str(), nullptr, &opts);
+        int ret = avformat_open_input(&m_FormatCtx, sourcePath.c_str(), nullptr, &opts);
         av_dict_free(&opts);
         if (ret < 0)
         {
             char errBuf[AV_ERROR_MAX_STRING_SIZE];
             av_strerror(ret, errBuf, sizeof(errBuf));
-            ENGINE_CORE_ERROR("FFmpegDecoder::Open — avformat_open_input 失败: {} ({})", errBuf, url);
+            ENGINE_CORE_ERROR("FFmpegDecoder::Open — avformat_open_input 失败: {} ({})", errBuf, sourcePath);
             return false;
         }
 
