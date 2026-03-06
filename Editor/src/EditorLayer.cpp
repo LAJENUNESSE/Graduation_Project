@@ -171,120 +171,9 @@ namespace Engine
         PerformanceMonitor::Get().SetSceneRenderCPU(sceneRenderCpuMs);
     }
 
-    void EditorLayer::OnImGuiRender()
+        void EditorLayer::OnImGuiRender()
     {
-        // Full-screen dockspace
-        static bool dockspaceOpen = true;
-        static ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_None;
-
-        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(viewport->WorkPos);
-        ImGui::SetNextWindowSize(viewport->WorkSize);
-        ImGui::SetNextWindowViewport(viewport->ID);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        windowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
-                       ImGuiWindowFlags_NoNavFocus;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::Begin("DockSpace", &dockspaceOpen, windowFlags);
-        ImGui::PopStyleVar(3);
-
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
-        {
-            ImGuiID dockspaceId = ImGui::GetID("MyDockSpace");
-            ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockspaceFlags);
-        }
-
-        // Menu bar
-        if (ImGui::BeginMenuBar())
-        {
-            if (ImGui::BeginMenu("\xe6\x96\x87\xe4\xbb\xb6"))
-            {
-                if (ImGui::MenuItem("\xe6\x96\xb0\xe5\xbb\xba\xe5\x9c\xba\xe6\x99\xaf", "Ctrl+N"))
-                    NewScene();
-                if (ImGui::MenuItem("\xe6\x89\x93\xe5\xbc\x80\xe5\x9c\xba\xe6\x99\xaf...", "Ctrl+O"))
-                    OpenScene();
-                if (ImGui::MenuItem("\xe4\xbf\x9d\xe5\xad\x98\xe5\x9c\xba\xe6\x99\xaf...", "Ctrl+Shift+S"))
-                    SaveScene();
-                ImGui::Separator();
-                if (ImGui::MenuItem("\xe9\x80\x80\xe5\x87\xba"))
-                    Application::Get().Close();
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("\xe7\xbc\x96\xe8\xbe\x91")) // 编辑
-            {
-                // 撤销
-                {
-                    std::string undoLabel = "\xe6\x92\xa4\xe9\x94\x80"; // 撤销
-                    std::string undoDesc = m_CommandHistory.GetUndoDescription();
-                    if (!undoDesc.empty())
-                        undoLabel += " (" + undoDesc + ")";
-                    if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, m_CommandHistory.CanUndo()))
-                        m_CommandHistory.UndoCommand();
-                }
-                // 重做
-                {
-                    std::string redoLabel = "\xe9\x87\x8d\xe5\x81\x9a"; // 重做
-                    std::string redoDesc = m_CommandHistory.GetRedoDescription();
-                    if (!redoDesc.empty())
-                        redoLabel += " (" + redoDesc + ")";
-                    if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, m_CommandHistory.CanRedo()))
-                        m_CommandHistory.RedoCommand();
-                }
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("\xe8\xa7\x86\xe5\x9b\xbe"))
-            {
-                bool showStatsPanel = m_PanelCoordinator.IsStatsPanelVisible();
-                if (ImGui::MenuItem("性能监控", nullptr, showStatsPanel))
-                    m_PanelCoordinator.ToggleStatsPanelVisible();
-                ImGui::EndMenu();
-            }
-            ImGui::EndMenuBar();
-        }
-
-        // Play/Stop toolbar
-        {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
-
-            ImGui::Begin("##\xe5\xb7\xa5\xe5\x85\xb7\xe6\xa0\x8f", nullptr,
-                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar |
-                ImGuiWindowFlags_NoScrollWithMouse);
-
-            float windowWidth = ImGui::GetWindowContentRegionMax().x;
-            float buttonWidth = 80.0f;
-            float buttonHeight = 28.0f;
-
-            ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
-            ImGui::SetCursorPosY((ImGui::GetWindowHeight() - buttonHeight) * 0.5f);
-
-            if (m_SceneSession.GetState() == SceneState::Edit)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.5f, 0.15f, 1.0f));
-                if (ImGui::Button("\xe2\x96\xb6 \xe6\x92\xad\xe6\x94\xbe", ImVec2(buttonWidth, buttonHeight)))
-                    OnScenePlay();
-                ImGui::PopStyleColor(3);
-            }
-            else if (m_SceneSession.GetState() == SceneState::Play)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
-                if (ImGui::Button("\xe2\x96\xa0 \xe5\x81\x9c\xe6\xad\xa2", ImVec2(buttonWidth, buttonHeight)))
-                    OnSceneStop();
-                ImGui::PopStyleColor(3);
-            }
-
-            ImGui::PopStyleVar(2);
-            ImGui::End();
-        }
+        HandleShellActions(m_EditorShell.Draw(BuildShellState()));
 
         m_PanelCoordinator.RenderPanels();
 
@@ -463,7 +352,6 @@ namespace Engine
         ImGui::End();
         ImGui::PopStyleVar();
 
-        ImGui::End(); // DockSpace
     }
 
     void EditorLayer::OnEvent(Event& event)
@@ -475,39 +363,15 @@ namespace Engine
         dispatcher.Dispatch<MouseButtonPressedEvent>(ENGINE_BIND_EVENT_FN(EditorLayer::OnMouseButtonPressed));
     }
 
-    bool EditorLayer::OnKeyPressed(KeyPressedEvent& e)
+        bool EditorLayer::OnKeyPressed(KeyPressedEvent& e)
     {
+        HandleShellActions(m_EditorShell.OnKeyPressed(e, BuildShellState()));
+
         if (e.GetRepeatCount() > 0)
             return false;
 
-        bool control = Input::IsKeyPressed(KeyCode::LeftControl) || Input::IsKeyPressed(KeyCode::RightControl);
-        bool shift = Input::IsKeyPressed(KeyCode::LeftShift) || Input::IsKeyPressed(KeyCode::RightShift);
-
         switch (static_cast<KeyCode>(e.GetKeyCode()))
         {
-        case KeyCode::N:
-            if (control)
-                NewScene();
-            break;
-        case KeyCode::O:
-            if (control)
-                OpenScene();
-            break;
-        case KeyCode::S:
-            if (control && shift)
-                SaveScene();
-            break;
-
-        // Undo / Redo
-        case KeyCode::Z:
-            if (control)
-                m_CommandHistory.UndoCommand();
-            break;
-        case KeyCode::Y:
-            if (control)
-                m_CommandHistory.RedoCommand();
-            break;
-
         case KeyCode::Q:
             if (!ImGuizmo::IsUsing())
                 m_GizmoType = -1;
@@ -524,7 +388,6 @@ namespace Engine
             if (!ImGuizmo::IsUsing())
                 m_GizmoType = ImGuizmo::SCALE;
             break;
-
         default:
             break;
         }
@@ -627,6 +490,40 @@ namespace Engine
     {
         m_SceneSession.EndPlay(m_ActiveScene);
         m_PanelCoordinator.ApplyScene(m_ActiveScene, false);
+    }
+
+    void EditorLayer::HandleShellActions(const EditorShellActions& actions)
+    {
+        if (actions.RequestNewScene)
+            NewScene();
+        if (actions.RequestOpenScene)
+            OpenScene();
+        if (actions.RequestSaveScene)
+            SaveScene();
+        if (actions.RequestPlay)
+            OnScenePlay();
+        if (actions.RequestStop)
+            OnSceneStop();
+        if (actions.RequestUndo)
+            m_CommandHistory.UndoCommand();
+        if (actions.RequestRedo)
+            m_CommandHistory.RedoCommand();
+        if (actions.ToggleStatsPanel)
+            m_PanelCoordinator.ToggleStatsPanelVisible();
+        if (actions.RequestCloseApplication)
+            Application::Get().Close();
+    }
+
+    EditorShellState EditorLayer::BuildShellState() const
+    {
+        EditorShellState state;
+        state.CurrentSceneState = m_SceneSession.GetState();
+        state.CanUndo = m_CommandHistory.CanUndo();
+        state.CanRedo = m_CommandHistory.CanRedo();
+        state.UndoDescription = m_CommandHistory.GetUndoDescription();
+        state.RedoDescription = m_CommandHistory.GetRedoDescription();
+        state.ShowStatsPanel = m_PanelCoordinator.IsStatsPanelVisible();
+        return state;
     }
 
 } // namespace Engine

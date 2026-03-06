@@ -14,6 +14,7 @@
 #include "Physics/PhysicsDebugDraw.h"
 #include "EditorSceneSession.h"
 #include "EditorPanelCoordinator.h"
+#include "EditorShell.h"
 
 namespace Engine
 {
@@ -41,6 +42,8 @@ namespace Engine
 
         void OnScenePlay();
         void OnSceneStop();
+        void HandleShellActions(const EditorShellActions& actions);
+        EditorShellState BuildShellState() const;
 
     private:
         Ref<Framebuffer> m_Framebuffer;
@@ -48,6 +51,7 @@ namespace Engine
         Ref<Scene> m_ActiveScene;
         EditorSceneSession m_SceneSession;
         EditorPanelCoordinator m_PanelCoordinator;
+        EditorShell m_EditorShell;
 
         SceneRenderer m_SceneRenderer;
         PostProcessing m_PostProcessing;
@@ -80,7 +84,6 @@ namespace Engine
         glm::vec2 m_LastMousePos = {0.0f, 0.0f};
 
         int m_GizmoType = -1;
-
 
         bool m_ShowPhysicsColliders = false;
         PhysicsDebugDraw m_PhysicsDebugDraw;

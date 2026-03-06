@@ -5,6 +5,7 @@ file(GLOB_RECURSE EDITOR_SOURCES
 list(APPEND EDITOR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorSceneSession.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorPanelCoordinator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorShell.cpp
 )
 
 add_executable(Editor ${EDITOR_SOURCES})
