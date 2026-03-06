@@ -1,0 +1,12 @@
+[agents]
+max_threads = 4
+max_depth = 1
+job_max_runtime_seconds = 1800
+
+[agents.build_fixer]
+description = "修复 CMake 配置、编译错误、链接错误，定位并给出最小改动修复。"
+config_file = "agents/build-fixer.toml"
+
+[agents.shader_reviewer]
+description = "审查 GLSL 与 C++ 渲染绑定一致性，输出按严重级别分组的问题清单。"
+config_file = "agents/shader-reviewer.toml"

@@ -1,0 +1,59 @@
+# Repository Agent Rules
+
+本文件定义 Codex 在本仓库工作的项目级规范（由 `.claude/rules/*.md` 收敛而来）。
+
+## 1. 沟通与范围
+
+- 默认使用简体中文进行说明、注释与变更说明。
+- 本仓库是 C++17 + OpenGL 4.3 引擎/编辑器工程，仅在既有架构内修改，不引入无关新依赖。
+- 不修改 `vendor/` 第三方源码，优先在项目层修复集成问题。
+
+## 2. 构建约定
+
+- 首次拉取或三方缺失时先执行：`git submodule update --init --recursive`。
+- 常用构建（Ninja）：
+  - 配置：`cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo`
+  - 构建 Editor：`cmake --build build --target Editor`
+- Windows + MSVC 保持 `/utf-8` 生效（如 CMake 已统一处理，不重复改动）。
+- `engpch.h` 由构建系统注入，除非必要不要手动补 include。
+
+## 3. 架构边界
+
+- `Ref<T>` = `std::shared_ptr<T>`，`Scope<T>` = `std::unique_ptr<T>`（见 `Core/Base.h`）。
+- 平台相关实现只放在 `Engine/Platform/`；`Engine/src/` 通过抽象接口访问。
+- 资源路径按项目根目录解析（如 `assets/shaders/PBR.glsl`）。
+
+## 4. Scene / ECS / Reflection
+
+- 新组件必须完成反射声明与注册，否则不会出现在编辑器和序列化中：
+  - 声明：`ENGINE_COMPONENT`、`ENGINE_PROPERTY`
+  - 注册：`REGISTER_COMPONENT_BEGIN/END`、`REGISTER_PROPERTY`
+- 组件结构体必须可默认构造、可拷贝。
+- `PropertyType` 必须与字段真实类型匹配；`Transient` 属性不序列化。
+- `Scene::DestroyEntity()` 前先清理对应 Bullet 刚体。
+
+## 5. Renderer / OpenGL / Shader
+
+- Shader 文件使用单文件 `#type` 分段，且 `#type` 必须在 `#version` 之前。
+- 渲染 Shader 使用 GLSL 330；Compute Shader 使用 430+。
+- 顶点布局约定：`location 0/1/2/3 = position/normal/texcoord/tangent`。
+- Uniform 名称与 C++ 设置端保持完全一致（区分大小写）。
+- Compute 流程保证：
+  - `local_size` 与 dispatch 参数匹配
+  - SSBO `std430` 与 C++ 结构体对齐
+  - 跨 pass 读写有 `memoryBarrier`/`barrier` 同步
+- `Material::Set()` 仅缓存值，需通过 `Bind()` 触发实际上传。
+
+## 6. Asset / Physics / Editor
+
+- `AssetManager::Init()` 后才能加载资源；每帧调用 `AssetManager::Update()`。
+- 异步加载当前仅支持纹理，Mesh 默认同步加载。
+- 每个 Scene 只能选择一种物理后端（Bullet 或自研），禁止混用。
+- Editor 删除实体采用延迟删除，避免迭代器/句柄失效。
+- Inspector 旋转以“度”显示，内部按“弧度”存储。
+- 编辑器 UI 文本默认中文；资源路径必须位于项目目录内（避免 `..` 越界）。
+
+## 7. 提交前检查
+
+- 至少构建受影响目标（最低 `Editor`），确认无新增编译/链接错误。
+- 涉及 Shader、反射组件、资源加载、物理同步时，至少走通一次对应运行路径。
