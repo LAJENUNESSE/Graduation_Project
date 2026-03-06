@@ -144,20 +144,25 @@ namespace Engine
             {
                 std::filesystem::path p(dir);
                 std::filesystem::path folder = p.parent_path();
-                std::string ext = p.extension().string();
-
-                std::vector<std::string> suffixes = {"right", "left", "top", "bottom", "front", "back"};
+                std::string ext = p.extension().string();                std::vector<std::string> suffixes = {"right", "left", "top", "bottom", "front", "back"};
                 std::vector<std::string> faces;
                 bool allFound = true;
-                std::filesystem::path cwd = std::filesystem::current_path();
                 for (const auto& s : suffixes)
                 {
                     std::filesystem::path facePath = folder / (s + ext);
                     if (std::filesystem::exists(facePath))
                     {
-                        // 存储为相对路径，确保跨平台可移植
-                        auto rel = std::filesystem::relative(facePath, cwd);
-                        faces.push_back(PathUtils::NormalizeSeparators(rel.string()));
+                        std::string relativeFacePath;
+                        if (PathUtils::TryToProjectRelative(facePath, relativeFacePath))
+                        {
+                            faces.push_back(relativeFacePath);
+                        }
+                        else
+                        {
+                            ENGINE_WARN("天空盒贴图必须位于项目目录内: {}", facePath.string());
+                            allFound = false;
+                            break;
+                        }
                     }
                     else
                     {

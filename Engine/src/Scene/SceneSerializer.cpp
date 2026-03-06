@@ -416,23 +416,9 @@ namespace Engine
         {
             const auto& skyboxPaths = m_Scene->GetSkyboxFacePaths();
             if (!skyboxPaths.empty())
-            {
-                // 保存时将绝对路径转为相对路径
-                std::vector<std::string> relativePaths;
-                std::filesystem::path cwd = std::filesystem::current_path();
+            {                std::vector<std::string> relativePaths;
                 for (const auto& p : skyboxPaths)
-                {
-                    std::filesystem::path fp(p);
-                    if (fp.is_absolute())
-                    {
-                        auto rel = std::filesystem::relative(fp, cwd);
-                        relativePaths.push_back(PathUtils::NormalizeSeparators(rel.string()));
-                    }
-                    else
-                    {
-                        relativePaths.push_back(PathUtils::NormalizeSeparators(p));
-                    }
-                }
+                    relativePaths.push_back(PathUtils::ToProjectRelativeOrAbsolute(p));
 
                 out << YAML::Key << "Skybox";
                 out << YAML::BeginMap;
@@ -457,7 +443,10 @@ namespace Engine
         out << YAML::EndSeq;
         out << YAML::EndMap;
 
-        std::ofstream fout(filepath);
+        const std::filesystem::path resolvedFilepath = PathUtils::ResolvePath(filepath);
+        std::error_code ec;
+        std::filesystem::create_directories(resolvedFilepath.parent_path(), ec);
+        std::ofstream fout(resolvedFilepath);
         if (!fout.is_open())
         {
             ENGINE_CORE_ERROR("Could not open file '{0}' for writing", filepath);
@@ -503,7 +492,8 @@ namespace Engine
         YAML::Node data;
         try
         {
-            data = YAML::LoadFile(filepath);
+            const std::filesystem::path resolvedFilepath = PathUtils::ResolvePath(filepath);
+            data = YAML::LoadFile(resolvedFilepath.string());
         }
         catch (const YAML::ParserException& e)
         {

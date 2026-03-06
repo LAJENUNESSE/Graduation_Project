@@ -1,6 +1,7 @@
 #include "Panels/AssetBrowserPanel.h"
 #include "Core/Log.h"
 #include "Renderer/Texture.h"
+#include "Asset/PathUtils.h"
 #include "Scene/SceneSerializer.h"
 
 #include <imgui.h>
@@ -10,7 +11,6 @@
 #include <Windows.h>
 #include <shellapi.h>
 #endif
-
 namespace Engine
 {
 
@@ -49,7 +49,7 @@ namespace Engine
 
     AssetBrowserPanel::AssetBrowserPanel()
     {
-        m_RootDirectory = std::filesystem::current_path() / "assets";
+        m_RootDirectory = PathUtils::GetAssetRoot();
         m_CurrentDirectory = m_RootDirectory;
     }
 
@@ -265,9 +265,7 @@ namespace Engine
             if (!entry.is_directory() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
             {
                 // 计算相对于项目根目录的路径
-                std::error_code ec;
-                std::filesystem::path relPath = std::filesystem::relative(path, std::filesystem::current_path(), ec);
-                std::string relStr = ec ? path.string() : relPath.string();
+                std::string relStr = PathUtils::ToProjectRelativeOrAbsolute(path);
 
                 // 根据文件类型设置不同的 payload 类型
                 const char* payloadType = "ASSET_PATH";
@@ -338,7 +336,7 @@ namespace Engine
         {
             // 通过回调加载场景
             if (m_OnSceneOpen)
-                m_OnSceneOpen(path.string());
+                m_OnSceneOpen(PathUtils::ToProjectRelativeOrAbsolute(path));
             else
                 ENGINE_INFO("双击场景文件: {0}", path.string());
         }
@@ -347,10 +345,10 @@ namespace Engine
             // 打开图片预览
             m_ShowImagePreview = true;
             ClearImagePreview();
-            m_PreviewImagePath = path.string();
+            m_PreviewImagePath = PathUtils::ToProjectRelativeOrAbsolute(path);
 
             // 持有纹理对象，避免只保存 renderer ID 导致悬空资源
-            m_PreviewTexture = Texture2D::Create(path.string());
+            m_PreviewTexture = Texture2D::Create(m_PreviewImagePath);
             if (m_PreviewTexture)
             {
                 m_PreviewImageWidth = static_cast<int>(m_PreviewTexture->GetWidth());
