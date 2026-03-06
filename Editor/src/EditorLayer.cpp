@@ -29,55 +29,17 @@ namespace Engine
 
         m_SceneRenderer.Init(static_cast<uint32_t>(viewportContext.Size.x),
                              static_cast<uint32_t>(viewportContext.Size.y));
-        m_SceneRenderer.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
-        m_SceneRenderer.SetPostProcessing(&m_PostProcessing, &m_PostProcessingSettings);
         m_SceneSession.Initialize(&m_SceneRenderer);
+        m_SceneRenderer.SetPostProcessing(&m_PostProcessing, &m_PostProcessingSettings);
         m_SceneRenderer.SetDebugDrawCallback([this]() {
             if (m_ShowPhysicsColliders)
                 m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController.GetCamera());
         });
+        SyncHDRFramebufferBindings();
 
-        m_ActiveScene = CreateRef<Scene>();
-        m_ActiveScene->SetSceneRenderer(&m_SceneRenderer);
-
-        Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
-        auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
-        meshRenderer.Type = MeshType::Cube;
-        meshRenderer.MeshAsset = AssetManager::Load<Mesh>("builtin:Cube");
-        meshRenderer.Color = {0.8f, 0.2f, 0.3f, 1.0f};
-
-        Entity lightEntity = m_ActiveScene->CreateEntity("方向光");
-        auto& light = lightEntity.AddComponent<LightComponent>();
-        light.Type = LightComponent::LightType::Directional;
-        light.Color = {1.0f, 0.95f, 0.9f};
-        auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
-        lightTransform.Rotation = {glm::radians(-45.0f), glm::radians(30.0f), 0.0f};
-
-        m_HierarchyPanel.SetCommandHistory(&m_CommandHistory);
-        m_AssetBrowserPanel.SetSceneOpenCallback([this](const std::string& path) {
-            OpenScene(path);
-        });
-
-        m_RenderSettingsPanel.SetContext(&m_SceneRenderer, &m_PostProcessingSettings,
-                                         m_ViewportController.GetHDRFramebuffer(), m_ActiveScene,
-                                         &m_ShowPhysicsColliders);
-        m_RenderSettingsPanel.SetMSAAChangedCallback([this](uint32_t samples) {
-            m_ViewportController.ApplyMSAASamples(samples);
-            m_SceneRenderer.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
-            m_PanelCoordinator.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
-        });
-
-        m_PanelCoordinator.Initialize(
-            &m_HierarchyPanel,
-            &m_PropertiesPanel,
-            &m_ConsolePanel,
-            &m_AssetBrowserPanel,
-            &m_RenderSettingsPanel,
-            &m_CommandHistory);
-        m_SelectionGizmoController.Initialize(&m_PanelCoordinator, &m_CommandHistory);
-
-        m_PanelCoordinator.ApplyScene(m_ActiveScene, false);
-        m_SelectionGizmoController.ClearTransientState();
+        BootstrapDefaultScene();
+        ConfigureEditorPanels();
+        ApplyActiveSceneContext(false);
         m_ConsolePanel.RegisterSink();
     }
 
@@ -161,8 +123,7 @@ namespace Engine
             static_cast<uint32_t>(viewportContext.Size.x),
             static_cast<uint32_t>(viewportContext.Size.y));
 
-        m_PanelCoordinator.ApplyScene(m_ActiveScene, true);
-        m_SelectionGizmoController.ClearTransientState();
+        ApplyActiveSceneContext(true);
     }
 
     void EditorLayer::OpenScene()
@@ -187,24 +148,8 @@ namespace Engine
             return;
         }
 
-        m_PostProcessingSettings = renderSettings.PostProcessing;
-        m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
-
-        m_SceneRenderer.GetSSAOEnabled() = renderSettings.SSAOEnabled;
-        m_SceneRenderer.GetSSAORadius() = renderSettings.SSAORadius;
-        m_SceneRenderer.GetSSAOBias() = renderSettings.SSAOBias;
-        m_SceneRenderer.GetSSAOKernelSize() = renderSettings.SSAOKernelSize;
-        m_SceneRenderer.GetSSAOIntensity() = renderSettings.SSAOIntensity;
-
-        if (renderSettings.MSAASamples != m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples)
-        {
-            m_ViewportController.ApplyMSAASamples(renderSettings.MSAASamples);
-            m_SceneRenderer.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
-        }
-
-        m_PanelCoordinator.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
-        m_PanelCoordinator.ApplyScene(m_ActiveScene, true);
-        m_SelectionGizmoController.ClearTransientState();
+        ApplyRenderSettings(renderSettings);
+        ApplyActiveSceneContext(true);
     }
 
     void EditorLayer::SaveScene()
@@ -213,17 +158,7 @@ namespace Engine
         if (filepath.empty())
             return;
 
-        EditorRenderSettings renderSettings;
-        renderSettings.PostProcessing = m_PostProcessingSettings;
-        renderSettings.MSAASamples = m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples;
-        renderSettings.PhysicsBackend = static_cast<int>(m_ActiveScene->GetPhysicsBackend());
-        renderSettings.SSAOEnabled = m_SceneRenderer.GetSSAOEnabled();
-        renderSettings.SSAORadius = m_SceneRenderer.GetSSAORadius();
-        renderSettings.SSAOBias = m_SceneRenderer.GetSSAOBias();
-        renderSettings.SSAOKernelSize = m_SceneRenderer.GetSSAOKernelSize();
-        renderSettings.SSAOIntensity = m_SceneRenderer.GetSSAOIntensity();
-
-        m_SceneSession.SaveSceneToPath(m_ActiveScene, filepath, renderSettings);
+        m_SceneSession.SaveSceneToPath(m_ActiveScene, filepath, CollectRenderSettings());
     }
 
     void EditorLayer::OnScenePlay()
@@ -234,8 +169,7 @@ namespace Engine
     void EditorLayer::OnSceneStop()
     {
         m_SceneSession.EndPlay(m_ActiveScene);
-        m_PanelCoordinator.ApplyScene(m_ActiveScene, false);
-        m_SelectionGizmoController.ClearTransientState();
+        ApplyActiveSceneContext(false);
     }
 
     void EditorLayer::HandleShellActions(const EditorShellActions& actions)
@@ -272,4 +206,92 @@ namespace Engine
         return state;
     }
 
+    void EditorLayer::BootstrapDefaultScene()
+    {
+        m_ActiveScene = CreateRef<Scene>();
+        m_ActiveScene->SetSceneRenderer(&m_SceneRenderer);
+
+        Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
+        auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
+        meshRenderer.Type = MeshType::Cube;
+        meshRenderer.MeshAsset = AssetManager::Load<Mesh>("builtin:Cube");
+        meshRenderer.Color = {0.8f, 0.2f, 0.3f, 1.0f};
+
+        Entity lightEntity = m_ActiveScene->CreateEntity("方向光");
+        auto& light = lightEntity.AddComponent<LightComponent>();
+        light.Type = LightComponent::LightType::Directional;
+        light.Color = {1.0f, 0.95f, 0.9f};
+        auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
+        lightTransform.Rotation = {glm::radians(-45.0f), glm::radians(30.0f), 0.0f};
+    }
+
+    void EditorLayer::ConfigureEditorPanels()
+    {
+        m_HierarchyPanel.SetCommandHistory(&m_CommandHistory);
+        m_AssetBrowserPanel.SetSceneOpenCallback([this](const std::string& path) {
+            OpenScene(path);
+        });
+
+        m_RenderSettingsPanel.SetContext(&m_SceneRenderer, &m_PostProcessingSettings,
+                                         m_ViewportController.GetHDRFramebuffer(), m_ActiveScene,
+                                         &m_ShowPhysicsColliders);
+        m_RenderSettingsPanel.SetMSAAChangedCallback([this](uint32_t samples) {
+            m_ViewportController.ApplyMSAASamples(samples);
+            SyncHDRFramebufferBindings();
+        });
+
+        m_PanelCoordinator.Initialize(
+            &m_HierarchyPanel,
+            &m_PropertiesPanel,
+            &m_ConsolePanel,
+            &m_AssetBrowserPanel,
+            &m_RenderSettingsPanel,
+            &m_CommandHistory);
+        m_SelectionGizmoController.Initialize(&m_PanelCoordinator, &m_CommandHistory);
+    }
+
+    void EditorLayer::ApplyActiveSceneContext(bool clearCommandHistory)
+    {
+        m_PanelCoordinator.ApplyScene(m_ActiveScene, clearCommandHistory);
+        m_SelectionGizmoController.ClearTransientState();
+    }
+
+    void EditorLayer::SyncHDRFramebufferBindings()
+    {
+        m_SceneRenderer.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
+        m_PanelCoordinator.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
+    }
+
+    void EditorLayer::ApplyRenderSettings(const EditorRenderSettings& renderSettings)
+    {
+        m_PostProcessingSettings = renderSettings.PostProcessing;
+        m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
+
+        m_SceneRenderer.GetSSAOEnabled() = renderSettings.SSAOEnabled;
+        m_SceneRenderer.GetSSAORadius() = renderSettings.SSAORadius;
+        m_SceneRenderer.GetSSAOBias() = renderSettings.SSAOBias;
+        m_SceneRenderer.GetSSAOKernelSize() = renderSettings.SSAOKernelSize;
+        m_SceneRenderer.GetSSAOIntensity() = renderSettings.SSAOIntensity;
+
+        if (renderSettings.MSAASamples != m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples)
+            m_ViewportController.ApplyMSAASamples(renderSettings.MSAASamples);
+
+        SyncHDRFramebufferBindings();
+    }
+
+    EditorRenderSettings EditorLayer::CollectRenderSettings()
+    {
+        EditorRenderSettings renderSettings;
+        renderSettings.PostProcessing = m_PostProcessingSettings;
+        renderSettings.MSAASamples = m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples;
+        renderSettings.PhysicsBackend = static_cast<int>(m_ActiveScene->GetPhysicsBackend());
+        renderSettings.SSAOEnabled = m_SceneRenderer.GetSSAOEnabled();
+        renderSettings.SSAORadius = m_SceneRenderer.GetSSAORadius();
+        renderSettings.SSAOBias = m_SceneRenderer.GetSSAOBias();
+        renderSettings.SSAOKernelSize = m_SceneRenderer.GetSSAOKernelSize();
+        renderSettings.SSAOIntensity = m_SceneRenderer.GetSSAOIntensity();
+        return renderSettings;
+    }
+
 } // namespace Engine
+

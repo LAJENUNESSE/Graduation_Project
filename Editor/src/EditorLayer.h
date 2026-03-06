@@ -2,7 +2,6 @@
 
 #include "Engine.h"
 #include "Scene/Scene.h"
-#include "Scene/Entity.h"
 #include "Panels/SceneHierarchyPanel.h"
 #include "Panels/PropertiesPanel.h"
 #include "Panels/ConsolePanel.h"
@@ -47,6 +46,13 @@ namespace Engine
         void HandleShellActions(const EditorShellActions& actions);
         EditorShellState BuildShellState() const;
 
+        void BootstrapDefaultScene();
+        void ConfigureEditorPanels();
+        void ApplyActiveSceneContext(bool clearCommandHistory);
+        void SyncHDRFramebufferBindings();
+        void ApplyRenderSettings(const EditorRenderSettings& renderSettings);
+        EditorRenderSettings CollectRenderSettings();
+
     private:
         Ref<Scene> m_ActiveScene;
         EditorSceneSession m_SceneSession;
@@ -72,3 +78,4 @@ namespace Engine
     };
 
 } // namespace Engine
+
