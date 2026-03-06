@@ -12,11 +12,10 @@
 #include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderer.h"
 #include "Physics/PhysicsDebugDraw.h"
+#include "EditorSceneSession.h"
 
 namespace Engine
 {
-
-    enum class SceneState { Edit = 0, Play = 1 };
 
     class EditorLayer : public Layer
     {
@@ -46,9 +45,7 @@ namespace Engine
         Ref<Framebuffer> m_Framebuffer;
         Ref<Framebuffer> m_HDRFramebuffer;
         Ref<Scene> m_ActiveScene;
-        Ref<Scene> m_EditorScene;
-
-        SceneState m_SceneState = SceneState::Edit;
+        EditorSceneSession m_SceneSession;
 
         SceneRenderer m_SceneRenderer;
         PostProcessing m_PostProcessing;
