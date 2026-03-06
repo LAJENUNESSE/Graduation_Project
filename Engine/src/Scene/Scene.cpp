@@ -5,6 +5,7 @@
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptableEntity.h"
 #include "Reflection/ComponentRegistry.h"
+#include "Reflection/ComponentPolicies.h"
 #include "Renderer/SceneRenderer.h"
 #include "Renderer/EditorCamera.h"
 #include "Physics/PhysicsWorld.h"
@@ -541,6 +542,9 @@ namespace Engine
             uint32_t dstId = static_cast<uint32_t>(static_cast<entt::entity>(newEntity));
             for (auto& meta : ComponentRegistry::Instance().GetAll())
             {
+                if (ComponentPolicies::IsCustomCopyComponentType(meta.TypeName))
+                    continue;
+
                 if (meta.Has(*src, srcId))
                     meta.Copy(*src, srcId, *newScene, dstId);
             }

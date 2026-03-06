@@ -6,6 +6,7 @@
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
 #include "Reflection/ComponentRegistry.h"
+#include "Reflection/ComponentPolicies.h"
 #include "Reflection/AutoInspector.h"
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptRegistry.h"
@@ -237,7 +238,8 @@ namespace Engine
                 uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
                 for (auto& meta : ComponentRegistry::Instance().GetAll())
                 {
-                    if (scene && !meta.Has(*scene, entityId))
+                    if (scene && !meta.Has(*scene, entityId) &&
+                        !ComponentPolicies::IsCustomAddMenuComponentType(meta.TypeName))
                     {
                         if (ImGui::MenuItem(meta.DisplayName))
                         {
@@ -1018,7 +1020,8 @@ namespace Engine
 
             for (auto& meta : ComponentRegistry::Instance().GetAll())
             {
-                if (scene && meta.Has(*scene, entityId))
+                if (scene && meta.Has(*scene, entityId) &&
+                    !ComponentPolicies::IsCustomInspectorComponentType(meta.TypeName))
                 {
                     DrawComponent_Auto(meta.DisplayName, entity, meta, drawVec3Wrapper);
                 }
