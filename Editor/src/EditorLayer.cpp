@@ -4,7 +4,6 @@
 #include "Core/FileDialogs.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Scene/Components.h"
-#include "Scene/SceneSerializer.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/Mesh.h"
 #include "Asset/AssetManager.h"
@@ -16,30 +15,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <filesystem>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
 namespace Engine
 {
-    namespace
-    {
-        size_t GetSceneEntityCount(const Ref<Scene>& scene)
-        {
-            if (!scene)
-                return 0;
-
-            size_t count = 0;
-            for (auto entity : scene->GetRegistry().view<IDComponent>())
-            {
-                (void)entity;
-                ++count;
-            }
-            return count;
-        }
-    } // namespace
-
 
     EditorLayer::EditorLayer()
         : Layer("EditorLayer")
@@ -604,10 +585,11 @@ namespace Engine
 
     void EditorLayer::NewScene()
     {
-        m_ActiveScene = CreateRef<Scene>();
-        m_ActiveScene->SetSceneRenderer(&m_SceneRenderer);
-        m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
-                                        static_cast<uint32_t>(m_ViewportSize.y));
+        m_SceneSession.CreateNewScene(
+            m_ActiveScene,
+            static_cast<uint32_t>(m_ViewportSize.x),
+            static_cast<uint32_t>(m_ViewportSize.y));
+
         m_HierarchyPanel.SetContext(m_ActiveScene);
         m_AssetBrowserPanel.SetContext(m_ActiveScene);
         m_RenderSettingsPanel.SetScene(m_ActiveScene);
@@ -625,26 +607,22 @@ namespace Engine
 
     void EditorLayer::OpenScene(const std::string& filepath)
     {
-        auto newScene = CreateRef<Scene>();
-        newScene->SetSceneRenderer(&m_SceneRenderer);
         EditorRenderSettings renderSettings;
-        SceneSerializer serializer(newScene);
-        if (!serializer.Deserialize(filepath, &renderSettings))
+        if (!m_SceneSession.OpenSceneFromPath(
+                m_ActiveScene,
+                filepath,
+                static_cast<uint32_t>(m_ViewportSize.x),
+                static_cast<uint32_t>(m_ViewportSize.y),
+                &renderSettings))
         {
-            ENGINE_WARN("Failed to load scene from '{0}', keeping current scene", filepath);
             return;
         }
 
-        m_ActiveScene = newScene;
-        m_ActiveScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x),
-                                        static_cast<uint32_t>(m_ViewportSize.y));
         m_HierarchyPanel.SetContext(m_ActiveScene);
         m_AssetBrowserPanel.SetContext(m_ActiveScene);
         m_SelectedEntity = {};
         m_HoveredEntity = {};
         m_CommandHistory.Clear();
-
-        ENGINE_INFO("[EditorEvent] OpenScene loaded '{0}', entities={1}", filepath, GetSceneEntityCount(m_ActiveScene));
 
         m_PostProcessingSettings = renderSettings.PostProcessing;
         m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
@@ -670,7 +648,7 @@ namespace Engine
 
     void EditorLayer::SaveScene()
     {
-        std::string filepath = FileDialogs::SaveFile("*.scene", "\xe5\x9c\xba\xe6\x99\xaf\xe6\x96\x87\xe4\xbb\xb6");
+        std::string filepath = FileDialogs::SaveFile("*.scene", "场景文件");
         if (filepath.empty())
             return;
 
@@ -686,11 +664,7 @@ namespace Engine
         renderSettings.SSAOKernelSize = m_SceneRenderer.GetSSAOKernelSize();
         renderSettings.SSAOIntensity = m_SceneRenderer.GetSSAOIntensity();
 
-        SceneSerializer serializer(m_ActiveScene);
-        if (serializer.Serialize(filepath, renderSettings))
-            ENGINE_INFO("Scene saved to '{0}'", filepath);
-        else
-            ENGINE_WARN("Failed to save scene to '{0}'", filepath);
+        m_SceneSession.SaveSceneToPath(m_ActiveScene, filepath, renderSettings);
     }
 
     void EditorLayer::OnScenePlay()
