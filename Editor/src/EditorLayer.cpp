@@ -3,10 +3,7 @@
 #include "Asset/AssetManager.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
-#include "Debug/PerformanceMonitor.h"
-#include "Debug/ProfileTimer.h"
 #include "Renderer/Mesh.h"
-#include "Renderer/Renderer.h"
 #include "Scene/Components.h"
 
 namespace Engine
@@ -22,23 +19,15 @@ namespace Engine
         ENGINE_INFO("EditorLayer OnAttach");
 
         m_ViewportController.Initialize();
-        const auto& viewportContext = m_ViewportController.GetContext();
-
-        m_PostProcessing.Init(static_cast<uint32_t>(viewportContext.RenderSize.x),
-                              static_cast<uint32_t>(viewportContext.RenderSize.y));
-
-        m_SceneRenderer.Init(static_cast<uint32_t>(viewportContext.RenderSize.x),
-                             static_cast<uint32_t>(viewportContext.RenderSize.y));
-        m_SceneSession.Initialize(&m_SceneRenderer);
-        m_SceneRenderer.SetPostProcessing(&m_PostProcessing, &m_PostProcessingSettings);
-        m_ViewportController.SetResizeCallback([this](uint32_t width, uint32_t height) {
-            m_SceneRenderer.ResizeHDR(width, height);
-        });
-        m_SceneRenderer.SetDebugDrawCallback([this]() {
-            if (m_ShowPhysicsColliders)
-                m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController.GetCamera());
-        });
-        SyncHDRFramebufferBindings();
+        m_RenderController.Initialize(&m_SceneRenderer,
+                                      &m_PostProcessing,
+                                      &m_PostProcessingSettings,
+                                      &m_ViewportController,
+                                      &m_PanelCoordinator,
+                                      &m_PhysicsDebugDraw,
+                                      &m_ShowPhysicsColliders);
+        m_RenderController.Attach();
+        m_SceneSession.Initialize(&m_RenderController.GetSceneRenderer());
 
         BootstrapDefaultScene();
         ConfigureEditorPanels();
@@ -52,33 +41,14 @@ namespace Engine
         if (m_SceneSession.IsPlaying())
             OnSceneStop();
         m_ConsolePanel.UnregisterSink();
-        m_SceneRenderer.Shutdown();
+        m_RenderController.Detach();
     }
 
     void EditorLayer::OnUpdate(Timestep ts)
     {
         m_ViewportController.OnUpdate(ts, *m_ActiveScene);
-
         AssetManager::Update(ts);
-
-        switch (m_SceneSession.GetState())
-        {
-        case SceneState::Edit:
-            m_ActiveScene->OnUpdateEditor(ts, m_ViewportController.GetCamera());
-            break;
-        case SceneState::Play:
-            m_ActiveScene->OnUpdateRuntime(ts, m_ViewportController.GetCamera());
-            break;
-        }
-
-        float sceneRenderCpuMs = 0.0f;
-        {
-            PROFILE_SCOPE("SceneRender", &sceneRenderCpuMs);
-            m_SceneRenderer.BeginScene(m_ViewportController.GetCamera(), m_ActiveScene.get(), ts);
-            m_SceneRenderer.RenderPipeline(m_ViewportController.GetFramebuffer());
-            m_SceneRenderer.EndScene();
-        }
-        PerformanceMonitor::Get().SetSceneRenderCPU(sceneRenderCpuMs);
+        m_RenderController.OnUpdate(ts, m_ActiveScene, m_SceneSession.GetState());
     }
 
     void EditorLayer::OnImGuiRender()
@@ -156,7 +126,7 @@ namespace Engine
             return;
         }
 
-        ApplyRenderSettings(renderSettings);
+        m_RenderController.ApplyRenderSettings(m_ActiveScene, renderSettings);
         ApplyActiveSceneContext(true);
     }
 
@@ -166,7 +136,7 @@ namespace Engine
         if (filepath.empty())
             return;
 
-        m_SceneSession.SaveSceneToPath(m_ActiveScene, filepath, CollectRenderSettings());
+        m_SceneSession.SaveSceneToPath(m_ActiveScene, filepath, m_RenderController.CollectRenderSettings(m_ActiveScene));
     }
 
     void EditorLayer::OnScenePlay()
@@ -218,7 +188,7 @@ namespace Engine
     void EditorLayer::BootstrapDefaultScene()
     {
         m_ActiveScene = CreateRef<Scene>();
-        m_ActiveScene->SetSceneRenderer(&m_SceneRenderer);
+        m_ActiveScene->SetSceneRenderer(&m_RenderController.GetSceneRenderer());
 
         Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
         auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
@@ -241,12 +211,13 @@ namespace Engine
             OpenScene(path);
         });
 
-        m_RenderSettingsPanel.SetContext(&m_SceneRenderer, &m_PostProcessingSettings,
-                                         m_ViewportController.GetHDRFramebuffer(), m_ActiveScene,
+        m_RenderSettingsPanel.SetContext(&m_RenderController.GetSceneRenderer(),
+                                         m_RenderController.GetPostProcessingSettings(),
+                                         m_ViewportController.GetHDRFramebuffer(),
+                                         m_ActiveScene,
                                          &m_ShowPhysicsColliders);
         m_RenderSettingsPanel.SetMSAAChangedCallback([this](uint32_t samples) {
-            m_ViewportController.ApplyMSAASamples(samples);
-            SyncHDRFramebufferBindings();
+            m_RenderController.ApplyMSAASamples(samples);
         });
 
         m_PanelCoordinator.Initialize(
@@ -263,43 +234,6 @@ namespace Engine
     {
         m_PanelCoordinator.ApplyScene(m_ActiveScene, clearCommandHistory);
         m_SelectionGizmoController.ClearTransientState();
-    }
-
-    void EditorLayer::SyncHDRFramebufferBindings()
-    {
-        m_SceneRenderer.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
-        m_PanelCoordinator.SetHDRFramebuffer(m_ViewportController.GetHDRFramebuffer());
-    }
-
-    void EditorLayer::ApplyRenderSettings(const EditorRenderSettings& renderSettings)
-    {
-        m_PostProcessingSettings = renderSettings.PostProcessing;
-        m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
-
-        m_SceneRenderer.GetSSAOEnabled() = renderSettings.SSAOEnabled;
-        m_SceneRenderer.GetSSAORadius() = renderSettings.SSAORadius;
-        m_SceneRenderer.GetSSAOBias() = renderSettings.SSAOBias;
-        m_SceneRenderer.GetSSAOKernelSize() = renderSettings.SSAOKernelSize;
-        m_SceneRenderer.GetSSAOIntensity() = renderSettings.SSAOIntensity;
-
-        if (renderSettings.MSAASamples != m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples)
-            m_ViewportController.ApplyMSAASamples(renderSettings.MSAASamples);
-
-        SyncHDRFramebufferBindings();
-    }
-
-    EditorRenderSettings EditorLayer::CollectRenderSettings()
-    {
-        EditorRenderSettings renderSettings;
-        renderSettings.PostProcessing = m_PostProcessingSettings;
-        renderSettings.MSAASamples = m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples;
-        renderSettings.PhysicsBackend = static_cast<int>(m_ActiveScene->GetPhysicsBackend());
-        renderSettings.SSAOEnabled = m_SceneRenderer.GetSSAOEnabled();
-        renderSettings.SSAORadius = m_SceneRenderer.GetSSAORadius();
-        renderSettings.SSAOBias = m_SceneRenderer.GetSSAOBias();
-        renderSettings.SSAOKernelSize = m_SceneRenderer.GetSSAOKernelSize();
-        renderSettings.SSAOIntensity = m_SceneRenderer.GetSSAOIntensity();
-        return renderSettings;
     }
 
 } // namespace Engine
