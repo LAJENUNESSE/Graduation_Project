@@ -29,13 +29,13 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 > **⚠️ 禁止使用 `find`/`ls`/`where`/`which` 等命令搜索 cmake 路径。** 下方路径是唯一正确路径，直接复制使用即可：
 
 ```bash
-CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
+# ⚠️ 每条命令必须和变量赋值写在同一行（Claude Code 每次调用是独立 shell，变量不跨调用保留）
 
 # 配置（使用 CMakePresets.json 中的 default preset，含 vcpkg 工具链）
-"$CMAKE" --preset default
+CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" && "$CMAKE" --preset default
 
 # 构建（Visual Studio 生成器需指定 --config）
-"$CMAKE" --build build --config RelWithDebInfo --target Editor
+CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" && "$CMAKE" --build build --config RelWithDebInfo --target Editor
 
 # Run
 ./build/Editor/RelWithDebInfo/Editor.exe

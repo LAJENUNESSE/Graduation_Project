@@ -7,6 +7,7 @@
 #include "Panels/PropertiesPanel.h"
 #include "Panels/ConsolePanel.h"
 #include "Panels/AssetBrowserPanel.h"
+#include "Panels/RenderSettingsPanel.h"
 #include "UndoSystem.h"
 #include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderer.h"
@@ -61,6 +62,7 @@ namespace Engine
         PropertiesPanel m_PropertiesPanel;
         ConsolePanel m_ConsolePanel;
         AssetBrowserPanel m_AssetBrowserPanel;
+        RenderSettingsPanel m_RenderSettingsPanel;
 
         // Undo/Redo 系统
         CommandHistory m_CommandHistory;
