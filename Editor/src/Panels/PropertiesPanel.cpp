@@ -3,6 +3,7 @@
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
 #include "Asset/AssetManager.h"
+#include "Asset/PathUtils.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
 #include "Reflection/ComponentRegistry.h"
@@ -19,6 +20,22 @@
 
 namespace Engine
 {
+    namespace
+    {
+        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel, std::string& outPath)
+        {
+            std::string selectedPath = FileDialogs::OpenFile(filter, description);
+            if (selectedPath.empty())
+                return false;
+
+            if (PathUtils::TryToProjectRelative(selectedPath, outPath))
+                return true;
+
+            ENGINE_WARN("{}必须位于项目目录内: {}", assetLabel, selectedPath);
+            return false;
+        }
+    } // namespace
+
 
     template <typename T, typename UIFunction>
     void PropertiesPanel::DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction, bool removable)
@@ -429,19 +446,9 @@ namespace Engine
             // Import model button
             if (ImGui::Button("导入模型..."))
             {
-                std::string absPath = FileDialogs::OpenFile("*.obj;*.fbx;*.gltf;*.glb", "3D模型文件");
-                if (!absPath.empty())
+                std::string relStr;
+                if (TrySelectProjectAssetPath("*.obj;*.fbx;*.gltf;*.glb", "3D模型文件", "模型", relStr))
                 {
-                    std::error_code ec;
-                    std::filesystem::path relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
-                    std::string relStr = ec ? absPath : relative.string();
-
-                    if (relStr.find("..") != std::string::npos)
-                    {
-                        ENGINE_WARN("模型必须位于项目目录内: {0}", relStr);
-                    }
-                    else
-                    {
                         auto meshHandle = AssetManager::Load<Mesh>(relStr);
                         if (meshHandle.IsValid())
                         {
@@ -467,7 +474,6 @@ namespace Engine
                         }
                     }
                 }
-            }
 
             // Show model path if loaded
             if (component.Type == MeshType::Model && component.MeshAsset.IsValid())
@@ -526,21 +532,10 @@ namespace Engine
             ImGui::SameLine();
             if (ImGui::Button("浏览..."))
             {
-                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "图片文件");
-                if (!absPath.empty())
+                std::string relStr;
+                if (TrySelectProjectAssetPath("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "图片文件", "纹理", relStr))
                 {
-                    std::error_code ec;
-                    std::filesystem::path relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
-                    std::string relStr = ec ? absPath : relative.string();
-
-                    if (relStr.find("..") != std::string::npos)
-                    {
-                        ENGINE_WARN("纹理必须位于项目目录内: {0}", relStr);
-                    }
-                    else
-                    {
-                        component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(relStr);
-                    }
+                    component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(relStr);
                 }
             }
 
@@ -588,21 +583,10 @@ namespace Engine
             ImGui::SameLine();
             if (ImGui::Button("浏览##NormalMap"))
             {
-                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "法线贴图");
-                if (!absPath.empty())
+                std::string relStr;
+                if (TrySelectProjectAssetPath("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "法线贴图", "法线贴图", relStr))
                 {
-                    std::error_code ec;
-                    std::filesystem::path relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
-                    std::string relStr = ec ? absPath : relative.string();
-
-                    if (relStr.find("..") != std::string::npos)
-                    {
-                        ENGINE_WARN("法线贴图必须位于项目目录内: {0}", relStr);
-                    }
-                    else
-                    {
-                        component.NormalMapAsset = AssetManager::Load<Texture2D>(relStr);
-                    }
+                    component.NormalMapAsset = AssetManager::Load<Texture2D>(relStr);
                 }
             }
 
@@ -643,17 +627,11 @@ namespace Engine
             ImGui::SameLine();
             if (ImGui::Button("浏览##Heightmap"))
             {
-                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.bmp;*.tga", "高度图");
-                if (!absPath.empty())
+                std::string relStr;
+                if (TrySelectProjectAssetPath("*.png;*.jpg;*.bmp;*.tga", "高度图", "高度图", relStr))
                 {
-                    std::error_code ec;
-                    auto relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
-                    std::string relStr = ec ? absPath : relative.string();
-                    if (relStr.find("..") == std::string::npos)
-                    {
-                        component.HeightmapPath = relStr;
-                        component.MeshDirty = true;
-                    }
+                    component.HeightmapPath = relStr;
+                    component.MeshDirty = true;
                 }
             }
 
@@ -679,15 +657,9 @@ namespace Engine
             ImGui::SameLine();
             if (ImGui::Button("浏览##Splatmap"))
             {
-                std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.bmp;*.tga", "Splatmap");
-                if (!absPath.empty())
-                {
-                    std::error_code ec;
-                    auto relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
-                    std::string relStr = ec ? absPath : relative.string();
-                    if (relStr.find("..") == std::string::npos)
-                        component.SplatmapPath = relStr;
-                }
+                std::string relStr;
+                if (TrySelectProjectAssetPath("*.png;*.jpg;*.bmp;*.tga", "Splatmap", "Splatmap", relStr))
+                    component.SplatmapPath = relStr;
             }
 
             ImGui::Separator();
@@ -713,15 +685,9 @@ namespace Engine
                     std::string browseId = "浏览##LayerTex" + std::to_string(i);
                     if (ImGui::Button(browseId.c_str()))
                     {
-                        std::string absPath = FileDialogs::OpenFile("*.png;*.jpg;*.bmp;*.tga", "贴图");
-                        if (!absPath.empty())
-                        {
-                            std::error_code ec;
-                            auto rel = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
-                            std::string relStr = ec ? absPath : rel.string();
-                            if (relStr.find("..") == std::string::npos)
-                                component.LayerTextures[i] = AssetManager::Load<Texture2D>(relStr);
-                        }
+                        std::string relStr;
+                        if (TrySelectProjectAssetPath("*.png;*.jpg;*.bmp;*.tga", "贴图", "贴图", relStr))
+                            component.LayerTextures[i] = AssetManager::Load<Texture2D>(relStr);
                     }
 
                     // 法线贴图
@@ -927,15 +893,9 @@ namespace Engine
             ImGui::SameLine();
             if (ImGui::Button("浏览##Audio"))
             {
-                std::string absPath = FileDialogs::OpenFile("*.wav", "WAV 音频文件");
-                if (!absPath.empty())
-                {
-                    std::error_code ec;
-                    auto relative = std::filesystem::relative(absPath, std::filesystem::current_path(), ec);
-                    std::string relStr = ec ? absPath : relative.string();
-                    if (relStr.find("..") == std::string::npos)
-                        component.AudioPath = relStr;
-                }
+                std::string relStr;
+                if (TrySelectProjectAssetPath("*.wav", "WAV 音频文件", "音频", relStr))
+                    component.AudioPath = relStr;
             }
 
             ImGui::SliderFloat("音量", &component.Volume, 0.0f, 2.0f, "%.2f");

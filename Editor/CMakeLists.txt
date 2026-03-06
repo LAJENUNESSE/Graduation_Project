@@ -23,8 +23,3 @@ target_include_directories(Editor PRIVATE
     ${CMAKE_SOURCE_DIR}/Engine/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-
-# Set working directory to project root so relative asset paths resolve correctly
-set_target_properties(Editor PROPERTIES
-    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-)
