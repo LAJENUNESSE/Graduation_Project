@@ -14,6 +14,10 @@ namespace Engine
     {
     public:
         static void Init();
+        static bool IsInitialized()
+        {
+            return static_cast<bool>(s_CoreLogger) && static_cast<bool>(s_ClientLogger);
+        }
 
         static Ref<spdlog::logger>& GetCoreLogger()
         {
@@ -45,3 +49,4 @@ namespace Engine
 #define ENGINE_WARN(...)          ::Engine::Log::GetClientLogger()->warn(__VA_ARGS__)
 #define ENGINE_ERROR(...)         ::Engine::Log::GetClientLogger()->error(__VA_ARGS__)
 #define ENGINE_CRITICAL(...)      ::Engine::Log::GetClientLogger()->critical(__VA_ARGS__)
+
