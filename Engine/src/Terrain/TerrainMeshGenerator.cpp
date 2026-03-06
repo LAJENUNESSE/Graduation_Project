@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Terrain/TerrainMeshGenerator.h"
+#include "Asset/PathUtils.h"
 #include "Renderer/Buffer.h"
 #include "Core/Log.h"
 
@@ -8,7 +9,6 @@
 
 #include <algorithm>
 #include <cmath>
-
 namespace Engine
 {
 
@@ -17,7 +17,8 @@ namespace Engine
         TerrainMeshData data;
 
         int w = 0, h = 0, channels = 0;
-        unsigned char* pixels = stbi_load(heightmapPath.c_str(), &w, &h, &channels, 1);
+        const std::string resolvedPath = PathUtils::ResolvePathString(heightmapPath);
+        unsigned char* pixels = stbi_load(resolvedPath.c_str(), &w, &h, &channels, 1);
 
         if (!pixels)
         {

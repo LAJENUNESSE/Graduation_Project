@@ -1,9 +1,9 @@
 #include "engpch.h"
 #include "Asset/AsyncLoadQueue.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 
 #include <stb_image/stb_image.h>
-
 namespace Engine
 {
 
@@ -68,8 +68,9 @@ namespace Engine
 
             // CPU-side image decoding (no GL calls here)
             int width, height, channels;
+            const std::string resolvedPath = PathUtils::ResolvePathString(request.first);
             stbi_set_flip_vertically_on_load(1);
-            stbi_uc* data = stbi_load(request.first.c_str(), &width, &height, &channels, 4);
+            stbi_uc* data = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
 
             TextureCPUData result;
             result.Path = request.first;
@@ -85,7 +86,7 @@ namespace Engine
             }
             else
             {
-                ENGINE_CORE_ERROR("AsyncLoadQueue: Failed to load '{0}'", request.first);
+                ENGINE_CORE_ERROR("AsyncLoadQueue: Failed to load '{0}'", resolvedPath);
                 // 1x1 magenta fallback
                 result.Width = 1;
                 result.Height = 1;

@@ -237,6 +237,7 @@ namespace Engine
     Ref<Mesh> Mesh::CreateFromFile(const std::string& filepath)
     {
         Assimp::Importer importer;
+        const std::string resolvedFilepath = PathUtils::ResolvePathString(filepath);
 
         unsigned int flags = aiProcess_Triangulate
                            | aiProcess_GenSmoothNormals
@@ -244,15 +245,15 @@ namespace Engine
                            | aiProcess_JoinIdenticalVertices
                            | aiProcess_CalcTangentSpace;
 
-        const aiScene* scene = importer.ReadFile(filepath, flags);
+        const aiScene* scene = importer.ReadFile(resolvedFilepath, flags);
 
         if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode)
         {
-            ENGINE_CORE_ERROR("Assimp failed to load '{0}': {1}", filepath, importer.GetErrorString());
+            ENGINE_CORE_ERROR("Assimp failed to load '{0}': {1}", resolvedFilepath, importer.GetErrorString());
             return nullptr;
         }
 
-        std::filesystem::path modelDir = std::filesystem::path(filepath).parent_path();
+        std::filesystem::path modelDir = std::filesystem::path(resolvedFilepath).parent_path();
 
         std::vector<SubMesh> subMeshes;
 
@@ -356,19 +357,8 @@ namespace Engine
                         std::filesystem::path fullTexPath = modelDir / texStr;
 
                         if (std::filesystem::exists(fullTexPath))
-                        {
-                            // Convert to path relative to working directory
-                            std::error_code ec;
-                            std::filesystem::path relPath = std::filesystem::relative(fullTexPath, std::filesystem::current_path(), ec);
-                            std::string relStr = PathUtils::NormalizeSeparators(
-                                ec ? fullTexPath.string() : relPath.string());
-
-                            // Safety: reject paths that escape project root
-                            if (relStr.find("..") == std::string::npos)
-                            {
-                                sub.DiffuseTexturePath = relStr;
-                                sub.DiffuseTextureAsset = AssetManager::Load<Texture2D>(relStr);
-                            }
+                        {                            sub.DiffuseTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                            sub.DiffuseTextureAsset = AssetManager::Load<Texture2D>(sub.DiffuseTexturePath);
                         }
                     }
                 }
@@ -386,17 +376,8 @@ namespace Engine
                     {
                         std::filesystem::path fullTexPath = modelDir / texStr;
                         if (std::filesystem::exists(fullTexPath))
-                        {
-                            std::error_code ec2;
-                            std::filesystem::path relPath2 = std::filesystem::relative(fullTexPath, std::filesystem::current_path(), ec2);
-                            std::string relStr2 = PathUtils::NormalizeSeparators(
-                                ec2 ? fullTexPath.string() : relPath2.string());
-
-                            if (relStr2.find("..") == std::string::npos)
-                            {
-                                sub.NormalTexturePath = relStr2;
-                                sub.NormalTextureAsset = AssetManager::Load<Texture2D>(relStr2);
-                            }
+                        {                            sub.NormalTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                            sub.NormalTextureAsset = AssetManager::Load<Texture2D>(sub.NormalTexturePath);
                         }
                     }
                 }

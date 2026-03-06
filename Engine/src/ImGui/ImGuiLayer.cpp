@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "ImGui/ImGuiLayer.h"
+#include "Asset/PathUtils.h"
 #include "Core/Application.h"
 #include "Core/Log.h"
 
@@ -31,7 +32,9 @@ namespace Engine
         // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
         // 加载中文字体
-        ImFont* font = io.Fonts->AddFontFromFileTTF("Editor/assets/fonts/NotoSansSC-Regular.ttf", 18.0f, nullptr,
+        const std::string fontPath =
+            PathUtils::ResolvePath((PathUtils::GetEditorAssetRoot() / "fonts" / "NotoSansSC-Regular.ttf")).string();
+        ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 18.0f, nullptr,
                                                      io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
         if (!font)
         {
