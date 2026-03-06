@@ -15,6 +15,7 @@
 #include "EditorSceneSession.h"
 #include "EditorPanelCoordinator.h"
 #include "EditorShell.h"
+#include "EditorViewportController.h"
 
 namespace Engine
 {
@@ -46,18 +47,16 @@ namespace Engine
         EditorShellState BuildShellState() const;
 
     private:
-        Ref<Framebuffer> m_Framebuffer;
-        Ref<Framebuffer> m_HDRFramebuffer;
         Ref<Scene> m_ActiveScene;
         EditorSceneSession m_SceneSession;
         EditorPanelCoordinator m_PanelCoordinator;
         EditorShell m_EditorShell;
+        EditorViewportController m_ViewportController;
 
         SceneRenderer m_SceneRenderer;
         PostProcessing m_PostProcessing;
         PostProcessingSettings m_PostProcessingSettings;
 
-        EditorCamera m_EditorCamera;
         Entity m_SelectedEntity;
         Entity m_HoveredEntity;
 
@@ -75,13 +74,6 @@ namespace Engine
         glm::vec3 m_GizmoStartTranslation = {};
         glm::vec3 m_GizmoStartRotation = {};
         glm::vec3 m_GizmoStartScale = {};
-
-        glm::vec2 m_ViewportSize = {1280.0f, 720.0f};
-        glm::vec2 m_ViewportBounds[2] = {};
-
-        bool m_ViewportFocused = false;
-        bool m_ViewportHovered = false;
-        glm::vec2 m_LastMousePos = {0.0f, 0.0f};
 
         int m_GizmoType = -1;
 
