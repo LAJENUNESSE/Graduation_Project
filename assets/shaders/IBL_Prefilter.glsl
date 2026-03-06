@@ -2,16 +2,49 @@
 #version 430 core
 layout(local_size_x = 16, local_size_y = 16) in;
 
-// 输入环境 cubemap
-uniform samplerCube u_EnvironmentMap;
+// ★ 用 imageLoad 替代 texture() 采样
+layout(rgba8, binding = 1) readonly uniform image2D u_EnvAtlas;
+uniform int u_EnvFaceSize;  // 环境贴图单面分辨率
 
 // 输出 prefiltered map（6 个面横向排列）
 layout(rgba16f, binding = 0) writeonly uniform image2D u_OutputPrefilter;
 
-uniform int u_FaceSize;      // 当前 mip 级别的每面分辨率
-uniform float u_Roughness;   // 当前 mip 对应的 roughness (0.0 ~ 1.0)
+uniform int u_FaceSize;
+uniform float u_Roughness;
 
 const float PI = 3.14159265359;
+
+// 从 2D atlas 用 imageLoad 读取环境贴图
+vec3 SampleEnvMap(vec3 dir)
+{
+    vec3 a = abs(dir);
+    int face;
+    float ma, sc, tc;
+
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        if (dir.x > 0.0) { face = 0; sc = -dir.z; tc = -dir.y; ma = dir.x; }
+        else              { face = 1; sc =  dir.z; tc = -dir.y; ma = -dir.x; }
+    }
+    else if (a.y >= a.x && a.y >= a.z)
+    {
+        if (dir.y > 0.0) { face = 2; sc = dir.x; tc =  dir.z; ma = dir.y; }
+        else              { face = 3; sc = dir.x; tc = -dir.z; ma = -dir.y; }
+    }
+    else
+    {
+        if (dir.z > 0.0) { face = 4; sc =  dir.x; tc = -dir.y; ma = dir.z; }
+        else              { face = 5; sc = -dir.x; tc = -dir.y; ma = -dir.z; }
+    }
+
+    float s = 0.5 * (sc / ma + 1.0);
+    float t = 0.5 * (tc / ma + 1.0);
+
+    int px = face * u_EnvFaceSize + clamp(int(s * float(u_EnvFaceSize)), 0, u_EnvFaceSize - 1);
+    int py = clamp(int(t * float(u_EnvFaceSize)), 0, u_EnvFaceSize - 1);
+
+    return imageLoad(u_EnvAtlas, ivec2(px, py)).rgb;
+}
 
 // Van der Corput 序列
 float RadicalInverse_VdC(uint bits)
@@ -41,7 +74,7 @@ vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
     H.y = sin(phi) * sinTheta;
     H.z = cosTheta;
 
-    vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 up = abs(N.z) < 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
     vec3 tangent = normalize(cross(up, N));
     vec3 bitangent = cross(N, tangent);
 
@@ -95,7 +128,7 @@ void main()
         float NdotL = max(dot(N, L), 0.0);
         if (NdotL > 0.0)
         {
-            prefilteredColor += texture(u_EnvironmentMap, L).rgb * NdotL;
+            prefilteredColor += SampleEnvMap(L) * NdotL;
             totalWeight += NdotL;
         }
     }

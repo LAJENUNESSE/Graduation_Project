@@ -82,6 +82,9 @@ namespace Engine
         int& GetSSAOKernelSize() { return m_SSAOKernelSize; }
         float& GetSSAOIntensity() { return m_SSAOIntensity; }
 
+        // IBL 调试模式
+        int& GetIBLDebugMode() { return m_IBLDebugMode; }
+
         // 供 MSAA 解析后单独绘制流体，避免颜色被 blit 覆盖
         void RenderFluidPass();
 
@@ -120,6 +123,7 @@ namespace Engine
         float m_SSAOBias = 0.025f;
         int m_SSAOKernelSize = 32;
         float m_SSAOIntensity = 1.5f;
+        int m_IBLDebugMode = 0;  // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
         Ref<VertexArray> m_FullscreenQuadVAO;
 
         // Particle systems keyed by entity ID

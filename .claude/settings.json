@@ -6,7 +6,8 @@
       "Bash(git log:*)",
       "Bash(git diff:*)",
       "Bash(git branch:*)",
-      "WebSearch"
+      "WebSearch",
+      "Search"
     ]
   }
 }

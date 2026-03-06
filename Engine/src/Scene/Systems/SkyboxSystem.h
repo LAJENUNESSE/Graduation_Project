@@ -31,6 +31,7 @@ namespace Engine
     private:
         void GenerateIBL();
         void GenerateBRDFLut();
+        uint32_t CreateEnvAtlas(); // 将 cubemap 6 面读到 CPU，创建 2D atlas 纹理
 
         Ref<Shader> m_SkyboxShader;
         Ref<VertexArray> m_SkyboxVAO;

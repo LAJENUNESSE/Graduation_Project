@@ -2,21 +2,52 @@
 #version 430 core
 layout(local_size_x = 16, local_size_y = 16) in;
 
-// 输入环境 cubemap
-uniform samplerCube u_EnvironmentMap;
+// ★ 用 imageLoad 替代 texture() 采样（texture() 在某些驱动的 compute shader 中返回零）
+layout(rgba8, binding = 1) readonly uniform image2D u_EnvAtlas;
+uniform int u_EnvFaceSize;  // 环境贴图单面分辨率
 
-// 输出 irradiance map（6 个面存储在一张 2D 纹理中，每面 faceSize x faceSize）
-// 布局：6 个面横向排列，总宽度 = faceSize * 6
+// 输出 irradiance map（6 个面横向排列）
 layout(rgba16f, binding = 0) writeonly uniform image2D u_OutputIrradiance;
 
-uniform int u_FaceSize;  // 每个面的分辨率（如 32）
+uniform int u_FaceSize;  // 输出面分辨率
 
 const float PI = 3.14159265359;
 
-// 根据面索引和 UV 坐标计算 cubemap 方向
+// 从 2D atlas 用 imageLoad 读取环境贴图
+vec3 SampleEnvMap(vec3 dir)
+{
+    vec3 a = abs(dir);
+    int face;
+    float ma, sc, tc;
+
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        if (dir.x > 0.0) { face = 0; sc = -dir.z; tc = -dir.y; ma = dir.x; }
+        else              { face = 1; sc =  dir.z; tc = -dir.y; ma = -dir.x; }
+    }
+    else if (a.y >= a.x && a.y >= a.z)
+    {
+        if (dir.y > 0.0) { face = 2; sc = dir.x; tc =  dir.z; ma = dir.y; }
+        else              { face = 3; sc = dir.x; tc = -dir.z; ma = -dir.y; }
+    }
+    else
+    {
+        if (dir.z > 0.0) { face = 4; sc =  dir.x; tc = -dir.y; ma = dir.z; }
+        else              { face = 5; sc = -dir.x; tc = -dir.y; ma = -dir.z; }
+    }
+
+    float s = 0.5 * (sc / ma + 1.0);
+    float t = 0.5 * (tc / ma + 1.0);
+
+    int px = face * u_EnvFaceSize + clamp(int(s * float(u_EnvFaceSize)), 0, u_EnvFaceSize - 1);
+    int py = clamp(int(t * float(u_EnvFaceSize)), 0, u_EnvFaceSize - 1);
+
+    return imageLoad(u_EnvAtlas, ivec2(px, py)).rgb;
+}
+
+// 根据输出面索引和 UV 坐标计算 cubemap 方向
 vec3 CubeMapDirection(int face, vec2 uv)
 {
-    // uv 范围 [0,1] -> [-1,1]
     float u = uv.x * 2.0 - 1.0;
     float v = uv.y * 2.0 - 1.0;
 
@@ -36,41 +67,38 @@ void main()
 {
     ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
 
-    // 总图像尺寸 = (faceSize * 6, faceSize)
     int totalWidth = u_FaceSize * 6;
     if (texCoord.x >= totalWidth || texCoord.y >= u_FaceSize)
         return;
 
-    // 确定面索引和面内 UV
     int face = texCoord.x / u_FaceSize;
     int localX = texCoord.x - face * u_FaceSize;
     vec2 uv = (vec2(localX, texCoord.y) + 0.5) / float(u_FaceSize);
 
     vec3 N = CubeMapDirection(face, uv);
-    vec3 irradiance = vec3(0.0);
 
-    // 半球卷积采样
-    vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    // 半球卷积
+    vec3 up = abs(N.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
     vec3 right = normalize(cross(up, N));
     up = cross(N, right);
 
-    float sampleDelta = 0.025;
+    vec3 irradiance = vec3(0.0);
+    float sampleDelta = 0.05;
     float nrSamples = 0.0;
 
     for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta)
     {
         for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta)
         {
-            // 球面坐标转换到笛卡尔坐标（切线空间）
             vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-            // 切线空间转换到世界空间
             vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;
 
-            irradiance += texture(u_EnvironmentMap, sampleVec).rgb * cos(theta) * sin(theta);
+            irradiance += SampleEnvMap(sampleVec) * cos(theta) * sin(theta);
             nrSamples += 1.0;
         }
     }
 
     irradiance = PI * irradiance / nrSamples;
+
     imageStore(u_OutputIrradiance, texCoord, vec4(irradiance, 1.0));
 }
