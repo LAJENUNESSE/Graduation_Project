@@ -16,6 +16,10 @@ namespace Engine
 
     namespace
     {
+        // SPH warm-up: 新粒子在此时间内 SPH 压力力从 0 渐入到 100%
+        // 防止爆发 (burst) 发射时密度冲击导致位置突变/闪烁
+        constexpr float SPH_WARMUP_TIME = 0.08f;  // 秒（约 5 帧 @ 60 FPS）
+
         bool ContainsToken(const char* str, const char* token)
         {
             return str && token && std::strstr(str, token) != nullptr;
@@ -399,6 +403,7 @@ namespace Engine
                     m_PCISPHForceShader->SetFloat("u_BoundaryStiffness", emitter.SPH_BoundaryStiffness);
                     m_PCISPHForceShader->SetFloat("u_BoundaryDamping", emitter.SPH_BoundaryDamping);
                     m_PCISPHForceShader->SetFloat("u_SpikyCoeff", spikyCoeff);
+                    m_PCISPHForceShader->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
 
                     // 帧间分摊：每帧只做 1 次 predict→density→force 迭代
                     m_PCISPHPredictShader->Bind();
@@ -439,6 +444,7 @@ namespace Engine
                     // 表面张力 + 刚体耦合 uniform
                     m_SPHForceShader->SetFloat("u_SurfaceTension", emitter.SPH_SurfaceTension);
                     m_SPHForceShader->SetFloat("u_SpikyCoeff", spikyCoeff);
+                    m_SPHForceShader->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
 
                     uint32_t rigidBodyCount = 0;
                     if (emitter.SPH_RigidBodyCoupling && registry)

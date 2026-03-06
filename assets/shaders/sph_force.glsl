@@ -47,6 +47,7 @@ uniform int   u_RigidBodyCount;     // 0=无刚体
 uniform float u_BoundaryStiffness;
 uniform float u_BoundaryDamping;
 uniform float u_SpikyCoeff;         // -45 / (π * h^6), CPU 预计算
+uniform float u_WarmupTime;         // SPH warm-up 时间 (秒), 新粒子逐步受 SPH 约束
 
 const float PI = 3.14159265359;
 
@@ -203,8 +204,15 @@ void main()
         }
     }
 
-    // 总 SPH 加速度 = (fPressure + fViscosity + fSurfaceTension + fBoundary) / ρ_i
-    vec3 sphAccel = (fPressure + fViscosity + fSurfaceTension + fBoundary) / densityI;
+    // SPH warm-up: 新生粒子逐步受压力影响，避免爆发时密度冲击导致闪烁
+    float life    = particles[myParticleIdx].posAndLife.w;
+    float maxLife = particles[myParticleIdx].velAndMaxLife.w;
+    float age     = maxLife - life;
+    float warmup  = (u_WarmupTime > 0.0) ? clamp(age / u_WarmupTime, 0.0, 1.0) : 1.0;
+
+    // 总 SPH 加速度 = (fPressure * warmup + fViscosity + fSurfaceTension + fBoundary) / ρ_i
+    // 仅对压力力施加 warmup，粘性力和边界力保持全强度（它们有助于稳定）
+    vec3 sphAccel = (fPressure * warmup + fViscosity + fSurfaceTension + fBoundary) / densityI;
 
     // 安全限幅：防止参数极端时数值爆炸
     float maxAccel = 500.0;

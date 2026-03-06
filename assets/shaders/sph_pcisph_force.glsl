@@ -50,6 +50,7 @@ uniform int   u_RigidBodyCount;
 uniform float u_BoundaryStiffness;
 uniform float u_BoundaryDamping;
 uniform float u_SpikyCoeff;         // -45 / (π * h^6), CPU 预计算
+uniform float u_WarmupTime;         // SPH warm-up 时间 (秒), 新粒子逐步受 SPH 约束
 
 // Spiky kernel gradient: ∇W_spiky = u_SpikyCoeff * (h - |r|)² * (r/|r|)
 vec3 spikyGrad(vec3 diff, float dist, float h)
@@ -170,8 +171,14 @@ void main()
         }
     }
 
-    // 压力加速度
-    vec3 a_pressure = (fPressure + fBoundary) / densityI;
+    // SPH warm-up: 新生粒子逐步受压力影响
+    float life    = particles[myParticleIdx].posAndLife.w;
+    float maxLife = particles[myParticleIdx].velAndMaxLife.w;
+    float age     = maxLife - life;
+    float warmup  = (u_WarmupTime > 0.0) ? clamp(age / u_WarmupTime, 0.0, 1.0) : 1.0;
+
+    // 压力加速度（仅对压力施加 warmup，边界力保持全强度防止穿透）
+    vec3 a_pressure = (fPressure * warmup + fBoundary) / densityI;
 
     // 安全限幅
     float maxAccel = 500.0;
