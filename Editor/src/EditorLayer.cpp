@@ -95,17 +95,19 @@ namespace Engine
             spec.Samples = samples;
             m_HDRFramebuffer = Framebuffer::Create(spec);
             m_SceneRenderer.SetHDRFramebuffer(m_HDRFramebuffer);
-            m_RenderSettingsPanel.SetHDRFramebuffer(m_HDRFramebuffer);
+            m_PanelCoordinator.SetHDRFramebuffer(m_HDRFramebuffer);
         });
 
-        m_SceneContextController.Initialize(
+        m_PanelCoordinator.Initialize(
             &m_HierarchyPanel,
+            &m_PropertiesPanel,
+            &m_ConsolePanel,
             &m_AssetBrowserPanel,
             &m_RenderSettingsPanel,
             &m_SelectedEntity,
             &m_HoveredEntity,
             &m_CommandHistory);
-        m_SceneContextController.ApplyScene(m_ActiveScene, false);
+        m_PanelCoordinator.ApplyScene(m_ActiveScene, false);
         // 注册控制台 sink 到 spdlog
         m_ConsolePanel.RegisterSink();
 
@@ -237,7 +239,9 @@ namespace Engine
             }
             if (ImGui::BeginMenu("\xe8\xa7\x86\xe5\x9b\xbe"))
             {
-                ImGui::MenuItem("\xe6\x80\xa7\xe8\x83\xbd\xe7\x9b\x91\xe6\x8e\xa7", nullptr, &m_ShowStatsPanel);
+                bool showStatsPanel = m_PanelCoordinator.IsStatsPanelVisible();
+                if (ImGui::MenuItem("性能监控", nullptr, showStatsPanel))
+                    m_PanelCoordinator.ToggleStatsPanelVisible();
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
@@ -282,55 +286,7 @@ namespace Engine
             ImGui::End();
         }
 
-        // Panels
-        m_HierarchyPanel.OnImGuiRender();
-        m_SelectedEntity = m_HierarchyPanel.GetSelectedEntity();
-        m_PropertiesPanel.OnImGuiRender(m_SelectedEntity);
-        m_ConsolePanel.OnImGuiRender();
-        m_AssetBrowserPanel.OnImGuiRender();
-
-        // Rendering settings panel
-        m_RenderSettingsPanel.OnImGuiRender();
-
-        // Performance monitoring panel
-        if (m_ShowStatsPanel)
-        {
-            auto& pm = PerformanceMonitor::Get();
-
-            ImGui::Begin("\xe6\x80\xa7\xe8\x83\xbd\xe7\x9b\x91\xe6\x8e\xa7", &m_ShowStatsPanel);
-
-            ImGui::Text("FPS: %.1f", pm.GetFPS());
-            ImGui::Text("\xe5\xb8\xa7\xe6\x97\xb6\xe9\x97\xb4: %.2f ms", pm.GetFrameTimeMs());
-
-            ImGui::Separator();
-            ImGui::Text("CPU \xe8\x80\x97\xe6\x97\xb6:");
-            ImGui::Text("  \xe9\x98\xb4\xe5\xbd\xb1Pass:  %.3f ms", pm.GetShadowPassCpuMs());
-            ImGui::Text("  \xe5\x9c\xba\xe6\x99\xaf\xe6\xb8\xb2\xe6\x9f\x93:  %.3f ms", pm.GetSceneRenderCpuMs());
-            ImGui::Text("  ImGui:     %.3f ms", pm.GetImGuiCpuMs());
-            ImGui::Text("  PollEvents:  %.3f ms", pm.GetPollEventsCpuMs());
-            ImGui::Text("  SwapBuffers: %.3f ms", pm.GetSwapBuffersCpuMs());
-
-            ImGui::Separator();
-            ImGui::Text("GPU \xe8\x80\x97\xe6\x97\xb6 (\xe4\xb8\x8a\xe4\xb8\x80\xe5\xb8\xa7):");
-            ImGui::Text("  \xe9\x98\xb4\xe5\xbd\xb1Pass:  %.3f ms", pm.GetShadowPassGpuMs());
-            ImGui::Text("  \xe5\x9c\xba\xe6\x99\xaf\xe6\xb8\xb2\xe6\x9f\x93:  %.3f ms", pm.GetSceneRenderGpuMs());
-
-            ImGui::Separator();
-            const auto& stats = pm.GetStats();
-            ImGui::Text("\xe6\xb8\xb2\xe6\x9f\x93\xe7\xbb\x9f\xe8\xae\xa1:");
-            ImGui::Text("  Draw Calls: %u", stats.DrawCalls);
-            ImGui::Text("  \xe9\xa1\xb6\xe7\x82\xb9\xe6\x95\xb0: %u", stats.Vertices);
-            ImGui::Text("  \xe4\xb8\x89\xe8\xa7\x92\xe5\xbd\xa2: %u", stats.Triangles);
-
-            ImGui::Separator();
-            ImGui::Text("\xe5\xb8\xa7\xe6\x97\xb6\xe9\x97\xb4\xe5\x8e\x86\xe5\x8f\xb2:");
-            ImGui::PlotLines("##FrameTime", pm.GetFrameTimeHistory(),
-                             PerformanceMonitor::FrameHistorySize,
-                             pm.GetFrameTimeHistoryOffset(),
-                             nullptr, 0.0f, 33.3f, ImVec2(0, 80));
-
-            ImGui::End();
-        }
+        m_PanelCoordinator.RenderPanels();
 
         // Viewport
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -596,7 +552,7 @@ namespace Engine
             static_cast<uint32_t>(m_ViewportSize.x),
             static_cast<uint32_t>(m_ViewportSize.y));
 
-        m_SceneContextController.ApplyScene(m_ActiveScene, true);
+        m_PanelCoordinator.ApplyScene(m_ActiveScene, true);
     }
 
     void EditorLayer::OpenScene()
@@ -637,8 +593,8 @@ namespace Engine
             m_SceneRenderer.SetHDRFramebuffer(m_HDRFramebuffer);
         }
 
-        m_RenderSettingsPanel.SetHDRFramebuffer(m_HDRFramebuffer);
-        m_SceneContextController.ApplyScene(m_ActiveScene, true);
+        m_PanelCoordinator.SetHDRFramebuffer(m_HDRFramebuffer);
+        m_PanelCoordinator.ApplyScene(m_ActiveScene, true);
     }
 
     void EditorLayer::SaveScene()
@@ -670,7 +626,7 @@ namespace Engine
     void EditorLayer::OnSceneStop()
     {
         m_SceneSession.EndPlay(m_ActiveScene);
-        m_SceneContextController.ApplyScene(m_ActiveScene, false);
+        m_PanelCoordinator.ApplyScene(m_ActiveScene, false);
     }
 
 } // namespace Engine

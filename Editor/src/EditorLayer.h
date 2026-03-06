@@ -13,7 +13,7 @@
 #include "Renderer/SceneRenderer.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "EditorSceneSession.h"
-#include "EditorSceneContextController.h"
+#include "EditorPanelCoordinator.h"
 
 namespace Engine
 {
@@ -47,7 +47,7 @@ namespace Engine
         Ref<Framebuffer> m_HDRFramebuffer;
         Ref<Scene> m_ActiveScene;
         EditorSceneSession m_SceneSession;
-        EditorSceneContextController m_SceneContextController;
+        EditorPanelCoordinator m_PanelCoordinator;
 
         SceneRenderer m_SceneRenderer;
         PostProcessing m_PostProcessing;
@@ -81,7 +81,6 @@ namespace Engine
 
         int m_GizmoType = -1;
 
-        bool m_ShowStatsPanel = true;
 
         bool m_ShowPhysicsColliders = false;
         PhysicsDebugDraw m_PhysicsDebugDraw;
