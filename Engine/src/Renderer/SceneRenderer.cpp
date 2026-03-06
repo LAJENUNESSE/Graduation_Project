@@ -11,6 +11,7 @@
 #include "Scene/Components.h"
 #include "Scene/Systems/MeshRenderSystem.h"
 #include "Debug/PerformanceMonitor.h"
+#include "Debug/ProfileTimer.h"
 
 #include <glad/gl.h>
 #include <random>
@@ -499,6 +500,128 @@ namespace Engine
             if (pass.Enabled && pass.Name == "FluidPass")
                 pass.ExecuteFn(m_Context);
         }
+    }
+
+    void SceneRenderer::SetHDRFramebuffer(const Ref<Framebuffer>& hdrFBO)
+    {
+        m_HDRFramebuffer = hdrFBO;
+    }
+
+    void SceneRenderer::SetPostProcessing(PostProcessing* pp, PostProcessingSettings* settings)
+    {
+        m_PostProcessing = pp;
+        m_PostProcessingSettings = settings;
+    }
+
+    void SceneRenderer::SetDebugDrawCallback(DebugDrawCallback callback)
+    {
+        m_DebugDrawCallback = std::move(callback);
+    }
+
+    void SceneRenderer::ResizeHDR(uint32_t width, uint32_t height)
+    {
+        if (m_HDRFramebuffer)
+            m_HDRFramebuffer->Resize(width, height);
+        if (m_PostProcessing)
+            m_PostProcessing->Resize(width, height);
+        m_FluidRenderer.Resize(width, height);
+    }
+
+    void SceneRenderer::RenderPipeline(const Ref<Framebuffer>& targetFBO)
+    {
+        // 设置视口信息
+        m_Context.ViewportWidth = m_HDRFramebuffer->GetSpecification().Width;
+        m_Context.ViewportHeight = m_HDRFramebuffer->GetSpecification().Height;
+
+        // Shadow pass（渲染到阴影系统自己的 FBO）— 独立 CPU 计时
+        float shadowCpuMs = 0.0f;
+        {
+            PROFILE_SCOPE("ShadowPass", &shadowCpuMs);
+            for (auto& pass : m_PassQueue)
+            {
+                if (pass.Enabled && (pass.Name == "LightCollect" || pass.Name == "ShadowPass"))
+                    pass.ExecuteFn(m_Context);
+            }
+        }
+        PerformanceMonitor::Get().SetShadowPassCPU(shadowCpuMs);
+
+        // 主场景渲染到 HDR FBO
+        m_HDRFramebuffer->Bind();
+        RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
+        RenderCommand::Clear();
+        m_HDRFramebuffer->ClearAttachment(1, -1);
+
+        // 设置 SSAO 深度纹理（使用上一帧 HDR FBO 的深度）
+        m_Context.SSAODepthTexID = m_HDRFramebuffer->GetDepthAttachmentRendererID();
+
+        const bool msaaEnabled = m_HDRFramebuffer->IsMSAAEnabled();
+
+        // 执行 SSAOPass + GeometryPass + SkyboxPass + TerrainPass + GrassPass
+        // 非 MSAA 时也执行 ParticlePass
+        for (auto& pass : m_PassQueue)
+        {
+            bool runPass = pass.Enabled &&
+                (pass.Name == "SSAOPass" || pass.Name == "GeometryPass" ||
+                 pass.Name == "SkyboxPass" || pass.Name == "TerrainPass" ||
+                 pass.Name == "GrassPass");
+            if (!msaaEnabled && pass.Enabled && pass.Name == "ParticlePass")
+                runPass = true;
+
+            if (runPass)
+                pass.ExecuteFn(m_Context);
+        }
+
+        m_HDRFramebuffer->Unbind();
+
+        // MSAA: re-render geometry+skybox to MSAA FBO, then blit
+        if (msaaEnabled)
+        {
+            m_HDRFramebuffer->BindMSAA();
+            RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
+            RenderCommand::Clear();
+
+            RenderGeometryAndSkybox();
+
+            m_HDRFramebuffer->BlitMSAA();
+
+            // Resolve 后单独绘制粒子，避免被 MSAA blit 覆盖掉
+            m_HDRFramebuffer->Bind();
+            RenderParticlePass();
+            m_HDRFramebuffer->Unbind();
+        }
+
+        // FluidPass: 在粒子绘制完成后、后处理之前执行
+        {
+            m_HDRFramebuffer->Bind();
+
+            m_Context.SceneColorTexID =
+                m_HDRFramebuffer->GetColorAttachmentRendererID(0);
+            m_Context.SceneDepthTexID =
+                m_HDRFramebuffer->GetDepthAttachmentRendererID();
+
+            RenderFluidPass();
+
+            m_HDRFramebuffer->Unbind();
+        }
+
+        // 物理碰撞体调试绘制（通过回调，可选）
+        if (m_DebugDrawCallback)
+        {
+            m_HDRFramebuffer->Bind();
+            m_DebugDrawCallback();
+            m_HDRFramebuffer->Unbind();
+        }
+
+        // Post-processing: HDR -> LDR，输出到 targetFBO
+        targetFBO->Bind();
+        RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 1.0f});
+        RenderCommand::Clear();
+        targetFBO->ClearAttachment(1, -1);
+
+        m_PostProcessing->Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0),
+                                  *m_PostProcessingSettings);
+
+        targetFBO->Unbind();
     }
 
 } // namespace Engine

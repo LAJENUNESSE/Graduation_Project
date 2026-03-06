@@ -5,6 +5,7 @@
 #include "Renderer/Shader.h"
 #include "Renderer/Texture.h"
 #include "Renderer/RenderQueue.h"
+#include "Renderer/PostProcessing.h"
 #include "Renderer/ParticleSystemGPU.h"
 #include "Renderer/FluidSystemGPU.h"
 #include "Renderer/FluidRenderer.h"
@@ -92,6 +93,16 @@ namespace Engine
         std::vector<RenderPassConfig>& GetPassQueue() { return m_PassQueue; }
         RenderContext& GetContext() { return m_Context; }
 
+        // 完整渲染管线：Shadow → HDR → MSAA → Fluid → DebugDraw → PostProcess → 输出到 targetFBO
+        void SetHDRFramebuffer(const Ref<Framebuffer>& hdrFBO);
+        void SetPostProcessing(PostProcessing* pp, PostProcessingSettings* settings);
+
+        using DebugDrawCallback = std::function<void()>;
+        void SetDebugDrawCallback(DebugDrawCallback callback);
+
+        void RenderPipeline(const Ref<Framebuffer>& targetFBO);
+        void ResizeHDR(uint32_t width, uint32_t height);
+
     private:
         std::vector<RenderPassConfig> m_PassQueue;
 
@@ -134,6 +145,12 @@ namespace Engine
         FluidRenderer m_FluidRenderer;
         Scene* m_LastScene = nullptr;
         float m_TotalTime = 0.0f;
+
+        // 完整渲染管线依赖（由外部注入）
+        Ref<Framebuffer> m_HDRFramebuffer;
+        PostProcessing* m_PostProcessing = nullptr;
+        PostProcessingSettings* m_PostProcessingSettings = nullptr;
+        DebugDrawCallback m_DebugDrawCallback;
     };
 
 } // namespace Engine
