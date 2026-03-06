@@ -1,13 +1,20 @@
-file(GLOB_RECURSE EDITOR_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
-)
-
-list(APPEND EDITOR_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorSceneSession.cpp
+set(EDITOR_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorApp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorLayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorPanelCoordinator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorSceneSession.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorSelectionGizmoController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorShell.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorViewportController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/AssetBrowserPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/ConsolePanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/PropertiesPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/RenderSettingsPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/SceneHierarchyPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/CollisionTestScript.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/PlayerController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/RotateScript.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/UndoSystem.cpp
 )
 
 add_executable(Editor ${EDITOR_SOURCES})
