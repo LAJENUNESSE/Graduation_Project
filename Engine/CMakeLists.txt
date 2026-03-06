@@ -3,6 +3,10 @@ file(GLOB_RECURSE ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/*.cpp
 )
 
+list(APPEND ENGINE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/CrashHandler.cpp
+)
+
 add_library(Engine STATIC ${ENGINE_SOURCES})
 
 # MSVC: treat source and execution charset as UTF-8 so Chinese literals work correctly
