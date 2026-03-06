@@ -20,8 +20,6 @@ namespace Engine
                                             ConsolePanel* consolePanel,
                                             AssetBrowserPanel* assetBrowserPanel,
                                             RenderSettingsPanel* renderSettingsPanel,
-                                            Entity* selectedEntity,
-                                            Entity* hoveredEntity,
                                             CommandHistory* commandHistory)
     {
         m_HierarchyPanel = hierarchyPanel;
@@ -29,8 +27,6 @@ namespace Engine
         m_ConsolePanel = consolePanel;
         m_AssetBrowserPanel = assetBrowserPanel;
         m_RenderSettingsPanel = renderSettingsPanel;
-        m_SelectedEntity = selectedEntity;
-        m_HoveredEntity = hoveredEntity;
         m_CommandHistory = commandHistory;
     }
 
@@ -45,11 +41,6 @@ namespace Engine
 
         ClearSelection();
 
-        if (m_SelectedEntity)
-            *m_SelectedEntity = {};
-        if (m_HoveredEntity)
-            *m_HoveredEntity = {};
-
         if (clearCommandHistory && m_CommandHistory)
             m_CommandHistory->Clear();
     }
@@ -58,10 +49,6 @@ namespace Engine
     {
         if (m_HierarchyPanel)
             m_HierarchyPanel->OnImGuiRender();
-
-        if (m_SelectedEntity)
-            *m_SelectedEntity = GetPrimarySelection();
-
         if (m_PropertiesPanel)
             m_PropertiesPanel->OnImGuiRender(GetPrimarySelection());
         if (m_ConsolePanel)
@@ -95,16 +82,12 @@ namespace Engine
     {
         if (m_HierarchyPanel)
             m_HierarchyPanel->SetSelectedEntity(entity);
-        if (m_SelectedEntity)
-            *m_SelectedEntity = entity;
     }
 
     void EditorPanelCoordinator::ClearSelection()
     {
         if (m_HierarchyPanel)
             m_HierarchyPanel->ClearSelection();
-        if (m_SelectedEntity)
-            *m_SelectedEntity = {};
     }
 
     void EditorPanelCoordinator::RenderStatsPanel()

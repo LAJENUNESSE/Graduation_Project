@@ -14,6 +14,7 @@
 #include "Physics/PhysicsDebugDraw.h"
 #include "EditorSceneSession.h"
 #include "EditorPanelCoordinator.h"
+#include "EditorSelectionGizmoController.h"
 #include "EditorShell.h"
 #include "EditorViewportController.h"
 
@@ -50,6 +51,7 @@ namespace Engine
         Ref<Scene> m_ActiveScene;
         EditorSceneSession m_SceneSession;
         EditorPanelCoordinator m_PanelCoordinator;
+        EditorSelectionGizmoController m_SelectionGizmoController;
         EditorShell m_EditorShell;
         EditorViewportController m_ViewportController;
 
@@ -57,25 +59,13 @@ namespace Engine
         PostProcessing m_PostProcessing;
         PostProcessingSettings m_PostProcessingSettings;
 
-        Entity m_SelectedEntity;
-        Entity m_HoveredEntity;
-
         SceneHierarchyPanel m_HierarchyPanel;
         PropertiesPanel m_PropertiesPanel;
         ConsolePanel m_ConsolePanel;
         AssetBrowserPanel m_AssetBrowserPanel;
         RenderSettingsPanel m_RenderSettingsPanel;
 
-        // Undo/Redo 系统
         CommandHistory m_CommandHistory;
-
-        // Gizmo 拖拽 Transform 快照（用于生成 undo 命令）
-        bool m_GizmoWasUsing = false;
-        glm::vec3 m_GizmoStartTranslation = {};
-        glm::vec3 m_GizmoStartRotation = {};
-        glm::vec3 m_GizmoStartScale = {};
-
-        int m_GizmoType = -1;
 
         bool m_ShowPhysicsColliders = false;
         PhysicsDebugDraw m_PhysicsDebugDraw;
