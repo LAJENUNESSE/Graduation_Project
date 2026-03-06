@@ -24,13 +24,16 @@ namespace Engine
         m_ViewportController.Initialize();
         const auto& viewportContext = m_ViewportController.GetContext();
 
-        m_PostProcessing.Init(static_cast<uint32_t>(viewportContext.Size.x),
-                              static_cast<uint32_t>(viewportContext.Size.y));
+        m_PostProcessing.Init(static_cast<uint32_t>(viewportContext.RenderSize.x),
+                              static_cast<uint32_t>(viewportContext.RenderSize.y));
 
-        m_SceneRenderer.Init(static_cast<uint32_t>(viewportContext.Size.x),
-                             static_cast<uint32_t>(viewportContext.Size.y));
+        m_SceneRenderer.Init(static_cast<uint32_t>(viewportContext.RenderSize.x),
+                             static_cast<uint32_t>(viewportContext.RenderSize.y));
         m_SceneSession.Initialize(&m_SceneRenderer);
         m_SceneRenderer.SetPostProcessing(&m_PostProcessing, &m_PostProcessingSettings);
+        m_ViewportController.SetResizeCallback([this](uint32_t width, uint32_t height) {
+            m_SceneRenderer.ResizeHDR(width, height);
+        });
         m_SceneRenderer.SetDebugDrawCallback([this]() {
             if (m_ShowPhysicsColliders)
                 m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController.GetCamera());
@@ -84,12 +87,15 @@ namespace Engine
         m_PanelCoordinator.RenderPanels();
 
         EditorViewportContext viewportContext = m_ViewportController.BeginViewportWindow();
-        m_SelectionGizmoController.UpdateHoveredEntity(viewportContext,
-                                                       m_ViewportController.GetHDRFramebuffer(),
-                                                       m_ActiveScene);
-        m_SelectionGizmoController.RenderGizmos(viewportContext,
-                                                m_ViewportController.GetCamera(),
-                                                m_ActiveScene);
+        if (m_SceneSession.GetState() == SceneState::Edit)
+        {
+            m_SelectionGizmoController.UpdateHoveredEntity(viewportContext,
+                                                           m_ViewportController.GetHDRFramebuffer(),
+                                                           m_ActiveScene);
+            m_SelectionGizmoController.RenderGizmos(viewportContext,
+                                                    m_ViewportController.GetCamera(),
+                                                    m_ActiveScene);
+        }
         m_ViewportController.EndViewportWindow();
     }
 
@@ -105,23 +111,25 @@ namespace Engine
     bool EditorLayer::OnKeyPressed(KeyPressedEvent& e)
     {
         HandleShellActions(m_EditorShell.OnKeyPressed(e, BuildShellState()));
-        m_SelectionGizmoController.OnKeyPressed(e);
+        if (m_SceneSession.GetState() == SceneState::Edit)
+            m_SelectionGizmoController.OnKeyPressed(e);
         return false;
     }
 
     bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e)
     {
-        m_SelectionGizmoController.OnMouseButtonPressed(e, m_ViewportController.GetContext(), m_ActiveScene);
+        if (m_SceneSession.GetState() == SceneState::Edit)
+            m_SelectionGizmoController.OnMouseButtonPressed(e, m_ViewportController.GetContext(), m_ActiveScene);
         return false;
     }
 
     void EditorLayer::NewScene()
     {
-        const auto& viewportContext = m_ViewportController.GetContext();
+        glm::vec2 renderSize = m_ViewportController.GetRenderSize();
         m_SceneSession.CreateNewScene(
             m_ActiveScene,
-            static_cast<uint32_t>(viewportContext.Size.x),
-            static_cast<uint32_t>(viewportContext.Size.y));
+            static_cast<uint32_t>(renderSize.x),
+            static_cast<uint32_t>(renderSize.y));
 
         ApplyActiveSceneContext(true);
     }
@@ -135,14 +143,14 @@ namespace Engine
 
     void EditorLayer::OpenScene(const std::string& filepath)
     {
-        const auto& viewportContext = m_ViewportController.GetContext();
+        glm::vec2 renderSize = m_ViewportController.GetRenderSize();
 
         EditorRenderSettings renderSettings;
         if (!m_SceneSession.OpenSceneFromPath(
                 m_ActiveScene,
                 filepath,
-                static_cast<uint32_t>(viewportContext.Size.x),
-                static_cast<uint32_t>(viewportContext.Size.y),
+                static_cast<uint32_t>(renderSize.x),
+                static_cast<uint32_t>(renderSize.y),
                 &renderSettings))
         {
             return;
@@ -163,6 +171,7 @@ namespace Engine
 
     void EditorLayer::OnScenePlay()
     {
+        m_SelectionGizmoController.ClearTransientState();
         m_SceneSession.BeginPlay(m_ActiveScene);
     }
 
@@ -294,4 +303,3 @@ namespace Engine
     }
 
 } // namespace Engine
-
