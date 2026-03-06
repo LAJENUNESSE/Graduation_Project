@@ -199,20 +199,6 @@ namespace Engine
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        // 诊断：GPU 回读验证（确认上传到 GPU 后数据完整）
-        {
-            int cx = faceSize / 2, cy = faceSize / 2;
-            int idx = (cy * faceSize * 6 + cx) * 4;
-            ENGINE_CORE_INFO("IBL: Env atlas CPU data face+X center = {},{},{},{}",
-                             atlasPixels[idx], atlasPixels[idx+1],
-                             atlasPixels[idx+2], atlasPixels[idx+3]);
-
-            std::vector<uint8_t> gpuReadback(faceSize * 6 * faceSize * 4);
-            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, gpuReadback.data());
-            ENGINE_CORE_INFO("IBL: Env atlas GPU data face+X center = {},{},{},{}",
-                             gpuReadback[idx], gpuReadback[idx+1],
-                             gpuReadback[idx+2], gpuReadback[idx+3]);
-        }
         glBindTexture(GL_TEXTURE_2D, 0);
 
         return atlasID;
@@ -288,13 +274,6 @@ namespace Engine
             glBindTexture(GL_TEXTURE_2D, irradTemp);
             glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixels.data());
             glBindTexture(GL_TEXTURE_2D, 0);
-
-            {
-                int cx = IRRADIANCE_SIZE / 2, cy = IRRADIANCE_SIZE / 2;
-                int idx = (cy * IRRADIANCE_SIZE * 6 + cx) * 4;
-                ENGINE_CORE_INFO("IBL: Irradiance face+X center = ({:.4f}, {:.4f}, {:.4f})",
-                                 pixels[idx], pixels[idx+1], pixels[idx+2]);
-            }
 
             glBindTexture(GL_TEXTURE_CUBE_MAP, m_IrradianceMapID);
             for (int face = 0; face < 6; face++)
@@ -374,14 +353,6 @@ namespace Engine
                 glBindTexture(GL_TEXTURE_2D, prefilterTemp);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixels.data());
                 glBindTexture(GL_TEXTURE_2D, 0);
-
-                if (mip == 0)
-                {
-                    int cx = mipSize / 2, cy = mipSize / 2;
-                    int idx = (cy * mipSize * 6 + cx) * 4;
-                    ENGINE_CORE_INFO("IBL: Prefilter mip0 face+X center = ({:.4f}, {:.4f}, {:.4f})",
-                                     pixels[idx], pixels[idx+1], pixels[idx+2]);
-                }
 
                 // NaN/Inf 清理
                 for (size_t pi = 0; pi < pixels.size(); pi++)
