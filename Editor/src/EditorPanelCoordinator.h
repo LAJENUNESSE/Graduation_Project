@@ -25,8 +25,6 @@ namespace Engine
                         ConsolePanel* consolePanel,
                         AssetBrowserPanel* assetBrowserPanel,
                         RenderSettingsPanel* renderSettingsPanel,
-                        Entity* selectedEntity,
-                        Entity* hoveredEntity,
                         CommandHistory* commandHistory);
 
         void ApplyScene(const Ref<Scene>& scene, bool clearCommandHistory);
@@ -51,8 +49,6 @@ namespace Engine
         ConsolePanel* m_ConsolePanel = nullptr;
         AssetBrowserPanel* m_AssetBrowserPanel = nullptr;
         RenderSettingsPanel* m_RenderSettingsPanel = nullptr;
-        Entity* m_SelectedEntity = nullptr;
-        Entity* m_HoveredEntity = nullptr;
         CommandHistory* m_CommandHistory = nullptr;
         bool m_ShowStatsPanel = true;
     };
