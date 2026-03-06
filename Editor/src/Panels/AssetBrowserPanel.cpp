@@ -340,26 +340,35 @@ namespace Engine
             if (m_OnSceneOpen)
                 m_OnSceneOpen(path.string());
             else
-                ENGINE_INFO("\xe5\x8f\x8c\xe5\x87\xbb\xe5\x9c\xba\xe6\x99\xaf\xe6\x96\x87\xe4\xbb\xb6: {0}", path.string());
+                ENGINE_INFO("双击场景文件: {0}", path.string());
         }
         else if (IsImageFile(path))
         {
             // 打开图片预览
             m_ShowImagePreview = true;
+            ClearImagePreview();
             m_PreviewImagePath = path.string();
 
-            // 加载纹理用于预览
-            if (m_PreviewTextureID != 0)
-                m_PreviewTextureID = 0;
-
-            auto texture = Texture2D::Create(path.string());
-            if (texture)
+            // 持有纹理对象，避免只保存 renderer ID 导致悬空资源
+            m_PreviewTexture = Texture2D::Create(path.string());
+            if (m_PreviewTexture)
             {
-                m_PreviewTextureID = texture->GetRendererID();
-                m_PreviewImageWidth = texture->GetWidth();
-                m_PreviewImageHeight = texture->GetHeight();
+                m_PreviewImageWidth = static_cast<int>(m_PreviewTexture->GetWidth());
+                m_PreviewImageHeight = static_cast<int>(m_PreviewTexture->GetHeight());
+            }
+            else
+            {
+                ENGINE_WARN("Failed to load preview texture: {0}", path.string());
             }
         }
+    }
+
+    void AssetBrowserPanel::ClearImagePreview()
+    {
+        m_PreviewTexture.reset();
+        m_PreviewImagePath.clear();
+        m_PreviewImageWidth = 0;
+        m_PreviewImageHeight = 0;
     }
 
     void AssetBrowserPanel::DrawImagePreview()
@@ -368,12 +377,12 @@ namespace Engine
             return;
 
         ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("\xe5\x9b\xbe\xe7\x89\x87\xe9\xa2\x84\xe8\xa7\x88", &m_ShowImagePreview)) // 图片预览
+        if (ImGui::Begin("图片预览", &m_ShowImagePreview)) // 图片预览
         {
             ImGui::Text("%s", m_PreviewImagePath.c_str());
-            ImGui::Text("\xe5\xb0\xba\xe5\xaf\xb8: %d x %d", m_PreviewImageWidth, m_PreviewImageHeight); // 尺寸
+            ImGui::Text("尺寸: %d x %d", m_PreviewImageWidth, m_PreviewImageHeight); // 尺寸
 
-            if (m_PreviewTextureID != 0)
+            if (m_PreviewTexture)
             {
                 ImVec2 avail = ImGui::GetContentRegionAvail();
                 float aspect = static_cast<float>(m_PreviewImageWidth) / static_cast<float>(m_PreviewImageHeight);
@@ -384,11 +393,15 @@ namespace Engine
                     h = avail.y;
                     w = h * aspect;
                 }
-                ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(m_PreviewTextureID)),
+                ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(m_PreviewTexture->GetRendererID())),
                              ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
             }
         }
         ImGui::End();
+
+        if (!m_ShowImagePreview)
+            ClearImagePreview();
     }
 
 } // namespace Engine
+

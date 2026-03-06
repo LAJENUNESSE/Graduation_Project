@@ -11,6 +11,8 @@
 namespace Engine
 {
 
+    class Texture2D;
+
     class AssetBrowserPanel
     {
     public:
@@ -42,6 +44,7 @@ namespace Engine
 
         // 绘制图片预览窗口
         void DrawImagePreview();
+        void ClearImagePreview();
 
     private:
         std::filesystem::path m_RootDirectory;
@@ -53,9 +56,10 @@ namespace Engine
         // 图片预览
         bool m_ShowImagePreview = false;
         std::string m_PreviewImagePath;
-        uint32_t m_PreviewTextureID = 0;
+        Ref<Texture2D> m_PreviewTexture;
         int m_PreviewImageWidth = 0;
         int m_PreviewImageHeight = 0;
     };
 
 } // namespace Engine
+
