@@ -2,6 +2,10 @@ file(GLOB_RECURSE EDITOR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 )
 
+list(APPEND EDITOR_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorSceneSession.cpp
+)
+
 add_executable(Editor ${EDITOR_SOURCES})
 
 # MSVC: treat source and execution charset as UTF-8 so Chinese literals work correctly

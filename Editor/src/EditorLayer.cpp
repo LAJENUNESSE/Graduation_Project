@@ -77,6 +77,7 @@ namespace Engine
                              static_cast<uint32_t>(m_ViewportSize.y));
         m_SceneRenderer.SetHDRFramebuffer(m_HDRFramebuffer);
         m_SceneRenderer.SetPostProcessing(&m_PostProcessing, &m_PostProcessingSettings);
+        m_SceneSession.Initialize(&m_SceneRenderer);
         m_SceneRenderer.SetDebugDrawCallback([this]() {
             if (m_ShowPhysicsColliders)
                 m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_EditorCamera);
@@ -128,6 +129,8 @@ namespace Engine
     void EditorLayer::OnDetach()
     {
         ENGINE_INFO("[EditorEvent] Detaching editor layer");
+        if (m_SceneSession.IsPlaying())
+            OnSceneStop();
         m_ConsolePanel.UnregisterSink();
         m_SceneRenderer.Shutdown();
     }
@@ -158,7 +161,7 @@ namespace Engine
         AssetManager::Update(ts);
 
         // 物理更新（仅运行时）
-        switch (m_SceneState)
+        switch (m_SceneSession.GetState())
         {
         case SceneState::Edit:
             m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
@@ -269,7 +272,7 @@ namespace Engine
             ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
             ImGui::SetCursorPosY((ImGui::GetWindowHeight() - buttonHeight) * 0.5f);
 
-            if (m_SceneState == SceneState::Edit)
+            if (m_SceneSession.GetState() == SceneState::Edit)
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
@@ -278,7 +281,7 @@ namespace Engine
                     OnScenePlay();
                 ImGui::PopStyleColor(3);
             }
-            else if (m_SceneState == SceneState::Play)
+            else if (m_SceneSession.GetState() == SceneState::Play)
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
@@ -692,28 +695,12 @@ namespace Engine
 
     void EditorLayer::OnScenePlay()
     {
-        m_SceneState = SceneState::Play;
-
-        // 深拷贝当前场景作为编辑器快照（ShadowSettings 保存在 Copy 的 fallback 中）
-        m_EditorScene = Scene::Copy(m_ActiveScene);
-        m_EditorScene->SetSceneRenderer(&m_SceneRenderer);
-
-        m_ActiveScene->OnRuntimeStart();
-        ENGINE_INFO("[EditorEvent] ScenePlay started");
+        m_SceneSession.BeginPlay(m_ActiveScene);
     }
 
     void EditorLayer::OnSceneStop()
     {
-        m_SceneState = SceneState::Edit;
-
-        m_ActiveScene->OnRuntimeStop();
-
-        // 恢复编辑器场景
-        m_ActiveScene = m_EditorScene;
-        m_EditorScene = nullptr;
-
-        // 恢复 ShadowSettings（从备份的 fallback 恢复到 renderer）
-        m_SceneRenderer.GetShadowSystem().GetSettings() = m_ActiveScene->GetShadowSettings();
+        m_SceneSession.EndPlay(m_ActiveScene);
 
         m_HierarchyPanel.SetContext(m_ActiveScene);
         m_AssetBrowserPanel.SetContext(m_ActiveScene);
