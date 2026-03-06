@@ -30,7 +30,13 @@ namespace Engine
             if (!scene)
                 return 0;
 
-            return scene->GetRegistry().view<IDComponent>().size_hint();
+            size_t count = 0;
+            for (auto entity : scene->GetRegistry().view<IDComponent>())
+            {
+                (void)entity;
+                ++count;
+            }
+            return count;
         }
     } // namespace
 
@@ -717,4 +723,3 @@ namespace Engine
     }
 
 } // namespace Engine
-

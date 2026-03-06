@@ -394,7 +394,12 @@ namespace Engine
     void Scene::OnRuntimeStart()
     {
         const char* backendName = m_PhysicsBackend == PhysicsBackend::Custom ? "Custom" : "Bullet";
-        const size_t entityCount = m_Registry.view<IDComponent>().size_hint();
+        size_t entityCount = 0;
+        for (auto entity : m_Registry.view<IDComponent>())
+        {
+            (void)entity;
+            ++entityCount;
+        }
         ENGINE_CORE_INFO("[SceneLifecycle] RuntimeStart backend={0}, entities={1}", backendName, entityCount);
 
         if (m_PhysicsBackend == PhysicsBackend::Custom)
@@ -454,7 +459,12 @@ namespace Engine
 
     void Scene::OnRuntimeStop()
     {
-        const size_t entityCount = m_Registry.view<IDComponent>().size_hint();
+        size_t entityCount = 0;
+        for (auto entity : m_Registry.view<IDComponent>())
+        {
+            (void)entity;
+            ++entityCount;
+        }
         ENGINE_CORE_INFO("[SceneLifecycle] RuntimeStop entities={0}", entityCount);
 
         // Audio + Video 系统停止（先于脚本销毁）
@@ -588,9 +598,23 @@ namespace Engine
             }
         }
 
+        size_t srcEntityCount = 0;
+        for (auto entity : srcReg.view<IDComponent>())
+        {
+            (void)entity;
+            ++srcEntityCount;
+        }
+
+        size_t dstEntityCount = 0;
+        for (auto entity : newScene->m_Registry.view<IDComponent>())
+        {
+            (void)entity;
+            ++dstEntityCount;
+        }
+
         ENGINE_CORE_INFO("[SceneLifecycle] Scene::Copy completed srcEntities={0}, dstEntities={1}",
-            srcReg.view<IDComponent>().size_hint(),
-            newScene->m_Registry.view<IDComponent>().size_hint());
+            srcEntityCount,
+            dstEntityCount);
 
         return newScene;
     }
@@ -653,4 +677,3 @@ namespace Engine
     }
 
 } // namespace Engine
-
