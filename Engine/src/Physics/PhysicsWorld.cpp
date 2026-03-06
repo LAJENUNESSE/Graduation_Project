@@ -4,11 +4,34 @@
 #include "Core/Log.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>
 
 namespace Engine
 {
+    namespace
+    {
+        glm::vec3 AbsVec3(const glm::vec3& value)
+        {
+            return {std::abs(value.x), std::abs(value.y), std::abs(value.z)};
+        }
+
+        glm::vec3 RotateScaledOffset(const glm::quat& rotation, const glm::vec3& offset, const glm::vec3& scale)
+        {
+            return rotation * (offset * scale);
+        }
+
+        glm::vec3 ComputeWorldAABBHalfExtents(const glm::vec3& localHalfExtents, const glm::quat& rotation)
+        {
+            const glm::mat3 basis = glm::mat3_cast(rotation);
+            return {
+                std::abs(basis[0][0]) * localHalfExtents.x + std::abs(basis[1][0]) * localHalfExtents.y + std::abs(basis[2][0]) * localHalfExtents.z,
+                std::abs(basis[0][1]) * localHalfExtents.x + std::abs(basis[1][1]) * localHalfExtents.y + std::abs(basis[2][1]) * localHalfExtents.z,
+                std::abs(basis[0][2]) * localHalfExtents.x + std::abs(basis[1][2]) * localHalfExtents.y + std::abs(basis[2][2]) * localHalfExtents.z
+            };
+        }
+    } // namespace
 
     void PhysicsWorld::Init(glm::vec3 gravity)
     {
@@ -95,8 +118,10 @@ namespace Engine
             entt::entity entity;
             glm::vec3 worldPos;
             enum Type { Box, Sphere } type;
-            glm::vec3 halfExtents; // Box
-            float radius;          // Sphere
+            glm::vec3 halfExtents;        // Box/OBB 本地半尺寸
+            glm::quat rotation;           // Box 朝向
+            glm::vec3 worldAABBHalfExtents; // 用于保守 Box-Box 检测
+            float radius;                 // Sphere
         };
 
         std::vector<ColliderInfo> colliders;
@@ -109,12 +134,18 @@ namespace Engine
                 auto& transform = view.get<TransformComponent>(entity);
                 auto& box = view.get<BoxColliderComponent>(entity);
 
+                const glm::quat rotation(transform.Rotation);
+                const glm::vec3 absScale = AbsVec3(transform.Scale);
+                const glm::vec3 halfExtents = box.HalfExtents * absScale;
+
                 ColliderInfo ci;
                 ci.entity = entity;
-                ci.worldPos = transform.Translation + box.Offset;
+                ci.worldPos = transform.Translation + RotateScaledOffset(rotation, box.Offset, transform.Scale);
                 ci.type = ColliderInfo::Box;
-                ci.halfExtents = box.HalfExtents * transform.Scale;
-                ci.radius = 0;
+                ci.halfExtents = halfExtents;
+                ci.rotation = rotation;
+                ci.worldAABBHalfExtents = ComputeWorldAABBHalfExtents(halfExtents, rotation);
+                ci.radius = 0.0f;
                 colliders.push_back(ci);
             }
         }
@@ -127,13 +158,18 @@ namespace Engine
                 auto& transform = view.get<TransformComponent>(entity);
                 auto& sphere = view.get<SphereColliderComponent>(entity);
 
+                const glm::quat rotation(transform.Rotation);
+                const glm::vec3 absScale = AbsVec3(transform.Scale);
+
                 ColliderInfo ci;
                 ci.entity = entity;
-                ci.worldPos = transform.Translation + sphere.Offset;
+                ci.worldPos = transform.Translation + RotateScaledOffset(rotation, sphere.Offset, transform.Scale);
                 ci.type = ColliderInfo::Sphere;
                 ci.halfExtents = {0, 0, 0};
+                ci.rotation = rotation;
+                ci.worldAABBHalfExtents = {0, 0, 0};
                 // 取 Scale 最大分量作为球半径缩放
-                float maxScale = std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
+                float maxScale = std::max({absScale.x, absScale.y, absScale.z});
                 ci.radius = sphere.Radius * maxScale;
                 colliders.push_back(ci);
             }
@@ -169,16 +205,16 @@ namespace Engine
                 }
                 else if (a.type == ColliderInfo::Box && b.type == ColliderInfo::Box)
                 {
-                    collided = AABBAABB(a.worldPos, a.halfExtents, b.worldPos, b.halfExtents, info);
+                    collided = AABBAABB(a.worldPos, a.worldAABBHalfExtents, b.worldPos, b.worldAABBHalfExtents, info);
                 }
                 else if (a.type == ColliderInfo::Sphere && b.type == ColliderInfo::Box)
                 {
-                    collided = SphereAABB(a.worldPos, a.radius, b.worldPos, b.halfExtents, info);
-                    // SphereAABB 法线从球指向盒子外部，需要保证 A→B 方向
+                    collided = SphereOBB(a.worldPos, a.radius, b.worldPos, b.halfExtents, b.rotation, info);
+                    // SphereOBB 返回盒子到球的法线，需要保持 A→B 方向
                 }
                 else if (a.type == ColliderInfo::Box && b.type == ColliderInfo::Sphere)
                 {
-                    collided = SphereAABB(b.worldPos, b.radius, a.worldPos, a.halfExtents, info);
+                    collided = SphereOBB(b.worldPos, b.radius, a.worldPos, a.halfExtents, a.rotation, info);
                     // 交换 A/B，翻转法线
                     if (collided)
                     {
@@ -306,6 +342,66 @@ namespace Engine
         return true;
     }
 
+    bool PhysicsWorld::SphereOBB(
+        const glm::vec3& spherePos, float sphereRadius,
+        const glm::vec3& boxPos, const glm::vec3& boxHalf,
+        const glm::quat& boxRotation,
+        CollisionInfo& info)
+    {
+        const glm::quat inverseRotation = glm::inverse(boxRotation);
+        const glm::vec3 localSphere = inverseRotation * (spherePos - boxPos);
+
+        glm::vec3 closest;
+        closest.x = std::clamp(localSphere.x, -boxHalf.x, boxHalf.x);
+        closest.y = std::clamp(localSphere.y, -boxHalf.y, boxHalf.y);
+        closest.z = std::clamp(localSphere.z, -boxHalf.z, boxHalf.z);
+
+        glm::vec3 localDiff = localSphere - closest;
+        float distSq = glm::dot(localDiff, localDiff);
+        glm::vec3 localNormal(0.0f);
+
+        if (distSq < 1e-6f)
+        {
+            float dx = boxHalf.x - std::abs(localSphere.x);
+            float dy = boxHalf.y - std::abs(localSphere.y);
+            float dz = boxHalf.z - std::abs(localSphere.z);
+
+            if (dx <= 0.0f || dy <= 0.0f || dz <= 0.0f)
+                return false;
+
+            if (dx <= dy && dx <= dz)
+            {
+                localNormal = (localSphere.x >= 0.0f) ? glm::vec3(1, 0, 0) : glm::vec3(-1, 0, 0);
+                closest = {localNormal.x * boxHalf.x, localSphere.y, localSphere.z};
+                info.penetrationDepth = dx + sphereRadius;
+            }
+            else if (dy <= dx && dy <= dz)
+            {
+                localNormal = (localSphere.y >= 0.0f) ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
+                closest = {localSphere.x, localNormal.y * boxHalf.y, localSphere.z};
+                info.penetrationDepth = dy + sphereRadius;
+            }
+            else
+            {
+                localNormal = (localSphere.z >= 0.0f) ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
+                closest = {localSphere.x, localSphere.y, localNormal.z * boxHalf.z};
+                info.penetrationDepth = dz + sphereRadius;
+            }
+        }
+        else
+        {
+            float dist = std::sqrt(distSq);
+            if (dist >= sphereRadius)
+                return false;
+
+            localNormal = localDiff / dist;
+            info.penetrationDepth = sphereRadius - dist;
+        }
+
+        info.contactNormal = boxRotation * localNormal;
+        info.contactPoint = boxPos + boxRotation * closest;
+        return true;
+    }
     // ===== Phase 9c: 冲量碰撞响应（论文核心亮点）=====
 
     void PhysicsWorld::ResolveCollisions(entt::registry& reg)

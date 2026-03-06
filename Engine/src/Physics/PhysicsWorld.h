@@ -3,6 +3,7 @@
 #include "Scene/Entity.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <entt/entt.hpp>
 
 #include <vector>
@@ -45,6 +46,12 @@ namespace Engine
         bool SphereAABB(
             const glm::vec3& spherePos, float sphereRadius,
             const glm::vec3& boxPos, const glm::vec3& boxHalf,
+            CollisionInfo& info);
+
+        bool SphereOBB(
+            const glm::vec3& spherePos, float sphereRadius,
+            const glm::vec3& boxPos, const glm::vec3& boxHalf,
+            const glm::quat& boxRotation,
             CollisionInfo& info);
 
         glm::vec3 m_Gravity = {0, -9.81f, 0};
