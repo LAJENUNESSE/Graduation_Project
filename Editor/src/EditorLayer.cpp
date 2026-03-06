@@ -23,6 +23,17 @@
 
 namespace Engine
 {
+    namespace
+    {
+        size_t GetSceneEntityCount(const Ref<Scene>& scene)
+        {
+            if (!scene)
+                return 0;
+
+            return scene->GetRegistry().view<IDComponent>().size_hint();
+        }
+    } // namespace
+
 
     EditorLayer::EditorLayer()
         : Layer("EditorLayer")
@@ -110,6 +121,8 @@ namespace Engine
 
     void EditorLayer::OnDetach()
     {
+        ENGINE_INFO("[EditorEvent] Detaching editor layer");
+        m_ConsolePanel.UnregisterSink();
         m_SceneRenderer.Shutdown();
     }
 
@@ -622,6 +635,8 @@ namespace Engine
         m_HoveredEntity = {};
         m_CommandHistory.Clear();
 
+        ENGINE_INFO("[EditorEvent] OpenScene loaded '{0}', entities={1}", filepath, GetSceneEntityCount(m_ActiveScene));
+
         m_PostProcessingSettings = renderSettings.PostProcessing;
         m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
 
@@ -678,6 +693,7 @@ namespace Engine
         m_EditorScene->SetSceneRenderer(&m_SceneRenderer);
 
         m_ActiveScene->OnRuntimeStart();
+        ENGINE_INFO("[EditorEvent] ScenePlay started");
     }
 
     void EditorLayer::OnSceneStop()
@@ -701,3 +717,4 @@ namespace Engine
     }
 
 } // namespace Engine
+

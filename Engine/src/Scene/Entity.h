@@ -1,9 +1,12 @@
 #pragma once
 
 #include "Core/Assert.h"
+#include "Core/Log.h"
 #include "Scene/Scene.h"
 
 #include <entt/entt.hpp>
+
+#include <typeinfo>
 
 namespace Engine
 {
@@ -20,6 +23,8 @@ namespace Engine
         {
             ENGINE_CORE_ASSERT(!HasComponent<T>(), "Entity already has component!");
             T& component = m_Scene->m_Registry.emplace<T>(m_EntityHandle, std::forward<Args>(args)...);
+            if (Log::GetCoreLogger())
+                ENGINE_CORE_TRACE("[ComponentLifecycle] Add '{0}' -> entity {1}", typeid(T).name(), static_cast<uint32_t>(m_EntityHandle));
             return component;
         }
 
@@ -27,6 +32,8 @@ namespace Engine
         T& AddOrReplaceComponent(Args&&... args)
         {
             T& component = m_Scene->m_Registry.emplace_or_replace<T>(m_EntityHandle, std::forward<Args>(args)...);
+            if (Log::GetCoreLogger())
+                ENGINE_CORE_TRACE("[ComponentLifecycle] AddOrReplace '{0}' -> entity {1}", typeid(T).name(), static_cast<uint32_t>(m_EntityHandle));
             return component;
         }
 
@@ -48,6 +55,8 @@ namespace Engine
         {
             ENGINE_CORE_ASSERT(HasComponent<T>(), "Entity does not have component!");
             m_Scene->m_Registry.remove<T>(m_EntityHandle);
+            if (Log::GetCoreLogger())
+                ENGINE_CORE_TRACE("[ComponentLifecycle] Remove '{0}' <- entity {1}", typeid(T).name(), static_cast<uint32_t>(m_EntityHandle));
         }
 
         operator bool() const
@@ -86,3 +95,4 @@ namespace Engine
     };
 
 } // namespace Engine
+
