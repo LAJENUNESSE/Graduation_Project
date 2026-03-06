@@ -11,6 +11,7 @@
 #include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderer.h"
 #include "Physics/PhysicsDebugDraw.h"
+#include "EditorRenderController.h"
 #include "EditorSceneSession.h"
 #include "EditorPanelCoordinator.h"
 #include "EditorSelectionGizmoController.h"
@@ -49,9 +50,6 @@ namespace Engine
         void BootstrapDefaultScene();
         void ConfigureEditorPanels();
         void ApplyActiveSceneContext(bool clearCommandHistory);
-        void SyncHDRFramebufferBindings();
-        void ApplyRenderSettings(const EditorRenderSettings& renderSettings);
-        EditorRenderSettings CollectRenderSettings();
 
     private:
         Ref<Scene> m_ActiveScene;
@@ -60,6 +58,7 @@ namespace Engine
         EditorSelectionGizmoController m_SelectionGizmoController;
         EditorShell m_EditorShell;
         EditorViewportController m_ViewportController;
+        EditorRenderController m_RenderController;
 
         SceneRenderer m_SceneRenderer;
         PostProcessing m_PostProcessing;
@@ -78,4 +77,3 @@ namespace Engine
     };
 
 } // namespace Engine
-
