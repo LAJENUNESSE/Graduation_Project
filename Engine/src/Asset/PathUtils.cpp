@@ -68,7 +68,8 @@ namespace Engine::PathUtils
     void SetProjectRoot(const std::filesystem::path& projectRoot)
     {
         s_ProjectRoot = NormalizePath(projectRoot);
-        ENGINE_CORE_INFO("[ProjectPaths] Project root = {0}", s_ProjectRoot.string());
+        if (Log::IsInitialized())
+            ENGINE_CORE_INFO("[ProjectPaths] Project root = {0}", s_ProjectRoot.string());
     }
 
     bool DiscoverProjectRoot(const std::filesystem::path& startDirectory)
@@ -166,6 +167,8 @@ namespace Engine::PathUtils
     }
 
 } // namespace Engine::PathUtils
+
+
 
 
 

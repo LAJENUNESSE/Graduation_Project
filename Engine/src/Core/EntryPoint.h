@@ -31,9 +31,8 @@ static void InitializeProjectRootFromExecutable()
 
 int main(int argc, char** argv)
 {
-    InitializeProjectRootFromExecutable();
-
     Engine::Log::Init();
+    InitializeProjectRootFromExecutable();
     Engine::CrashHandler::Install();
     ENGINE_CORE_INFO("Initialized Log!");
 
@@ -43,4 +42,5 @@ int main(int argc, char** argv)
 
     return 0;
 }
+
 
