@@ -77,12 +77,17 @@ namespace Engine
         ImVec2 mousePos = ImGui::GetMousePos();
         float mx = mousePos.x - viewport.Bounds[0].x;
         float my = mousePos.y - viewport.Bounds[0].y;
-        glm::vec2 vpSize = viewport.Bounds[1] - viewport.Bounds[0];
-        my = vpSize.y - my;
+        glm::vec2 displaySize = viewport.Bounds[1] - viewport.Bounds[0];
+        if (displaySize.x <= 0.0f || displaySize.y <= 0.0f)
+            return;
 
-        int mouseX = static_cast<int>(mx);
-        int mouseY = static_cast<int>(my);
-        if (mouseX < 0 || mouseY < 0 || mouseX >= static_cast<int>(vpSize.x) || mouseY >= static_cast<int>(vpSize.y))
+        const auto hdrSpec = hdrFramebuffer->GetSpecification();
+        float scaleX = static_cast<float>(hdrSpec.Width) / displaySize.x;
+        float scaleY = static_cast<float>(hdrSpec.Height) / displaySize.y;
+        int mouseX = static_cast<int>(mx * scaleX);
+        int mouseY = static_cast<int>((displaySize.y - my) * scaleY);
+        if (mouseX < 0 || mouseY < 0 ||
+            mouseX >= static_cast<int>(hdrSpec.Width) || mouseY >= static_cast<int>(hdrSpec.Height))
             return;
 
         int pixelData = hdrFramebuffer->ReadPixel(1, mouseX, mouseY);

@@ -10,6 +10,17 @@
 
 namespace Engine
 {
+    namespace
+    {
+        glm::vec2 GetFramebufferScale()
+        {
+            ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
+            return {
+                scale.x > 0.0f ? scale.x : 1.0f,
+                scale.y > 0.0f ? scale.y : 1.0f
+            };
+        }
+    } // namespace
 
     void EditorViewportController::Initialize(uint32_t width, uint32_t height)
     {
@@ -28,6 +39,8 @@ namespace Engine
         m_HDRFramebuffer = Framebuffer::Create(hdrSpec);
 
         m_Context.Size = {static_cast<float>(width), static_cast<float>(height)};
+        m_Context.RenderSize = m_Context.Size;
+        m_TargetSize = m_Context.RenderSize;
         m_EditorCamera = EditorCamera(45.0f, static_cast<float>(width) / static_cast<float>(height), 0.1f, 1000.0f);
         m_EditorCamera.SetViewportSize(static_cast<float>(width), static_cast<float>(height));
     }
@@ -35,19 +48,20 @@ namespace Engine
     void EditorViewportController::OnUpdate(Timestep ts, Scene& activeScene)
     {
         FramebufferSpecification spec = m_Framebuffer->GetSpecification();
-        if (m_Context.Size.x > 0.0f && m_Context.Size.y > 0.0f &&
-            (spec.Width != static_cast<uint32_t>(m_Context.Size.x) ||
-             spec.Height != static_cast<uint32_t>(m_Context.Size.y)))
+        if (m_TargetSize.x > 0.0f && m_TargetSize.y > 0.0f &&
+            (spec.Width != static_cast<uint32_t>(m_TargetSize.x) ||
+             spec.Height != static_cast<uint32_t>(m_TargetSize.y)))
         {
             if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
-                uint32_t width = static_cast<uint32_t>(m_Context.Size.x);
-                uint32_t height = static_cast<uint32_t>(m_Context.Size.y);
+                uint32_t width = static_cast<uint32_t>(m_TargetSize.x);
+                uint32_t height = static_cast<uint32_t>(m_TargetSize.y);
 
                 m_Framebuffer->Resize(width, height);
-                m_HDRFramebuffer->Resize(width, height);
-                m_EditorCamera.SetViewportSize(m_Context.Size.x, m_Context.Size.y);
+                m_EditorCamera.SetViewportSize(m_TargetSize.x, m_TargetSize.y);
                 activeScene.OnViewportResize(width, height);
+                if (m_OnResize)
+                    m_OnResize(width, height);
             }
         }
 
@@ -64,15 +78,7 @@ namespace Engine
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::Begin("视口");
 
-        ImVec2 minRegion = ImGui::GetWindowContentRegionMin();
-        ImVec2 maxRegion = ImGui::GetWindowContentRegionMax();
-        ImVec2 offset = ImGui::GetWindowPos();
-        m_Context.Bounds[0] = {minRegion.x + offset.x, minRegion.y + offset.y};
-        m_Context.Bounds[1] = {maxRegion.x + offset.x, maxRegion.y + offset.y};
-
         m_Context.Focused = ImGui::IsWindowFocused();
-        m_Context.Hovered = ImGui::IsWindowHovered();
-        Application::Get().GetImGuiLayer()->SetBlockEvents(!m_Context.Hovered);
 
         ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
         m_Context.Size = {
@@ -80,9 +86,42 @@ namespace Engine
             std::max(viewportPanelSize.y, 32.0f)
         };
 
+        glm::vec2 framebufferScale = GetFramebufferScale();
+        m_TargetSize = {
+            std::max(m_Context.Size.x * framebufferScale.x, 32.0f),
+            std::max(m_Context.Size.y * framebufferScale.y, 32.0f)
+        };
+
+        const auto& spec = m_Framebuffer->GetSpecification();
+        float sourceWidth = static_cast<float>(std::max(spec.Width, 1u));
+        float sourceHeight = static_cast<float>(std::max(spec.Height, 1u));
+        m_Context.RenderSize = {sourceWidth, sourceHeight};
+
+        glm::vec2 sourceDisplaySize = {
+            sourceWidth / framebufferScale.x,
+            sourceHeight / framebufferScale.y
+        };
+        float scale = std::min(m_Context.Size.x / sourceDisplaySize.x, m_Context.Size.y / sourceDisplaySize.y);
+        scale = std::max(scale, 0.0f);
+
+        glm::vec2 imageSize = {sourceDisplaySize.x * scale, sourceDisplaySize.y * scale};
+        ImVec2 cursorPos = ImGui::GetCursorPos();
+        ImVec2 imageOffset((m_Context.Size.x - imageSize.x) * 0.5f, (m_Context.Size.y - imageSize.y) * 0.5f);
+        ImGui::SetCursorPos(ImVec2(cursorPos.x + imageOffset.x, cursorPos.y + imageOffset.y));
+
+        ImVec2 imageScreenPos = ImGui::GetCursorScreenPos();
+        m_Context.Bounds[0] = {imageScreenPos.x, imageScreenPos.y};
+        m_Context.Bounds[1] = {imageScreenPos.x + imageSize.x, imageScreenPos.y + imageSize.y};
+
+        ImVec2 mousePos = ImGui::GetMousePos();
+        m_Context.Hovered = ImGui::IsWindowHovered() &&
+            mousePos.x >= m_Context.Bounds[0].x && mousePos.x <= m_Context.Bounds[1].x &&
+            mousePos.y >= m_Context.Bounds[0].y && mousePos.y <= m_Context.Bounds[1].y;
+        Application::Get().GetImGuiLayer()->SetBlockEvents(!m_Context.Hovered);
+
         uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID(0);
         ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)),
-                     ImVec2(m_Context.Size.x, m_Context.Size.y), ImVec2(0, 1), ImVec2(1, 0));
+                     ImVec2(imageSize.x, imageSize.y), ImVec2(0, 1), ImVec2(1, 0));
 
         return m_Context;
     }
