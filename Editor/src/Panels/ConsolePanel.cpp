@@ -51,16 +51,51 @@ namespace Engine
         m_Sink = CreateRef<ImGuiConsoleSink>();
     }
 
+    ConsolePanel::~ConsolePanel()
+    {
+        UnregisterSink();
+    }
+
     void ConsolePanel::RegisterSink()
     {
-        // 注册到引擎核心日志器和客户端日志器
-        Log::GetCoreLogger()->sinks().push_back(m_Sink);
-        Log::GetClientLogger()->sinks().push_back(m_Sink);
+        if (m_SinkRegistered)
+            return;
+
+        auto registerLoggerSink = [this](const Ref<spdlog::logger>& logger) {
+            if (!logger)
+                return;
+
+            auto& sinks = logger->sinks();
+            if (std::find(sinks.begin(), sinks.end(), m_Sink) == sinks.end())
+                sinks.push_back(m_Sink);
+        };
+
+        registerLoggerSink(Log::GetCoreLogger());
+        registerLoggerSink(Log::GetClientLogger());
+        m_SinkRegistered = true;
+    }
+
+    void ConsolePanel::UnregisterSink()
+    {
+        if (!m_SinkRegistered)
+            return;
+
+        auto unregisterLoggerSink = [this](const Ref<spdlog::logger>& logger) {
+            if (!logger)
+                return;
+
+            auto& sinks = logger->sinks();
+            sinks.erase(std::remove(sinks.begin(), sinks.end(), m_Sink), sinks.end());
+        };
+
+        unregisterLoggerSink(Log::GetCoreLogger());
+        unregisterLoggerSink(Log::GetClientLogger());
+        m_SinkRegistered = false;
     }
 
     void ConsolePanel::OnImGuiRender()
     {
-        ImGui::Begin("\xe6\x8e\xa7\xe5\x88\xb6\xe5\x8f\xb0"); // 控制台
+        ImGui::Begin("控制台"); // 控制台
 
         // 工具栏：级别过滤按钮
         {
@@ -95,14 +130,14 @@ namespace Engine
 
             // 搜索框
             ImGui::SetNextItemWidth(200.0f);
-            ImGui::InputTextWithHint("##\xe6\x90\x9c\xe7\xb4\xa2", "\xe6\x90\x9c\xe7\xb4\xa2...", m_SearchBuffer, sizeof(m_SearchBuffer)); // 搜索
+            ImGui::InputTextWithHint("##搜索", "搜索...", m_SearchBuffer, sizeof(m_SearchBuffer)); // 搜索
 
             ImGui::SameLine();
-            if (ImGui::Button("\xe6\xb8\x85\xe7\xa9\xba")) // 清空
+            if (ImGui::Button("清空")) // 清空
                 m_Sink->ClearEntries();
 
             ImGui::SameLine();
-            ImGui::Checkbox("\xe8\x87\xaa\xe5\x8a\xa8\xe6\xbb\x9a\xe5\x8a\xa8", &m_AutoScroll); // 自动滚动
+            ImGui::Checkbox("自动滚动", &m_AutoScroll); // 自动滚动
         }
 
         ImGui::Separator();
@@ -190,3 +225,4 @@ namespace Engine
     }
 
 } // namespace Engine
+

@@ -2,6 +2,7 @@
 
 #include "Core/Application.h"
 #include "Core/Log.h"
+#include "Core/CrashHandler.h"
 
 #include <filesystem>
 #ifdef _WIN32
@@ -42,6 +43,7 @@ int main(int argc, char** argv)
     SetWorkingDirectoryToProjectRoot();
 
     Engine::Log::Init();
+    Engine::CrashHandler::Install();
     ENGINE_CORE_INFO("Initialized Log!");
 
     auto app = Engine::CreateApplication();
@@ -50,3 +52,4 @@ int main(int argc, char** argv)
 
     return 0;
 }
+

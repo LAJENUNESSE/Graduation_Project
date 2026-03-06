@@ -42,14 +42,17 @@ namespace Engine
     {
     public:
         ConsolePanel();
+        ~ConsolePanel();
 
         // 注册 sink 到 spdlog 日志器
         void RegisterSink();
+        void UnregisterSink();
 
         void OnImGuiRender();
 
     private:
         Ref<ImGuiConsoleSink> m_Sink;
+        bool m_SinkRegistered = false;
 
         // 过滤设置
         bool m_ShowTrace = true;
@@ -63,3 +66,4 @@ namespace Engine
     };
 
 } // namespace Engine
+

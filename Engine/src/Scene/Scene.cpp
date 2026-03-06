@@ -10,6 +10,7 @@
 #include "Physics/PhysicsWorld.h"
 #include "Physics/BulletPhysicsWorld.h"
 #include "Terrain/TerrainMeshGenerator.h"
+#include "Core/Log.h"
 
 #include <set>
 
@@ -392,6 +393,10 @@ namespace Engine
 
     void Scene::OnRuntimeStart()
     {
+        const char* backendName = m_PhysicsBackend == PhysicsBackend::Custom ? "Custom" : "Bullet";
+        const size_t entityCount = m_Registry.view<IDComponent>().size_hint();
+        ENGINE_CORE_INFO("[SceneLifecycle] RuntimeStart backend={0}, entities={1}", backendName, entityCount);
+
         if (m_PhysicsBackend == PhysicsBackend::Custom)
         {
             m_PhysicsWorld = std::make_unique<PhysicsWorld>();
@@ -449,6 +454,9 @@ namespace Engine
 
     void Scene::OnRuntimeStop()
     {
+        const size_t entityCount = m_Registry.view<IDComponent>().size_hint();
+        ENGINE_CORE_INFO("[SceneLifecycle] RuntimeStop entities={0}", entityCount);
+
         // Audio + Video 系统停止（先于脚本销毁）
         if (m_SceneRenderer)
         {
@@ -580,6 +588,10 @@ namespace Engine
             }
         }
 
+        ENGINE_CORE_INFO("[SceneLifecycle] Scene::Copy completed srcEntities={0}, dstEntities={1}",
+            srcReg.view<IDComponent>().size_hint(),
+            newScene->m_Registry.view<IDComponent>().size_hint());
+
         return newScene;
     }
 
@@ -641,3 +653,4 @@ namespace Engine
     }
 
 } // namespace Engine
+
