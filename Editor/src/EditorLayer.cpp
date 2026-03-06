@@ -82,9 +82,7 @@ namespace Engine
         lightTransform.Rotation = {glm::radians(-45.0f), glm::radians(30.0f), 0.0f};
 
         // Initialize panels
-        m_HierarchyPanel.SetContext(m_ActiveScene);
         m_HierarchyPanel.SetCommandHistory(&m_CommandHistory);
-        m_AssetBrowserPanel.SetContext(m_ActiveScene);
         m_AssetBrowserPanel.SetSceneOpenCallback([this](const std::string& path) {
             OpenScene(path);
         });
@@ -100,6 +98,14 @@ namespace Engine
             m_RenderSettingsPanel.SetHDRFramebuffer(m_HDRFramebuffer);
         });
 
+        m_SceneContextController.Initialize(
+            &m_HierarchyPanel,
+            &m_AssetBrowserPanel,
+            &m_RenderSettingsPanel,
+            &m_SelectedEntity,
+            &m_HoveredEntity,
+            &m_CommandHistory);
+        m_SceneContextController.ApplyScene(m_ActiveScene, false);
         // 注册控制台 sink 到 spdlog
         m_ConsolePanel.RegisterSink();
 
@@ -590,12 +596,7 @@ namespace Engine
             static_cast<uint32_t>(m_ViewportSize.x),
             static_cast<uint32_t>(m_ViewportSize.y));
 
-        m_HierarchyPanel.SetContext(m_ActiveScene);
-        m_AssetBrowserPanel.SetContext(m_ActiveScene);
-        m_RenderSettingsPanel.SetScene(m_ActiveScene);
-        m_SelectedEntity = {};
-        m_HoveredEntity = {};
-        m_CommandHistory.Clear();
+        m_SceneContextController.ApplyScene(m_ActiveScene, true);
     }
 
     void EditorLayer::OpenScene()
@@ -618,12 +619,6 @@ namespace Engine
             return;
         }
 
-        m_HierarchyPanel.SetContext(m_ActiveScene);
-        m_AssetBrowserPanel.SetContext(m_ActiveScene);
-        m_SelectedEntity = {};
-        m_HoveredEntity = {};
-        m_CommandHistory.Clear();
-
         m_PostProcessingSettings = renderSettings.PostProcessing;
         m_ActiveScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
 
@@ -642,8 +637,8 @@ namespace Engine
             m_SceneRenderer.SetHDRFramebuffer(m_HDRFramebuffer);
         }
 
-        m_RenderSettingsPanel.SetScene(m_ActiveScene);
         m_RenderSettingsPanel.SetHDRFramebuffer(m_HDRFramebuffer);
+        m_SceneContextController.ApplyScene(m_ActiveScene, true);
     }
 
     void EditorLayer::SaveScene()
@@ -675,12 +670,7 @@ namespace Engine
     void EditorLayer::OnSceneStop()
     {
         m_SceneSession.EndPlay(m_ActiveScene);
-
-        m_HierarchyPanel.SetContext(m_ActiveScene);
-        m_AssetBrowserPanel.SetContext(m_ActiveScene);
-        m_RenderSettingsPanel.SetScene(m_ActiveScene);
-        m_SelectedEntity = {};
-        m_HoveredEntity = {};
+        m_SceneContextController.ApplyScene(m_ActiveScene, false);
     }
 
 } // namespace Engine

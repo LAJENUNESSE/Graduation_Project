@@ -13,6 +13,7 @@
 #include "Renderer/SceneRenderer.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "EditorSceneSession.h"
+#include "EditorSceneContextController.h"
 
 namespace Engine
 {
@@ -46,6 +47,7 @@ namespace Engine
         Ref<Framebuffer> m_HDRFramebuffer;
         Ref<Scene> m_ActiveScene;
         EditorSceneSession m_SceneSession;
+        EditorSceneContextController m_SceneContextController;
 
         SceneRenderer m_SceneRenderer;
         PostProcessing m_PostProcessing;
