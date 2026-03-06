@@ -127,6 +127,7 @@ uniform samplerCube u_PrefilterMap;   // unit 7
 uniform sampler2D u_BRDF_LUT;         // unit 8
 uniform int u_IBLEnabled;
 uniform float u_IBLIntensity;
+uniform int u_IBLDebugMode;   // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
 
 // SSAO
 uniform sampler2D u_SSAOTexture;      // unit 9
@@ -392,6 +393,22 @@ void main() {
 
     // Output linear HDR (tone mapping + gamma done in post-processing)
     vec3 color = ambient + Lo;
+
+    // IBL 调试模式
+    if (u_IBLDebugMode == 1) {
+        vec3 dbg = (u_IBLEnabled != 0) ? texture(u_IrradianceMap, N).rgb : vec3(0.0);
+        o_Color = vec4(dbg, 1.0); o_EntityID = u_EntityID; return;
+    } else if (u_IBLDebugMode == 2) {
+        vec3 R = reflect(-V, N);
+        vec3 dbg = (u_IBLEnabled != 0) ? textureLod(u_PrefilterMap, R, roughness * 4.0).rgb : vec3(0.0);
+        o_Color = vec4(dbg, 1.0); o_EntityID = u_EntityID; return;
+    } else if (u_IBLDebugMode == 3) {
+        vec2 dbg = (u_IBLEnabled != 0) ? texture(u_BRDF_LUT, vec2(max(dot(N, V), 0.0), roughness)).rg : vec2(0.0);
+        o_Color = vec4(dbg, 0.0, 1.0); o_EntityID = u_EntityID; return;
+    } else if (u_IBLDebugMode == 4) {
+        o_Color = vec4(N * 0.5 + 0.5, 1.0); o_EntityID = u_EntityID; return;
+    }
+
     o_Color = vec4(color, u_Color.a * texColor.a);
     o_EntityID = u_EntityID;
 }

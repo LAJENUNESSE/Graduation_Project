@@ -36,8 +36,15 @@ vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
     H.z = cosTheta;
 
     // 从切线空间转换到世界空间
-    vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-    vec3 tangent = normalize(cross(up, N));
+    vec3 up = abs(N.z) < 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = cross(up, N);
+    float tlen = length(tangent);
+    if (tlen < 0.0001) {
+        up = vec3(1.0, 0.0, 0.0);
+        tangent = cross(up, N);
+        tlen = length(tangent);
+    }
+    tangent /= tlen;
     vec3 bitangent = cross(N, tangent);
 
     return normalize(tangent * H.x + bitangent * H.y + N * H.z);

@@ -412,6 +412,19 @@ namespace Engine
                 ImGui::DragFloat("SSAO \xe5\xbc\xba\xe5\xba\xa6", &m_SceneRenderer.GetSSAOIntensity(), 0.05f, 0.1f, 5.0f, "%.2f");
             }
 
+            // IBL 调试
+            ImGui::Separator();
+            ImGui::Text("IBL \xe8\xb0\x83\xe8\xaf\x95");
+            {
+                const char* iblDebugItems[] = {
+                    "\xe6\xad\xa3\xe5\xb8\xb8\xe6\xb8\xb2\xe6\x9f\x93",
+                    "Irradiance Map", "Prefilter Map", "BRDF LUT",
+                    "\xe6\xb3\x95\xe7\xba\xbf\xe6\x96\xb9\xe5\x90\x91"
+                };
+                ImGui::Combo("IBL \xe8\xb0\x83\xe8\xaf\x95\xe6\xa8\xa1\xe5\xbc\x8f",
+                             &m_SceneRenderer.GetIBLDebugMode(), iblDebugItems, 5);
+            }
+
             ImGui::Separator();
             ImGui::Checkbox("Gamma \xe6\xa0\xa1\xe6\xad\xa3", &m_PostProcessingSettings.GammaCorrection);
 

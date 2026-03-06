@@ -301,6 +301,7 @@ namespace Engine
             bool iblActive = m_SkyboxSystem.HasIBL();
             m_PBRShader->SetInt("u_IBLEnabled", iblActive ? 1 : 0);
             m_PBRShader->SetFloat("u_IBLIntensity", 1.0f);
+            m_PBRShader->SetInt("u_IBLDebugMode", m_IBLDebugMode);
             if (iblActive)
             {
                 // Irradiance 和 Prefilter 是 cubemap 纹理，必须用 BindCubemapUnit
