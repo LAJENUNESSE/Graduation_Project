@@ -26,8 +26,23 @@ namespace Engine
     void EditorSceneSession::Initialize(SceneRenderer* sceneRenderer)
     {
         m_SceneRenderer = sceneRenderer;
-        m_EditorSceneSnapshot = nullptr;
+        m_EditorScene = nullptr;
+        m_RuntimeScene = nullptr;
         m_State = SceneState::Edit;
+    }
+
+    void EditorSceneSession::SetEditorScene(const Ref<Scene>& editorScene)
+    {
+        m_EditorScene = editorScene;
+        if (m_State == SceneState::Edit)
+            m_RuntimeScene = nullptr;
+    }
+
+    Ref<Scene> EditorSceneSession::GetSceneForSaving(const Ref<Scene>& activeScene) const
+    {
+        if (m_EditorScene)
+            return m_EditorScene;
+        return activeScene;
     }
 
     void EditorSceneSession::CreateNewScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight)
@@ -35,10 +50,14 @@ namespace Engine
         if (m_State == SceneState::Play)
             EndPlay(activeScene);
 
-        activeScene = CreateRef<Scene>();
+        auto newScene = CreateRef<Scene>();
         if (m_SceneRenderer)
-            activeScene->SetSceneRenderer(m_SceneRenderer);
-        activeScene->OnViewportResize(viewportWidth, viewportHeight);
+            newScene->SetSceneRenderer(m_SceneRenderer);
+        newScene->OnViewportResize(viewportWidth, viewportHeight);
+
+        m_EditorScene = newScene;
+        m_RuntimeScene = nullptr;
+        activeScene = m_EditorScene;
 
         ENGINE_INFO("[EditorEvent] NewScene ready, entities={0}", CountSceneEntities(activeScene));
     }
@@ -66,7 +85,9 @@ namespace Engine
         }
 
         newScene->OnViewportResize(viewportWidth, viewportHeight);
-        activeScene = newScene;
+        m_EditorScene = newScene;
+        m_RuntimeScene = nullptr;
+        activeScene = m_EditorScene;
 
         if (outRenderSettings)
             *outRenderSettings = loadedRenderSettings;
@@ -75,13 +96,13 @@ namespace Engine
         return true;
     }
 
-    bool EditorSceneSession::SaveSceneToPath(const Ref<Scene>& activeScene, const std::string& filepath,
+    bool EditorSceneSession::SaveSceneToPath(const Ref<Scene>& sceneToSave, const std::string& filepath,
                                              const EditorRenderSettings& renderSettings)
     {
-        if (!activeScene || filepath.empty())
+        if (!sceneToSave || filepath.empty())
             return false;
 
-        SceneSerializer serializer(activeScene);
+        SceneSerializer serializer(sceneToSave);
         if (serializer.Serialize(filepath, renderSettings))
         {
             ENGINE_INFO("Scene saved to '{0}'", filepath);
@@ -97,14 +118,16 @@ namespace Engine
         if (m_State == SceneState::Play || !activeScene || !m_SceneRenderer)
             return;
 
-        ENGINE_INFO("[EditorEvent] ScenePlay requested, entities={0}", CountSceneEntities(activeScene));
-        m_State = SceneState::Play;
+        m_EditorScene = activeScene;
+        ENGINE_INFO("[EditorEvent] ScenePlay requested, entities={0}", CountSceneEntities(m_EditorScene));
 
-        // 深拷贝当前场景作为编辑器快照
-        m_EditorSceneSnapshot = Scene::Copy(activeScene);
-        m_EditorSceneSnapshot->SetSceneRenderer(m_SceneRenderer);
+        m_RuntimeScene = Scene::Copy(m_EditorScene);
+        m_RuntimeScene->SetSceneRenderer(m_SceneRenderer);
 
+        activeScene = m_RuntimeScene;
         activeScene->OnRuntimeStart();
+
+        m_State = SceneState::Play;
         ENGINE_INFO("[EditorEvent] ScenePlay started");
     }
 
@@ -115,11 +138,11 @@ namespace Engine
 
         ENGINE_INFO("[EditorEvent] SceneStop requested");
 
-        if (activeScene)
-            activeScene->OnRuntimeStop();
+        if (m_RuntimeScene)
+            m_RuntimeScene->OnRuntimeStop();
 
-        activeScene = m_EditorSceneSnapshot;
-        m_EditorSceneSnapshot = nullptr;
+        activeScene = m_EditorScene;
+        m_RuntimeScene = nullptr;
 
         if (activeScene)
             m_SceneRenderer->GetShadowSystem().GetSettings() = activeScene->GetShadowSettings();
