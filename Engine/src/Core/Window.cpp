@@ -26,11 +26,10 @@ namespace Engine
     static uint8_t s_GLFWWindowCount = 0;
 
 #ifdef __linux__
-    // 抑制 X11 退出时的 BadWindow 错误（VMware/Mesa 已知问题）
     static int X11ErrorHandler(Display*, XErrorEvent* event)
     {
         if (event->error_code == BadWindow)
-            return 0; // 忽略
+            return 0;
         return 0;
     }
 #endif
@@ -54,6 +53,11 @@ namespace Engine
         void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
         void SetVSync(bool enabled) override;
         bool IsVSync() const override;
+        void SetCursorMode(CursorMode mode) override;
+        CursorMode GetCursorMode() const override;
+        bool SupportsRawMouseInput() const override;
+        void SetRawMouseInput(bool enabled) override;
+        bool IsRawMouseInputEnabled() const override;
 
         void* GetNativeWindow() const override { return m_Window; }
 
@@ -71,6 +75,8 @@ namespace Engine
             unsigned int Width = 0;
             unsigned int Height = 0;
             bool VSync = false;
+            CursorMode CurrentCursorMode = CursorMode::Normal;
+            bool RawMouseInput = false;
             float PendingMouseX = 0.0f;
             float PendingMouseY = 0.0f;
             bool HasPendingMouseMove = false;
@@ -134,8 +140,9 @@ namespace Engine
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
         SetVSync(false);
+        SetCursorMode(CursorMode::Normal);
+        SetRawMouseInput(false);
 
-        // Set GLFW callbacks
         glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
         {
             WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
@@ -237,9 +244,7 @@ namespace Engine
         m_Context = nullptr;
 
         if (s_GLFWWindowCount == 0)
-        {
             glfwTerminate();
-        }
     }
 
     void GLFWWindowImpl::OnUpdate()
@@ -269,21 +274,62 @@ namespace Engine
 
     void GLFWWindowImpl::SetVSync(bool enabled)
     {
-        if (enabled)
-        {
-            glfwSwapInterval(1);
-        }
-        else
-        {
-            glfwSwapInterval(0);
-        }
-
+        glfwSwapInterval(enabled ? 1 : 0);
         m_Data.VSync = enabled;
     }
 
     bool GLFWWindowImpl::IsVSync() const
     {
         return m_Data.VSync;
+    }
+
+    void GLFWWindowImpl::SetCursorMode(CursorMode mode)
+    {
+        if (!m_Window || m_Data.CurrentCursorMode == mode)
+            return;
+
+        const int glfwMode = mode == CursorMode::Disabled ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL;
+        glfwSetInputMode(m_Window, GLFW_CURSOR, glfwMode);
+        m_Data.CurrentCursorMode = mode;
+    }
+
+    Window::CursorMode GLFWWindowImpl::GetCursorMode() const
+    {
+        return m_Data.CurrentCursorMode;
+    }
+
+    bool GLFWWindowImpl::SupportsRawMouseInput() const
+    {
+#if defined(GLFW_RAW_MOUSE_MOTION)
+        return glfwRawMouseMotionSupported() == GLFW_TRUE;
+#else
+        return false;
+#endif
+    }
+
+    void GLFWWindowImpl::SetRawMouseInput(bool enabled)
+    {
+#if defined(GLFW_RAW_MOUSE_MOTION)
+        if (!m_Window || !SupportsRawMouseInput())
+        {
+            m_Data.RawMouseInput = false;
+            return;
+        }
+
+        if (m_Data.RawMouseInput == enabled)
+            return;
+
+        glfwSetInputMode(m_Window, GLFW_RAW_MOUSE_MOTION, enabled ? GLFW_TRUE : GLFW_FALSE);
+        m_Data.RawMouseInput = enabled;
+#else
+        (void)enabled;
+        m_Data.RawMouseInput = false;
+#endif
+    }
+
+    bool GLFWWindowImpl::IsRawMouseInputEnabled() const
+    {
+        return m_Data.RawMouseInput;
     }
 
 } // namespace Engine
