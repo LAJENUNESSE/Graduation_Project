@@ -136,13 +136,17 @@ namespace Engine
         if (filepath.empty())
             return;
 
-        m_SceneSession.SaveSceneToPath(m_ActiveScene, filepath, m_RenderController.CollectRenderSettings(m_ActiveScene));
+        Ref<Scene> sceneToSave = m_SceneSession.GetSceneForSaving(m_ActiveScene);
+        m_SceneSession.SaveSceneToPath(sceneToSave,
+                                       filepath,
+                                       m_RenderController.CollectRenderSettings(sceneToSave));
     }
 
     void EditorLayer::OnScenePlay()
     {
         m_SelectionGizmoController.ClearTransientState();
         m_SceneSession.BeginPlay(m_ActiveScene);
+        ApplyActiveSceneContext(false);
     }
 
     void EditorLayer::OnSceneStop()
@@ -163,9 +167,9 @@ namespace Engine
             OnScenePlay();
         if (actions.RequestStop)
             OnSceneStop();
-        if (actions.RequestUndo)
+        if (actions.RequestUndo && m_SceneSession.GetState() == SceneState::Edit)
             m_CommandHistory.UndoCommand();
-        if (actions.RequestRedo)
+        if (actions.RequestRedo && m_SceneSession.GetState() == SceneState::Edit)
             m_CommandHistory.RedoCommand();
         if (actions.ToggleStatsPanel)
             m_PanelCoordinator.ToggleStatsPanelVisible();
@@ -176,11 +180,12 @@ namespace Engine
     EditorShellState EditorLayer::BuildShellState() const
     {
         EditorShellState state;
+        const bool allowHistoryActions = m_SceneSession.GetState() == SceneState::Edit;
         state.CurrentSceneState = m_SceneSession.GetState();
-        state.CanUndo = m_CommandHistory.CanUndo();
-        state.CanRedo = m_CommandHistory.CanRedo();
-        state.UndoDescription = m_CommandHistory.GetUndoDescription();
-        state.RedoDescription = m_CommandHistory.GetRedoDescription();
+        state.CanUndo = allowHistoryActions && m_CommandHistory.CanUndo();
+        state.CanRedo = allowHistoryActions && m_CommandHistory.CanRedo();
+        state.UndoDescription = allowHistoryActions ? m_CommandHistory.GetUndoDescription() : "";
+        state.RedoDescription = allowHistoryActions ? m_CommandHistory.GetRedoDescription() : "";
         state.ShowStatsPanel = m_PanelCoordinator.IsStatsPanelVisible();
         return state;
     }
@@ -202,6 +207,8 @@ namespace Engine
         light.Color = {1.0f, 0.95f, 0.9f};
         auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
         lightTransform.Rotation = {glm::radians(-45.0f), glm::radians(30.0f), 0.0f};
+
+        m_SceneSession.SetEditorScene(m_ActiveScene);
     }
 
     void EditorLayer::ConfigureEditorPanels()
