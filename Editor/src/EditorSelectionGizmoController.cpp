@@ -68,7 +68,7 @@ namespace Engine
     }
 
     void EditorSelectionGizmoController::UpdateHoveredEntity(const EditorViewportContext& viewport,
-                                                             const Ref<Framebuffer>& hdrFramebuffer,
+                                                             const Ref<Framebuffer>& pickingFramebuffer,
                                                              const Ref<Scene>& activeScene)
     {
         if (!ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -81,16 +81,16 @@ namespace Engine
         if (displaySize.x <= 0.0f || displaySize.y <= 0.0f)
             return;
 
-        const auto hdrSpec = hdrFramebuffer->GetSpecification();
-        float scaleX = static_cast<float>(hdrSpec.Width) / displaySize.x;
-        float scaleY = static_cast<float>(hdrSpec.Height) / displaySize.y;
+        const auto pickingSpec = pickingFramebuffer->GetSpecification();
+        float scaleX = static_cast<float>(pickingSpec.Width) / displaySize.x;
+        float scaleY = static_cast<float>(pickingSpec.Height) / displaySize.y;
         int mouseX = static_cast<int>(mx * scaleX);
         int mouseY = static_cast<int>((displaySize.y - my) * scaleY);
         if (mouseX < 0 || mouseY < 0 ||
-            mouseX >= static_cast<int>(hdrSpec.Width) || mouseY >= static_cast<int>(hdrSpec.Height))
+            mouseX >= static_cast<int>(pickingSpec.Width) || mouseY >= static_cast<int>(pickingSpec.Height))
             return;
 
-        int pixelData = hdrFramebuffer->ReadPixel(1, mouseX, mouseY);
+        int pixelData = pickingFramebuffer->ReadPixel(1, mouseX, mouseY);
         m_HoveredEntity =
             pixelData == -1 ? Entity() : Entity(static_cast<entt::entity>(pixelData), activeScene.get());
     }

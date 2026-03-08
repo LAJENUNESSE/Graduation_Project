@@ -60,7 +60,7 @@ namespace Engine
         if (m_SceneSession.GetState() == SceneState::Edit)
         {
             m_SelectionGizmoController.UpdateHoveredEntity(viewportContext,
-                                                           m_ViewportController.GetHDRFramebuffer(),
+                                                           m_ViewportController.GetPickingFramebuffer(),
                                                            m_ActiveScene);
             m_SelectionGizmoController.RenderGizmos(viewportContext,
                                                     m_ViewportController.GetCamera(),
