@@ -29,64 +29,68 @@ namespace Engine
         for (auto entity : view)
         {
             auto& asc = view.get<AudioSourceComponent>(entity);
+            std::string audioPath = asc.AudioPath;
 
-            if (asc.AudioPath.empty())
+            if (audioPath.empty())
                 continue;
 
-            if (!PathUtils::IsSafeAssetPath(asc.AudioPath))
+            if (!PathUtils::IsSafeAssetPath(audioPath))
             {
-                ENGINE_CORE_WARN("[AudioSystem] 不安全的音频路径: {}", asc.AudioPath);
-                continue;
+                std::string normalizedPath;
+                if (PathUtils::TryToProjectRelative(audioPath, normalizedPath))
+                {
+                    asc.AudioPath = normalizedPath;
+                    audioPath = normalizedPath;
+                }
+                else
+                {
+                    ENGINE_CORE_WARN("[AudioSystem] 不安全的音频路径: {}", audioPath);
+                    continue;
+                }
             }
 
-            // 加载音频文件
-            AudioClip clip = AudioClip::LoadFromFile(asc.AudioPath);
+            AudioClip clip = AudioClip::LoadFromFile(audioPath);
             if (!clip.IsValid())
             {
-                ENGINE_CORE_WARN("[AudioSystem] 无法加载音频文件: {}", asc.AudioPath);
+                ENGINE_CORE_WARN("[AudioSystem] 无法加载音频文件: {}", audioPath);
                 continue;
             }
 
-            // 创建 OpenAL buffer 和 source
             uint32_t buffer = audio.CreateBuffer(clip);
             if (buffer == 0)
             {
-                ENGINE_CORE_WARN("[AudioSystem] 创建音频缓冲区失败: {}", asc.AudioPath);
+                ENGINE_CORE_WARN("[AudioSystem] 创建音频缓冲区失败: {}", audioPath);
                 continue;
             }
 
             uint32_t source = audio.CreateSource();
             if (source == 0)
             {
-                ENGINE_CORE_WARN("[AudioSystem] 创建音频源失败: {}", asc.AudioPath);
+                ENGINE_CORE_WARN("[AudioSystem] 创建音频源失败: {}", audioPath);
                 audio.DestroyBuffer(buffer);
                 continue;
             }
 
-            // 设置音频源属性
             audio.SetSourceVolume(source, asc.Volume);
             audio.SetSourcePitch(source, asc.Pitch);
             audio.SetSourceMinDistance(source, asc.MinDistance);
             audio.SetSourceMaxDistance(source, asc.MaxDistance);
             audio.SetSourceSpatial(source, asc.Spatial);
 
-            // 存储运行时数据
             asc.RuntimeBuffer = buffer;
             asc.RuntimeSource = source;
 
-            // 设置初始位置（如果有 TransformComponent）
             if (asc.Spatial && reg.all_of<TransformComponent>(entity))
             {
                 auto& tc = reg.get<TransformComponent>(entity);
                 audio.SetSourcePosition(source, tc.Translation);
             }
 
-            // 自动播放
             if (asc.PlayOnStart)
             {
                 audio.Play(source, buffer, asc.Loop);
                 asc.IsPlaying = true;
-                ENGINE_CORE_INFO("[AudioSystem] 开始播放音频: {}", asc.AudioPath);
+                ENGINE_CORE_INFO("[AudioSystem] 开始播放音频: {}", audioPath);
             }
         }
     }

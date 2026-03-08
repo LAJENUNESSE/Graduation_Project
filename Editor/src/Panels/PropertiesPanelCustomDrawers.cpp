@@ -27,6 +27,64 @@ namespace Engine
             ENGINE_WARN("{}必须位于项目目录内: {}", assetLabel, selectedPath);
             return false;
         }
+
+        bool TryNormalizeProjectAssetPath(const std::string& candidatePath, const char* assetLabel, std::string& outPath,
+                                          bool warnOnFailure = true)
+        {
+            if (candidatePath.empty())
+            {
+                outPath.clear();
+                return true;
+            }
+
+            if (PathUtils::IsSafeAssetPath(candidatePath))
+            {
+                outPath = PathUtils::NormalizeSeparators(candidatePath);
+                return true;
+            }
+
+            if (PathUtils::TryToProjectRelative(candidatePath, outPath))
+                return true;
+
+            if (warnOnFailure)
+                ENGINE_WARN("{}必须位于项目目录内: {}", assetLabel, candidatePath);
+            return false;
+        }
+
+        void ApplyModelMeshAsset(MeshRendererComponent& component, AssetHandle meshHandle)
+        {
+            if (!meshHandle.IsValid())
+                return;
+
+            component.Type = MeshType::Model;
+            component.MeshAsset = meshHandle;
+
+            Mesh* mesh = AssetManager::Get<Mesh>(meshHandle);
+            if (!mesh)
+                return;
+
+            bool hasSubMeshTex = false;
+            for (const auto& sub : mesh->GetSubMeshes())
+            {
+                if (sub.DiffuseTextureAsset.IsValid())
+                {
+                    hasSubMeshTex = true;
+                    break;
+                }
+            }
+
+            if (hasSubMeshTex)
+                component.DiffuseTextureAsset = {};
+        }
+
+        void ApplyModelMeshPath(MeshRendererComponent& component, const std::string& path)
+        {
+            std::string normalizedPath;
+            if (!TryNormalizeProjectAssetPath(path, "模型", normalizedPath))
+                return;
+
+            ApplyModelMeshAsset(component, AssetManager::Load<Mesh>(normalizedPath));
+        }
     } // namespace
 
     namespace PropertiesPanelCustomDrawers
@@ -60,55 +118,48 @@ namespace Engine
                 ImGui::EndCombo();
             }
 
+            auto acceptModelDrop = [&component]()
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL"))
+                {
+                    ApplyModelMeshPath(component, static_cast<const char*>(payload->Data));
+                    return true;
+                }
+
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                {
+                    ApplyModelMeshPath(component, static_cast<const char*>(payload->Data));
+                    return true;
+                }
+
+                return false;
+            };
+
             if (ImGui::Button("导入模型..."))
             {
                 std::string relStr;
                 if (TrySelectProjectAssetPath("*.obj;*.fbx;*.gltf;*.glb", "3D模型文件", "模型", relStr))
-                {
-                    auto meshHandle = AssetManager::Load<Mesh>(relStr);
-                    if (meshHandle.IsValid())
-                    {
-                        component.Type = MeshType::Model;
-                        component.MeshAsset = meshHandle;
-
-                        Mesh* mesh = AssetManager::Get<Mesh>(meshHandle);
-                        if (mesh)
-                        {
-                            bool hasSubMeshTex = false;
-                            for (const auto& sub : mesh->GetSubMeshes())
-                            {
-                                if (sub.DiffuseTextureAsset.IsValid())
-                                {
-                                    hasSubMeshTex = true;
-                                    break;
-                                }
-                            }
-                            if (hasSubMeshTex)
-                                component.DiffuseTextureAsset = {};
-                        }
-                    }
-                }
+                    ApplyModelMeshPath(component, relStr);
             }
 
-            if (component.Type == MeshType::Model && component.MeshAsset.IsValid())
-            {
-                ImGui::SameLine();
-                const std::string& modelPath = AssetManager::GetPath<Mesh>(component.MeshAsset);
-                ImGui::TextDisabled("(%s)", modelPath.c_str());
-            }
+            const std::string& modelPath = AssetManager::GetPath<Mesh>(component.MeshAsset);
+            char modelPathBuf[256];
+            memset(modelPathBuf, 0, sizeof(modelPathBuf));
+            std::strncpy(modelPathBuf, modelPath.c_str(), sizeof(modelPathBuf) - 1);
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::InputText("模型路径", modelPathBuf, sizeof(modelPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                ApplyModelMeshPath(component, modelPathBuf);
 
             if (ImGui::BeginDragDropTarget())
             {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL"))
-                {
-                    std::string droppedPath(static_cast<const char*>(payload->Data));
-                    auto meshHandle = AssetManager::Load<Mesh>(droppedPath);
-                    if (meshHandle.IsValid())
-                    {
-                        component.Type = MeshType::Model;
-                        component.MeshAsset = meshHandle;
-                    }
-                }
+                acceptModelDrop();
+                ImGui::EndDragDropTarget();
+            }
+
+            ImGui::Button("拖拽模型到此处", ImVec2(-FLT_MIN, 0.0f));
+            if (ImGui::BeginDragDropTarget())
+            {
+                acceptModelDrop();
                 ImGui::EndDragDropTarget();
             }
 
@@ -345,12 +396,20 @@ namespace Engine
             memset(pathBuf, 0, sizeof(pathBuf));
             std::strncpy(pathBuf, component.AudioPath.c_str(), sizeof(pathBuf) - 1);
             if (ImGui::InputText("音频文件", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
-                component.AudioPath = std::string(pathBuf);
+            {
+                std::string normalizedPath;
+                if (TryNormalizeProjectAssetPath(pathBuf, "音频", normalizedPath))
+                    component.AudioPath = normalizedPath;
+            }
 
             if (ImGui::BeginDragDropTarget())
             {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_AUDIO"))
-                    component.AudioPath = std::string(static_cast<const char*>(payload->Data));
+                {
+                    std::string normalizedPath;
+                    if (TryNormalizeProjectAssetPath(static_cast<const char*>(payload->Data), "音频", normalizedPath, false))
+                        component.AudioPath = normalizedPath;
+                }
                 ImGui::EndDragDropTarget();
             }
 
