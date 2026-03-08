@@ -101,6 +101,7 @@ namespace Engine
         void SetDebugDrawCallback(DebugDrawCallback callback);
 
         void RenderPipeline(const Ref<Framebuffer>& targetFBO);
+        void RenderEditorPicking(const Ref<Framebuffer>& pickingFBO);
         void ResizeHDR(uint32_t width, uint32_t height);
 
     private:

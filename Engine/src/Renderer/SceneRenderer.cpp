@@ -623,5 +623,18 @@ namespace Engine
 
         targetFBO->Unbind();
     }
+    void SceneRenderer::RenderEditorPicking(const Ref<Framebuffer>& pickingFBO)
+    {
+        if (!pickingFBO || !m_Context.Camera || !m_Context.ActiveScene)
+            return;
 
+        pickingFBO->Bind();
+        RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 1.0f});
+        RenderCommand::Clear();
+        pickingFBO->ClearAttachment(1, -1);
+
+        RenderGeometryAndSkybox();
+
+        pickingFBO->Unbind();
+    }
 } // namespace Engine

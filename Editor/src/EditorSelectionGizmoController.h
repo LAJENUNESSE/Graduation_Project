@@ -25,7 +25,7 @@ namespace Engine
         void OnKeyPressed(const KeyPressedEvent& e);
         void OnMouseButtonPressed(const MouseButtonPressedEvent& e, const EditorViewportContext& viewport,
                                   Ref<Scene> activeScene);
-        void UpdateHoveredEntity(const EditorViewportContext& viewport, const Ref<Framebuffer>& hdrFramebuffer,
+        void UpdateHoveredEntity(const EditorViewportContext& viewport, const Ref<Framebuffer>& pickingFramebuffer,
                                  const Ref<Scene>& activeScene);
         void RenderGizmos(const EditorViewportContext& viewport, EditorCamera& camera, const Ref<Scene>& activeScene);
         void ClearTransientState();

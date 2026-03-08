@@ -38,6 +38,13 @@ namespace Engine
         hdrSpec.Height = height;
         m_HDRFramebuffer = Framebuffer::Create(hdrSpec);
 
+        FramebufferSpecification pickingSpec;
+        pickingSpec.Attachments = {FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER,
+                                   FramebufferTextureFormat::DEPTH24STENCIL8};
+        pickingSpec.Width = width;
+        pickingSpec.Height = height;
+        m_PickingFramebuffer = Framebuffer::Create(pickingSpec);
+
         m_Context.Size = {static_cast<float>(width), static_cast<float>(height)};
         m_Context.RenderSize = m_Context.Size;
         m_TargetSize = m_Context.RenderSize;
@@ -58,6 +65,7 @@ namespace Engine
                 uint32_t height = static_cast<uint32_t>(m_TargetSize.y);
 
                 m_Framebuffer->Resize(width, height);
+                m_PickingFramebuffer->Resize(width, height);
                 m_EditorCamera.SetViewportSize(m_TargetSize.x, m_TargetSize.y);
                 activeScene.OnViewportResize(width, height);
                 if (m_OnResize)
