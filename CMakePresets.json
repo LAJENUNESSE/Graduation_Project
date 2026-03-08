@@ -44,6 +44,30 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
             }
+        },
+        {
+            "name": "clion-release",
+            "displayName": "CLion (Ninja + vcpkg + RelWithDebInfo)",
+            "description": "性能分析与发布预设：开启优化，带符号表",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/cmake-build-release",
+            "warnings": { "dev": false },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_TOOLCHAIN_FILE": "C:/Dev/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
+            "name": "clion-debug",
+            "displayName": "CLion (Ninja + vcpkg + Debug)",
+            "description": "步进调试专用预设：零优化，防变量被优化掉",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/cmake-build-debug",
+            "warnings": { "dev": false },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "C:/Dev/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            }
         }
     ]
 }
