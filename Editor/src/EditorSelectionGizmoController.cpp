@@ -144,6 +144,7 @@ namespace Engine
                     m_GizmoStartTranslation = tc.Translation;
                     m_GizmoStartRotation = tc.Rotation;
                     m_GizmoStartScale = tc.Scale;
+                    CaptureGizmoSelectionStartStates(activeScene, selectedEntities);
                     m_GizmoWasUsing = true;
                 }
 
@@ -194,11 +195,43 @@ namespace Engine
             else if (m_GizmoWasUsing && m_CommandHistory)
             {
                 m_GizmoWasUsing = false;
-                auto cmd = CreateRef<TransformChangeCommand>(
-                    selectedEntity,
-                    m_GizmoStartTranslation, m_GizmoStartRotation, m_GizmoStartScale,
-                    tc.Translation, tc.Rotation, tc.Scale);
-                m_CommandHistory->PushCommand(cmd);
+                if (m_GizmoSelectionStartStates.size() > 1)
+                {
+                    std::vector<MultiTransformChangeCommand::Entry> entries;
+                    entries.reserve(m_GizmoSelectionStartStates.size());
+
+                    for (const auto& snapshot : m_GizmoSelectionStartStates)
+                    {
+                        Entity entity = activeScene->FindEntityByUUID(snapshot.EntityID);
+                        if (!entity || !entity.HasComponent<TransformComponent>())
+                            continue;
+
+                        const auto& current = entity.GetComponent<TransformComponent>();
+                        entries.push_back({
+                            snapshot.EntityID,
+                            snapshot.Translation,
+                            snapshot.Rotation,
+                            snapshot.Scale,
+                            current.Translation,
+                            current.Rotation,
+                            current.Scale
+                        });
+                    }
+
+                    if (!entries.empty())
+                        m_CommandHistory->PushCommand(
+                            CreateRef<MultiTransformChangeCommand>(activeScene, std::move(entries)));
+                }
+                else
+                {
+                    auto cmd = CreateRef<TransformChangeCommand>(
+                        selectedEntity,
+                        m_GizmoStartTranslation, m_GizmoStartRotation, m_GizmoStartScale,
+                        tc.Translation, tc.Rotation, tc.Scale);
+                    m_CommandHistory->PushCommand(cmd);
+                }
+
+                m_GizmoSelectionStartStates.clear();
             }
         }
 
@@ -216,6 +249,30 @@ namespace Engine
     {
         m_HoveredEntity = {};
         m_GizmoWasUsing = false;
+        m_GizmoSelectionStartStates.clear();
+    }
+
+    void EditorSelectionGizmoController::CaptureGizmoSelectionStartStates(
+        const Ref<Scene>& activeScene, const std::vector<Entity>& selectedEntities)
+    {
+        m_GizmoSelectionStartStates.clear();
+        if (!activeScene)
+            return;
+
+        m_GizmoSelectionStartStates.reserve(selectedEntities.size());
+        for (Entity entity : selectedEntities)
+        {
+            if (!entity || entity.GetScene() != activeScene.get() || !entity.HasComponent<TransformComponent>())
+                continue;
+
+            const auto& tc = entity.GetComponent<TransformComponent>();
+            m_GizmoSelectionStartStates.push_back({
+                entity.GetUUID(),
+                tc.Translation,
+                tc.Rotation,
+                tc.Scale
+            });
+        }
     }
 
 } // namespace Engine

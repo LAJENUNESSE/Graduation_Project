@@ -3,6 +3,33 @@
 
 namespace Engine
 {
+    namespace
+    {
+        void ApplyTransform(Entity entity,
+                            const glm::vec3& translation,
+                            const glm::vec3& rotation,
+                            const glm::vec3& scale)
+        {
+            if (!entity || !entity.HasComponent<TransformComponent>())
+                return;
+
+            auto& tc = entity.GetComponent<TransformComponent>();
+            tc.Translation = translation;
+            tc.Rotation = rotation;
+            tc.Scale = scale;
+        }
+
+        void ApplyTransformByUUID(const UUID& entityID, const Ref<Scene>& scene,
+                                  const glm::vec3& translation,
+                                  const glm::vec3& rotation,
+                                  const glm::vec3& scale)
+        {
+            if (!scene)
+                return;
+
+            ApplyTransform(scene->FindEntityByUUID(entityID), translation, rotation, scale);
+        }
+    } // namespace
 
     // ==================== CommandHistory ====================
 
@@ -64,8 +91,10 @@ namespace Engine
     // ==================== TransformChangeCommand ====================
 
     TransformChangeCommand::TransformChangeCommand(Entity entity,
-                                                    const glm::vec3& oldTranslation, const glm::vec3& oldRotation, const glm::vec3& oldScale,
-                                                    const glm::vec3& newTranslation, const glm::vec3& newRotation, const glm::vec3& newScale)
+                                                   const glm::vec3& oldTranslation, const glm::vec3& oldRotation,
+                                                   const glm::vec3& oldScale,
+                                                   const glm::vec3& newTranslation, const glm::vec3& newRotation,
+                                                   const glm::vec3& newScale)
         : m_EntityHandle(static_cast<entt::entity>(entity))
         , m_Scene(entity.GetScene())
         , m_OldTranslation(oldTranslation), m_OldRotation(oldRotation), m_OldScale(oldScale)
@@ -75,31 +104,39 @@ namespace Engine
 
     void TransformChangeCommand::Execute()
     {
-        Entity entity(m_EntityHandle, m_Scene);
-        if (entity && entity.HasComponent<TransformComponent>())
-        {
-            auto& tc = entity.GetComponent<TransformComponent>();
-            tc.Translation = m_NewTranslation;
-            tc.Rotation = m_NewRotation;
-            tc.Scale = m_NewScale;
-        }
+        ApplyTransform(Entity(m_EntityHandle, m_Scene), m_NewTranslation, m_NewRotation, m_NewScale);
     }
 
     void TransformChangeCommand::Undo()
     {
-        Entity entity(m_EntityHandle, m_Scene);
-        if (entity && entity.HasComponent<TransformComponent>())
-        {
-            auto& tc = entity.GetComponent<TransformComponent>();
-            tc.Translation = m_OldTranslation;
-            tc.Rotation = m_OldRotation;
-            tc.Scale = m_OldScale;
-        }
+        ApplyTransform(Entity(m_EntityHandle, m_Scene), m_OldTranslation, m_OldRotation, m_OldScale);
     }
 
     std::string TransformChangeCommand::GetDescription() const
     {
-        return "\xe4\xbf\xae\xe6\x94\xb9\xe5\x8f\x98\xe6\x8d\xa2"; // 修改变换
+        return "修改变换";
+    }
+
+    MultiTransformChangeCommand::MultiTransformChangeCommand(Ref<Scene> scene, std::vector<Entry> entries)
+        : m_Scene(std::move(scene)), m_Entries(std::move(entries))
+    {
+    }
+
+    void MultiTransformChangeCommand::Execute()
+    {
+        for (const auto& entry : m_Entries)
+            ApplyTransformByUUID(entry.EntityID, m_Scene, entry.NewTranslation, entry.NewRotation, entry.NewScale);
+    }
+
+    void MultiTransformChangeCommand::Undo()
+    {
+        for (const auto& entry : m_Entries)
+            ApplyTransformByUUID(entry.EntityID, m_Scene, entry.OldTranslation, entry.OldRotation, entry.OldScale);
+    }
+
+    std::string MultiTransformChangeCommand::GetDescription() const
+    {
+        return m_Entries.size() > 1 ? "修改多个实体变换" : "修改变换";
     }
 
     // ==================== EntityCreateCommand ====================

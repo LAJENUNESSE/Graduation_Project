@@ -8,6 +8,7 @@
 #include "Scene/Entity.h"
 
 #include <glm/glm.hpp>
+#include <vector>
 
 namespace Engine
 {
@@ -31,6 +32,17 @@ namespace Engine
         void ClearTransientState();
 
     private:
+        struct GizmoTransformSnapshot
+        {
+            UUID EntityID = 0;
+            glm::vec3 Translation = {};
+            glm::vec3 Rotation = {};
+            glm::vec3 Scale = {1.0f, 1.0f, 1.0f};
+        };
+
+        void CaptureGizmoSelectionStartStates(const Ref<Scene>& activeScene,
+                                              const std::vector<Entity>& selectedEntities);
+
         EditorPanelCoordinator* m_PanelCoordinator = nullptr;
         CommandHistory* m_CommandHistory = nullptr;
 
@@ -40,6 +52,7 @@ namespace Engine
         glm::vec3 m_GizmoStartTranslation = {};
         glm::vec3 m_GizmoStartRotation = {};
         glm::vec3 m_GizmoStartScale = {};
+        std::vector<GizmoTransformSnapshot> m_GizmoSelectionStartStates;
     };
 
 } // namespace Engine
