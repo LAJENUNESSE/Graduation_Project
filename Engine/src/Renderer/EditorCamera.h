@@ -94,6 +94,7 @@ namespace Engine
         bool m_ViewMatrixDirty = false;
 
         glm::vec2 m_InitialMousePosition = {0.0f, 0.0f};
+        bool m_MouseCaptured = false;
 
         float m_ViewportWidth = 1280;
         float m_ViewportHeight = 720;

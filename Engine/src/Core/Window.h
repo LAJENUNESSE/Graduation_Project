@@ -25,6 +25,12 @@ namespace Engine
     public:
         using EventCallbackFn = std::function<void(Event&)>;
 
+        enum class CursorMode
+        {
+            Normal = 0,
+            Disabled
+        };
+
         virtual ~Window() = default;
 
         virtual void OnUpdate() = 0;
@@ -35,6 +41,11 @@ namespace Engine
         virtual void SetEventCallback(const EventCallbackFn& callback) = 0;
         virtual void SetVSync(bool enabled) = 0;
         virtual bool IsVSync() const = 0;
+        virtual void SetCursorMode(CursorMode mode) = 0;
+        virtual CursorMode GetCursorMode() const = 0;
+        virtual bool SupportsRawMouseInput() const = 0;
+        virtual void SetRawMouseInput(bool enabled) = 0;
+        virtual bool IsRawMouseInputEnabled() const = 0;
 
         virtual void* GetNativeWindow() const = 0;
 

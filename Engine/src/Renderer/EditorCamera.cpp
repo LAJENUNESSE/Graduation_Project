@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Renderer/EditorCamera.h"
 
+#include "Core/Application.h"
 #include "Core/Base.h"
 #include "Core/Input.h"
 #include "Core/KeyCodes.h"
@@ -61,29 +62,45 @@ namespace Engine
 
     void EditorCamera::OnUpdate(Timestep ts, bool allowInput)
     {
-        if (allowInput && Input::IsKeyPressed(KeyCode::LeftAlt))
+        (void)ts;
+
+        Window& window = Application::Get().GetWindow();
+        bool altPressed = Input::IsKeyPressed(KeyCode::LeftAlt);
+        bool navigationButtonPressed =
+            Input::IsMouseButtonPressed(MouseCode::ButtonMiddle) ||
+            Input::IsMouseButtonPressed(MouseCode::ButtonLeft) ||
+            Input::IsMouseButtonPressed(MouseCode::ButtonRight);
+        bool wantsNavigation = allowInput && altPressed && navigationButtonPressed;
+
+        if (wantsNavigation)
         {
+            if (!m_MouseCaptured)
+            {
+                window.SetCursorMode(Window::CursorMode::Disabled);
+                if (window.SupportsRawMouseInput())
+                    window.SetRawMouseInput(true);
+                m_InitialMousePosition = Input::GetMousePosition();
+                m_MouseCaptured = true;
+            }
+
             glm::vec2 mouse = Input::GetMousePosition();
             glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
             m_InitialMousePosition = mouse;
 
             if (Input::IsMouseButtonPressed(MouseCode::ButtonMiddle))
             {
-                // Pan
                 glm::vec2 panSpeed = PanSpeed();
                 m_FocalPoint += -GetRightDirection() * delta.x * panSpeed.x * m_Distance;
                 m_FocalPoint += GetUpDirection() * delta.y * panSpeed.y * m_Distance;
             }
             else if (Input::IsMouseButtonPressed(MouseCode::ButtonLeft))
             {
-                // Rotate
                 float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
                 m_Yaw += yawSign * delta.x * RotationSpeed();
                 m_Pitch += delta.y * RotationSpeed();
             }
             else if (Input::IsMouseButtonPressed(MouseCode::ButtonRight))
             {
-                // Zoom
                 float zoomDelta = delta.x + delta.y;
                 m_Distance -= zoomDelta * ZoomSpeed();
                 if (m_Distance < 1.0f)
@@ -95,6 +112,13 @@ namespace Engine
         }
         else
         {
+            if (m_MouseCaptured)
+            {
+                if (window.IsRawMouseInputEnabled())
+                    window.SetRawMouseInput(false);
+                window.SetCursorMode(Window::CursorMode::Normal);
+                m_MouseCaptured = false;
+            }
             m_InitialMousePosition = Input::GetMousePosition();
         }
 
@@ -126,9 +150,8 @@ namespace Engine
     void EditorCamera::SetViewportSize(float width, float height)
     {
         if (width <= 0.0f || height <= 0.0f)
-        {
             return;
-        }
+
         m_ViewportWidth = width;
         m_ViewportHeight = height;
         UpdateProjection();
@@ -164,16 +187,13 @@ namespace Engine
         glm::vec3 forward = -glm::normalize(glm::vec3(invView[2]));
         glm::vec3 up = glm::normalize(glm::vec3(invView[1]));
 
-        // 全范围 pitch 提取：通过 up 向量判断是否 "翻过顶部"
         float sinPitch = glm::clamp(-forward.y, -1.0f, 1.0f);
         if (up.y >= 0.0f)
         {
-            // 正常范围 [-π/2, π/2]
             m_Pitch = std::asin(sinPitch);
         }
         else
         {
-            // 相机翻转（过顶/过底），pitch 在 [π/2, π] 或 [-π, -π/2]
             m_Pitch = (sinPitch >= 0.0f)
                 ? glm::pi<float>() - std::asin(sinPitch)
                 : -glm::pi<float>() - std::asin(sinPitch);
