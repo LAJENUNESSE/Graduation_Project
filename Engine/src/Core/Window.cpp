@@ -71,6 +71,9 @@ namespace Engine
             unsigned int Width = 0;
             unsigned int Height = 0;
             bool VSync = false;
+            float PendingMouseX = 0.0f;
+            float PendingMouseY = 0.0f;
+            bool HasPendingMouseMove = false;
             EventCallbackFn EventCallback;
         };
 
@@ -215,8 +218,9 @@ namespace Engine
         glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xPos, double yPos)
         {
             WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
-            MouseMovedEvent event(static_cast<float>(xPos), static_cast<float>(yPos));
-            data.EventCallback(event);
+            data.PendingMouseX = static_cast<float>(xPos);
+            data.PendingMouseY = static_cast<float>(yPos);
+            data.HasPendingMouseMove = true;
         });
     }
 
@@ -248,6 +252,14 @@ namespace Engine
         auto t0 = std::chrono::high_resolution_clock::now();
         glfwPollEvents();
         auto t1 = std::chrono::high_resolution_clock::now();
+
+        if (m_Data.HasPendingMouseMove)
+        {
+            MouseMovedEvent event(m_Data.PendingMouseX, m_Data.PendingMouseY);
+            m_Data.EventCallback(event);
+            m_Data.HasPendingMouseMove = false;
+        }
+
         m_Context->SwapBuffers();
         auto t2 = std::chrono::high_resolution_clock::now();
 

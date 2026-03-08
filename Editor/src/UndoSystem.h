@@ -69,6 +69,31 @@ namespace Engine
         glm::vec3 m_NewTranslation, m_NewRotation, m_NewScale;
     };
 
+
+    class MultiTransformChangeCommand : public ICommand
+    {
+    public:
+        struct Entry
+        {
+            UUID EntityID = 0;
+            glm::vec3 OldTranslation = {};
+            glm::vec3 OldRotation = {};
+            glm::vec3 OldScale = {1.0f, 1.0f, 1.0f};
+            glm::vec3 NewTranslation = {};
+            glm::vec3 NewRotation = {};
+            glm::vec3 NewScale = {1.0f, 1.0f, 1.0f};
+        };
+
+        MultiTransformChangeCommand(Ref<Scene> scene, std::vector<Entry> entries);
+
+        void Execute() override;
+        void Undo() override;
+        std::string GetDescription() const override;
+
+    private:
+        Ref<Scene> m_Scene;
+        std::vector<Entry> m_Entries;
+    };
     // ========== 实体创建命令 ==========
     class EntityCreateCommand : public ICommand
     {
