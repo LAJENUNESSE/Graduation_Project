@@ -11,6 +11,18 @@
             }
         },
         {
+            "name": "clion",
+            "displayName": "CLion (Ninja + vcpkg)",
+            "description": "CLion 专用预设：Ninja 生成器 + vcpkg 工具链",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/cmake-build-${presetName}",
+            "warnings": { "dev": false },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_TOOLCHAIN_FILE": "C:/Dev/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
             "name": "使用工具链文件配置预设",
             "displayName": "使用工具链文件配置预设",
             "description": "设置 Ninja 生成器、版本和安装目录",
