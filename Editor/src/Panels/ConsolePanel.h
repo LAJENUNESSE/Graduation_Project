@@ -26,7 +26,7 @@ namespace Engine
     public:
         static constexpr size_t MaxEntries = 1000;
 
-        const std::vector<ConsoleLogEntry>& GetEntries() const { return m_Entries; }
+        std::vector<ConsoleLogEntry> CopyEntries();
         void ClearEntries();
 
     protected:

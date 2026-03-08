@@ -12,6 +12,11 @@ namespace Engine
 
     // ==================== ImGuiConsoleSink ====================
 
+    std::vector<ConsoleLogEntry> ImGuiConsoleSink::CopyEntries()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return m_Entries;
+    }
     void ImGuiConsoleSink::ClearEntries()
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -145,7 +150,7 @@ namespace Engine
         // 日志内容区域
         ImGui::BeginChild("ConsoleScrollRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 
-        const auto& entries = m_Sink->GetEntries();
+        const auto entries = m_Sink->CopyEntries();
         std::string searchStr(m_SearchBuffer);
 
         for (const auto& entry : entries)
