@@ -29,7 +29,7 @@ namespace Engine
         s_Instance = this;
 
         WindowProps props;
-        m_Window = std::unique_ptr<Window>(Window::Create(props));
+        m_Window = Window::Create(props);
 
         if (!m_Window->GetNativeWindow())
         {

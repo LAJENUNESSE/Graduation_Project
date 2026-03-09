@@ -68,7 +68,7 @@ namespace Engine
 
     private:
         GLFWwindow* m_Window = nullptr;
-        OpenGLContext* m_Context = nullptr;
+        Scope<OpenGLContext> m_Context;
 
         struct WindowData
         {
@@ -87,9 +87,9 @@ namespace Engine
         WindowData m_Data;
     };
 
-    Window* Window::Create(const WindowProps& props)
+    Scope<Window> Window::Create(const WindowProps& props)
     {
-        return new GLFWWindowImpl(props);
+        return CreateScope<GLFWWindowImpl>(props);
     }
 
     GLFWWindowImpl::GLFWWindowImpl(const WindowProps& props)
@@ -136,7 +136,7 @@ namespace Engine
         }
         ++s_GLFWWindowCount;
 
-        m_Context = new OpenGLContext(m_Window);
+        m_Context = CreateScope<OpenGLContext>(m_Window);
         m_Context->Init();
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
@@ -262,8 +262,7 @@ namespace Engine
             --s_GLFWWindowCount;
         }
 
-        delete m_Context;
-        m_Context = nullptr;
+        m_Context.reset();
 
         if (s_GLFWWindowCount == 0)
             glfwTerminate();
