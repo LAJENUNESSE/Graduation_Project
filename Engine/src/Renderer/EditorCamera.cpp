@@ -13,6 +13,10 @@
 
 namespace Engine
 {
+    namespace
+    {
+        constexpr bool kEnableRawMouseNavigation = false;
+    }
 
     EditorCamera::EditorCamera(float fov, float aspectRatio, float nearClip, float farClip)
         : m_FOV(fov), m_AspectRatio(aspectRatio), m_NearClip(nearClip), m_FarClip(farClip)
@@ -77,7 +81,7 @@ namespace Engine
             if (!m_MouseCaptured)
             {
                 window.SetCursorMode(Window::CursorMode::Disabled);
-                if (window.SupportsRawMouseInput())
+                if (kEnableRawMouseNavigation && window.SupportsRawMouseInput())
                     window.SetRawMouseInput(true);
                 m_InitialMousePosition = Input::GetMousePosition();
                 m_MouseCaptured = true;

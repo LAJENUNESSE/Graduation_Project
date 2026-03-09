@@ -53,7 +53,7 @@ namespace Engine
 
         GLFWwindow* window =
             static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
-        ImGui_ImplGlfw_InitForOpenGL(window, true);
+        ImGui_ImplGlfw_InitForOpenGL(window, false);
         ImGui_ImplOpenGL3_Init("#version 330");
     }
 
@@ -102,3 +102,4 @@ namespace Engine
     }
 
 } // namespace Engine
+
