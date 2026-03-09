@@ -7,7 +7,7 @@
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_TOOLCHAIN_FILE": "C:/Dev/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
             }
         },
         {
@@ -19,7 +19,7 @@
             "warnings": { "dev": false },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-                "CMAKE_TOOLCHAIN_FILE": "C:/Dev/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
             }
         },
         {
@@ -54,7 +54,7 @@
             "warnings": { "dev": false },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-                "CMAKE_TOOLCHAIN_FILE": "C:/Dev/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
             }
         },
         {
@@ -66,7 +66,7 @@
             "warnings": { "dev": false },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_TOOLCHAIN_FILE": "C:/Dev/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
             }
         }
     ]
