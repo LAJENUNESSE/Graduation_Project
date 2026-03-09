@@ -44,8 +44,9 @@ namespace Engine
         AssetManager::Init();
         PerformanceMonitor::Get().Init();
 
-        m_ImGuiLayer = new ImGuiLayer();
-        PushOverlay(m_ImGuiLayer);
+        auto imguiLayer = CreateScope<ImGuiLayer>();
+        m_ImGuiLayer = imguiLayer.get();
+        PushOverlay(std::move(imguiLayer));
 
         m_Initialized = true;
 
@@ -68,16 +69,18 @@ namespace Engine
         s_Instance = nullptr;
     }
 
-    void Application::PushLayer(Layer* layer)
+    void Application::PushLayer(Scope<Layer> layer)
     {
-        m_LayerStack.PushLayer(layer);
-        layer->OnAttach();
+        Layer* layerPtr = layer.get();
+        m_LayerStack.PushLayer(std::move(layer));
+        layerPtr->OnAttach();
     }
 
-    void Application::PushOverlay(Layer* overlay)
+    void Application::PushOverlay(Scope<Layer> overlay)
     {
-        m_LayerStack.PushOverlay(overlay);
-        overlay->OnAttach();
+        Layer* overlayPtr = overlay.get();
+        m_LayerStack.PushOverlay(std::move(overlay));
+        overlayPtr->OnAttach();
     }
 
     void Application::OnEvent(Event& e)
@@ -89,9 +92,7 @@ namespace Engine
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             if (e.Handled)
-            {
                 break;
-            }
             (*it)->OnEvent(e);
         }
     }
@@ -127,19 +128,15 @@ namespace Engine
 
             if (!m_Minimized)
             {
-                for (Layer* layer : m_LayerStack)
-                {
+                for (const auto& layer : m_LayerStack)
                     layer->OnUpdate(timestep);
-                }
 
                 float imguiCpuMs = 0.0f;
                 m_ImGuiLayer->Begin();
                 {
                     PROFILE_SCOPE("ImGui", &imguiCpuMs);
-                    for (Layer* layer : m_LayerStack)
-                    {
+                    for (const auto& layer : m_LayerStack)
                         layer->OnImGuiRender();
-                    }
                 }
                 PerformanceMonitor::Get().SetImGuiCPU(imguiCpuMs);
                 m_ImGuiLayer->End();

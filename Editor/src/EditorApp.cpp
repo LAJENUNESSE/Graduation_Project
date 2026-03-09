@@ -11,15 +11,15 @@ namespace Engine
     public:
         EditorApplication()
         {
-            PushLayer(new EditorLayer());
+            PushLayer(CreateScope<EditorLayer>());
         }
 
         ~EditorApplication() override = default;
     };
 
-    Application* CreateApplication()
+    Scope<Application> CreateApplication()
     {
-        return new EditorApplication();
+        return CreateScope<EditorApplication>();
     }
 
 } // namespace Engine
