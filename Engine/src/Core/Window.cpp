@@ -15,6 +15,7 @@
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
+#include <imgui_impl_glfw.h>
 
 #ifdef __linux__
 #include <X11/Xlib.h>
@@ -143,6 +144,16 @@ namespace Engine
         SetCursorMode(CursorMode::Normal);
         SetRawMouseInput(false);
 
+        glfwSetWindowFocusCallback(m_Window, [](GLFWwindow* window, int focused)
+        {
+            ImGui_ImplGlfw_WindowFocusCallback(window, focused);
+        });
+
+        glfwSetCursorEnterCallback(m_Window, [](GLFWwindow* window, int entered)
+        {
+            ImGui_ImplGlfw_CursorEnterCallback(window, entered);
+        });
+
         glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
         {
             WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
@@ -160,8 +171,10 @@ namespace Engine
             data.EventCallback(event);
         });
 
-        glfwSetKeyCallback(m_Window, [](GLFWwindow* window, int key, int /*scancode*/, int action, int /*mods*/)
+        glfwSetKeyCallback(m_Window, [](GLFWwindow* window, int key, int scancode, int action, int mods)
         {
+            ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+
             WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
 
             switch (action)
@@ -189,13 +202,17 @@ namespace Engine
 
         glfwSetCharCallback(m_Window, [](GLFWwindow* window, unsigned int keycode)
         {
+            ImGui_ImplGlfw_CharCallback(window, keycode);
+
             WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
             KeyTypedEvent event(static_cast<int>(keycode));
             data.EventCallback(event);
         });
 
-        glfwSetMouseButtonCallback(m_Window, [](GLFWwindow* window, int button, int action, int /*mods*/)
+        glfwSetMouseButtonCallback(m_Window, [](GLFWwindow* window, int button, int action, int mods)
         {
+            ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+
             WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
 
             switch (action)
@@ -217,6 +234,8 @@ namespace Engine
 
         glfwSetScrollCallback(m_Window, [](GLFWwindow* window, double xOffset, double yOffset)
         {
+            ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
+
             WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
             MouseScrolledEvent event(static_cast<float>(xOffset), static_cast<float>(yOffset));
             data.EventCallback(event);
@@ -228,6 +247,9 @@ namespace Engine
             data.PendingMouseX = static_cast<float>(xPos);
             data.PendingMouseY = static_cast<float>(yPos);
             data.HasPendingMouseMove = true;
+
+            if (data.CurrentCursorMode == CursorMode::Normal)
+                ImGui_ImplGlfw_CursorPosCallback(window, xPos, yPos);
         });
     }
 
