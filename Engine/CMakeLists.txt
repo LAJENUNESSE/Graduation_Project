@@ -76,6 +76,8 @@ set(ENGINE_SOURCES
 
 add_library(Engine STATIC ${ENGINE_SOURCES})
 
+target_compile_features(Engine PUBLIC cxx_std_17)
+
 # MSVC: treat source and execution charset as UTF-8 so Chinese literals work correctly
 if(MSVC)
     target_compile_options(Engine PRIVATE /utf-8)
@@ -89,11 +91,13 @@ find_package(FFMPEG REQUIRED)
 # OpenAL (vcpkg)
 find_package(OpenAL CONFIG REQUIRED)
 
-target_include_directories(Engine PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/vendor/bullet3/src
-    ${FFMPEG_INCLUDE_DIRS}
+target_include_directories(Engine
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/vendor/bullet3/src
+        ${FFMPEG_INCLUDE_DIRS}
 )
 
 target_link_libraries(Engine PUBLIC
