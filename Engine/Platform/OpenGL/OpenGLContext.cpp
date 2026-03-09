@@ -13,14 +13,14 @@ namespace Engine
 
     OpenGLContext::OpenGLContext(GLFWwindow* windowHandle) : m_WindowHandle(windowHandle)
     {
-        ENGINE_CORE_ASSERT(windowHandle, "Window handle is null!");
+        ENGINE_CORE_RELEASE_ASSERT(windowHandle, "Window handle is null!");
     }
 
     void OpenGLContext::Init()
     {
         glfwMakeContextCurrent(m_WindowHandle);
         int version = gladLoadGL(glfwGetProcAddress);
-        ENGINE_CORE_ASSERT(version, "Failed to initialize Glad!");
+        ENGINE_CORE_RELEASE_ASSERT(version, "Failed to initialize Glad!");
 
         ENGINE_CORE_INFO("OpenGL Info:");
         ENGINE_CORE_INFO("  Vendor:   {0}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));

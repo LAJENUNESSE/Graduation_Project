@@ -204,7 +204,7 @@ namespace Engine
             // Set draw buffers
             if (m_ColorAttachments.size() > 1)
             {
-                ENGINE_CORE_ASSERT(m_ColorAttachments.size() <= 4, "Too many color attachments");
+                ENGINE_CORE_RELEASE_ASSERT(m_ColorAttachments.size() <= 4, "Too many color attachments");
                 GLenum buffers[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2,
                                      GL_COLOR_ATTACHMENT3};
                 glDrawBuffers(static_cast<GLsizei>(m_ColorAttachments.size()), buffers);
@@ -239,7 +239,7 @@ namespace Engine
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_DepthAttachment);
         }
 
-        ENGINE_CORE_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
+        ENGINE_CORE_RELEASE_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
                            "Framebuffer is incomplete!");
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -276,7 +276,7 @@ namespace Engine
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
                                       GL_RENDERBUFFER, m_MSAADepthRenderbuffer);
 
-            ENGINE_CORE_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
+            ENGINE_CORE_RELEASE_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
                                "MSAA Framebuffer is incomplete!");
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
