@@ -10,7 +10,7 @@
 #include <Windows.h>
 #endif
 
-extern Engine::Application* Engine::CreateApplication();
+extern Engine::Scope<Engine::Application> Engine::CreateApplication();
 
 static void InitializeProjectRootFromExecutable()
 {
@@ -38,9 +38,6 @@ int main(int argc, char** argv)
 
     auto app = Engine::CreateApplication();
     app->Run();
-    delete app;
 
     return 0;
 }
-
-

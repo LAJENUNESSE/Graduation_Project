@@ -246,15 +246,15 @@ namespace Engine
     public:
         Sandbox()
         {
-            PushLayer(new ExampleLayer());
+            PushLayer(CreateScope<ExampleLayer>());
         }
 
         ~Sandbox() override {}
     };
 
-    Application* CreateApplication()
+    Scope<Application> CreateApplication()
     {
-        return new Sandbox();
+        return CreateScope<Sandbox>();
     }
 
 } // namespace Engine

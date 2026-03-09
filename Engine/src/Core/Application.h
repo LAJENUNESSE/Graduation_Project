@@ -19,8 +19,8 @@ namespace Engine
         void Run();
         void OnEvent(Event& e);
 
-        void PushLayer(Layer* layer);
-        void PushOverlay(Layer* overlay);
+        void PushLayer(Scope<Layer> layer);
+        void PushOverlay(Scope<Layer> overlay);
         void Close() { m_Running = false; }
 
         ImGuiLayer* GetImGuiLayer() { return m_ImGuiLayer; }
@@ -51,6 +51,6 @@ namespace Engine
     };
 
     // To be defined by the client application
-    Application* CreateApplication();
+    Scope<Application> CreateApplication();
 
 } // namespace Engine
