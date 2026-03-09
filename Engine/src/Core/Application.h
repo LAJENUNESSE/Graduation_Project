@@ -1,7 +1,6 @@
 #pragma once
 
-#include <memory>
-
+#include "Core/Base.h"
 #include "Core/LayerStack.h"
 #include "Core/Window.h"
 #include "Events/Event.h"
@@ -38,7 +37,7 @@ namespace Engine
         bool OnWindowClose(class WindowCloseEvent& e);
         bool OnWindowResize(class WindowResizeEvent& e);
 
-        std::unique_ptr<Window> m_Window;
+        Scope<Window> m_Window;
         ImGuiLayer* m_ImGuiLayer = nullptr;
         LayerStack m_LayerStack;
         bool m_Running = true;
@@ -46,7 +45,7 @@ namespace Engine
         bool m_Initialized = false;
         float m_LastFrameTime = 0.0f;
         float m_TargetFrameRate = 144.0f;
-        bool  m_FrameRateLimitEnabled = true;
+        bool m_FrameRateLimitEnabled = true;
 
         static Application* s_Instance;
     };
