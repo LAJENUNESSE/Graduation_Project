@@ -19,7 +19,7 @@ namespace Engine
         if (type == "compute")
             return GL_COMPUTE_SHADER;
 
-        ENGINE_CORE_ASSERT(false, "Unknown shader type!");
+        ENGINE_CORE_RELEASE_ASSERT(false, "Unknown shader type!");
         return 0;
     }
 
@@ -91,13 +91,13 @@ namespace Engine
         while (pos != std::string::npos)
         {
             size_t eol = source.find_first_of("\r\n", pos);
-            ENGINE_CORE_ASSERT(eol != std::string::npos, "Syntax error in shader file");
+            ENGINE_CORE_RELEASE_ASSERT(eol != std::string::npos, "Syntax error in shader file");
 
             size_t begin = pos + typeTokenLength + 1;
             std::string type = source.substr(begin, eol - begin);
 
             size_t nextLinePos = source.find_first_not_of("\r\n", eol);
-            ENGINE_CORE_ASSERT(nextLinePos != std::string::npos, "Syntax error in shader file");
+            ENGINE_CORE_RELEASE_ASSERT(nextLinePos != std::string::npos, "Syntax error in shader file");
 
             pos = source.find(typeToken, nextLinePos);
             shaderSources[ShaderTypeFromString(type)] =
@@ -110,7 +110,7 @@ namespace Engine
     void OpenGLShader::Compile(const std::unordered_map<unsigned int, std::string>& shaderSources)
     {
         GLuint program = glCreateProgram();
-        ENGINE_CORE_ASSERT(shaderSources.size() <= 3, "We only support 3 shaders for now");
+        ENGINE_CORE_RELEASE_ASSERT(shaderSources.size() <= 3, "We only support 3 shaders for now");
 
         std::array<GLuint, 3> glShaderIDs;
         int glShaderIDIndex = 0;
@@ -146,7 +146,7 @@ namespace Engine
                 glDeleteProgram(program);
 
                 ENGINE_CORE_ERROR("{0}", infoLog.data());
-                ENGINE_CORE_ASSERT(false, "Shader compilation failure!");
+                ENGINE_CORE_RELEASE_ASSERT(false, "Shader compilation failure!");
                 return;
             }
 
@@ -171,7 +171,7 @@ namespace Engine
                 glDeleteShader(glShaderIDs[i]);
 
             ENGINE_CORE_ERROR("{0}", infoLog.data());
-            ENGINE_CORE_ASSERT(false, "Shader link failure!");
+            ENGINE_CORE_RELEASE_ASSERT(false, "Shader link failure!");
             return;
         }
 
