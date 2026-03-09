@@ -9,6 +9,7 @@ namespace Engine
     {
         void DrawMeshRendererInspector(MeshRendererComponent& component);
         void DrawTerrainInspector(TerrainComponent& component);
+        void DrawParticleEmitterInspector(ParticleEmitterComponent& component);
         void DrawAudioSourceInspector(AudioSourceComponent& component);
         void DrawAudioListenerInspector(AudioListenerComponent& component);
         void DrawVideoPlayerInspector(VideoPlayerComponent& component);

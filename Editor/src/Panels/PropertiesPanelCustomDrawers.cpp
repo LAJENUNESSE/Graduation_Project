@@ -9,6 +9,7 @@
 #include "Script/ScriptRegistry.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Engine
@@ -89,6 +90,53 @@ namespace Engine
 
     namespace PropertiesPanelCustomDrawers
     {
+        namespace
+        {
+            void DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f,
+                                 float columnWidth = 100.0f)
+            {
+                ImGuiIO& io = ImGui::GetIO();
+                ImFont* boldFont = io.Fonts->Fonts[0];
+
+                ImGui::PushID(label.c_str());
+                ImGui::Columns(2);
+                ImGui::SetColumnWidth(0, columnWidth);
+                ImGui::Text("%s", label.c_str());
+                ImGui::NextColumn();
+
+                ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
+
+                const float lineHeight = ImGui::GetFrameHeight();
+                const ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
+
+                auto drawAxis = [&](const char* axisLabel, int axisIndex, const ImVec4& color, const ImVec4& hoverColor)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, color);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hoverColor);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+                    ImGui::PushFont(boldFont);
+                    if (ImGui::Button(axisLabel, buttonSize))
+                        values[axisIndex] = resetValue;
+                    ImGui::PopFont();
+                    ImGui::PopStyleColor(3);
+                    ImGui::SameLine();
+                    ImGui::DragFloat((std::string("##") + axisLabel).c_str(), &values[axisIndex], 0.1f, 0.0f, 0.0f, "%.2f");
+                    ImGui::PopItemWidth();
+                };
+
+                drawAxis("X", 0, ImVec4{0.8f, 0.1f, 0.15f, 1.0f}, ImVec4{0.9f, 0.2f, 0.2f, 1.0f});
+                ImGui::SameLine();
+                drawAxis("Y", 1, ImVec4{0.2f, 0.7f, 0.2f, 1.0f}, ImVec4{0.3f, 0.8f, 0.3f, 1.0f});
+                ImGui::SameLine();
+                drawAxis("Z", 2, ImVec4{0.1f, 0.25f, 0.8f, 1.0f}, ImVec4{0.2f, 0.35f, 0.9f, 1.0f});
+
+                ImGui::PopStyleVar();
+                ImGui::Columns(1);
+                ImGui::PopID();
+            }
+        } // namespace
+
         void DrawMeshRendererInspector(MeshRendererComponent& component)
         {
             ImGui::ColorEdit4("颜色", glm::value_ptr(component.Color));
@@ -387,6 +435,116 @@ namespace Engine
                     std::string p(grassBuf);
                     component.GrassTexture = p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
                 }
+            }
+        }
+
+        void DrawParticleEmitterInspector(ParticleEmitterComponent& component)
+        {
+            const char* presetNames[] = {"自定义", "火焰", "烟雾", "爆炸", "火花"};
+            int presetIdx = static_cast<int>(component.CurrentPreset);
+            if (ImGui::Combo("预设", &presetIdx, presetNames, 5))
+            {
+                auto preset = static_cast<ParticleEmitterComponent::Preset>(presetIdx);
+                if (preset != ParticleEmitterComponent::Preset::Custom)
+                    ParticleEmitterComponent::ApplyPreset(component, preset);
+                else
+                    component.CurrentPreset = ParticleEmitterComponent::Preset::Custom;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("发射");
+
+            bool changed = false;
+            changed |= ImGui::DragFloat("发射速率", &component.EmitRate, 1.0f, 0.0f, 100000.0f, "%.0f");
+            ImGui::SameLine();
+            ImGui::TextDisabled("粒子/秒");
+            changed |= ImGui::DragInt("爆发数量", &component.BurstCount, 1, 0, 10000);
+            ImGui::SameLine();
+            if (ImGui::Button("触发爆发"))
+                component.PendingBurst = component.BurstCount;
+
+            int maxParticles = static_cast<int>(component.MaxParticles);
+            if (ImGui::DragInt("最大粒子数", &maxParticles, 100, 100, 1000000))
+            {
+                component.MaxParticles = static_cast<uint32_t>(std::max(maxParticles, 100));
+                changed = true;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("生命周期");
+            changed |= ImGui::DragFloat("最短寿命", &component.LifeMin, 0.05f, 0.01f, 60.0f, "%.2f 秒");
+            changed |= ImGui::DragFloat("最长寿命", &component.LifeMax, 0.05f, 0.01f, 60.0f, "%.2f 秒");
+            if (component.LifeMax < component.LifeMin)
+                component.LifeMax = component.LifeMin;
+
+            ImGui::Separator();
+            ImGui::Text("速度与方向");
+            changed |= ImGui::DragFloat("最小速度", &component.SpeedMin, 0.1f, 0.0f, 100.0f, "%.1f");
+            changed |= ImGui::DragFloat("最大速度", &component.SpeedMax, 0.1f, 0.0f, 100.0f, "%.1f");
+            if (component.SpeedMax < component.SpeedMin)
+                component.SpeedMax = component.SpeedMin;
+            DrawVec3Control("发射方向", component.EmitDirection);
+            changed |= ImGui::DragFloat("锥角", &component.EmitAngle, 0.5f, 0.0f, 180.0f, "%.1f°");
+
+            ImGui::Separator();
+            ImGui::Text("大小");
+            changed |= ImGui::DragFloat("起始大小", &component.SizeStart, 0.01f, 0.001f, 10.0f, "%.3f");
+            changed |= ImGui::DragFloat("结束大小", &component.SizeEnd, 0.01f, 0.0f, 10.0f, "%.3f");
+
+            ImGui::Separator();
+            ImGui::Text("颜色");
+            changed |= ImGui::ColorEdit4("起始颜色", glm::value_ptr(component.ColorStart));
+            changed |= ImGui::ColorEdit4("结束颜色", glm::value_ptr(component.ColorEnd));
+
+            ImGui::Separator();
+            ImGui::Text("物理");
+            DrawVec3Control("重力", component.Gravity);
+            changed |= ImGui::DragFloat("阻尼", &component.Damping, 0.01f, 0.0f, 1.0f, "%.2f");
+
+            ImGui::Separator();
+            const char* blendModes[] = {"加法混合", "Alpha混合"};
+            int blendIdx = static_cast<int>(component.Blend);
+            if (ImGui::Combo("混合模式", &blendIdx, blendModes, 2))
+            {
+                component.Blend = static_cast<ParticleEmitterComponent::BlendMode>(blendIdx);
+                changed = true;
+            }
+
+            if (changed && component.CurrentPreset != ParticleEmitterComponent::Preset::Custom)
+                component.CurrentPreset = ParticleEmitterComponent::Preset::Custom;
+
+            ImGui::Separator();
+            ImGui::Text("SPH 流体");
+            ImGui::Checkbox("启用 SPH", &component.SPHEnabled);
+            if (!component.SPHEnabled)
+                return;
+
+            ImGui::DragFloat("静止密度", &component.SPH_RestDensity, 10.0f, 100.0f, 10000.0f, "%.0f");
+            ImGui::DragFloat("气体常数", &component.SPH_GasConstant, 10.0f, 100.0f, 50000.0f, "%.0f");
+            ImGui::DragFloat("粘性系数", &component.SPH_Viscosity, 0.001f, 0.0f, 1.0f, "%.4f");
+            ImGui::DragFloat("光滑半径", &component.SPH_SmoothingRadius, 0.01f, 0.01f, 2.0f, "%.3f");
+            ImGui::DragFloat("粒子质量", &component.SPH_ParticleMass, 0.001f, 0.001f, 1.0f, "%.4f");
+
+            ImGui::Separator();
+            ImGui::Text("PCISPH");
+            ImGui::Checkbox("启用 PCISPH", &component.SPH_PCISPHEnabled);
+            if (component.SPH_PCISPHEnabled)
+            {
+                ImGui::SliderInt("PCISPH 迭代次数", &component.SPH_PCISPHIterations, 1, 8);
+                ImGui::DragFloat("PCISPH 校正系数", &component.SPH_PCISPHDelta, 0.01f, 0.01f, 1.0f, "%.3f");
+            }
+
+            ImGui::Separator();
+            ImGui::Text("表面张力");
+            ImGui::DragFloat("表面张力系数", &component.SPH_SurfaceTension, 0.1f, 0.0f, 20.0f, "%.2f");
+
+            ImGui::Separator();
+            ImGui::Text("刚体耦合");
+            ImGui::Checkbox("启用刚体耦合", &component.SPH_RigidBodyCoupling);
+            if (component.SPH_RigidBodyCoupling)
+            {
+                ImGui::DragFloat("边界刚度", &component.SPH_BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
+                ImGui::DragFloat("边界阻尼", &component.SPH_BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
             }
         }
 
