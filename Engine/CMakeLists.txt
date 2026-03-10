@@ -80,7 +80,7 @@ target_compile_features(Engine PUBLIC cxx_std_17)
 
 # MSVC: treat source and execution charset as UTF-8 so Chinese literals work correctly
 if(MSVC)
-    target_compile_options(Engine PRIVATE /utf-8)
+    target_compile_options(Engine PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
 endif()
 
 find_package(Threads REQUIRED)
@@ -133,4 +133,21 @@ target_precompile_headers(Engine PRIVATE
 
 engine_apply_warnings(Engine)
 engine_apply_sanitizers(Engine)
+
+if(ENGINE_ENABLE_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    target_sources(Engine PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaGLInteropContext.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
+    )
+    target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_CUDA=1)
+    target_include_directories(Engine PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+    target_link_libraries(Engine PUBLIC CUDA::cudart)
+    set_property(TARGET Engine PROPERTY CUDA_STANDARD 17)
+    set_property(TARGET Engine PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+    if(MSVC)
+        target_compile_options(Engine PRIVATE
+            $<$<COMPILE_LANGUAGE:CUDA>:--compiler-options=/utf-8>)
+    endif()
+endif()
 

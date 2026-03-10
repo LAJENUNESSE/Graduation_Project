@@ -14,6 +14,10 @@ namespace Engine
 
     struct ParticleEmitterComponent;
 
+#ifdef ENGINE_ENABLE_CUDA
+    class CudaGLInteropContext;
+#endif
+
     class ParticleSystemGPU
     {
     public:
@@ -90,6 +94,18 @@ namespace Engine
         uint32_t m_ReadbackBuffer = 0;    // GL buffer for async copy
         void*    m_ReadbackFence = nullptr; // GLsync fence
         bool     m_ReadbackPending = false;
+
+#ifdef ENGINE_ENABLE_CUDA
+        // CUDA compute sidecar（Phase 1: emit / simulate / render_args）
+        Scope<CudaGLInteropContext> m_CudaInterop;
+        bool m_UseCudaPath = false;
+        bool m_CudaInitAttempted = false;
+        int  m_CudaSlotParticle  = -1;
+        int  m_CudaSlotDeadList  = -1;
+        int  m_CudaSlotAliveList = -1;
+        int  m_CudaSlotCounter   = -1;
+        int  m_CudaSlotIndirect  = -1;
+#endif
 
         void InitSPH(float smoothingRadius);
     };
