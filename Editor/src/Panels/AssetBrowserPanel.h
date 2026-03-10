@@ -3,10 +3,10 @@
 #include "Core/Base.h"
 #include "Scene/Scene.h"
 
-#include <string>
-#include <vector>
 #include <filesystem>
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -27,6 +27,15 @@ namespace Engine
         void OnImGuiRender();
 
     private:
+        bool EnsureCurrentDirectoryValid();
+        bool TryEnumerateDirectory(const std::filesystem::path& directory,
+                                   std::vector<std::filesystem::directory_entry>& outEntries);
+        bool TryBuildRelativePath(const std::filesystem::path& path,
+                                  const std::filesystem::path& base,
+                                  std::filesystem::path& outRelative);
+        bool TryGetFileSizeText(const std::filesystem::directory_entry& entry, std::string& outText);
+        void SetFilesystemError(const std::string& message);
+
         // 绘制文件夹树（左侧）
         void DrawDirectoryTree(const std::filesystem::path& directory);
 
@@ -52,6 +61,7 @@ namespace Engine
 
         Ref<Scene> m_Scene;
         SceneOpenCallback m_OnSceneOpen;
+        std::string m_LastFilesystemError;
 
         // 图片预览
         bool m_ShowImagePreview = false;
@@ -62,4 +72,3 @@ namespace Engine
     };
 
 } // namespace Engine
-

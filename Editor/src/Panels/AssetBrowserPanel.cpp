@@ -6,46 +6,85 @@
 
 #include <imgui.h>
 #include <algorithm>
+#include <cstdio>
+#include <system_error>
 
 #ifdef _WIN32
 #include <Windows.h>
 #include <shellapi.h>
 #endif
+
 namespace Engine
 {
-
-    // 支持的图片扩展名
-    static bool IsImageFile(const std::filesystem::path& path)
+    namespace
     {
-        std::string ext = path.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
-               ext == ".bmp" || ext == ".tga" || ext == ".hdr";
-    }
+        std::string FormatFileSize(uintmax_t fileSize)
+        {
+            char buffer[64] = {};
+            if (fileSize < 1024)
+            {
+                std::snprintf(buffer, sizeof(buffer), "%llu B", static_cast<unsigned long long>(fileSize));
+            }
+            else if (fileSize < 1024ull * 1024ull)
+            {
+                std::snprintf(buffer, sizeof(buffer), "%.1f KB", static_cast<double>(fileSize) / 1024.0);
+            }
+            else if (fileSize < 1024ull * 1024ull * 1024ull)
+            {
+                std::snprintf(buffer, sizeof(buffer), "%.1f MB", static_cast<double>(fileSize) / (1024.0 * 1024.0));
+            }
+            else
+            {
+                std::snprintf(buffer, sizeof(buffer), "%.1f GB", static_cast<double>(fileSize) / (1024.0 * 1024.0 * 1024.0));
+            }
 
-    static bool IsSceneFile(const std::filesystem::path& path)
-    {
-        return path.extension() == ".scene";
-    }
+            return buffer;
+        }
 
-    static bool IsShaderFile(const std::filesystem::path& path)
-    {
-        return path.extension() == ".glsl";
-    }
+        bool IsImageFile(const std::filesystem::path& path)
+        {
+            std::string ext = path.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
+                   ext == ".bmp" || ext == ".tga" || ext == ".hdr";
+        }
 
-    static bool IsModelFile(const std::filesystem::path& path)
-    {
-        std::string ext = path.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-        return ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb";
-    }
+        bool IsSceneFile(const std::filesystem::path& path)
+        {
+            return path.extension() == ".scene";
+        }
 
-    static bool IsAudioFile(const std::filesystem::path& path)
-    {
-        std::string ext = path.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-        return ext == ".wav" || ext == ".mp3" || ext == ".ogg";
-    }
+        bool IsShaderFile(const std::filesystem::path& path)
+        {
+            return path.extension() == ".glsl";
+        }
+
+        bool IsModelFile(const std::filesystem::path& path)
+        {
+            std::string ext = path.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            return ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb";
+        }
+
+        bool IsAudioFile(const std::filesystem::path& path)
+        {
+            std::string ext = path.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            return ext == ".wav" || ext == ".mp3" || ext == ".ogg";
+        }
+
+        bool IsDirectoryPath(const std::filesystem::path& path)
+        {
+            std::error_code ec;
+            return std::filesystem::is_directory(path, ec) && !ec;
+        }
+
+        std::string BuildFilesystemError(const char* action, const std::filesystem::path& path,
+                                         const std::error_code& ec)
+        {
+            return std::string(action) + ": " + path.string() + " (" + ec.message() + ")";
+        }
+    } // namespace
 
     AssetBrowserPanel::AssetBrowserPanel()
     {
@@ -53,9 +92,130 @@ namespace Engine
         m_CurrentDirectory = m_RootDirectory;
     }
 
+    void AssetBrowserPanel::SetFilesystemError(const std::string& message)
+    {
+        if (!message.empty())
+            m_LastFilesystemError = message;
+    }
+
+    bool AssetBrowserPanel::EnsureCurrentDirectoryValid()
+    {
+        std::error_code ec;
+        bool currentExists = std::filesystem::exists(m_CurrentDirectory, ec);
+        if (ec)
+        {
+            SetFilesystemError(BuildFilesystemError("检查当前目录失败", m_CurrentDirectory, ec));
+        }
+        else if (currentExists && std::filesystem::is_directory(m_CurrentDirectory, ec) && !ec)
+        {
+            return true;
+        }
+        else if (!ec && !currentExists)
+        {
+            SetFilesystemError("当前目录已失效，已回退到 assets 根目录: " + m_CurrentDirectory.string());
+        }
+        else if (ec)
+        {
+            SetFilesystemError(BuildFilesystemError("检查当前目录失败", m_CurrentDirectory, ec));
+        }
+        else
+        {
+            SetFilesystemError("当前目录不可用，已回退到 assets 根目录: " + m_CurrentDirectory.string());
+        }
+
+        ec.clear();
+        if (std::filesystem::exists(m_RootDirectory, ec) && !ec && std::filesystem::is_directory(m_RootDirectory, ec) && !ec)
+        {
+            m_CurrentDirectory = m_RootDirectory;
+            return true;
+        }
+
+        if (ec)
+            SetFilesystemError(BuildFilesystemError("检查 assets 根目录失败", m_RootDirectory, ec));
+        return false;
+    }
+
+    bool AssetBrowserPanel::TryEnumerateDirectory(const std::filesystem::path& directory,
+                                                  std::vector<std::filesystem::directory_entry>& outEntries)
+    {
+        outEntries.clear();
+
+        std::error_code ec;
+        bool exists = std::filesystem::exists(directory, ec);
+        if (ec)
+        {
+            SetFilesystemError(BuildFilesystemError("检查目录失败", directory, ec));
+            return false;
+        }
+        if (!exists)
+        {
+            SetFilesystemError("目录不存在: " + directory.string());
+            return false;
+        }
+
+        if (!std::filesystem::is_directory(directory, ec) || ec)
+        {
+            SetFilesystemError(ec ? BuildFilesystemError("检查目录类型失败", directory, ec)
+                                  : "路径不是目录: " + directory.string());
+            return false;
+        }
+
+        std::filesystem::directory_iterator it(directory, std::filesystem::directory_options::skip_permission_denied, ec);
+        if (ec)
+        {
+            SetFilesystemError(BuildFilesystemError("打开目录失败", directory, ec));
+            return false;
+        }
+
+        const std::filesystem::directory_iterator end;
+        while (it != end)
+        {
+            outEntries.push_back(*it);
+            it.increment(ec);
+            if (ec)
+            {
+                SetFilesystemError(BuildFilesystemError("遍历目录失败", directory, ec));
+                break;
+            }
+        }
+
+        return true;
+    }
+
+    bool AssetBrowserPanel::TryBuildRelativePath(const std::filesystem::path& path,
+                                                 const std::filesystem::path& base,
+                                                 std::filesystem::path& outRelative)
+    {
+        std::error_code ec;
+        outRelative = std::filesystem::relative(path, base, ec);
+        if (ec)
+        {
+            SetFilesystemError(BuildFilesystemError("计算相对路径失败", path, ec));
+            return false;
+        }
+
+        return true;
+    }
+
+    bool AssetBrowserPanel::TryGetFileSizeText(const std::filesystem::directory_entry& entry, std::string& outText)
+    {
+        outText.clear();
+
+        std::error_code ec;
+        uintmax_t fileSize = entry.file_size(ec);
+        if (ec)
+        {
+            SetFilesystemError(BuildFilesystemError("读取文件大小失败", entry.path(), ec));
+            return false;
+        }
+
+        outText = FormatFileSize(fileSize);
+        return true;
+    }
+
     const char* AssetBrowserPanel::GetFileIcon(const std::filesystem::path& path)
     {
-        if (std::filesystem::is_directory(path))
+        if (IsDirectoryPath(path))
             return "[D]";
         if (IsImageFile(path))
             return "[I]";
@@ -72,39 +232,61 @@ namespace Engine
 
     void AssetBrowserPanel::OnImGuiRender()
     {
-        ImGui::Begin("\xe8\xb5\x84\xe4\xba\xa7\xe6\xb5\x8f\xe8\xa7\x88\xe5\x99\xa8"); // 资产浏览器
+        m_LastFilesystemError.clear();
+        ImGui::Begin("资产浏览器");
 
-        // 确保根目录存在
-        if (!std::filesystem::exists(m_RootDirectory))
+        std::error_code ec;
+        bool rootExists = std::filesystem::exists(m_RootDirectory, ec);
+        if (ec)
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
-                "\xe6\x9c\xaa\xe6\x89\xbe\xe5\x88\xb0 assets/ \xe7\x9b\xae\xe5\xbd\x95"); // 未找到 assets/ 目录
+            SetFilesystemError(BuildFilesystemError("检查 assets 根目录失败", m_RootDirectory, ec));
+            rootExists = false;
+        }
+
+        bool rootIsDirectory = false;
+        if (rootExists)
+        {
+            rootIsDirectory = std::filesystem::is_directory(m_RootDirectory, ec);
+            if (ec)
+            {
+                SetFilesystemError(BuildFilesystemError("检查 assets 根目录类型失败", m_RootDirectory, ec));
+                rootIsDirectory = false;
+            }
+        }
+
+        if (!rootExists || !rootIsDirectory)
+        {
+            if (m_LastFilesystemError.empty())
+                SetFilesystemError("未找到 assets 目录: " + m_RootDirectory.string());
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", m_LastFilesystemError.c_str());
             ImGui::End();
             return;
         }
 
-        // 面包屑导航
-        DrawBreadcrumbs();
+        EnsureCurrentDirectoryValid();
 
+        if (!m_LastFilesystemError.empty())
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s", m_LastFilesystemError.c_str());
+            ImGui::Separator();
+        }
+
+        DrawBreadcrumbs();
         ImGui::Separator();
 
-        // 双列布局
         float panelWidth = ImGui::GetContentRegionAvail().x;
         float treeWidth = (std::max)(panelWidth * 0.25f, 150.0f);
 
-        // 左侧：文件夹树
         ImGui::BeginChild("FolderTree", ImVec2(treeWidth, 0), true);
         DrawDirectoryTree(m_RootDirectory);
         ImGui::EndChild();
 
         ImGui::SameLine();
 
-        // 右侧：文件网格
         ImGui::BeginChild("FileGrid", ImVec2(0, 0), true);
         DrawFileGrid();
         ImGui::EndChild();
 
-        // 图片预览窗口
         DrawImagePreview();
 
         ImGui::End();
@@ -112,7 +294,6 @@ namespace Engine
 
     void AssetBrowserPanel::DrawBreadcrumbs()
     {
-        // 后退按钮
         bool canGoBack = m_CurrentDirectory != m_RootDirectory;
         if (!canGoBack)
         {
@@ -127,8 +308,13 @@ namespace Engine
 
         ImGui::SameLine();
 
-        // 从 root 到 current 路径的每一级
-        std::filesystem::path relative = std::filesystem::relative(m_CurrentDirectory, m_RootDirectory);
+        std::filesystem::path relative;
+        if (!TryBuildRelativePath(m_CurrentDirectory, m_RootDirectory, relative))
+        {
+            if (ImGui::Button("assets"))
+                m_CurrentDirectory = m_RootDirectory;
+            return;
+        }
 
         if (ImGui::Button("assets"))
             m_CurrentDirectory = m_RootDirectory;
@@ -154,24 +340,28 @@ namespace Engine
         if (dirName.empty())
             dirName = directory.string();
 
-        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-        if (m_CurrentDirectory == directory)
-            flags |= ImGuiTreeNodeFlags_Selected;
-
-        // 检查是否有子目录
+        std::vector<std::filesystem::directory_entry> entries;
         bool hasSubDirs = false;
-        if (std::filesystem::exists(directory))
+        if (TryEnumerateDirectory(directory, entries))
         {
-            for (const auto& entry : std::filesystem::directory_iterator(directory))
+            for (const auto& entry : entries)
             {
-                if (entry.is_directory())
+                std::error_code ec;
+                if (entry.is_directory(ec) && !ec)
                 {
                     hasSubDirs = true;
                     break;
                 }
+                if (ec)
+                {
+                    SetFilesystemError(BuildFilesystemError("检查子目录失败", entry.path(), ec));
+                }
             }
         }
 
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+        if (m_CurrentDirectory == directory)
+            flags |= ImGuiTreeNodeFlags_Selected;
         if (!hasSubDirs)
             flags |= ImGuiTreeNodeFlags_Leaf;
 
@@ -182,38 +372,39 @@ namespace Engine
 
         if (opened)
         {
-            if (std::filesystem::exists(directory))
+            std::vector<std::filesystem::path> subDirs;
+            subDirs.reserve(entries.size());
+            for (const auto& entry : entries)
             {
-                // 收集子目录并排序
-                std::vector<std::filesystem::path> subDirs;
-                for (const auto& entry : std::filesystem::directory_iterator(directory))
+                std::error_code ec;
+                bool isDirectory = entry.is_directory(ec);
+                if (ec)
                 {
-                    if (entry.is_directory())
-                        subDirs.push_back(entry.path());
+                    SetFilesystemError(BuildFilesystemError("检查子目录失败", entry.path(), ec));
+                    continue;
                 }
-                std::sort(subDirs.begin(), subDirs.end());
-
-                for (const auto& subDir : subDirs)
-                    DrawDirectoryTree(subDir);
+                if (isDirectory)
+                    subDirs.push_back(entry.path());
             }
+
+            std::sort(subDirs.begin(), subDirs.end());
+            for (const auto& subDir : subDirs)
+                DrawDirectoryTree(subDir);
+
             ImGui::TreePop();
         }
     }
 
     void AssetBrowserPanel::DrawFileGrid()
     {
-        if (!std::filesystem::exists(m_CurrentDirectory))
+        if (!EnsureCurrentDirectoryValid())
             return;
 
-        // 右键菜单
         if (ImGui::BeginPopupContextWindow("AssetBrowserContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
         {
-            if (ImGui::MenuItem("\xe5\x88\xb7\xe6\x96\xb0")) // 刷新
-            {
-                // 强制刷新（不需要做什么，下次迭代会自动重新读取）
-            }
+            ImGui::MenuItem("刷新");
 #ifdef _WIN32
-            if (ImGui::MenuItem("\xe5\x9c\xa8\xe6\x96\x87\xe4\xbb\xb6\xe7\xae\xa1\xe7\x90\x86\xe5\x99\xa8\xe4\xb8\xad\xe6\x89\x93\xe5\xbc\x80")) // 在文件管理器中打开
+            if (ImGui::MenuItem("在文件管理器中打开"))
             {
                 ShellExecuteA(nullptr, "explore", m_CurrentDirectory.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
@@ -221,18 +412,20 @@ namespace Engine
             ImGui::EndPopup();
         }
 
-        // 收集并排序条目（文件夹优先，然后按名称）
         std::vector<std::filesystem::directory_entry> entries;
-        for (const auto& entry : std::filesystem::directory_iterator(m_CurrentDirectory))
-            entries.push_back(entry);
+        if (!TryEnumerateDirectory(m_CurrentDirectory, entries))
+            return;
 
         std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-            if (a.is_directory() != b.is_directory())
-                return a.is_directory();
+            std::error_code aEc;
+            std::error_code bEc;
+            bool aIsDirectory = a.is_directory(aEc) && !aEc;
+            bool bIsDirectory = b.is_directory(bEc) && !bEc;
+            if (aIsDirectory != bIsDirectory)
+                return aIsDirectory;
             return a.path().filename() < b.path().filename();
         });
 
-        // 网格参数
         float cellSize = 80.0f;
         float padding = 8.0f;
         float panelWidth = ImGui::GetContentRegionAvail().x;
@@ -248,26 +441,25 @@ namespace Engine
 
             ImGui::PushID(filename.c_str());
 
-            // 按钮表示文件/文件夹
             std::string label = std::string(icon) + "\n" + filename;
 
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
-
-            if (ImGui::Button(label.c_str(), ImVec2(cellSize, cellSize)))
-            {
-                // 单击：选择
-            }
-
+            ImGui::Button(label.c_str(), ImVec2(cellSize, cellSize));
             ImGui::PopStyleColor(2);
 
-            // 拖拽源：将文件相对路径作为 payload
-            if (!entry.is_directory() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+            std::error_code dirEc;
+            bool isDirectory = entry.is_directory(dirEc);
+            if (dirEc)
             {
-                // 计算相对于项目根目录的路径
+                SetFilesystemError(BuildFilesystemError("检查条目类型失败", path, dirEc));
+                isDirectory = false;
+            }
+
+            if (!isDirectory && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+            {
                 std::string relStr = PathUtils::ToProjectRelativeOrAbsolute(path);
 
-                // 根据文件类型设置不同的 payload 类型
                 const char* payloadType = "ASSET_PATH";
                 if (IsImageFile(path))
                     payloadType = "ASSET_TEXTURE";
@@ -283,20 +475,18 @@ namespace Engine
                 ImGui::EndDragDropSource();
             }
 
-            // 双击处理
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
             {
-                if (entry.is_directory())
+                if (isDirectory)
                     m_CurrentDirectory = path;
                 else
                     OnFileDoubleClicked(path);
             }
 
-            // 右键菜单（单个文件）
             if (ImGui::BeginPopupContextItem())
             {
 #ifdef _WIN32
-                if (ImGui::MenuItem("\xe5\x9c\xa8\xe6\x96\x87\xe4\xbb\xb6\xe7\xae\xa1\xe7\x90\x86\xe5\x99\xa8\xe4\xb8\xad\xe6\x98\xbe\xe7\xa4\xba")) // 在文件管理器中显示
+                if (ImGui::MenuItem("在文件管理器中显示"))
                 {
                     std::string cmd = "/select," + path.string();
                     ShellExecuteA(nullptr, "open", "explorer.exe", cmd.c_str(), nullptr, SW_SHOWNORMAL);
@@ -305,20 +495,15 @@ namespace Engine
                 ImGui::EndPopup();
             }
 
-            // 工具提示
             if (ImGui::IsItemHovered())
             {
                 ImGui::BeginTooltip();
                 ImGui::Text("%s", filename.c_str());
-                if (!entry.is_directory())
+                if (!isDirectory)
                 {
-                    auto fileSize = entry.file_size();
-                    if (fileSize < 1024)
-                        ImGui::Text("%llu B", fileSize);
-                    else if (fileSize < 1024 * 1024)
-                        ImGui::Text("%.1f KB", fileSize / 1024.0f);
-                    else
-                        ImGui::Text("%.1f MB", fileSize / (1024.0f * 1024.0f));
+                    std::string fileSizeText;
+                    if (TryGetFileSizeText(entry, fileSizeText) && !fileSizeText.empty())
+                        ImGui::Text("%s", fileSizeText.c_str());
                 }
                 ImGui::EndTooltip();
             }
@@ -334,7 +519,6 @@ namespace Engine
     {
         if (IsSceneFile(path))
         {
-            // 通过回调加载场景
             if (m_OnSceneOpen)
                 m_OnSceneOpen(PathUtils::ToProjectRelativeOrAbsolute(path));
             else
@@ -342,12 +526,10 @@ namespace Engine
         }
         else if (IsImageFile(path))
         {
-            // 打开图片预览
             m_ShowImagePreview = true;
             ClearImagePreview();
             m_PreviewImagePath = PathUtils::ToProjectRelativeOrAbsolute(path);
 
-            // 持有纹理对象，避免只保存 renderer ID 导致悬空资源
             m_PreviewTexture = Texture2D::Create(m_PreviewImagePath);
             if (m_PreviewTexture)
             {
@@ -375,10 +557,10 @@ namespace Engine
             return;
 
         ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("图片预览", &m_ShowImagePreview)) // 图片预览
+        if (ImGui::Begin("图片预览", &m_ShowImagePreview))
         {
             ImGui::Text("%s", m_PreviewImagePath.c_str());
-            ImGui::Text("尺寸: %d x %d", m_PreviewImageWidth, m_PreviewImageHeight); // 尺寸
+            ImGui::Text("尺寸: %d x %d", m_PreviewImageWidth, m_PreviewImageHeight);
 
             if (m_PreviewTexture)
             {
@@ -402,4 +584,3 @@ namespace Engine
     }
 
 } // namespace Engine
-
