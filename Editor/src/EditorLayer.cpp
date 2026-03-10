@@ -1,6 +1,7 @@
 #include "EditorLayer.h"
 
 #include "Asset/AssetManager.h"
+#include "Core/Application.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
 #include "EditorPanelCoordinator.h"
@@ -16,6 +17,7 @@
 #include "Panels/SceneHierarchyPanel.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Components.h"
 #include "UndoSystem.h"
@@ -44,6 +46,7 @@ namespace Engine
 
         m_SceneRenderer = CreateScope<SceneRenderer>();
         m_PostProcessing = CreateScope<PostProcessing>();
+        m_PostProcessingSettings = CreateScope<PostProcessingSettings>();
         m_PhysicsDebugDraw = CreateScope<PhysicsDebugDraw>();
 
         m_SceneSession = CreateScope<EditorSceneSession>();
@@ -56,7 +59,7 @@ namespace Engine
         m_ViewportController->Initialize();
         m_RenderController->Initialize(m_SceneRenderer.get(),
                                        m_PostProcessing.get(),
-                                       &m_PostProcessingSettings,
+                                       m_PostProcessingSettings.get(),
                                        m_ViewportController.get(),
                                        m_PanelCoordinator.get(),
                                        m_PhysicsDebugDraw.get(),
@@ -281,3 +284,5 @@ namespace Engine
     }
 
 } // namespace Engine
+
+
