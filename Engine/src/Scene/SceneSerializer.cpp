@@ -18,6 +18,7 @@
 
 #include <glm/glm.hpp>
 #include <filesystem>
+#include <fstream>
 
 namespace YAML
 {
@@ -490,19 +491,27 @@ namespace Engine
     bool SceneSerializer::Deserialize(const std::string& filepath, EditorRenderSettings* outRenderSettings)
     {
         YAML::Node data;
+        const std::filesystem::path resolvedFilepath = PathUtils::ResolvePath(filepath);
+
         try
         {
-            const std::filesystem::path resolvedFilepath = PathUtils::ResolvePath(filepath);
-            data = YAML::LoadFile(resolvedFilepath.string());
+            std::ifstream input(resolvedFilepath, std::ios::binary);
+            if (!input.is_open())
+            {
+                ENGINE_CORE_ERROR("Failed to open scene file '{0}'", PathUtils::PathToUtf8String(resolvedFilepath));
+                return false;
+            }
+
+            data = YAML::Load(input);
         }
         catch (const YAML::ParserException& e)
         {
-            ENGINE_CORE_ERROR("Failed to parse scene file '{0}': {1}", filepath, e.what());
+            ENGINE_CORE_ERROR("Failed to parse scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath), e.what());
             return false;
         }
         catch (const YAML::BadFile& e)
         {
-            ENGINE_CORE_ERROR("Failed to open scene file '{0}': {1}", filepath, e.what());
+            ENGINE_CORE_ERROR("Failed to open scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath), e.what());
             return false;
         }
 
@@ -993,3 +1002,5 @@ namespace Engine
     }
 
 } // namespace Engine
+
+
