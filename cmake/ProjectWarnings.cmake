@@ -1,0 +1,23 @@
+include_guard(GLOBAL)
+
+function(engine_apply_warnings target)
+    if(NOT TARGET ${target})
+        message(FATAL_ERROR "engine_apply_warnings: target '${target}' does not exist")
+    endif()
+
+    if(NOT ENGINE_ENABLE_STRICT_WARNINGS)
+        return()
+    endif()
+
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+        if(ENGINE_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        if(ENGINE_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    endif()
+endfunction()

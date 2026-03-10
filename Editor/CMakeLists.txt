@@ -31,3 +31,7 @@ target_link_libraries(Editor PRIVATE Engine)
 target_include_directories(Editor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+engine_apply_warnings(Editor)
+engine_apply_sanitizers(Editor)
+
