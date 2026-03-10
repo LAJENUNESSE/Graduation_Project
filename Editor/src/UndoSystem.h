@@ -30,7 +30,8 @@ namespace Engine
     public:
         static constexpr size_t MaxHistory = 100;
 
-        void PushCommand(Ref<ICommand> cmd);
+        void ExecuteAndPushCommand(Ref<ICommand> cmd);
+        void PushExecutedCommand(Ref<ICommand> cmd);
 
         void UndoCommand();
         void RedoCommand();
@@ -45,6 +46,8 @@ namespace Engine
         void Clear();
 
     private:
+        void PushUndoEntry(Ref<ICommand> cmd);
+
         std::vector<Ref<ICommand>> m_UndoStack;
         std::vector<Ref<ICommand>> m_RedoStack;
     };
