@@ -12,17 +12,28 @@
 #include "Reflection/AutoInspector.h"
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptRegistry.h"
+#include "UndoSystem.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <cmath>
 #include <filesystem>
 
 namespace Engine
 {
     namespace
     {
+        constexpr float kVec3ControlEpsilon = 0.0001f;
+
+        bool AreVec3Equal(const glm::vec3& lhs, const glm::vec3& rhs)
+        {
+            return std::abs(lhs.x - rhs.x) <= kVec3ControlEpsilon &&
+                   std::abs(lhs.y - rhs.y) <= kVec3ControlEpsilon &&
+                   std::abs(lhs.z - rhs.z) <= kVec3ControlEpsilon;
+        }
+
         bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel, std::string& outPath)
         {
             std::string selectedPath = FileDialogs::OpenFile(filter, description);
@@ -49,23 +60,23 @@ namespace Engine
             return;
 
         auto& component = entity.GetComponent<T>();
+        const int componentID = static_cast<int>(typeid(T).hash_code());
+        ImGui::PushID(componentID);
+
         ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
         float lineHeight = ImGui::GetFrameHeight();
         ImGui::Separator();
-        bool open = ImGui::TreeNodeEx(reinterpret_cast<void*>(typeid(T).hash_code()), treeNodeFlags, "%s",
-                                      name.c_str());
+        bool open = ImGui::TreeNodeEx("ComponentHeader", treeNodeFlags, "%s", name.c_str());
         ImGui::PopStyleVar();
 
         bool removeComponent = false;
         if (removable)
         {
             ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
-            if (ImGui::Button("+", ImVec2{lineHeight, lineHeight}))
-            {
+            if (ImGui::Button("+##ComponentMenu", ImVec2{lineHeight, lineHeight}))
                 ImGui::OpenPopup("ComponentSettings");
-            }
 
             if (ImGui::BeginPopup("ComponentSettings"))
             {
@@ -83,73 +94,6 @@ namespace Engine
 
         if (removeComponent)
             entity.RemoveComponent<T>();
-    }
-
-    void PropertiesPanel::DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue,
-                                          float columnWidth)
-    {
-        ImGuiIO& io = ImGui::GetIO();
-        auto boldFont = io.Fonts->Fonts[0]; // Default font (bold can be added later)
-
-        ImGui::PushID(label.c_str());
-
-        ImGui::Columns(2);
-        ImGui::SetColumnWidth(0, columnWidth);
-        ImGui::Text("%s", label.c_str());
-        ImGui::NextColumn();
-
-        ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
-
-        float lineHeight = ImGui::GetFrameHeight();
-        ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
-
-        // X
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.9f, 0.2f, 0.2f, 1.0f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
-        ImGui::PushFont(boldFont);
-        if (ImGui::Button("X", buttonSize))
-            values.x = resetValue;
-        ImGui::PopFont();
-        ImGui::PopStyleColor(3);
-
-        ImGui::SameLine();
-        ImGui::DragFloat("##X", &values.x, 0.1f, 0.0f, 0.0f, "%.2f");
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
-
-        // Y
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.3f, 0.8f, 0.3f, 1.0f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
-        ImGui::PushFont(boldFont);
-        if (ImGui::Button("Y", buttonSize))
-            values.y = resetValue;
-        ImGui::PopFont();
-        ImGui::PopStyleColor(3);
-
-        ImGui::SameLine();
-        ImGui::DragFloat("##Y", &values.y, 0.1f, 0.0f, 0.0f, "%.2f");
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
-
-        // Z
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.1f, 0.25f, 0.8f, 1.0f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f, 0.35f, 0.9f, 1.0f});
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.1f, 0.25f, 0.8f, 1.0f});
-        ImGui::PushFont(boldFont);
-        if (ImGui::Button("Z", buttonSize))
-            values.z = resetValue;
-        ImGui::PopFont();
-        ImGui::PopStyleColor(3);
-
-        ImGui::SameLine();
-        ImGui::DragFloat("##Z", &values.z, 0.1f, 0.0f, 0.0f, "%.2f");
-        ImGui::PopItemWidth();
-
-        ImGui::PopStyleVar();
-        ImGui::Columns(1);
 
         ImGui::PopID();
     }
@@ -167,17 +111,18 @@ namespace Engine
             return;
 
         void* component = meta.Get(*scene, entityId);
+        ImGui::PushID(meta.TypeName);
         ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
         float lineHeight = ImGui::GetFrameHeight();
         ImGui::Separator();
-        bool open = ImGui::TreeNodeEx(meta.TypeName, treeNodeFlags, "%s", name.c_str());
+        bool open = ImGui::TreeNodeEx("ComponentHeader", treeNodeFlags, "%s", name.c_str());
         ImGui::PopStyleVar();
 
         bool removeComponent = false;
         ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
-        if (ImGui::Button("+", ImVec2{lineHeight, lineHeight}))
+        if (ImGui::Button("+##ComponentMenu", ImVec2{lineHeight, lineHeight}))
             ImGui::OpenPopup("ComponentSettings");
 
         if (ImGui::BeginPopup("ComponentSettings"))
@@ -195,15 +140,119 @@ namespace Engine
 
         if (removeComponent)
             meta.Remove(*scene, entityId);
+
+        ImGui::PopID();
     }
 
+    PropertiesPanel::Vec3ControlEditState PropertiesPanel::DrawVec3Control(const std::string& label, glm::vec3& values,
+                                                                           float resetValue, float columnWidth)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        auto boldFont = io.Fonts->Fonts[0];
+        Vec3ControlEditState state;
+
+        ImGui::PushID(label.c_str());
+
+        ImGui::Columns(2);
+        ImGui::SetColumnWidth(0, columnWidth);
+        ImGui::Text("%s", label.c_str());
+        ImGui::NextColumn();
+
+        ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
+
+        float lineHeight = ImGui::GetFrameHeight();
+        ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.9f, 0.2f, 0.2f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
+        ImGui::PushFont(boldFont);
+        if (ImGui::Button("X", buttonSize))
+        {
+            values.x = resetValue;
+            state.ValueChanged = true;
+            state.EditStarted = true;
+            state.EditFinished = true;
+        }
+        ImGui::PopFont();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        state.ValueChanged = ImGui::DragFloat("##X", &values.x, 0.1f, 0.0f, 0.0f, "%.2f") || state.ValueChanged;
+        state.EditStarted = ImGui::IsItemActivated() || state.EditStarted;
+        state.EditFinished = ImGui::IsItemDeactivatedAfterEdit() || state.EditFinished;
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.3f, 0.8f, 0.3f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
+        ImGui::PushFont(boldFont);
+        if (ImGui::Button("Y", buttonSize))
+        {
+            values.y = resetValue;
+            state.ValueChanged = true;
+            state.EditStarted = true;
+            state.EditFinished = true;
+        }
+        ImGui::PopFont();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        state.ValueChanged = ImGui::DragFloat("##Y", &values.y, 0.1f, 0.0f, 0.0f, "%.2f") || state.ValueChanged;
+        state.EditStarted = ImGui::IsItemActivated() || state.EditStarted;
+        state.EditFinished = ImGui::IsItemDeactivatedAfterEdit() || state.EditFinished;
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.1f, 0.25f, 0.8f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f, 0.35f, 0.9f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.1f, 0.25f, 0.8f, 1.0f});
+        ImGui::PushFont(boldFont);
+        if (ImGui::Button("Z", buttonSize))
+        {
+            values.z = resetValue;
+            state.ValueChanged = true;
+            state.EditStarted = true;
+            state.EditFinished = true;
+        }
+        ImGui::PopFont();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        state.ValueChanged = ImGui::DragFloat("##Z", &values.z, 0.1f, 0.0f, 0.0f, "%.2f") || state.ValueChanged;
+        state.EditStarted = ImGui::IsItemActivated() || state.EditStarted;
+        state.EditFinished = ImGui::IsItemDeactivatedAfterEdit() || state.EditFinished;
+        ImGui::PopItemWidth();
+
+        ImGui::PopStyleVar();
+        ImGui::Columns(1);
+
+        ImGui::PopID();
+        return state;
+    }
     void PropertiesPanel::OnImGuiRender(Entity selectedEntity)
     {
         ImGui::Begin("属性");
 
-        if (selectedEntity)
+        const bool hasValidSelection = selectedEntity && selectedEntity.GetScene() &&
+            selectedEntity.GetScene()->GetRegistry().valid(static_cast<entt::entity>(selectedEntity));
+
+        if (hasValidSelection)
         {
+            if (m_TransformEditSession.Active &&
+                (static_cast<uint64_t>(m_TransformEditSession.EntityID) != static_cast<uint64_t>(selectedEntity.GetUUID()) ||
+                 m_TransformEditSession.SceneContext != selectedEntity.GetScene()))
+            {
+                m_TransformEditSession = {};
+            }
+
             DrawComponents(selectedEntity);
+        }
+        else
+        {
+            m_TransformEditSession = {};
         }
 
         ImGui::End();
@@ -327,13 +376,56 @@ namespace Engine
         ImGui::PopItemWidth();
 
         // Transform
-        DrawComponent<TransformComponent>("变换", entity, [this](auto& component)
+        const entt::entity entityHandle = static_cast<entt::entity>(entity);
+        const uint64_t entityIDValue = static_cast<uint64_t>(entity.GetUUID());
+        Scene* const entityScene = entity.GetScene();
+
+        DrawComponent<TransformComponent>("变换", entity, [this, entityHandle, entityIDValue, entityScene](auto& component)
         {
-            DrawVec3Control("位移", component.Translation);
+            const glm::vec3 oldTranslation = component.Translation;
             glm::vec3 rotation = glm::degrees(component.Rotation);
-            DrawVec3Control("旋转", rotation);
+            const glm::vec3 oldRotation = component.Rotation;
+            const glm::vec3 oldScale = component.Scale;
+
+            const Vec3ControlEditState translationState = DrawVec3Control("位移", component.Translation);
+            const Vec3ControlEditState rotationState = DrawVec3Control("旋转", rotation);
             component.Rotation = glm::radians(rotation);
-            DrawVec3Control("缩放", component.Scale, 1.0f);
+            const Vec3ControlEditState scaleState = DrawVec3Control("缩放", component.Scale, 1.0f);
+
+            const bool editStarted = translationState.EditStarted || rotationState.EditStarted || scaleState.EditStarted;
+            const bool editFinished = translationState.EditFinished || rotationState.EditFinished || scaleState.EditFinished;
+
+            if (editStarted && !m_TransformEditSession.Active)
+            {
+                m_TransformEditSession.Active = true;
+                m_TransformEditSession.EntityID = UUID(entityIDValue);
+                m_TransformEditSession.SceneContext = entityScene;
+                m_TransformEditSession.Translation = oldTranslation;
+                m_TransformEditSession.Rotation = oldRotation;
+                m_TransformEditSession.Scale = oldScale;
+            }
+
+            if (editFinished && m_TransformEditSession.Active)
+            {
+                if (m_CommandHistory &&
+                    static_cast<uint64_t>(m_TransformEditSession.EntityID) == entityIDValue &&
+                    m_TransformEditSession.SceneContext == entityScene &&
+                    (!AreVec3Equal(m_TransformEditSession.Translation, component.Translation) ||
+                     !AreVec3Equal(m_TransformEditSession.Rotation, component.Rotation) ||
+                     !AreVec3Equal(m_TransformEditSession.Scale, component.Scale)))
+                {
+                    m_CommandHistory->PushExecutedCommand(CreateRef<TransformChangeCommand>(
+                        Entity(entityHandle, entityScene),
+                        m_TransformEditSession.Translation,
+                        m_TransformEditSession.Rotation,
+                        m_TransformEditSession.Scale,
+                        component.Translation,
+                        component.Rotation,
+                        component.Scale));
+                }
+
+                m_TransformEditSession = {};
+            }
         }, false);
 
         // Camera
@@ -482,3 +574,9 @@ namespace Engine
     }
 
 } // namespace Engine
+
+
+
+
+
+

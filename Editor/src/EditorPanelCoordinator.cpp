@@ -28,6 +28,9 @@ namespace Engine
         m_AssetBrowserPanel = assetBrowserPanel;
         m_RenderSettingsPanel = renderSettingsPanel;
         m_CommandHistory = commandHistory;
+
+        if (m_PropertiesPanel)
+            m_PropertiesPanel->SetCommandHistory(commandHistory);
     }
 
     void EditorPanelCoordinator::ApplyScene(const Ref<Scene>& scene, bool clearCommandHistory)
@@ -133,3 +136,6 @@ namespace Engine
     }
 
 } // namespace Engine
+
+
+
