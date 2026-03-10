@@ -33,9 +33,25 @@ namespace Engine
 
     // ==================== CommandHistory ====================
 
-    void CommandHistory::PushCommand(Ref<ICommand> cmd)
+    void CommandHistory::ExecuteAndPushCommand(Ref<ICommand> cmd)
     {
+        if (!cmd)
+            return;
+
         cmd->Execute();
+        PushUndoEntry(std::move(cmd));
+    }
+
+    void CommandHistory::PushExecutedCommand(Ref<ICommand> cmd)
+    {
+        if (!cmd)
+            return;
+
+        PushUndoEntry(std::move(cmd));
+    }
+
+    void CommandHistory::PushUndoEntry(Ref<ICommand> cmd)
+    {
         m_UndoStack.push_back(std::move(cmd));
 
         // 清空 redo 栈（新操作后旧的 redo 分支作废）

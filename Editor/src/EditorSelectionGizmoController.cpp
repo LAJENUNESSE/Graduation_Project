@@ -219,7 +219,7 @@ namespace Engine
                     }
 
                     if (!entries.empty())
-                        m_CommandHistory->PushCommand(
+                        m_CommandHistory->PushExecutedCommand(
                             CreateRef<MultiTransformChangeCommand>(activeScene, std::move(entries)));
                 }
                 else
@@ -228,7 +228,7 @@ namespace Engine
                         selectedEntity,
                         m_GizmoStartTranslation, m_GizmoStartRotation, m_GizmoStartScale,
                         tc.Translation, tc.Rotation, tc.Scale);
-                    m_CommandHistory->PushCommand(cmd);
+                    m_CommandHistory->PushExecutedCommand(cmd);
                 }
 
                 m_GizmoSelectionStartStates.clear();

@@ -34,6 +34,8 @@ namespace Engine
     private:
         void DrawEntityNode(Entity entity, Entity& entityToDelete);
         void SelectEntity(Entity entity, bool ctrlHeld);
+        void PruneInvalidSelection();
+        bool IsEntityValid(Entity entity) const;
 
     private:
         Ref<Scene> m_Context;
@@ -42,3 +44,5 @@ namespace Engine
     };
 
 } // namespace Engine
+
+

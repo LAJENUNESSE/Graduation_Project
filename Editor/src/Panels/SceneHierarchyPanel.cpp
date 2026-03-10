@@ -24,7 +24,11 @@ namespace Engine
 
     Entity SceneHierarchyPanel::GetSelectedEntity() const
     {
-        return m_SelectedEntities.empty() ? Entity{} : m_SelectedEntities.front();
+        if (m_SelectedEntities.empty())
+            return {};
+
+        Entity entity = m_SelectedEntities.front();
+        return IsEntityValid(entity) ? entity : Entity{};
     }
 
     void SceneHierarchyPanel::SetSelectedEntity(Entity entity)
@@ -76,6 +80,8 @@ namespace Engine
 
         if (m_Context)
         {
+            PruneInvalidSelection();
+
             Entity entityToDelete;
 
             // 仅遍历根实体（无父节点的实体）
@@ -97,7 +103,7 @@ namespace Engine
                 if (m_CommandHistory)
                 {
                     auto cmd = CreateRef<EntityDeleteCommand>(m_Context, entityToDelete);
-                    m_CommandHistory->PushCommand(cmd);
+                    m_CommandHistory->ExecuteAndPushCommand(cmd);
                 }
                 else
                 {
@@ -125,7 +131,7 @@ namespace Engine
                             if (m_CommandHistory)
                             {
                                 auto cmd = CreateRef<ParentChangeCommand>(m_Context, droppedEntity, Entity{});
-                                m_CommandHistory->PushCommand(cmd);
+                                m_CommandHistory->ExecuteAndPushCommand(cmd);
                             }
                             else
                             {
@@ -144,7 +150,7 @@ namespace Engine
                         if (m_CommandHistory)
                         {
                             auto cmd = CreateRef<EntityCreateCommand>(m_Context, "\xe7\xa9\xba\xe5\xae\x9e\xe4\xbd\x93");
-                            m_CommandHistory->PushCommand(cmd);
+                            m_CommandHistory->ExecuteAndPushCommand(cmd);
                         }
                         else
                         {
@@ -171,7 +177,7 @@ namespace Engine
                         if (m_CommandHistory)
                         {
                             auto cmd = CreateRef<EntityDeleteCommand>(m_Context, e);
-                            m_CommandHistory->PushCommand(cmd);
+                            m_CommandHistory->ExecuteAndPushCommand(cmd);
                         }
                         else
                         {
@@ -238,7 +244,7 @@ namespace Engine
                     if (m_CommandHistory)
                     {
                         auto cmd = CreateRef<ParentChangeCommand>(m_Context, droppedEntity, entity);
-                        m_CommandHistory->PushCommand(cmd);
+                        m_CommandHistory->ExecuteAndPushCommand(cmd);
                     }
                     else
                     {
@@ -260,7 +266,7 @@ namespace Engine
                 if (m_CommandHistory)
                 {
                     auto cmd = CreateRef<ParentChangeCommand>(m_Context, entity, Entity{});
-                    m_CommandHistory->PushCommand(cmd);
+                    m_CommandHistory->ExecuteAndPushCommand(cmd);
                 }
                 else
                 {
@@ -290,4 +296,19 @@ namespace Engine
         }
     }
 
+
+    void SceneHierarchyPanel::PruneInvalidSelection()
+    {
+        m_SelectedEntities.erase(
+            std::remove_if(m_SelectedEntities.begin(), m_SelectedEntities.end(),
+                [this](const Entity& entity) { return !IsEntityValid(entity); }),
+            m_SelectedEntities.end());
+    }
+
+    bool SceneHierarchyPanel::IsEntityValid(Entity entity) const
+    {
+        return m_Context && entity && m_Context->GetRegistry().valid(static_cast<entt::entity>(entity));
+    }
 } // namespace Engine
+
+
