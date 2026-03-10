@@ -77,3 +77,14 @@ CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/ID
 - New components must be registered with the reflection system (macros in header, `REGISTER_COMPONENT_*` in a .cpp) to appear in the editor and serialize correctly
 - Platform-specific code lives in `Engine/Platform/` (currently only `OpenGL/`)
 - `Ref<T>` is `std::shared_ptr<T>`, `Scope<T>` is `std::unique_ptr<T>` (defined in `Core/Base.h`)
+
+## Development Workflow
+
+Always follow this workflow:
+
+1. Explore relevant files
+2. Plan the change
+3. Implement a small step
+4. Create snapshot
+5. Run tests
+6. Continue
