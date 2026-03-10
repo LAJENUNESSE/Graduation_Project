@@ -1,31 +1,33 @@
 #pragma once
 
 #include "Engine.h"
-#include "Scene/Scene.h"
-#include "Panels/SceneHierarchyPanel.h"
-#include "Panels/PropertiesPanel.h"
-#include "Panels/ConsolePanel.h"
-#include "Panels/AssetBrowserPanel.h"
-#include "Panels/RenderSettingsPanel.h"
-#include "UndoSystem.h"
 #include "Renderer/PostProcessing.h"
-#include "Renderer/SceneRenderer.h"
-#include "Physics/PhysicsDebugDraw.h"
-#include "EditorRenderController.h"
-#include "EditorSceneSession.h"
-#include "EditorPanelCoordinator.h"
-#include "EditorSelectionGizmoController.h"
-#include "EditorShell.h"
-#include "EditorViewportController.h"
 
 namespace Engine
 {
+    class Scene;
+    class SceneRenderer;
+    class PhysicsDebugDraw;
+    class SceneHierarchyPanel;
+    class PropertiesPanel;
+    class ConsolePanel;
+    class AssetBrowserPanel;
+    class RenderSettingsPanel;
+    class CommandHistory;
+    class EditorSceneSession;
+    class EditorPanelCoordinator;
+    class EditorSelectionGizmoController;
+    class EditorShell;
+    struct EditorShellActions;
+    struct EditorShellState;
+    class EditorViewportController;
+    class EditorRenderController;
 
     class EditorLayer : public Layer
     {
     public:
         EditorLayer();
-        ~EditorLayer() override = default;
+        ~EditorLayer() override;
 
         void OnAttach() override;
         void OnDetach() override;
@@ -53,27 +55,27 @@ namespace Engine
 
     private:
         Ref<Scene> m_ActiveScene;
-        EditorSceneSession m_SceneSession;
-        EditorPanelCoordinator m_PanelCoordinator;
-        EditorSelectionGizmoController m_SelectionGizmoController;
-        EditorShell m_EditorShell;
-        EditorViewportController m_ViewportController;
-        EditorRenderController m_RenderController;
+        Scope<EditorSceneSession> m_SceneSession;
+        Scope<EditorPanelCoordinator> m_PanelCoordinator;
+        Scope<EditorSelectionGizmoController> m_SelectionGizmoController;
+        Scope<EditorShell> m_EditorShell;
+        Scope<EditorViewportController> m_ViewportController;
+        Scope<EditorRenderController> m_RenderController;
 
-        SceneRenderer m_SceneRenderer;
-        PostProcessing m_PostProcessing;
+        Scope<SceneRenderer> m_SceneRenderer;
+        Scope<PostProcessing> m_PostProcessing;
         PostProcessingSettings m_PostProcessingSettings;
 
-        SceneHierarchyPanel m_HierarchyPanel;
-        PropertiesPanel m_PropertiesPanel;
-        ConsolePanel m_ConsolePanel;
-        AssetBrowserPanel m_AssetBrowserPanel;
-        RenderSettingsPanel m_RenderSettingsPanel;
+        Scope<SceneHierarchyPanel> m_HierarchyPanel;
+        Scope<PropertiesPanel> m_PropertiesPanel;
+        Scope<ConsolePanel> m_ConsolePanel;
+        Scope<AssetBrowserPanel> m_AssetBrowserPanel;
+        Scope<RenderSettingsPanel> m_RenderSettingsPanel;
 
-        CommandHistory m_CommandHistory;
+        Scope<CommandHistory> m_CommandHistory;
 
         bool m_ShowPhysicsColliders = false;
-        PhysicsDebugDraw m_PhysicsDebugDraw;
+        Scope<PhysicsDebugDraw> m_PhysicsDebugDraw;
     };
 
 } // namespace Engine

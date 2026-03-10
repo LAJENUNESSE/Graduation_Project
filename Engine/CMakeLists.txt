@@ -130,3 +130,7 @@ endif()
 target_precompile_headers(Engine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/engpch.h
 )
+
+engine_apply_warnings(Engine)
+engine_apply_sanitizers(Engine)
+
