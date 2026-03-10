@@ -21,6 +21,7 @@ option(ENGINE_ENABLE_STRICT_WARNINGS "Enable stricter warnings for project targe
 option(ENGINE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
+option(ENGINE_ENABLE_CUDA "Enable CUDA compute sidecar for particle system" OFF)
 
 add_subdirectory(vendor)
 add_subdirectory(Engine)

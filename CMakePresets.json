@@ -12,6 +12,18 @@
       }
     },
     {
+      "name": "vs2022-cuda",
+      "displayName": "VS 2022 + CUDA sidecar (vcpkg)",
+      "description": "Enables CUDA compute sidecar; requires NVIDIA CUDA Toolkit",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_CUDA_COMPILER": "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/bin/nvcc.exe",
+        "ENGINE_ENABLE_CUDA": "ON"
+      }
+    },
+    {
       "name": "clion",
       "displayName": "CLion (Ninja + vcpkg)",
       "description": "CLion 专用预设：Ninja 生成器 + vcpkg 工具链",

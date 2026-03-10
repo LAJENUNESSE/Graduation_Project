@@ -11,6 +11,12 @@
 #include <cstdlib>
 #include <cstring>
 
+#ifdef ENGINE_ENABLE_CUDA
+#include "Platform/CUDA/CudaGLInteropContext.h"
+#include "Platform/CUDA/CudaParticlePipeline.h"
+#include "Platform/CUDA/CudaParticleTypes.h"
+#endif
+
 namespace Engine
 {
 
@@ -53,6 +59,32 @@ namespace Engine
         uint32_t first;
         uint32_t baseInstance;
     };
+
+#ifdef ENGINE_ENABLE_CUDA
+    // 交叉验证 C++ 结构体与 CUDA 共享 POD 类型的内存布局一致性
+    static_assert(sizeof(GPUParticleData) == sizeof(CudaInterop::GPUParticle),
+                  "GPUParticleData / CudaInterop::GPUParticle size mismatch");
+    static_assert(sizeof(CounterData) == sizeof(CudaInterop::CounterData),
+                  "CounterData size mismatch");
+    static_assert(sizeof(IndirectDrawCommand) == sizeof(CudaInterop::IndirectDrawCommand),
+                  "IndirectDrawCommand size mismatch");
+
+    static_assert(offsetof(GPUParticleData, posAndLife)   == offsetof(CudaInterop::GPUParticle, posAndLife), "");
+    static_assert(offsetof(GPUParticleData, velAndMaxLife) == offsetof(CudaInterop::GPUParticle, velAndMaxLife), "");
+    static_assert(offsetof(GPUParticleData, startColor)   == offsetof(CudaInterop::GPUParticle, startColor), "");
+    static_assert(offsetof(GPUParticleData, endColor)     == offsetof(CudaInterop::GPUParticle, endColor), "");
+    static_assert(offsetof(GPUParticleData, params)       == offsetof(CudaInterop::GPUParticle, params), "");
+
+    static_assert(offsetof(CounterData, deadCount)  == offsetof(CudaInterop::CounterData, deadCount), "");
+    static_assert(offsetof(CounterData, aliveCount) == offsetof(CudaInterop::CounterData, aliveCount), "");
+    static_assert(offsetof(CounterData, emitCount)  == offsetof(CudaInterop::CounterData, emitCount), "");
+
+    // IndirectDrawCommand 字段名不同但 offset 必须匹配
+    static_assert(offsetof(IndirectDrawCommand, count)         == offsetof(CudaInterop::IndirectDrawCommand, vertexCount), "");
+    static_assert(offsetof(IndirectDrawCommand, instanceCount) == offsetof(CudaInterop::IndirectDrawCommand, instanceCount), "");
+    static_assert(offsetof(IndirectDrawCommand, first)         == offsetof(CudaInterop::IndirectDrawCommand, firstVertex), "");
+    static_assert(offsetof(IndirectDrawCommand, baseInstance)  == offsetof(CudaInterop::IndirectDrawCommand, baseInstance), "");
+#endif
 
     // Must match GPU GPURigidBody struct: 7 x vec4 = 112 bytes
     struct GPURigidBodyData
@@ -163,6 +195,41 @@ namespace Engine
         }
 
         m_Initialized = true;
+
+#ifdef ENGINE_ENABLE_CUDA
+        // ---- CUDA sidecar 初始化（一次性，失败后永久走 GL）----
+        if (!m_CudaInitAttempted)
+        {
+            m_CudaInitAttempted = true;
+            if (CudaGLInteropContext::ProbeDeviceMatch())
+            {
+                m_CudaInterop = CreateScope<CudaGLInteropContext>();
+                m_CudaSlotParticle  = m_CudaInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
+                m_CudaSlotDeadList  = m_CudaInterop->RegisterBuffer(m_DeadList->GetRendererID(), "DeadList");
+                m_CudaSlotAliveList = m_CudaInterop->RegisterBuffer(m_AliveList->GetRendererID(), "AliveList");
+                m_CudaSlotCounter   = m_CudaInterop->RegisterBuffer(m_CounterBuffer->GetRendererID(), "CounterBuffer");
+                m_CudaSlotIndirect  = m_CudaInterop->RegisterBuffer(m_IndirectArgs->GetRendererID(), "IndirectArgs");
+
+                if (m_CudaSlotParticle >= 0 && m_CudaSlotDeadList >= 0 &&
+                    m_CudaSlotAliveList >= 0 && m_CudaSlotCounter >= 0 &&
+                    m_CudaSlotIndirect >= 0)
+                {
+                    m_UseCudaPath = true;
+                    ENGINE_INFO("[Particle] CUDA compute sidecar activated ({0} buffers registered).",
+                                m_CudaInterop->GetSlotCount());
+                }
+                else
+                {
+                    ENGINE_WARN("[Particle] CUDA buffer registration partially failed; falling back to GL compute.");
+                    m_CudaInterop.reset();
+                }
+            }
+            else
+            {
+                ENGINE_INFO("[Particle] No CUDA-capable device matching GL context; using GL compute path.");
+            }
+        }
+#endif
     }
 
     void ParticleSystemGPU::InitSPH(float smoothingRadius)
@@ -271,6 +338,88 @@ namespace Engine
 
         m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8);  // emitCount
 
+#ifdef ENGINE_ENABLE_CUDA
+        // ---- CUDA compute sidecar path ----
+        bool cudaSucceeded = false;
+        if (m_UseCudaPath && !sphEnabled)
+        {
+            if (m_CudaInterop->MapAll())
+            {
+                void* stream = m_CudaInterop->GetStream();
+
+                // Emit
+                if (emitCount > 0)
+                {
+                    CudaInterop::EmitParams ep{};
+                    ep.emitterPos[0]    = emitterPos.x;
+                    ep.emitterPos[1]    = emitterPos.y;
+                    ep.emitterPos[2]    = emitterPos.z;
+                    ep.emitDirection[0] = emitter.EmitDirection.x;
+                    ep.emitDirection[1] = emitter.EmitDirection.y;
+                    ep.emitDirection[2] = emitter.EmitDirection.z;
+                    ep.emitAngle        = glm::radians(emitter.EmitAngle);
+                    ep.lifeMin          = emitter.LifeMin;
+                    ep.lifeMax          = emitter.LifeMax;
+                    ep.speedMin         = emitter.SpeedMin;
+                    ep.speedMax         = emitter.SpeedMax;
+                    ep.sizeStart        = emitter.SizeStart;
+                    ep.sizeEnd          = emitter.SizeEnd;
+                    ep.startColor[0]    = emitter.ColorStart.r;
+                    ep.startColor[1]    = emitter.ColorStart.g;
+                    ep.startColor[2]    = emitter.ColorStart.b;
+                    ep.startColor[3]    = emitter.ColorStart.a;
+                    ep.endColor[0]      = emitter.ColorEnd.r;
+                    ep.endColor[1]      = emitter.ColorEnd.g;
+                    ep.endColor[2]      = emitter.ColorEnd.b;
+                    ep.endColor[3]      = emitter.ColorEnd.a;
+                    m_TotalTime        += dt;
+                    ep.time             = m_TotalTime;
+                    ep.maxParticles     = m_MaxParticles;
+                    ep.emitCount        = emitCount;
+
+                    CudaInterop::LaunchEmit(
+                        m_CudaInterop->GetMappedPointer(m_CudaSlotParticle),
+                        m_CudaInterop->GetMappedPointer(m_CudaSlotDeadList),
+                        m_CudaInterop->GetMappedPointer(m_CudaSlotCounter),
+                        ep, stream);
+                }
+
+                // Simulate
+                {
+                    CudaInterop::SimulateParams sp{};
+                    sp.deltaTime    = std::min(dt, 0.05f);
+                    sp.gravity[0]   = emitter.Gravity.x;
+                    sp.gravity[1]   = emitter.Gravity.y;
+                    sp.gravity[2]   = emitter.Gravity.z;
+                    sp.damping      = emitter.Damping;
+                    sp.maxParticles = m_MaxParticles;
+
+                    CudaInterop::LaunchSimulate(
+                        m_CudaInterop->GetMappedPointer(m_CudaSlotParticle),
+                        m_CudaInterop->GetMappedPointer(m_CudaSlotDeadList),
+                        m_CudaInterop->GetMappedPointer(m_CudaSlotAliveList),
+                        m_CudaInterop->GetMappedPointer(m_CudaSlotCounter),
+                        sp, stream);
+                }
+
+                // Render Args
+                CudaInterop::LaunchRenderArgs(
+                    m_CudaInterop->GetMappedPointer(m_CudaSlotCounter),
+                    m_CudaInterop->GetMappedPointer(m_CudaSlotIndirect),
+                    stream);
+
+                m_CudaInterop->UnmapAll();
+                cudaSucceeded = true;
+            }
+            else
+            {
+                ENGINE_WARN("[Particle] CUDA MapAll failed; permanently falling back to GL compute.");
+                m_UseCudaPath = false;
+            }
+        }
+        if (!cudaSucceeded)
+#endif
+        { // GL Compute path
         // Bind all buffers
         m_ParticleBuffer->Bind(0);
         m_DeadList->Bind(1);
@@ -492,6 +641,7 @@ namespace Engine
         m_RenderArgsShader->Bind();
         RenderCommand::DispatchCompute(1);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
+        } // GL Compute path
 
         // ---- 异步回读：始终执行，用于 simulate 按存活数 dispatch + SPH + direct-draw ----
         {
