@@ -1,7 +1,9 @@
 #pragma once
 
-#include "Engine.h"
-#include "Renderer/PostProcessing.h"
+#include "Core/Base.h"
+#include "Core/Layer.h"
+
+#include <string>
 
 namespace Engine
 {
@@ -22,6 +24,10 @@ namespace Engine
     struct EditorShellState;
     class EditorViewportController;
     class EditorRenderController;
+    class PostProcessing;
+    struct PostProcessingSettings;
+    class KeyPressedEvent;
+    class MouseButtonPressedEvent;
 
     class EditorLayer : public Layer
     {
@@ -64,7 +70,7 @@ namespace Engine
 
         Scope<SceneRenderer> m_SceneRenderer;
         Scope<PostProcessing> m_PostProcessing;
-        PostProcessingSettings m_PostProcessingSettings;
+        Scope<PostProcessingSettings> m_PostProcessingSettings;
 
         Scope<SceneHierarchyPanel> m_HierarchyPanel;
         Scope<PropertiesPanel> m_PropertiesPanel;
