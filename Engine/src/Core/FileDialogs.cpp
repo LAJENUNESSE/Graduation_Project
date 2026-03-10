@@ -32,6 +32,9 @@ namespace Engine
 
     std::string FileDialogs::OpenFile(const char* filter, const char* description)
     {
+#ifdef _WIN32
+        tinyfd_winUtf8 = 1;
+#endif
         std::vector<std::string> storage;
         auto patterns = SplitFilter(filter, storage);
 
@@ -49,6 +52,9 @@ namespace Engine
 
     std::string FileDialogs::SaveFile(const char* filter, const char* description)
     {
+#ifdef _WIN32
+        tinyfd_winUtf8 = 1;
+#endif
         std::vector<std::string> storage;
         auto patterns = SplitFilter(filter, storage);
 
@@ -64,3 +70,4 @@ namespace Engine
     }
 
 } // namespace Engine
+

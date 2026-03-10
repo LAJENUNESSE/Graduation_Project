@@ -15,6 +15,54 @@ namespace Engine::PathUtils
     {
         std::filesystem::path s_ProjectRoot;
 
+#ifdef _WIN32
+        std::wstring Utf8ToWide(const std::string& utf8)
+        {
+            if (utf8.empty())
+                return {};
+
+            const int utf8Size = static_cast<int>(utf8.size());
+            int wideSize = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.c_str(), utf8Size, nullptr, 0);
+            UINT codePage = CP_UTF8;
+            DWORD flags = MB_ERR_INVALID_CHARS;
+
+            if (wideSize <= 0)
+            {
+                codePage = CP_ACP;
+                flags = 0;
+                wideSize = MultiByteToWideChar(codePage, flags, utf8.c_str(), utf8Size, nullptr, 0);
+            }
+
+            if (wideSize <= 0)
+                return {};
+
+            std::wstring wide(static_cast<size_t>(wideSize), L'\0');
+            const int converted = MultiByteToWideChar(codePage, flags, utf8.c_str(), utf8Size, wide.data(), wideSize);
+            if (converted <= 0)
+                return {};
+
+            return wide;
+        }
+
+        std::string WideToUtf8(const std::wstring& wide)
+        {
+            if (wide.empty())
+                return {};
+
+            const int wideSize = static_cast<int>(wide.size());
+            int utf8Size = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideSize, nullptr, 0, nullptr, nullptr);
+            if (utf8Size <= 0)
+                return {};
+
+            std::string utf8(static_cast<size_t>(utf8Size), '\0');
+            const int converted = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideSize, utf8.data(), utf8Size, nullptr, nullptr);
+            if (converted <= 0)
+                return {};
+
+            return utf8;
+        }
+#endif
+
         std::filesystem::path NormalizePath(const std::filesystem::path& path)
         {
             std::error_code ec;
@@ -45,13 +93,32 @@ namespace Engine::PathUtils
         return result;
     }
 
+    std::filesystem::path PathFromUtf8(const std::string& path)
+    {
+#ifdef _WIN32
+        const std::wstring wide = Utf8ToWide(path);
+        return wide.empty() ? std::filesystem::path() : std::filesystem::path(wide);
+#else
+        return std::filesystem::path(path);
+#endif
+    }
+
+    std::string PathToUtf8String(const std::filesystem::path& path)
+    {
+#ifdef _WIN32
+        return NormalizeSeparators(WideToUtf8(path.wstring()));
+#else
+        return NormalizeSeparators(path.string());
+#endif
+    }
+
     bool IsSafeAssetPath(const std::string& path)
     {
         if (path.empty())
             return false;
 
         std::string normalized = NormalizeSeparators(path);
-        std::filesystem::path filePath(normalized);
+        std::filesystem::path filePath = PathFromUtf8(normalized);
         if (filePath.is_absolute())
             return false;
         if (normalized.find("..") != std::string::npos)
@@ -69,7 +136,7 @@ namespace Engine::PathUtils
     {
         s_ProjectRoot = NormalizePath(projectRoot);
         if (Log::IsInitialized())
-            ENGINE_CORE_INFO("[ProjectPaths] Project root = {0}", s_ProjectRoot.string());
+            ENGINE_CORE_INFO("[ProjectPaths] Project root = {0}", PathToUtf8String(s_ProjectRoot));
     }
 
     bool DiscoverProjectRoot(const std::filesystem::path& startDirectory)
@@ -132,11 +199,18 @@ namespace Engine::PathUtils
         return NormalizePath(GetProjectRoot() / path);
     }
 
+    std::filesystem::path ResolvePath(const std::string& path)
+    {
+        if (path.empty())
+            return {};
+        return ResolvePath(PathFromUtf8(path));
+    }
+
     std::string ResolvePathString(const std::string& path)
     {
         if (path.empty() || IsLikelyURL(path) || path.rfind("builtin:", 0) == 0)
             return path;
-        return ResolvePath(path).string();
+        return PathToUtf8String(ResolvePath(path));
     }
 
     bool TryToProjectRelative(const std::filesystem::path& path, std::string& outPath)
@@ -150,7 +224,7 @@ namespace Engine::PathUtils
         if (ec)
             return false;
 
-        std::string normalized = NormalizeSeparators(relative.string());
+        std::string normalized = NormalizeSeparators(PathToUtf8String(relative));
         if (!IsSafeAssetPath(normalized))
             return false;
 
@@ -163,12 +237,7 @@ namespace Engine::PathUtils
         std::string relativePath;
         if (TryToProjectRelative(path, relativePath))
             return relativePath;
-        return NormalizeSeparators(ResolvePath(path).string());
+        return PathToUtf8String(ResolvePath(path));
     }
 
 } // namespace Engine::PathUtils
-
-
-
-
-

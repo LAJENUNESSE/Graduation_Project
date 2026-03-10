@@ -7,6 +7,8 @@ namespace Engine::PathUtils
 {
 
     std::string NormalizeSeparators(const std::string& path);
+    std::filesystem::path PathFromUtf8(const std::string& path);
+    std::string PathToUtf8String(const std::filesystem::path& path);
 
     bool IsSafeAssetPath(const std::string& path);
     bool IsLikelyURL(const std::string& path);
@@ -21,6 +23,7 @@ namespace Engine::PathUtils
     std::filesystem::path GetEditorAssetRoot();
 
     std::filesystem::path ResolvePath(const std::filesystem::path& path);
+    std::filesystem::path ResolvePath(const std::string& path);
     std::string ResolvePathString(const std::string& path);
 
     bool TryToProjectRelative(const std::filesystem::path& path, std::string& outPath);
