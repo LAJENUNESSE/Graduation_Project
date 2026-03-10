@@ -16,6 +16,10 @@
 - 常用构建（Ninja）：
   - 配置：`cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo`
   - 构建 Editor：`cmake --build build --target Editor`
+- 已于 `2026-03-10` 验证当前 Windows 环境：Visual Studio Build Tools 2022 17.14、MSVC 14.44.35207、VS 自带 `CMake 3.31.6`、`Ninja 1.12.1`、`vcpkg` 工具链、`CUDA Toolkit 13.1`（`nvcc` 可用）。
+- 当前普通 PowerShell 未将 `cmake`、`ninja`、`cl` 加入 `PATH`；命令行构建优先使用 Developer PowerShell，或显式调用 VS Build Tools 自带工具。
+- 已验证现有 `build/` 目录可成功执行：`cmake --build build --target Editor --config RelWithDebInfo`。
+- 仓库当前未在顶层 CMake 启用 `CUDA` 语言，也未发现 `.cu` / `.cuh` / `find_package(CUDAToolkit)` 现有接入；不要假定项目已默认支持 CUDA。
 - Windows + MSVC 保持 `/utf-8` 生效（如 CMake 已统一处理，不重复改动）。
 - `engpch.h` 由构建系统注入，除非必要不要手动补 include。
 
@@ -23,6 +27,7 @@
 
 - `Ref<T>` = `std::shared_ptr<T>`，`Scope<T>` = `std::unique_ptr<T>`（见 `Core/Base.h`）。
 - 平台相关实现只放在 `Engine/Platform/`；`Engine/src/` 通过抽象接口访问。
+- 如新增 CUDA 相关实现，统一放在 `Engine/Platform/CUDA/` 或同级平台目录；`Engine/src/` 不直接依赖 `cuda_runtime.h`。
 - 资源路径按项目根目录解析（如 `assets/shaders/PBR.glsl`）。
 
 ## 4. Scene / ECS / Reflection
@@ -38,6 +43,9 @@
 
 - Shader 文件使用单文件 `#type` 分段，且 `#type` 必须在 `#version` 之前。
 - 渲染 Shader 使用 GLSL 330；Compute Shader 使用 430+。
+- 当前 GPU 计算主路径仍是 OpenGL Compute Shader；只有在性能或能力明确不足时再引入 CUDA 分支，避免无必要地长期维护两套实现。
+- 如后续引入 CUDA，优先以独立 target 方式接入 `CUDAToolkit`；仅在确需编译 `.cu` 时启用 CUDA 语言，不要把 CUDA 编译/链接选项扩散到全部目标。
+- 如涉及 CUDA / OpenGL 互操作，必须明确资源所有权、映射/解绑顺序与同步点，避免跨 API 读写竞争。
 - 顶点布局约定：`location 0/1/2/3 = position/normal/texcoord/tangent`。
 - Uniform 名称与 C++ 设置端保持完全一致（区分大小写）。
 - Compute 流程保证：
