@@ -6,10 +6,10 @@
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Systems/ShadowSystem.h"
 
-#include <glm/glm.hpp>
 #include <entt/entt.hpp>
-#include <unordered_map>
+#include <glm/glm.hpp>
 #include <string>
+#include <unordered_map>
 
 namespace Engine
 {
@@ -21,9 +21,8 @@ namespace Engine
     public:
         void Init();
         void UpdateTerrainMeshes(entt::registry& reg);
-        void Render(entt::registry& reg, const EditorCamera& camera,
-                    const LightEnvironment& lights, const ShadowData& shadow,
-                    const ShadowSettings& shadowSettings);
+        void Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
+                    const ShadowData& shadow, const ShadowSettings& shadowSettings);
         void RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader);
 
     private:

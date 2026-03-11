@@ -1,5 +1,5 @@
-#include "engpch.h"
 #include "Platform/OpenGL/OpenGLFramebuffer.h"
+#include "engpch.h"
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
@@ -61,8 +61,7 @@ namespace Engine
 
     } // namespace Utils
 
-    OpenGLFramebuffer::OpenGLFramebuffer(const FramebufferSpecification& spec)
-        : m_Specification(spec)
+    OpenGLFramebuffer::OpenGLFramebuffer(const FramebufferSpecification& spec) : m_Specification(spec)
     {
         for (auto& s : m_Specification.Attachments.Attachments)
         {
@@ -134,8 +133,7 @@ namespace Engine
             if (!m_ColorAttachmentSpecifications.empty())
             {
                 m_ColorAttachments.resize(m_ColorAttachmentSpecifications.size());
-                Utils::CreateTextures(m_ColorAttachments.data(),
-                                      static_cast<uint32_t>(m_ColorAttachments.size()));
+                Utils::CreateTextures(m_ColorAttachments.data(), static_cast<uint32_t>(m_ColorAttachments.size()));
 
                 for (size_t i = 0; i < m_ColorAttachments.size(); i++)
                 {
@@ -184,8 +182,8 @@ namespace Engine
                 {
                     glGenTextures(1, &m_DepthAttachment);
                     glBindTexture(GL_TEXTURE_2D, m_DepthAttachment);
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, m_Specification.Width,
-                                 m_Specification.Height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, m_Specification.Width, m_Specification.Height,
+                                 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -234,13 +232,12 @@ namespace Engine
             // Depth-stencil renderbuffer
             glGenRenderbuffers(1, &m_DepthAttachment);
             glBindRenderbuffer(GL_RENDERBUFFER, m_DepthAttachment);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_Specification.Width,
-                                  m_Specification.Height);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_Specification.Width, m_Specification.Height);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_DepthAttachment);
         }
 
         ENGINE_CORE_RELEASE_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
-                           "Framebuffer is incomplete!");
+                                   "Framebuffer is incomplete!");
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -263,21 +260,20 @@ namespace Engine
             // MSAA color renderbuffer
             glGenRenderbuffers(1, &m_MSAAColorRenderbuffer);
             glBindRenderbuffer(GL_RENDERBUFFER, m_MSAAColorRenderbuffer);
-            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, msaaInternalFormat,
-                                             m_Specification.Width, m_Specification.Height);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                      GL_RENDERBUFFER, m_MSAAColorRenderbuffer);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, msaaInternalFormat, m_Specification.Width,
+                                             m_Specification.Height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, m_MSAAColorRenderbuffer);
 
             // MSAA depth renderbuffer
             glGenRenderbuffers(1, &m_MSAADepthRenderbuffer);
             glBindRenderbuffer(GL_RENDERBUFFER, m_MSAADepthRenderbuffer);
-            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8,
-                                             m_Specification.Width, m_Specification.Height);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
-                                      GL_RENDERBUFFER, m_MSAADepthRenderbuffer);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, m_Specification.Width,
+                                             m_Specification.Height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
+                                      m_MSAADepthRenderbuffer);
 
             ENGINE_CORE_RELEASE_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
-                               "MSAA Framebuffer is incomplete!");
+                                       "MSAA Framebuffer is incomplete!");
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }
@@ -319,9 +315,8 @@ namespace Engine
         GLenum drawBuf = GL_COLOR_ATTACHMENT0;
         glDrawBuffers(1, &drawBuf);
 
-        glBlitFramebuffer(0, 0, m_Specification.Width, m_Specification.Height,
-                          0, 0, m_Specification.Width, m_Specification.Height,
-                          GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(0, 0, m_Specification.Width, m_Specification.Height, 0, 0, m_Specification.Width,
+                          m_Specification.Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
         // Restore all draw buffers
         if (m_ColorAttachments.size() > 1)

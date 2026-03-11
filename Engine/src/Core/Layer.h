@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "Events/Event.h"
 #include "Core/Timestep.h"
+#include "Events/Event.h"
 
 namespace Engine
 {
@@ -11,10 +11,7 @@ namespace Engine
     class Layer
     {
     public:
-        Layer(const std::string& name = "Layer")
-            : m_DebugName(name)
-        {
-        }
+        Layer(const std::string& name = "Layer") : m_DebugName(name) {}
 
         virtual ~Layer() = default;
 

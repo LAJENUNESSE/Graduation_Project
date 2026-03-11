@@ -1,28 +1,28 @@
 #pragma once
 
+#include "Asset/AssetHandle.h"
 #include "Core/Base.h"
 #include "Core/Timestep.h"
+#include "Renderer/FluidRenderer.h"
+#include "Renderer/FluidSystemGPU.h"
+#include "Renderer/ParticleSystemGPU.h"
+#include "Renderer/PostProcessing.h"
+#include "Renderer/RenderQueue.h"
 #include "Renderer/Shader.h"
 #include "Renderer/Texture.h"
-#include "Renderer/RenderQueue.h"
-#include "Renderer/PostProcessing.h"
-#include "Renderer/ParticleSystemGPU.h"
-#include "Renderer/FluidSystemGPU.h"
-#include "Renderer/FluidRenderer.h"
-#include "Asset/AssetHandle.h"
+#include "Scene/Systems/AudioSystem.h"
+#include "Scene/Systems/GrassRenderSystem.h"
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Systems/ShadowSystem.h"
 #include "Scene/Systems/SkyboxSystem.h"
 #include "Scene/Systems/TerrainRenderSystem.h"
-#include "Scene/Systems/GrassRenderSystem.h"
-#include "Scene/Systems/AudioSystem.h"
 #include "Scene/Systems/VideoSystem.h"
 
+#include <functional>
 #include <glm/glm.hpp>
 #include <string>
-#include <vector>
-#include <functional>
 #include <unordered_map>
+#include <vector>
 
 namespace Engine
 {
@@ -135,7 +135,7 @@ namespace Engine
         float m_SSAOBias = 0.025f;
         int m_SSAOKernelSize = 32;
         float m_SSAOIntensity = 1.5f;
-        int m_IBLDebugMode = 0;  // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
+        int m_IBLDebugMode = 0; // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
         Ref<VertexArray> m_FullscreenQuadVAO;
 
         // Particle systems keyed by entity ID

@@ -66,7 +66,8 @@ namespace Engine
         if (m_SinkRegistered)
             return;
 
-        auto registerLoggerSink = [this](const Ref<spdlog::logger>& logger) {
+        auto registerLoggerSink = [this](const Ref<spdlog::logger>& logger)
+        {
             if (!logger)
                 return;
 
@@ -85,7 +86,8 @@ namespace Engine
         if (!m_SinkRegistered)
             return;
 
-        auto unregisterLoggerSink = [this](const Ref<spdlog::logger>& logger) {
+        auto unregisterLoggerSink = [this](const Ref<spdlog::logger>& logger)
+        {
             if (!logger)
                 return;
 
@@ -104,12 +106,13 @@ namespace Engine
 
         // 工具栏：级别过滤按钮
         {
-            auto ToggleButton = [](const char* label, bool& value, const ImVec4& activeColor) {
+            auto ToggleButton = [](const char* label, bool& value, const ImVec4& activeColor)
+            {
                 if (value)
                 {
                     ImGui::PushStyleColor(ImGuiCol_Button, activeColor);
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                        ImVec4(activeColor.x * 1.2f, activeColor.y * 1.2f, activeColor.z * 1.2f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(activeColor.x * 1.2f, activeColor.y * 1.2f,
+                                                                         activeColor.z * 1.2f, 1.0f));
                 }
                 else
                 {
@@ -159,13 +162,26 @@ namespace Engine
             bool show = false;
             switch (entry.Level)
             {
-            case spdlog::level::trace:    show = m_ShowTrace; break;
-            case spdlog::level::debug:    show = m_ShowTrace; break;
-            case spdlog::level::info:     show = m_ShowInfo;  break;
-            case spdlog::level::warn:     show = m_ShowWarn;  break;
-            case spdlog::level::err:      show = m_ShowError; break;
-            case spdlog::level::critical: show = m_ShowError; break;
-            default: break;
+            case spdlog::level::trace:
+                show = m_ShowTrace;
+                break;
+            case spdlog::level::debug:
+                show = m_ShowTrace;
+                break;
+            case spdlog::level::info:
+                show = m_ShowInfo;
+                break;
+            case spdlog::level::warn:
+                show = m_ShowWarn;
+                break;
+            case spdlog::level::err:
+                show = m_ShowError;
+                break;
+            case spdlog::level::critical:
+                show = m_ShowError;
+                break;
+            default:
+                break;
             }
             if (!show)
                 continue;
@@ -230,4 +246,3 @@ namespace Engine
     }
 
 } // namespace Engine
-

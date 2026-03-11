@@ -1,5 +1,5 @@
-#include "engpch.h"
 #include "Asset/AssetType.h"
+#include "engpch.h"
 
 #include <algorithm>
 
@@ -11,8 +11,8 @@ namespace Engine
         std::string lower = ext;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
-        if (lower == ".png" || lower == ".jpg" || lower == ".jpeg" ||
-            lower == ".bmp" || lower == ".tga" || lower == ".hdr")
+        if (lower == ".png" || lower == ".jpg" || lower == ".jpeg" || lower == ".bmp" || lower == ".tga" ||
+            lower == ".hdr")
             return AssetType::Texture2D;
 
         if (lower == ".obj" || lower == ".fbx" || lower == ".gltf" || lower == ".glb")
@@ -25,10 +25,14 @@ namespace Engine
     {
         switch (type)
         {
-        case AssetType::Texture2D:      return "Texture2D";
-        case AssetType::TextureCubemap: return "TextureCubemap";
-        case AssetType::Mesh:           return "Mesh";
-        default:                        return "None";
+        case AssetType::Texture2D:
+            return "Texture2D";
+        case AssetType::TextureCubemap:
+            return "TextureCubemap";
+        case AssetType::Mesh:
+            return "Mesh";
+        default:
+            return "None";
         }
     }
 

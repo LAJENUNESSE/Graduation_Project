@@ -12,13 +12,11 @@
 namespace Engine
 {
 
-    void EditorRenderController::Initialize(SceneRenderer* sceneRenderer,
-                                            PostProcessing* postProcessing,
+    void EditorRenderController::Initialize(SceneRenderer* sceneRenderer, PostProcessing* postProcessing,
                                             PostProcessingSettings* postProcessingSettings,
                                             EditorViewportController* viewportController,
                                             EditorPanelCoordinator* panelCoordinator,
-                                            PhysicsDebugDraw* physicsDebugDraw,
-                                            bool* showPhysicsColliders)
+                                            PhysicsDebugDraw* physicsDebugDraw, bool* showPhysicsColliders)
     {
         m_SceneRenderer = sceneRenderer;
         m_PostProcessing = postProcessing;
@@ -38,15 +36,16 @@ namespace Engine
         m_PostProcessing->Init(width, height);
         m_SceneRenderer->Init(width, height);
         m_SceneRenderer->SetPostProcessing(m_PostProcessing, m_PostProcessingSettings);
-        m_ViewportController->SetResizeCallback([this](uint32_t resizedWidth, uint32_t resizedHeight) {
-            OnViewportResized(resizedWidth, resizedHeight);
-        });
-        m_SceneRenderer->SetDebugDrawCallback([this]() {
-            if (!m_ActiveScene || !m_ShowPhysicsColliders || !*m_ShowPhysicsColliders)
-                return;
+        m_ViewportController->SetResizeCallback([this](uint32_t resizedWidth, uint32_t resizedHeight)
+                                                { OnViewportResized(resizedWidth, resizedHeight); });
+        m_SceneRenderer->SetDebugDrawCallback(
+            [this]()
+            {
+                if (!m_ActiveScene || !m_ShowPhysicsColliders || !*m_ShowPhysicsColliders)
+                    return;
 
-            m_PhysicsDebugDraw->DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController->GetCamera());
-        });
+                m_PhysicsDebugDraw->DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController->GetCamera());
+            });
 
         SyncHDRFramebufferBindings();
     }

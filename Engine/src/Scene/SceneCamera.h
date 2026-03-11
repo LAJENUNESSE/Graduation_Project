@@ -23,10 +23,7 @@ namespace Engine
         void SetViewportSize(uint32_t width, uint32_t height);
 
         // Perspective
-        float GetPerspectiveVerticalFOV() const
-        {
-            return m_PerspectiveFOV;
-        }
+        float GetPerspectiveVerticalFOV() const { return m_PerspectiveFOV; }
 
         void SetPerspectiveVerticalFOV(float verticalFOV)
         {
@@ -34,10 +31,7 @@ namespace Engine
             RecalculateProjection();
         }
 
-        float GetPerspectiveNearClip() const
-        {
-            return m_PerspectiveNear;
-        }
+        float GetPerspectiveNearClip() const { return m_PerspectiveNear; }
 
         void SetPerspectiveNearClip(float nearClip)
         {
@@ -45,10 +39,7 @@ namespace Engine
             RecalculateProjection();
         }
 
-        float GetPerspectiveFarClip() const
-        {
-            return m_PerspectiveFar;
-        }
+        float GetPerspectiveFarClip() const { return m_PerspectiveFar; }
 
         void SetPerspectiveFarClip(float farClip)
         {
@@ -57,10 +48,7 @@ namespace Engine
         }
 
         // Orthographic
-        float GetOrthographicSize() const
-        {
-            return m_OrthographicSize;
-        }
+        float GetOrthographicSize() const { return m_OrthographicSize; }
 
         void SetOrthographicSize(float size)
         {
@@ -68,10 +56,7 @@ namespace Engine
             RecalculateProjection();
         }
 
-        float GetOrthographicNearClip() const
-        {
-            return m_OrthographicNear;
-        }
+        float GetOrthographicNearClip() const { return m_OrthographicNear; }
 
         void SetOrthographicNearClip(float nearClip)
         {
@@ -79,10 +64,7 @@ namespace Engine
             RecalculateProjection();
         }
 
-        float GetOrthographicFarClip() const
-        {
-            return m_OrthographicFar;
-        }
+        float GetOrthographicFarClip() const { return m_OrthographicFar; }
 
         void SetOrthographicFarClip(float farClip)
         {
@@ -90,10 +72,7 @@ namespace Engine
             RecalculateProjection();
         }
 
-        ProjectionType GetProjectionType() const
-        {
-            return m_ProjectionType;
-        }
+        ProjectionType GetProjectionType() const { return m_ProjectionType; }
 
         void SetProjectionType(ProjectionType type)
         {

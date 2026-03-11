@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Renderer/PostProcessing.h"
 #include "Renderer/Framebuffer.h"
+#include "Renderer/PostProcessing.h"
 
 #include <functional>
 
@@ -17,22 +17,14 @@ namespace Engine
     public:
         RenderSettingsPanel() = default;
 
-        void SetContext(
-            SceneRenderer* sceneRenderer,
-            PostProcessingSettings* postProcessingSettings,
-            Ref<Framebuffer> hdrFramebuffer,
-            Ref<Scene> scene,
-            bool* showPhysicsColliders
-        );
+        void SetContext(SceneRenderer* sceneRenderer, PostProcessingSettings* postProcessingSettings,
+                        Ref<Framebuffer> hdrFramebuffer, Ref<Scene> scene, bool* showPhysicsColliders);
 
         void SetScene(const Ref<Scene>& scene) { m_Scene = scene; }
         void SetHDRFramebuffer(const Ref<Framebuffer>& fb) { m_HDRFramebuffer = fb; }
 
         using MSAAChangedCallback = std::function<void(uint32_t samples)>;
-        void SetMSAAChangedCallback(MSAAChangedCallback callback)
-        {
-            m_OnMSAAChanged = std::move(callback);
-        }
+        void SetMSAAChangedCallback(MSAAChangedCallback callback) { m_OnMSAAChanged = std::move(callback); }
 
         void OnImGuiRender();
 

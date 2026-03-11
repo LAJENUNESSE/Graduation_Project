@@ -1,12 +1,12 @@
-#include "engpch.h"
 #include "Platform/OpenGL/OpenGLShader.h"
+#include "engpch.h"
 
 #include <glad/gl.h>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "Asset/PathUtils.h"
 #include "Core/Assert.h"
 #include "Core/Log.h"
-#include "Asset/PathUtils.h"
 namespace Engine
 {
 
@@ -23,8 +23,7 @@ namespace Engine
         return 0;
     }
 
-    OpenGLShader::OpenGLShader(const std::string& filepath)
-        : m_FilePath(filepath)
+    OpenGLShader::OpenGLShader(const std::string& filepath) : m_FilePath(filepath)
     {
         std::string source = ReadFile(filepath);
         auto shaderSources = PreProcess(source);
@@ -38,8 +37,7 @@ namespace Engine
         m_Name = filepath.substr(lastSlash, count);
     }
 
-    OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc,
-                               const std::string& fragmentSrc)
+    OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
         : m_Name(name)
     {
         std::unordered_map<unsigned int, std::string> sources;

@@ -1,11 +1,11 @@
-#include "engpch.h"
 #include "Scene/Systems/ShadowSystem.h"
-#include "Scene/Components.h"
-#include "Renderer/RenderCommand.h"
-#include "Renderer/EditorCamera.h"
-#include "Renderer/Mesh.h"
 #include "Asset/AssetManager.h"
 #include "Debug/PerformanceMonitor.h"
+#include "Renderer/EditorCamera.h"
+#include "Renderer/Mesh.h"
+#include "Renderer/RenderCommand.h"
+#include "Scene/Components.h"
+#include "engpch.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
@@ -109,10 +109,8 @@ namespace Engine
         return splits;
     }
 
-    glm::mat4 ShadowSystem::ComputeCascadeLightSpaceMatrix(
-        const glm::vec3& lightDir,
-        const glm::mat4& invViewProj,
-        float nearSplit, float farSplit) const
+    glm::mat4 ShadowSystem::ComputeCascadeLightSpaceMatrix(const glm::vec3& lightDir, const glm::mat4& invViewProj,
+                                                           float nearSplit, float farSplit) const
     {
         // 计算此分割的子视锥角点（NDC -> world）
         // 将 nearSplit/farSplit 映射到 NDC Z
@@ -122,14 +120,14 @@ namespace Engine
         glm::vec4 frustumCorners[8] = {
             // 近平面 4 个角
             {-1.0f, -1.0f, -1.0f, 1.0f},
-            { 1.0f, -1.0f, -1.0f, 1.0f},
-            { 1.0f,  1.0f, -1.0f, 1.0f},
-            {-1.0f,  1.0f, -1.0f, 1.0f},
+            {1.0f, -1.0f, -1.0f, 1.0f},
+            {1.0f, 1.0f, -1.0f, 1.0f},
+            {-1.0f, 1.0f, -1.0f, 1.0f},
             // 远平面 4 个角
-            {-1.0f, -1.0f,  1.0f, 1.0f},
-            { 1.0f, -1.0f,  1.0f, 1.0f},
-            { 1.0f,  1.0f,  1.0f, 1.0f},
-            {-1.0f,  1.0f,  1.0f, 1.0f},
+            {-1.0f, -1.0f, 1.0f, 1.0f},
+            {1.0f, -1.0f, 1.0f, 1.0f},
+            {1.0f, 1.0f, 1.0f, 1.0f},
+            {-1.0f, 1.0f, 1.0f, 1.0f},
         };
 
         // NDC -> world
@@ -159,8 +157,8 @@ namespace Engine
 
         // 光源视图矩阵
         glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.99f)
-                            ? glm::vec3(0.0f, 0.0f, 1.0f)
-                            : glm::vec3(0.0f, 1.0f, 0.0f);
+                           ? glm::vec3(0.0f, 0.0f, 1.0f)
+                           : glm::vec3(0.0f, 1.0f, 0.0f);
         glm::mat4 lightView = glm::lookAt(center - lightDir, center, up);
 
         // 计算在光源空间中的包围盒
@@ -230,8 +228,8 @@ namespace Engine
 
         glm::vec3 lightPos = -lightDir * m_Settings.OrthoSize;
         glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.99f)
-                            ? glm::vec3(0.0f, 0.0f, 1.0f)
-                            : glm::vec3(0.0f, 1.0f, 0.0f);
+                           ? glm::vec3(0.0f, 0.0f, 1.0f)
+                           : glm::vec3(0.0f, 1.0f, 0.0f);
         glm::mat4 lightViewMat = glm::lookAt(lightPos, lightPos + lightDir, up);
 
         data.LightSpaceMatrix = lightProjection * lightViewMat;
@@ -253,8 +251,7 @@ namespace Engine
         return data;
     }
 
-    ShadowData ShadowSystem::ExecuteCSM(entt::registry& reg, const LightEnvironment& lights,
-                                        const EditorCamera& camera)
+    ShadowData ShadowSystem::ExecuteCSM(entt::registry& reg, const LightEnvironment& lights, const EditorCamera& camera)
     {
         ShadowData data;
 
@@ -298,8 +295,8 @@ namespace Engine
             glm::mat4 lightProjection = glm::ortho(-s, s, -s, s, m_Settings.NearPlane, m_Settings.FarPlane);
             glm::vec3 lightPos = -lightDir * m_Settings.OrthoSize;
             glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.99f)
-                                ? glm::vec3(0.0f, 0.0f, 1.0f)
-                                : glm::vec3(0.0f, 1.0f, 0.0f);
+                               ? glm::vec3(0.0f, 0.0f, 1.0f)
+                               : glm::vec3(0.0f, 1.0f, 0.0f);
             glm::mat4 lightViewMat = glm::lookAt(lightPos, lightPos + lightDir, up);
             data.LightSpaceMatrix = lightProjection * lightViewMat;
 
@@ -324,12 +321,12 @@ namespace Engine
 
         // 计算级联分割
         float nearClip = camera.GetNearClip();
-        float farClip = std::min(camera.GetFarClip(), 200.0f);  // 限制阴影最远距离
+        float farClip = std::min(camera.GetFarClip(), 200.0f); // 限制阴影最远距离
         auto splits = ComputeCascadeSplits(nearClip, farClip);
 
         // 使用限制后的 near/far 构建专用投影矩阵，确保 NDC 角点对应正确的视锥范围
-        glm::mat4 shadowProjection = glm::perspective(
-            glm::radians(camera.GetFOV()), camera.GetAspectRatio(), nearClip, farClip);
+        glm::mat4 shadowProjection =
+            glm::perspective(glm::radians(camera.GetFOV()), camera.GetAspectRatio(), nearClip, farClip);
         glm::mat4 invViewProj = glm::inverse(shadowProjection * camera.GetViewMatrix());
 
         // 为每个级联计算 lightSpaceMatrix 并渲染深度
@@ -339,9 +336,9 @@ namespace Engine
             float cascadeNear = (splits[i] - nearClip) / (farClip - nearClip);
             float cascadeFar = (splits[i + 1] - nearClip) / (farClip - nearClip);
 
-            data.CascadeLightSpaceMatrices[i] = ComputeCascadeLightSpaceMatrix(
-                lightDir, invViewProj, cascadeNear, cascadeFar);
-            data.CascadeSplitDepths[i] = splits[i + 1];  // view-space 远裁切
+            data.CascadeLightSpaceMatrices[i] =
+                ComputeCascadeLightSpaceMatrix(lightDir, invViewProj, cascadeNear, cascadeFar);
+            data.CascadeSplitDepths[i] = splits[i + 1]; // view-space 远裁切
 
             // 检查 FBO 分辨率
             auto& fboSpec = m_CascadeFBOs[i]->GetSpecification();

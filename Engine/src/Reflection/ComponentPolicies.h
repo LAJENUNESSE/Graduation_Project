@@ -22,53 +22,26 @@ namespace Engine::ComponentPolicies
     inline bool IsCustomCopyComponentType(std::string_view typeName)
     {
         constexpr std::array<std::string_view, 12> kCustomCopyTypes = {
-            "IDComponent",
-            "TagComponent",
-            "TransformComponent",
-            "RelationshipComponent",
-            "MeshRendererComponent",
-            "CameraComponent",
-            "TerrainComponent",
-            "ParticleEmitterComponent",
-            "NativeScriptComponent",
-            "AudioSourceComponent",
-            "AudioListenerComponent",
-            "VideoPlayerComponent"
-        };
+            "IDComponent",           "TagComponent",         "TransformComponent",     "RelationshipComponent",
+            "MeshRendererComponent", "CameraComponent",      "TerrainComponent",       "ParticleEmitterComponent",
+            "NativeScriptComponent", "AudioSourceComponent", "AudioListenerComponent", "VideoPlayerComponent"};
         return Detail::Contains(typeName, kCustomCopyTypes);
     }
 
     inline bool IsCustomAddMenuComponentType(std::string_view typeName)
     {
         constexpr std::array<std::string_view, 8> kCustomAddMenuTypes = {
-            "CameraComponent",
-            "MeshRendererComponent",
-            "TerrainComponent",
-            "ParticleEmitterComponent",
-            "NativeScriptComponent",
-            "AudioSourceComponent",
-            "AudioListenerComponent",
-            "VideoPlayerComponent"
-        };
+            "CameraComponent",       "MeshRendererComponent", "TerrainComponent",       "ParticleEmitterComponent",
+            "NativeScriptComponent", "AudioSourceComponent",  "AudioListenerComponent", "VideoPlayerComponent"};
         return Detail::Contains(typeName, kCustomAddMenuTypes);
     }
 
     inline bool IsCustomInspectorComponentType(std::string_view typeName)
     {
         constexpr std::array<std::string_view, 12> kCustomInspectorTypes = {
-            "IDComponent",
-            "TagComponent",
-            "TransformComponent",
-            "RelationshipComponent",
-            "CameraComponent",
-            "MeshRendererComponent",
-            "TerrainComponent",
-            "ParticleEmitterComponent",
-            "NativeScriptComponent",
-            "AudioSourceComponent",
-            "AudioListenerComponent",
-            "VideoPlayerComponent"
-        };
+            "IDComponent",           "TagComponent",          "TransformComponent",     "RelationshipComponent",
+            "CameraComponent",       "MeshRendererComponent", "TerrainComponent",       "ParticleEmitterComponent",
+            "NativeScriptComponent", "AudioSourceComponent",  "AudioListenerComponent", "VideoPlayerComponent"};
         return Detail::Contains(typeName, kCustomInspectorTypes);
     }
 

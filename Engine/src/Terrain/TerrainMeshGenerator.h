@@ -3,9 +3,9 @@
 #include "Core/Base.h"
 #include "Renderer/VertexArray.h"
 
-#include <vector>
-#include <string>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -30,11 +30,12 @@ namespace Engine
     class TerrainMeshGenerator
     {
     public:
-        static TerrainMeshData Generate(const std::string& heightmapPath, float size, float heightScale, int lodLevels = 3);
+        static TerrainMeshData Generate(const std::string& heightmapPath, float size, float heightScale,
+                                        int lodLevels = 3);
 
     private:
-        static TerrainLODMesh BuildLOD(const std::vector<float>& heightData, int hmWidth, int hmHeight,
-                                       int gridRes, float size, float heightScale);
+        static TerrainLODMesh BuildLOD(const std::vector<float>& heightData, int hmWidth, int hmHeight, int gridRes,
+                                       float size, float heightScale);
     };
 
 } // namespace Engine

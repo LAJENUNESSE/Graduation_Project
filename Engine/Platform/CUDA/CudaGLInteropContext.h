@@ -53,7 +53,7 @@ namespace Engine
         void* GetStream() const;
 
         bool IsMapped() const;
-        int  GetSlotCount() const;
+        int GetSlotCount() const;
 
     private:
         struct Impl;

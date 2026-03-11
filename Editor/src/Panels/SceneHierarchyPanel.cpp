@@ -1,8 +1,8 @@
 #include "Panels/SceneHierarchyPanel.h"
-#include "UndoSystem.h"
-#include "Scene/Components.h"
 #include "Core/Input.h"
 #include "Core/KeyCodes.h"
+#include "Scene/Components.h"
+#include "UndoSystem.h"
 
 #include <imgui.h>
 
@@ -59,7 +59,7 @@ namespace Engine
         {
             // Ctrl+Click: 切换选中状态
             auto it = std::find_if(m_SelectedEntities.begin(), m_SelectedEntities.end(),
-                [entity](const Entity& e) { return e == entity; });
+                                   [entity](const Entity& e) { return e == entity; });
             if (it != m_SelectedEntities.end())
                 m_SelectedEntities.erase(it);
             else
@@ -95,10 +95,10 @@ namespace Engine
             if (entityToDelete)
             {
                 // 从选中列表中移除被删除的实体
-                m_SelectedEntities.erase(
-                    std::remove_if(m_SelectedEntities.begin(), m_SelectedEntities.end(),
-                        [entityToDelete](const Entity& e) { return e == entityToDelete; }),
-                    m_SelectedEntities.end());
+                m_SelectedEntities.erase(std::remove_if(m_SelectedEntities.begin(), m_SelectedEntities.end(),
+                                                        [entityToDelete](const Entity& e)
+                                                        { return e == entityToDelete; }),
+                                         m_SelectedEntities.end());
 
                 if (m_CommandHistory)
                 {
@@ -149,7 +149,8 @@ namespace Engine
                     {
                         if (m_CommandHistory)
                         {
-                            auto cmd = CreateRef<EntityCreateCommand>(m_Context, "\xe7\xa9\xba\xe5\xae\x9e\xe4\xbd\x93");
+                            auto cmd =
+                                CreateRef<EntityCreateCommand>(m_Context, "\xe7\xa9\xba\xe5\xae\x9e\xe4\xbd\x93");
                             m_CommandHistory->ExecuteAndPushCommand(cmd);
                         }
                         else
@@ -213,9 +214,8 @@ namespace Engine
         if (!hasChildren)
             flags |= ImGuiTreeNodeFlags_Leaf;
 
-        bool opened =
-            ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<uint64_t>(static_cast<uint32_t>(entity))),
-                              flags, "%s", tag.c_str());
+        bool opened = ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<uint64_t>(static_cast<uint32_t>(entity))),
+                                        flags, "%s", tag.c_str());
 
         if (ImGui::IsItemClicked())
         {
@@ -296,13 +296,11 @@ namespace Engine
         }
     }
 
-
     void SceneHierarchyPanel::PruneInvalidSelection()
     {
-        m_SelectedEntities.erase(
-            std::remove_if(m_SelectedEntities.begin(), m_SelectedEntities.end(),
-                [this](const Entity& entity) { return !IsEntityValid(entity); }),
-            m_SelectedEntities.end());
+        m_SelectedEntities.erase(std::remove_if(m_SelectedEntities.begin(), m_SelectedEntities.end(),
+                                                [this](const Entity& entity) { return !IsEntityValid(entity); }),
+                                 m_SelectedEntities.end());
     }
 
     bool SceneHierarchyPanel::IsEntityValid(Entity entity) const
@@ -310,5 +308,3 @@ namespace Engine
         return m_Context && entity && m_Context->GetRegistry().valid(static_cast<entt::entity>(entity));
     }
 } // namespace Engine
-
-

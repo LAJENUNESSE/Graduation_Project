@@ -1,6 +1,6 @@
-#include "engpch.h"
 #include "Core/Input.h"
 #include "Core/Application.h"
+#include "engpch.h"
 
 #include <GLFW/glfw3.h>
 

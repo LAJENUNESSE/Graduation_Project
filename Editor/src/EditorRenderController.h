@@ -18,12 +18,9 @@ namespace Engine
     class EditorRenderController
     {
     public:
-        void Initialize(SceneRenderer* sceneRenderer,
-                        PostProcessing* postProcessing,
-                        PostProcessingSettings* postProcessingSettings,
-                        EditorViewportController* viewportController,
-                        EditorPanelCoordinator* panelCoordinator,
-                        PhysicsDebugDraw* physicsDebugDraw,
+        void Initialize(SceneRenderer* sceneRenderer, PostProcessing* postProcessing,
+                        PostProcessingSettings* postProcessingSettings, EditorViewportController* viewportController,
+                        EditorPanelCoordinator* panelCoordinator, PhysicsDebugDraw* physicsDebugDraw,
                         bool* showPhysicsColliders);
 
         void Attach();

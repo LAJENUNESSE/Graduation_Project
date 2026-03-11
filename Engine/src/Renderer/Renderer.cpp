@@ -1,8 +1,8 @@
-#include "engpch.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Shader.h"
 #include "Renderer/VertexArray.h"
+#include "engpch.h"
 
 namespace Engine
 {
@@ -14,9 +14,7 @@ namespace Engine
         RenderCommand::Init();
     }
 
-    void Renderer::Shutdown()
-    {
-    }
+    void Renderer::Shutdown() {}
 
     void Renderer::OnWindowResize(uint32_t width, uint32_t height)
     {
@@ -28,9 +26,7 @@ namespace Engine
         s_SceneData.ViewProjectionMatrix = viewProjection;
     }
 
-    void Renderer::EndScene()
-    {
-    }
+    void Renderer::EndScene() {}
 
     void Renderer::Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray, const glm::mat4& transform)
     {

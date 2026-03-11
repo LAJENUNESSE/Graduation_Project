@@ -1,5 +1,5 @@
-#include "engpch.h"
 #include "Renderer/Shader.h"
+#include "engpch.h"
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
@@ -13,8 +13,7 @@ namespace Engine
         return CreateRef<OpenGLShader>(filepath);
     }
 
-    Ref<Shader> Shader::Create(const std::string& name, const std::string& vertexSrc,
-                               const std::string& fragmentSrc)
+    Ref<Shader> Shader::Create(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
     {
         return CreateRef<OpenGLShader>(name, vertexSrc, fragmentSrc);
     }

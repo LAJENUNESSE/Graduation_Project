@@ -1,9 +1,9 @@
-#include "engpch.h"
 #include "Scene/Systems/MeshRenderSystem.h"
-#include "Scene/Components.h"
+#include "Asset/AssetManager.h"
 #include "Renderer/Material.h"
 #include "Renderer/Mesh.h"
-#include "Asset/AssetManager.h"
+#include "Scene/Components.h"
+#include "engpch.h"
 
 namespace Engine
 {
@@ -32,11 +32,8 @@ namespace Engine
         return localMatrix;
     }
 
-    void MeshRenderSystem::SubmitRenderPackets(
-        entt::registry& reg,
-        RenderQueue& queue,
-        const Ref<Shader>& pbrShader,
-        const Ref<Texture2D>& whiteTexture)
+    void MeshRenderSystem::SubmitRenderPackets(entt::registry& reg, RenderQueue& queue, const Ref<Shader>& pbrShader,
+                                               const Ref<Texture2D>& whiteTexture)
     {
         auto meshView = reg.view<TransformComponent, MeshRendererComponent>();
         for (auto entity : meshView)

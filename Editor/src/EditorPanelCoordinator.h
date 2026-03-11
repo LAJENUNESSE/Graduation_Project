@@ -20,12 +20,9 @@ namespace Engine
     class EditorPanelCoordinator
     {
     public:
-        void Initialize(SceneHierarchyPanel* hierarchyPanel,
-                        PropertiesPanel* propertiesPanel,
-                        ConsolePanel* consolePanel,
-                        AssetBrowserPanel* assetBrowserPanel,
-                        RenderSettingsPanel* renderSettingsPanel,
-                        CommandHistory* commandHistory);
+        void Initialize(SceneHierarchyPanel* hierarchyPanel, PropertiesPanel* propertiesPanel,
+                        ConsolePanel* consolePanel, AssetBrowserPanel* assetBrowserPanel,
+                        RenderSettingsPanel* renderSettingsPanel, CommandHistory* commandHistory);
 
         void ApplyScene(const Ref<Scene>& scene, bool clearCommandHistory);
         void RenderPanels();

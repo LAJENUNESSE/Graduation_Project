@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Core/Timestep.h"
+#include "Core/Input.h"
 #include "Core/KeyCodes.h"
 #include "Core/MouseCodes.h"
-#include "Core/Input.h"
-#include "Scene/Entity.h"
+#include "Core/Timestep.h"
 #include "Scene/Components.h"
+#include "Scene/Entity.h"
 
 #include <glm/glm.hpp>
 
@@ -40,34 +40,17 @@ namespace Engine
         virtual void OnTriggerExit(Entity other) {}
 
     protected:
-        template <typename T>
-        T& GetComponent()
-        {
-            return m_Entity.GetComponent<T>();
-        }
+        template <typename T> T& GetComponent() { return m_Entity.GetComponent<T>(); }
 
-        template <typename T>
-        bool HasComponent()
-        {
-            return m_Entity.HasComponent<T>();
-        }
+        template <typename T> bool HasComponent() { return m_Entity.HasComponent<T>(); }
 
-        TransformComponent& GetTransform()
-        {
-            return m_Entity.GetComponent<TransformComponent>();
-        }
+        TransformComponent& GetTransform() { return m_Entity.GetComponent<TransformComponent>(); }
 
         Entity GetEntity() const { return m_Entity; }
 
-        bool IsKeyPressed(KeyCode key)
-        {
-            return Input::IsKeyPressed(key);
-        }
+        bool IsKeyPressed(KeyCode key) { return Input::IsKeyPressed(key); }
 
-        bool IsMouseButtonPressed(MouseCode button)
-        {
-            return Input::IsMouseButtonPressed(button);
-        }
+        bool IsMouseButtonPressed(MouseCode button) { return Input::IsMouseButtonPressed(button); }
 
     private:
         Entity m_Entity;

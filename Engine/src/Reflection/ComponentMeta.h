@@ -2,10 +2,10 @@
 
 #include "Reflection/PropertyInfo.h"
 
-#include <vector>
-#include <string>
-#include <functional>
 #include <cstddef>
+#include <functional>
+#include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -30,55 +30,62 @@ namespace Engine
 // ---- 反射宏 ----
 
 // 声明组件元数据（在 struct 外部使用）
-#define ENGINE_COMPONENT(CompType, displayName) \
-    namespace _Reflect_##CompType { \
-        inline ::Engine::ComponentMeta& GetMeta() { \
-            static ::Engine::ComponentMeta s_Meta; \
-            s_Meta.TypeName = #CompType; \
-            s_Meta.DisplayName = displayName; \
-            s_Meta.Properties.clear(); \
-            return s_Meta; \
-        } \
+#define ENGINE_COMPONENT(CompType, displayName)                                                                        \
+    namespace _Reflect_##CompType                                                                                      \
+    {                                                                                                                  \
+        inline ::Engine::ComponentMeta& GetMeta()                                                                      \
+        {                                                                                                              \
+            static ::Engine::ComponentMeta s_Meta;                                                                     \
+            s_Meta.TypeName = #CompType;                                                                               \
+            s_Meta.DisplayName = displayName;                                                                          \
+            s_Meta.Properties.clear();                                                                                 \
+            return s_Meta;                                                                                             \
+        }                                                                                                              \
     }
 
 // 标记属性（基础版）
-#define ENGINE_PROPERTY(CompType, field, displayName, propType) \
-    namespace _Reflect_##CompType { \
-        namespace _Prop_##field { \
-            inline void Register(::Engine::ComponentMeta& meta) { \
-                ::Engine::PropertyInfo info; \
-                info.Name = #field; \
-                info.DisplayName = displayName; \
-                info.Type = ::Engine::PropertyType::propType; \
-                info.Offset = offsetof(::Engine::CompType, field); \
-                info.Hints = {}; \
-                meta.Properties.push_back(info); \
-            } \
-        } \
+#define ENGINE_PROPERTY(CompType, field, displayName, propType)                                                        \
+    namespace _Reflect_##CompType                                                                                      \
+    {                                                                                                                  \
+        namespace _Prop_##field                                                                                        \
+        {                                                                                                              \
+            inline void Register(::Engine::ComponentMeta& meta)                                                        \
+            {                                                                                                          \
+                ::Engine::PropertyInfo info;                                                                           \
+                info.Name = #field;                                                                                    \
+                info.DisplayName = displayName;                                                                        \
+                info.Type = ::Engine::PropertyType::propType;                                                          \
+                info.Offset = offsetof(::Engine::CompType, field);                                                     \
+                info.Hints = {};                                                                                       \
+                meta.Properties.push_back(info);                                                                       \
+            }                                                                                                          \
+        }                                                                                                              \
     }
 
 // 标记属性（带 hints 扩展版）
-#define ENGINE_PROPERTY_EX(CompType, field, displayName, propType, hintsCode) \
-    namespace _Reflect_##CompType { \
-        namespace _Prop_##field { \
-            inline void Register(::Engine::ComponentMeta& meta) { \
-                ::Engine::PropertyInfo info; \
-                info.Name = #field; \
-                info.DisplayName = displayName; \
-                info.Type = ::Engine::PropertyType::propType; \
-                info.Offset = offsetof(::Engine::CompType, field); \
-                ::Engine::PropertyHints hints{}; \
-                hintsCode; \
-                info.Hints = hints; \
-                meta.Properties.push_back(info); \
-            } \
-        } \
+#define ENGINE_PROPERTY_EX(CompType, field, displayName, propType, hintsCode)                                          \
+    namespace _Reflect_##CompType                                                                                      \
+    {                                                                                                                  \
+        namespace _Prop_##field                                                                                        \
+        {                                                                                                              \
+            inline void Register(::Engine::ComponentMeta& meta)                                                        \
+            {                                                                                                          \
+                ::Engine::PropertyInfo info;                                                                           \
+                info.Name = #field;                                                                                    \
+                info.DisplayName = displayName;                                                                        \
+                info.Type = ::Engine::PropertyType::propType;                                                          \
+                info.Offset = offsetof(::Engine::CompType, field);                                                     \
+                ::Engine::PropertyHints hints{};                                                                       \
+                hintsCode;                                                                                             \
+                info.Hints = hints;                                                                                    \
+                meta.Properties.push_back(info);                                                                       \
+            }                                                                                                          \
+        }                                                                                                              \
     }
 
 // 在 .cpp 中触发注册（组合所有属性 + 注册到全局表）
 // 使用 __VA_ARGS__ 展开所有字段
-#define REGISTER_COMPONENT_BEGIN(CompType) \
-    static bool s_Registered_##CompType = []() -> bool { \
+#define REGISTER_COMPONENT_BEGIN(CompType) static bool s_Registered_##CompType = []() -> bool { \
         auto& meta = _Reflect_##CompType::GetMeta(); \
         meta.Has = [](::Engine::Scene& scene, uint32_t entity) -> bool { \
             return scene.GetRegistry().all_of<::Engine::CompType>(static_cast<entt::entity>(entity)); \
@@ -99,15 +106,15 @@ namespace Engine
             } \
         };
 
-#define REGISTER_COMPONENT_PROPERTY(CompType, field) \
-        _Reflect_##CompType::_Prop_##field::Register(meta);
+#define REGISTER_COMPONENT_PROPERTY(CompType, field) _Reflect_##CompType::_Prop_##field::Register(meta);
 
-#define REGISTER_COMPONENT_END(CompType) \
-        ::Engine::ComponentRegistry::Instance().Register(meta); \
-        return true; \
-    }();
+#define REGISTER_COMPONENT_END(CompType)                                                                               \
+    ::Engine::ComponentRegistry::Instance().Register(meta);                                                            \
+    return true;                                                                                                       \
+    }                                                                                                                  \
+    ();
 
 // 便捷宏：无属性组件直接注册
-#define REGISTER_COMPONENT(CompType) \
-    REGISTER_COMPONENT_BEGIN(CompType) \
+#define REGISTER_COMPONENT(CompType)                                                                                   \
+    REGISTER_COMPONENT_BEGIN(CompType)                                                                                 \
     REGISTER_COMPONENT_END(CompType)

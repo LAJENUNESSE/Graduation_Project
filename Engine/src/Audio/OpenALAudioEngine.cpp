@@ -1,7 +1,7 @@
-#include "engpch.h"
 #include "Audio/OpenALAudioEngine.h"
 #include "Audio/AudioClip.h"
 #include "Core/Log.h"
+#include "engpch.h"
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -105,8 +105,7 @@ namespace Engine
         if (CheckALError("alGenBuffers"))
             return 0;
 
-        alBufferData(buf, clip.ALFormat, clip.Data.data(),
-                     static_cast<ALsizei>(clip.Data.size()),
+        alBufferData(buf, clip.ALFormat, clip.Data.data(), static_cast<ALsizei>(clip.Data.size()),
                      static_cast<ALsizei>(clip.SampleRate));
         if (CheckALError("alBufferData"))
         {
@@ -278,7 +277,7 @@ namespace Engine
 
         alListener3f(AL_POSITION, pos.x, pos.y, pos.z);
 
-        float ori[6] = { forward.x, forward.y, forward.z, up.x, up.y, up.z };
+        float ori[6] = {forward.x, forward.y, forward.z, up.x, up.y, up.z};
         alListenerfv(AL_ORIENTATION, ori);
     }
 

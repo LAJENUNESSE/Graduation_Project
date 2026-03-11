@@ -28,15 +28,9 @@ namespace Engine
             return m_ColorAttachments[index];
         }
 
-        uint32_t GetDepthAttachmentRendererID() const override
-        {
-            return m_DepthAttachment;
-        }
+        uint32_t GetDepthAttachmentRendererID() const override { return m_DepthAttachment; }
 
-        const FramebufferSpecification& GetSpecification() const override
-        {
-            return m_Specification;
-        }
+        const FramebufferSpecification& GetSpecification() const override { return m_Specification; }
 
         // MSAA support
         void BindMSAA() override;

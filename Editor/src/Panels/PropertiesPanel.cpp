@@ -1,22 +1,22 @@
 #include "Panels/PropertiesPanel.h"
-#include "Panels/PropertiesPanelCustomDrawers.h"
-#include "Scene/SceneCamera.h"
-#include "Renderer/Mesh.h"
-#include "Renderer/Texture.h"
 #include "Asset/AssetManager.h"
 #include "Asset/PathUtils.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
-#include "Reflection/ComponentRegistry.h"
-#include "Reflection/ComponentPolicies.h"
+#include "Panels/PropertiesPanelCustomDrawers.h"
 #include "Reflection/AutoInspector.h"
+#include "Reflection/ComponentPolicies.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Renderer/Mesh.h"
+#include "Renderer/Texture.h"
+#include "Scene/SceneCamera.h"
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptRegistry.h"
 #include "UndoSystem.h"
 
+#include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <glm/gtc/type_ptr.hpp>
 
 #include <cmath>
 #include <filesystem>
@@ -29,12 +29,12 @@ namespace Engine
 
         bool AreVec3Equal(const glm::vec3& lhs, const glm::vec3& rhs)
         {
-            return std::abs(lhs.x - rhs.x) <= kVec3ControlEpsilon &&
-                   std::abs(lhs.y - rhs.y) <= kVec3ControlEpsilon &&
+            return std::abs(lhs.x - rhs.x) <= kVec3ControlEpsilon && std::abs(lhs.y - rhs.y) <= kVec3ControlEpsilon &&
                    std::abs(lhs.z - rhs.z) <= kVec3ControlEpsilon;
         }
 
-        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel, std::string& outPath)
+        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel,
+                                       std::string& outPath)
         {
             std::string selectedPath = FileDialogs::OpenFile(filter, description);
             if (selectedPath.empty())
@@ -48,13 +48,12 @@ namespace Engine
         }
     } // namespace
 
-
     template <typename T, typename UIFunction>
     void PropertiesPanel::DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction, bool removable)
     {
         const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
-                                                 ImGuiTreeNodeFlags_SpanAvailWidth |
-                                                 ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
+                                                 ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap |
+                                                 ImGuiTreeNodeFlags_FramePadding;
 
         if (!entity.HasComponent<T>())
             return;
@@ -98,12 +97,12 @@ namespace Engine
         ImGui::PopID();
     }
 
-    void PropertiesPanel::DrawComponent_Auto(const std::string& name, Entity entity,
-                                              const ComponentMeta& meta, AutoInspector::DrawVec3Fn drawVec3)
+    void PropertiesPanel::DrawComponent_Auto(const std::string& name, Entity entity, const ComponentMeta& meta,
+                                             AutoInspector::DrawVec3Fn drawVec3)
     {
         const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
-                                                 ImGuiTreeNodeFlags_SpanAvailWidth |
-                                                 ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
+                                                 ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap |
+                                                 ImGuiTreeNodeFlags_FramePadding;
 
         auto* scene = entity.GetScene();
         uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
@@ -236,14 +235,15 @@ namespace Engine
     {
         ImGui::Begin("属性");
 
-        const bool hasValidSelection = selectedEntity && selectedEntity.GetScene() &&
+        const bool hasValidSelection =
+            selectedEntity && selectedEntity.GetScene() &&
             selectedEntity.GetScene()->GetRegistry().valid(static_cast<entt::entity>(selectedEntity));
 
         if (hasValidSelection)
         {
-            if (m_TransformEditSession.Active &&
-                (static_cast<uint64_t>(m_TransformEditSession.EntityID) != static_cast<uint64_t>(selectedEntity.GetUUID()) ||
-                 m_TransformEditSession.SceneContext != selectedEntity.GetScene()))
+            if (m_TransformEditSession.Active && (static_cast<uint64_t>(m_TransformEditSession.EntityID) !=
+                                                      static_cast<uint64_t>(selectedEntity.GetUUID()) ||
+                                                  m_TransformEditSession.SceneContext != selectedEntity.GetScene()))
             {
                 m_TransformEditSession = {};
             }
@@ -380,125 +380,127 @@ namespace Engine
         const uint64_t entityIDValue = static_cast<uint64_t>(entity.GetUUID());
         Scene* const entityScene = entity.GetScene();
 
-        DrawComponent<TransformComponent>("变换", entity, [this, entityHandle, entityIDValue, entityScene](auto& component)
-        {
-            const glm::vec3 oldTranslation = component.Translation;
-            glm::vec3 rotation = glm::degrees(component.Rotation);
-            const glm::vec3 oldRotation = component.Rotation;
-            const glm::vec3 oldScale = component.Scale;
-
-            const Vec3ControlEditState translationState = DrawVec3Control("位移", component.Translation);
-            const Vec3ControlEditState rotationState = DrawVec3Control("旋转", rotation);
-            component.Rotation = glm::radians(rotation);
-            const Vec3ControlEditState scaleState = DrawVec3Control("缩放", component.Scale, 1.0f);
-
-            const bool editStarted = translationState.EditStarted || rotationState.EditStarted || scaleState.EditStarted;
-            const bool editFinished = translationState.EditFinished || rotationState.EditFinished || scaleState.EditFinished;
-
-            if (editStarted && !m_TransformEditSession.Active)
+        DrawComponent<TransformComponent>(
+            "变换", entity,
+            [this, entityHandle, entityIDValue, entityScene](auto& component)
             {
-                m_TransformEditSession.Active = true;
-                m_TransformEditSession.EntityID = UUID(entityIDValue);
-                m_TransformEditSession.SceneContext = entityScene;
-                m_TransformEditSession.Translation = oldTranslation;
-                m_TransformEditSession.Rotation = oldRotation;
-                m_TransformEditSession.Scale = oldScale;
-            }
+                const glm::vec3 oldTranslation = component.Translation;
+                glm::vec3 rotation = glm::degrees(component.Rotation);
+                const glm::vec3 oldRotation = component.Rotation;
+                const glm::vec3 oldScale = component.Scale;
 
-            if (editFinished && m_TransformEditSession.Active)
-            {
-                if (m_CommandHistory &&
-                    static_cast<uint64_t>(m_TransformEditSession.EntityID) == entityIDValue &&
-                    m_TransformEditSession.SceneContext == entityScene &&
-                    (!AreVec3Equal(m_TransformEditSession.Translation, component.Translation) ||
-                     !AreVec3Equal(m_TransformEditSession.Rotation, component.Rotation) ||
-                     !AreVec3Equal(m_TransformEditSession.Scale, component.Scale)))
+                const Vec3ControlEditState translationState = DrawVec3Control("位移", component.Translation);
+                const Vec3ControlEditState rotationState = DrawVec3Control("旋转", rotation);
+                component.Rotation = glm::radians(rotation);
+                const Vec3ControlEditState scaleState = DrawVec3Control("缩放", component.Scale, 1.0f);
+
+                const bool editStarted =
+                    translationState.EditStarted || rotationState.EditStarted || scaleState.EditStarted;
+                const bool editFinished =
+                    translationState.EditFinished || rotationState.EditFinished || scaleState.EditFinished;
+
+                if (editStarted && !m_TransformEditSession.Active)
                 {
-                    m_CommandHistory->PushExecutedCommand(CreateRef<TransformChangeCommand>(
-                        Entity(entityHandle, entityScene),
-                        m_TransformEditSession.Translation,
-                        m_TransformEditSession.Rotation,
-                        m_TransformEditSession.Scale,
-                        component.Translation,
-                        component.Rotation,
-                        component.Scale));
+                    m_TransformEditSession.Active = true;
+                    m_TransformEditSession.EntityID = UUID(entityIDValue);
+                    m_TransformEditSession.SceneContext = entityScene;
+                    m_TransformEditSession.Translation = oldTranslation;
+                    m_TransformEditSession.Rotation = oldRotation;
+                    m_TransformEditSession.Scale = oldScale;
                 }
 
-                m_TransformEditSession = {};
-            }
-        }, false);
+                if (editFinished && m_TransformEditSession.Active)
+                {
+                    if (m_CommandHistory && static_cast<uint64_t>(m_TransformEditSession.EntityID) == entityIDValue &&
+                        m_TransformEditSession.SceneContext == entityScene &&
+                        (!AreVec3Equal(m_TransformEditSession.Translation, component.Translation) ||
+                         !AreVec3Equal(m_TransformEditSession.Rotation, component.Rotation) ||
+                         !AreVec3Equal(m_TransformEditSession.Scale, component.Scale)))
+                    {
+                        m_CommandHistory->PushExecutedCommand(CreateRef<TransformChangeCommand>(
+                            Entity(entityHandle, entityScene), m_TransformEditSession.Translation,
+                            m_TransformEditSession.Rotation, m_TransformEditSession.Scale, component.Translation,
+                            component.Rotation, component.Scale));
+                    }
+
+                    m_TransformEditSession = {};
+                }
+            },
+            false);
 
         // Camera
-        DrawComponent<CameraComponent>("相机", entity, [](auto& component)
-        {
-            auto& camera = component.Camera;
-
-            ImGui::Checkbox("主相机", &component.Primary);
-
-            const char* projectionTypeStrings[] = {"透视", "正交"};
-            const char* currentProjectionTypeString =
-                projectionTypeStrings[static_cast<int>(camera.GetProjectionType())];
-
-            if (ImGui::BeginCombo("投影方式", currentProjectionTypeString))
+        DrawComponent<CameraComponent>(
+            "相机", entity,
+            [](auto& component)
             {
-                for (int i = 0; i < 2; i++)
+                auto& camera = component.Camera;
+
+                ImGui::Checkbox("主相机", &component.Primary);
+
+                const char* projectionTypeStrings[] = {"透视", "正交"};
+                const char* currentProjectionTypeString =
+                    projectionTypeStrings[static_cast<int>(camera.GetProjectionType())];
+
+                if (ImGui::BeginCombo("投影方式", currentProjectionTypeString))
                 {
-                    bool isSelected = currentProjectionTypeString == projectionTypeStrings[i];
-                    if (ImGui::Selectable(projectionTypeStrings[i], isSelected))
+                    for (int i = 0; i < 2; i++)
                     {
-                        currentProjectionTypeString = projectionTypeStrings[i];
-                        camera.SetProjectionType(static_cast<SceneCamera::ProjectionType>(i));
+                        bool isSelected = currentProjectionTypeString == projectionTypeStrings[i];
+                        if (ImGui::Selectable(projectionTypeStrings[i], isSelected))
+                        {
+                            currentProjectionTypeString = projectionTypeStrings[i];
+                            camera.SetProjectionType(static_cast<SceneCamera::ProjectionType>(i));
+                        }
+                        if (isSelected)
+                            ImGui::SetItemDefaultFocus();
                     }
-                    if (isSelected)
-                        ImGui::SetItemDefaultFocus();
+                    ImGui::EndCombo();
                 }
-                ImGui::EndCombo();
-            }
 
-            if (camera.GetProjectionType() == SceneCamera::ProjectionType::Perspective)
-            {
-                float perspectiveFOV = glm::degrees(camera.GetPerspectiveVerticalFOV());
-                if (ImGui::DragFloat("垂直FOV", &perspectiveFOV, 1.0f, 1.0f, 179.0f))
-                    camera.SetPerspectiveVerticalFOV(glm::radians(std::clamp(perspectiveFOV, 1.0f, 179.0f)));
-
-                float perspectiveNear = camera.GetPerspectiveNearClip();
-                if (ImGui::DragFloat("近平面", &perspectiveNear, 0.01f, 0.001f, 0.0f))
+                if (camera.GetProjectionType() == SceneCamera::ProjectionType::Perspective)
                 {
-                    perspectiveNear = std::max(perspectiveNear, 0.001f);
-                    camera.SetPerspectiveNearClip(perspectiveNear);
+                    float perspectiveFOV = glm::degrees(camera.GetPerspectiveVerticalFOV());
+                    if (ImGui::DragFloat("垂直FOV", &perspectiveFOV, 1.0f, 1.0f, 179.0f))
+                        camera.SetPerspectiveVerticalFOV(glm::radians(std::clamp(perspectiveFOV, 1.0f, 179.0f)));
+
+                    float perspectiveNear = camera.GetPerspectiveNearClip();
+                    if (ImGui::DragFloat("近平面", &perspectiveNear, 0.01f, 0.001f, 0.0f))
+                    {
+                        perspectiveNear = std::max(perspectiveNear, 0.001f);
+                        camera.SetPerspectiveNearClip(perspectiveNear);
+                    }
+
+                    float perspectiveFar = camera.GetPerspectiveFarClip();
+                    if (ImGui::DragFloat("远平面", &perspectiveFar, 1.0f, 0.0f, 0.0f))
+                    {
+                        perspectiveFar = std::max(perspectiveFar, camera.GetPerspectiveNearClip() + 0.1f);
+                        camera.SetPerspectiveFarClip(perspectiveFar);
+                    }
                 }
 
-                float perspectiveFar = camera.GetPerspectiveFarClip();
-                if (ImGui::DragFloat("远平面", &perspectiveFar, 1.0f, 0.0f, 0.0f))
+                if (camera.GetProjectionType() == SceneCamera::ProjectionType::Orthographic)
                 {
-                    perspectiveFar = std::max(perspectiveFar, camera.GetPerspectiveNearClip() + 0.1f);
-                    camera.SetPerspectiveFarClip(perspectiveFar);
+                    float orthoSize = camera.GetOrthographicSize();
+                    if (ImGui::DragFloat("大小", &orthoSize, 0.1f, 0.0f, 0.0f))
+                    {
+                        orthoSize = std::max(orthoSize, 0.01f);
+                        camera.SetOrthographicSize(orthoSize);
+                    }
+
+                    float orthoNear = camera.GetOrthographicNearClip();
+                    if (ImGui::DragFloat("近平面", &orthoNear, 0.1f))
+                        camera.SetOrthographicNearClip(orthoNear);
+
+                    float orthoFar = camera.GetOrthographicFarClip();
+                    if (ImGui::DragFloat("远平面", &orthoFar, 0.1f))
+                    {
+                        orthoFar = std::max(orthoFar, camera.GetOrthographicNearClip() + 0.1f);
+                        camera.SetOrthographicFarClip(orthoFar);
+                    }
+
+                    ImGui::Checkbox("固定宽高比", &component.FixedAspectRatio);
                 }
-            }
-
-            if (camera.GetProjectionType() == SceneCamera::ProjectionType::Orthographic)
-            {
-                float orthoSize = camera.GetOrthographicSize();
-                if (ImGui::DragFloat("大小", &orthoSize, 0.1f, 0.0f, 0.0f))
-                {
-                    orthoSize = std::max(orthoSize, 0.01f);
-                    camera.SetOrthographicSize(orthoSize);
-                }
-
-                float orthoNear = camera.GetOrthographicNearClip();
-                if (ImGui::DragFloat("近平面", &orthoNear, 0.1f))
-                    camera.SetOrthographicNearClip(orthoNear);
-
-                float orthoFar = camera.GetOrthographicFarClip();
-                if (ImGui::DragFloat("远平面", &orthoFar, 0.1f))
-                {
-                    orthoFar = std::max(orthoFar, camera.GetOrthographicNearClip() + 0.1f);
-                    camera.SetOrthographicFarClip(orthoFar);
-                }
-
-                ImGui::Checkbox("固定宽高比", &component.FixedAspectRatio);
-            }
-        });
+            });
 
         // Light — 通过反射自动绘制（见下方统一循环）
         // RigidBody — 通过反射自动绘制
@@ -508,9 +510,7 @@ namespace Engine
 
         // Mesh Renderer
         DrawComponent<MeshRendererComponent>("\u7f51\u683c\u6e32\u67d3\u5668", entity, [](auto& component)
-        {
-            PropertiesPanelCustomDrawers::DrawMeshRendererInspector(component);
-        });
+                                             { PropertiesPanelCustomDrawers::DrawMeshRendererInspector(component); });
         // RigidBody — 通过反射自动绘制（见下方统一循环）
 
         // BoxCollider — 通过反射自动绘制
@@ -519,39 +519,29 @@ namespace Engine
 
         // Terrain
         DrawComponent<TerrainComponent>("\u5730\u5f62", entity, [this](auto& component)
-        {
-            PropertiesPanelCustomDrawers::DrawTerrainInspector(component);
-        });
+                                        { PropertiesPanelCustomDrawers::DrawTerrainInspector(component); });
         // ParticleEmitter
-        DrawComponent<ParticleEmitterComponent>("粒子发射器", entity, [](auto& component)
-        {
-            PropertiesPanelCustomDrawers::DrawParticleEmitterInspector(component);
-        });
+        DrawComponent<ParticleEmitterComponent>(
+            "粒子发射器", entity,
+            [](auto& component) { PropertiesPanelCustomDrawers::DrawParticleEmitterInspector(component); });
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // AudioSource
         DrawComponent<AudioSourceComponent>("\u97f3\u9891\u6e90", entity, [](auto& component)
-        {
-            PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component);
-        });
+                                            { PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component); });
         // AudioListener
         DrawComponent<AudioListenerComponent>("\u97f3\u9891\u76d1\u542c\u5668", entity, [](auto& component)
-        {
-            PropertiesPanelCustomDrawers::DrawAudioListenerInspector(component);
-        });
+                                              { PropertiesPanelCustomDrawers::DrawAudioListenerInspector(component); });
         // VideoPlayer
         DrawComponent<VideoPlayerComponent>("\u89c6\u9891\u64ad\u653e\u5668", entity, [](auto& component)
-        {
-            PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component);
-        });
+                                            { PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component); });
         // ---- 反射组件统一绘制 ----
         {
             // DrawVec3Control 适配函数（包装成 AutoInspector 需要的签名）
             static PropertiesPanel* s_Panel = nullptr;
             s_Panel = this;
-            auto drawVec3Wrapper = [](const char* label, float* values, float resetValue) {
-                s_Panel->DrawVec3Control(label, *reinterpret_cast<glm::vec3*>(values), resetValue);
-            };
+            auto drawVec3Wrapper = [](const char* label, float* values, float resetValue)
+            { s_Panel->DrawVec3Control(label, *reinterpret_cast<glm::vec3*>(values), resetValue); };
 
             auto* scene = entity.GetScene();
             uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
@@ -568,15 +558,7 @@ namespace Engine
 
         // ---- NativeScript 组件 ----
         DrawComponent<NativeScriptComponent>("\u811a\u672c", entity, [](auto& component)
-        {
-            PropertiesPanelCustomDrawers::DrawNativeScriptInspector(component);
-        });
+                                             { PropertiesPanelCustomDrawers::DrawNativeScriptInspector(component); });
     }
 
 } // namespace Engine
-
-
-
-
-
-

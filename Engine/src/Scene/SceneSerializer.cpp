@@ -1,30 +1,29 @@
-#include "engpch.h"
 #include "Scene/SceneSerializer.h"
+#include "engpch.h"
 
-#include "Scene/Scene.h"
-#include "Scene/Entity.h"
-#include "Scene/Components.h"
-#include "Script/NativeScriptComponent.h"
-#include "Script/ScriptRegistry.h"
-#include "Reflection/ComponentRegistry.h"
-#include "Reflection/AutoSerializer.h"
-#include "Renderer/Mesh.h"
-#include "Renderer/Texture.h"
 #include "Asset/AssetManager.h"
 #include "Asset/PathUtils.h"
 #include "Core/Log.h"
+#include "Reflection/AutoSerializer.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Renderer/Mesh.h"
+#include "Renderer/Texture.h"
+#include "Scene/Components.h"
+#include "Scene/Entity.h"
+#include "Scene/Scene.h"
+#include "Script/NativeScriptComponent.h"
+#include "Script/ScriptRegistry.h"
 
 #include <yaml-cpp/yaml.h>
 
-#include <glm/glm.hpp>
 #include <filesystem>
 #include <fstream>
+#include <glm/glm.hpp>
 
 namespace YAML
 {
 
-    template <>
-    struct convert<glm::vec3>
+    template <> struct convert<glm::vec3>
     {
         static Node encode(const glm::vec3& rhs)
         {
@@ -48,8 +47,7 @@ namespace YAML
         }
     };
 
-    template <>
-    struct convert<glm::vec4>
+    template <> struct convert<glm::vec4>
     {
         static Node encode(const glm::vec4& rhs)
         {
@@ -75,8 +73,7 @@ namespace YAML
         }
     };
 
-    template <>
-    struct convert<glm::vec2>
+    template <> struct convert<glm::vec2>
     {
         static Node encode(const glm::vec2& rhs)
         {
@@ -124,10 +121,7 @@ namespace Engine
         return out;
     }
 
-    SceneSerializer::SceneSerializer(const Ref<Scene>& scene)
-        : m_Scene(scene)
-    {
-    }
+    SceneSerializer::SceneSerializer(const Ref<Scene>& scene) : m_Scene(scene) {}
 
     static void SerializeEntity(YAML::Emitter& out, Entity entity)
     {
@@ -182,10 +176,18 @@ namespace Engine
             const char* meshTypeStr = "Cube";
             switch (mrc.Type)
             {
-            case MeshType::Cube:   meshTypeStr = "Cube";   break;
-            case MeshType::Plane:  meshTypeStr = "Plane";  break;
-            case MeshType::Sphere: meshTypeStr = "Sphere"; break;
-            case MeshType::Model:  meshTypeStr = "Model";  break;
+            case MeshType::Cube:
+                meshTypeStr = "Cube";
+                break;
+            case MeshType::Plane:
+                meshTypeStr = "Plane";
+                break;
+            case MeshType::Sphere:
+                meshTypeStr = "Sphere";
+                break;
+            case MeshType::Model:
+                meshTypeStr = "Model";
+                break;
             }
             out << YAML::Key << "MeshType" << YAML::Value << meshTypeStr;
 
@@ -196,14 +198,17 @@ namespace Engine
             }
 
             out << YAML::Key << "Color" << YAML::Value << mrc.Color;
-            out << YAML::Key << "TexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.DiffuseTextureAsset);
+            out << YAML::Key << "TexturePath" << YAML::Value
+                << AssetManager::GetPath<Texture2D>(mrc.DiffuseTextureAsset);
             out << YAML::Key << "Tiling" << YAML::Value << mrc.Tiling;
             out << YAML::Key << "Shininess" << YAML::Value << mrc.Shininess;
             out << YAML::Key << "NormalMapPath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.NormalMapAsset);
             out << YAML::Key << "Metallic" << YAML::Value << mrc.Metallic;
             out << YAML::Key << "Roughness" << YAML::Value << mrc.Roughness;
-            out << YAML::Key << "MetallicTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.MetallicTextureAsset);
-            out << YAML::Key << "RoughnessTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.RoughnessTextureAsset);
+            out << YAML::Key << "MetallicTexturePath" << YAML::Value
+                << AssetManager::GetPath<Texture2D>(mrc.MetallicTextureAsset);
+            out << YAML::Key << "RoughnessTexturePath" << YAML::Value
+                << AssetManager::GetPath<Texture2D>(mrc.RoughnessTextureAsset);
             out << YAML::Key << "AOTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.AOTextureAsset);
             out << YAML::EndMap;
         }
@@ -216,8 +221,7 @@ namespace Engine
             auto& cc = entity.GetComponent<CameraComponent>();
             auto& camera = cc.Camera;
 
-            out << YAML::Key << "ProjectionType"
-                << YAML::Value << static_cast<int>(camera.GetProjectionType());
+            out << YAML::Key << "ProjectionType" << YAML::Value << static_cast<int>(camera.GetProjectionType());
             out << YAML::Key << "PerspectiveFOV" << YAML::Value << camera.GetPerspectiveVerticalFOV();
             out << YAML::Key << "PerspectiveNear" << YAML::Value << camera.GetPerspectiveNearClip();
             out << YAML::Key << "PerspectiveFar" << YAML::Value << camera.GetPerspectiveFarClip();
@@ -268,8 +272,10 @@ namespace Engine
             for (int i = 0; i < 4; i++)
             {
                 std::string p = "Layer" + std::to_string(i);
-                out << YAML::Key << (p + "Texture") << YAML::Value << AssetManager::GetPath<Texture2D>(tc.LayerTextures[i]);
-                out << YAML::Key << (p + "NormalMap") << YAML::Value << AssetManager::GetPath<Texture2D>(tc.LayerNormalMaps[i]);
+                out << YAML::Key << (p + "Texture") << YAML::Value
+                    << AssetManager::GetPath<Texture2D>(tc.LayerTextures[i]);
+                out << YAML::Key << (p + "NormalMap") << YAML::Value
+                    << AssetManager::GetPath<Texture2D>(tc.LayerNormalMaps[i]);
                 out << YAML::Key << (p + "Tiling") << YAML::Value << tc.LayerTiling[i];
                 out << YAML::Key << (p + "Metallic") << YAML::Value << tc.LayerMetallic[i];
                 out << YAML::Key << (p + "Roughness") << YAML::Value << tc.LayerRoughness[i];
@@ -417,7 +423,8 @@ namespace Engine
         {
             const auto& skyboxPaths = m_Scene->GetSkyboxFacePaths();
             if (!skyboxPaths.empty())
-            {                std::vector<std::string> relativePaths;
+            {
+                std::vector<std::string> relativePaths;
                 for (const auto& p : skyboxPaths)
                     relativePaths.push_back(PathUtils::ToProjectRelativeOrAbsolute(p));
 
@@ -482,9 +489,12 @@ namespace Engine
 
     static MeshType MeshTypeFromString(const std::string& str)
     {
-        if (str == "Plane")  return MeshType::Plane;
-        if (str == "Sphere") return MeshType::Sphere;
-        if (str == "Model")  return MeshType::Model;
+        if (str == "Plane")
+            return MeshType::Plane;
+        if (str == "Sphere")
+            return MeshType::Sphere;
+        if (str == "Model")
+            return MeshType::Model;
         return MeshType::Cube;
     }
 
@@ -506,12 +516,14 @@ namespace Engine
         }
         catch (const YAML::ParserException& e)
         {
-            ENGINE_CORE_ERROR("Failed to parse scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath), e.what());
+            ENGINE_CORE_ERROR("Failed to parse scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath),
+                              e.what());
             return false;
         }
         catch (const YAML::BadFile& e)
         {
-            ENGINE_CORE_ERROR("Failed to open scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath), e.what());
+            ENGINE_CORE_ERROR("Failed to open scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath),
+                              e.what());
             return false;
         }
 
@@ -529,8 +541,10 @@ namespace Engine
             {
                 int res = shadowNode["MapResolution"].as<int>();
                 // 范围校验：256 ~ 8192
-                if (res < 256) res = 256;
-                if (res > 8192) res = 8192;
+                if (res < 256)
+                    res = 256;
+                if (res > 8192)
+                    res = 8192;
                 m_Scene->ResizeShadowMap(res);
             }
             if (shadowNode["Bias"])
@@ -562,8 +576,10 @@ namespace Engine
             if (renderNode["BloomIterations"])
             {
                 int iters = renderNode["BloomIterations"].as<int>();
-                if (iters < 1) iters = 1;
-                if (iters > 20) iters = 20;
+                if (iters < 1)
+                    iters = 1;
+                if (iters > 20)
+                    iters = 20;
                 outRenderSettings->PostProcessing.BloomIterations = iters;
             }
             if (renderNode["ToneMappingMode"])
@@ -634,9 +650,8 @@ namespace Engine
             Entity deserializedEntity;
             try
             {
-                uint64_t uuid = entityNode["Entity"]
-                    ? entityNode["Entity"].as<uint64_t>()
-                    : static_cast<uint64_t>(UUID());
+                uint64_t uuid =
+                    entityNode["Entity"] ? entityNode["Entity"].as<uint64_t>() : static_cast<uint64_t>(UUID());
 
                 std::string name;
                 auto tagComponent = entityNode["TagComponent"];
@@ -671,7 +686,8 @@ namespace Engine
                 {
                     auto& mrc = deserializedEntity.AddComponent<MeshRendererComponent>();
                     std::string meshType = meshRendererComponent["MeshType"]
-                        ? meshRendererComponent["MeshType"].as<std::string>() : "Cube";
+                                               ? meshRendererComponent["MeshType"].as<std::string>()
+                                               : "Cube";
 
                     // Read model path for Model type
                     std::string modelPath;
@@ -718,8 +734,10 @@ namespace Engine
                     if (meshRendererComponent["Roughness"])
                         mrc.Roughness = meshRendererComponent["Roughness"].as<float>();
 
-                    auto loadSafeTextureHandle = [](const YAML::Node& node, const std::string& key) -> AssetHandle {
-                        if (!node[key]) return {};
+                    auto loadSafeTextureHandle = [](const YAML::Node& node, const std::string& key) -> AssetHandle
+                    {
+                        if (!node[key])
+                            return {};
                         std::string path = node[key].as<std::string>();
                         if (PathUtils::IsSafeAssetPath(path))
                             return AssetManager::Load<Texture2D>(path);
@@ -779,18 +797,23 @@ namespace Engine
                 {
                     auto& tc = deserializedEntity.AddComponent<TerrainComponent>();
 
-                    auto loadSafePath = [](const YAML::Node& n, const std::string& k) -> std::string {
-                        if (!n[k]) return "";
+                    auto loadSafePath = [](const YAML::Node& n, const std::string& k) -> std::string
+                    {
+                        if (!n[k])
+                            return "";
                         std::string p = n[k].as<std::string>();
                         return PathUtils::IsSafeAssetPath(p) ? p : "";
                     };
 
                     tc.HeightmapPath = loadSafePath(terrainNode, "HeightmapPath");
-                    if (terrainNode["HeightScale"]) tc.HeightScale = terrainNode["HeightScale"].as<float>();
-                    if (terrainNode["TerrainSize"]) tc.TerrainSize = terrainNode["TerrainSize"].as<float>();
+                    if (terrainNode["HeightScale"])
+                        tc.HeightScale = terrainNode["HeightScale"].as<float>();
+                    if (terrainNode["TerrainSize"])
+                        tc.TerrainSize = terrainNode["TerrainSize"].as<float>();
                     tc.SplatmapPath = loadSafePath(terrainNode, "SplatmapPath");
 
-                    auto loadSafeTexHandle = [&](const YAML::Node& n, const std::string& k) -> AssetHandle {
+                    auto loadSafeTexHandle = [&](const YAML::Node& n, const std::string& k) -> AssetHandle
+                    {
                         std::string p = loadSafePath(n, k);
                         return p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
                     };
@@ -800,21 +823,34 @@ namespace Engine
                         std::string p = "Layer" + std::to_string(i);
                         tc.LayerTextures[i] = loadSafeTexHandle(terrainNode, p + "Texture");
                         tc.LayerNormalMaps[i] = loadSafeTexHandle(terrainNode, p + "NormalMap");
-                        if (terrainNode[p + "Tiling"]) tc.LayerTiling[i] = terrainNode[p + "Tiling"].as<float>();
-                        if (terrainNode[p + "Metallic"]) tc.LayerMetallic[i] = terrainNode[p + "Metallic"].as<float>();
-                        if (terrainNode[p + "Roughness"]) tc.LayerRoughness[i] = terrainNode[p + "Roughness"].as<float>();
+                        if (terrainNode[p + "Tiling"])
+                            tc.LayerTiling[i] = terrainNode[p + "Tiling"].as<float>();
+                        if (terrainNode[p + "Metallic"])
+                            tc.LayerMetallic[i] = terrainNode[p + "Metallic"].as<float>();
+                        if (terrainNode[p + "Roughness"])
+                            tc.LayerRoughness[i] = terrainNode[p + "Roughness"].as<float>();
                     }
 
-                    if (terrainNode["Friction"]) tc.Friction = terrainNode["Friction"].as<float>();
-                    if (terrainNode["Restitution"]) tc.Restitution = terrainNode["Restitution"].as<float>();
-                    if (terrainNode["LODLevels"]) tc.LODLevels = std::clamp(terrainNode["LODLevels"].as<int>(), 1, 3);
-                    if (terrainNode["LODDistance1"]) tc.LODDistance1 = terrainNode["LODDistance1"].as<float>();
-                    if (terrainNode["LODDistance2"]) tc.LODDistance2 = terrainNode["LODDistance2"].as<float>();
-                    if (terrainNode["GrassEnabled"]) tc.GrassEnabled = terrainNode["GrassEnabled"].as<bool>();
-                    if (terrainNode["GrassDensity"]) tc.GrassDensity = terrainNode["GrassDensity"].as<float>();
-                    if (terrainNode["GrassHeight"]) tc.GrassHeight = terrainNode["GrassHeight"].as<float>();
-                    if (terrainNode["GrassWidth"]) tc.GrassWidth = terrainNode["GrassWidth"].as<float>();
-                    if (terrainNode["GrassWindStrength"]) tc.GrassWindStrength = terrainNode["GrassWindStrength"].as<float>();
+                    if (terrainNode["Friction"])
+                        tc.Friction = terrainNode["Friction"].as<float>();
+                    if (terrainNode["Restitution"])
+                        tc.Restitution = terrainNode["Restitution"].as<float>();
+                    if (terrainNode["LODLevels"])
+                        tc.LODLevels = std::clamp(terrainNode["LODLevels"].as<int>(), 1, 3);
+                    if (terrainNode["LODDistance1"])
+                        tc.LODDistance1 = terrainNode["LODDistance1"].as<float>();
+                    if (terrainNode["LODDistance2"])
+                        tc.LODDistance2 = terrainNode["LODDistance2"].as<float>();
+                    if (terrainNode["GrassEnabled"])
+                        tc.GrassEnabled = terrainNode["GrassEnabled"].as<bool>();
+                    if (terrainNode["GrassDensity"])
+                        tc.GrassDensity = terrainNode["GrassDensity"].as<float>();
+                    if (terrainNode["GrassHeight"])
+                        tc.GrassHeight = terrainNode["GrassHeight"].as<float>();
+                    if (terrainNode["GrassWidth"])
+                        tc.GrassWidth = terrainNode["GrassWidth"].as<float>();
+                    if (terrainNode["GrassWindStrength"])
+                        tc.GrassWindStrength = terrainNode["GrassWindStrength"].as<float>();
                     tc.GrassTexture = loadSafeTexHandle(terrainNode, "GrassTexture");
                     tc.MeshDirty = true;
                 }
@@ -1002,5 +1038,3 @@ namespace Engine
     }
 
 } // namespace Engine
-
-

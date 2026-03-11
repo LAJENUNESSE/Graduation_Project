@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Core/Application.h"
-#include "Core/Log.h"
-#include "Core/CrashHandler.h"
 #include "Asset/PathUtils.h"
+#include "Core/Application.h"
+#include "Core/CrashHandler.h"
+#include "Core/Log.h"
 
 #include <filesystem>
 #ifdef _WIN32

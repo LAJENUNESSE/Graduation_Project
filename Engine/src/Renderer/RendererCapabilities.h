@@ -8,7 +8,7 @@ namespace Engine
     {
         int GLMajorVersion = 0;
         int GLMinorVersion = 0;
-        bool SupportsComputeShaders = false;  // 需要 GL >= 4.3
+        bool SupportsComputeShaders = false; // 需要 GL >= 4.3
 
         void Query();
 

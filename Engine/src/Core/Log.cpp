@@ -1,5 +1,5 @@
-#include "engpch.h"
 #include "Core/Log.h"
+#include "engpch.h"
 
 #include <spdlog/sinks/stdout_color_sinks.h>
 

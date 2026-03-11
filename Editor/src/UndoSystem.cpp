@@ -5,9 +5,7 @@ namespace Engine
 {
     namespace
     {
-        void ApplyTransform(Entity entity,
-                            const glm::vec3& translation,
-                            const glm::vec3& rotation,
+        void ApplyTransform(Entity entity, const glm::vec3& translation, const glm::vec3& rotation,
                             const glm::vec3& scale)
         {
             if (!entity || !entity.HasComponent<TransformComponent>())
@@ -19,10 +17,8 @@ namespace Engine
             tc.Scale = scale;
         }
 
-        void ApplyTransformByUUID(const UUID& entityID, const Ref<Scene>& scene,
-                                  const glm::vec3& translation,
-                                  const glm::vec3& rotation,
-                                  const glm::vec3& scale)
+        void ApplyTransformByUUID(const UUID& entityID, const Ref<Scene>& scene, const glm::vec3& translation,
+                                  const glm::vec3& rotation, const glm::vec3& scale)
         {
             if (!scene)
                 return;
@@ -106,15 +102,13 @@ namespace Engine
 
     // ==================== TransformChangeCommand ====================
 
-    TransformChangeCommand::TransformChangeCommand(Entity entity,
-                                                   const glm::vec3& oldTranslation, const glm::vec3& oldRotation,
-                                                   const glm::vec3& oldScale,
+    TransformChangeCommand::TransformChangeCommand(Entity entity, const glm::vec3& oldTranslation,
+                                                   const glm::vec3& oldRotation, const glm::vec3& oldScale,
                                                    const glm::vec3& newTranslation, const glm::vec3& newRotation,
                                                    const glm::vec3& newScale)
-        : m_EntityHandle(static_cast<entt::entity>(entity))
-        , m_Scene(entity.GetScene())
-        , m_OldTranslation(oldTranslation), m_OldRotation(oldRotation), m_OldScale(oldScale)
-        , m_NewTranslation(newTranslation), m_NewRotation(newRotation), m_NewScale(newScale)
+        : m_EntityHandle(static_cast<entt::entity>(entity)), m_Scene(entity.GetScene()),
+          m_OldTranslation(oldTranslation), m_OldRotation(oldRotation), m_OldScale(oldScale),
+          m_NewTranslation(newTranslation), m_NewRotation(newRotation), m_NewScale(newScale)
     {
     }
 
@@ -157,8 +151,7 @@ namespace Engine
 
     // ==================== EntityCreateCommand ====================
 
-    EntityCreateCommand::EntityCreateCommand(Ref<Scene> scene, const std::string& name)
-        : m_Scene(scene), m_Name(name)
+    EntityCreateCommand::EntityCreateCommand(Ref<Scene> scene, const std::string& name) : m_Scene(scene), m_Name(name)
     {
     }
 
@@ -203,8 +196,7 @@ namespace Engine
     // ==================== EntityDeleteCommand ====================
 
     EntityDeleteCommand::EntityDeleteCommand(Ref<Scene> scene, Entity entity)
-        : m_Scene(scene)
-        , m_EntityHandle(static_cast<entt::entity>(entity))
+        : m_Scene(scene), m_EntityHandle(static_cast<entt::entity>(entity))
     {
         // 保存快照
         m_EntityName = entity.GetName();
@@ -289,13 +281,10 @@ namespace Engine
 
     // ==================== PropertyChangeCommand ====================
 
-    PropertyChangeCommand::PropertyChangeCommand(const std::string& description,
-                                                  std::any oldValue, std::any newValue,
-                                                  ApplyFn applyFn)
-        : m_Description(description)
-        , m_OldValue(std::move(oldValue))
-        , m_NewValue(std::move(newValue))
-        , m_ApplyFn(std::move(applyFn))
+    PropertyChangeCommand::PropertyChangeCommand(const std::string& description, std::any oldValue, std::any newValue,
+                                                 ApplyFn applyFn)
+        : m_Description(description), m_OldValue(std::move(oldValue)), m_NewValue(std::move(newValue)),
+          m_ApplyFn(std::move(applyFn))
     {
     }
 
@@ -319,9 +308,7 @@ namespace Engine
     // ==================== ParentChangeCommand ====================
 
     ParentChangeCommand::ParentChangeCommand(Ref<Scene> scene, Entity child, Entity newParent)
-        : m_Scene(scene)
-        , m_ChildUUID(child.GetUUID())
-        , m_NewParentUUID(newParent ? newParent.GetUUID() : UUID(0))
+        : m_Scene(scene), m_ChildUUID(child.GetUUID()), m_NewParentUUID(newParent ? newParent.GetUUID() : UUID(0))
     {
         // 记录旧父节点 UUID
         if (child.HasComponent<RelationshipComponent>())

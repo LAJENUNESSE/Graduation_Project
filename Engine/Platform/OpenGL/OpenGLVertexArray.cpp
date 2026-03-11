@@ -1,5 +1,5 @@
-#include "engpch.h"
 #include "Platform/OpenGL/OpenGLVertexArray.h"
+#include "engpch.h"
 
 #include <glad/gl.h>
 
@@ -100,8 +100,8 @@ namespace Engine
                 for (uint32_t i = 0; i < count; i++)
                 {
                     glEnableVertexAttribArray(m_VertexBufferIndex);
-                    glVertexAttribPointer(m_VertexBufferIndex, count, GL_FLOAT,
-                                          element.Normalized ? GL_TRUE : GL_FALSE, layout.GetStride(),
+                    glVertexAttribPointer(m_VertexBufferIndex, count, GL_FLOAT, element.Normalized ? GL_TRUE : GL_FALSE,
+                                          layout.GetStride(),
                                           reinterpret_cast<const void*>(
                                               static_cast<uintptr_t>(element.Offset + sizeof(float) * count * i)));
                     glVertexAttribDivisor(m_VertexBufferIndex, 1);
