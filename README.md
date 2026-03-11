@@ -92,4 +92,28 @@ vendor/                 第三方依赖（Git 子模块）
 
 ## License
 
-This project is for educational purposes (graduation thesis).
+This project is licensed under the **GNU Lesser General Public License v2.1+** (LGPL v2.1+).
+
+### Commercial Use & FFmpeg
+
+Since FFmpeg is linked as an **external dynamic library** (`.dll` on Windows), you can:
+- ✅ Use this engine in **proprietary/commercial applications**
+- ✅ Distribute closed-source products
+- ✅ Users can replace FFmpeg with their own build if needed
+
+**Requirements:**
+- Distribute the LGPL-licensed engine source code or provide dynamic linking capability
+- Include the `LICENSE` file with your distribution
+- Allow FFmpeg replacement by users (e.g., ship FFmpeg as a separate DLL)
+
+### Dependency Licenses
+
+| Dependency | License | Status |
+|---|---|---|
+| FFmpeg | GPL v2 | Dynamic DLL (external, replaceable) |
+| GLFW, Bullet3 | zlib | ✓ |
+| EnTT, spdlog, ImGui, yaml-cpp | MIT | ✓ |
+| Assimp | BSD 3-Clause | ✓ |
+| OpenAL Soft | LGPL/MIT | ✓ |
+
+See `LICENSE` file for full details.
