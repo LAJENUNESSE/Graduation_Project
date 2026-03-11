@@ -50,6 +50,14 @@ namespace Engine
         void SetParticleUsingCuda(bool v) { m_ParticleUsingCuda = v; }
         bool IsParticleUsingCuda() const { return m_ParticleUsingCuda; }
 
+        // Fluid compute timing
+        GPUTimerQuery& GetFluidComputeGPUTimer() { return m_FluidComputeGPU; }
+        void SetFluidComputeCudaMs(float ms) { m_FluidComputeCudaMs = ms; }
+        void SetFluidUsingCuda(bool v) { m_FluidUsingCuda = v; }
+        bool IsFluidUsingCuda() const { return m_FluidUsingCuda; }
+        void SetFluidActive(bool v) { m_FluidActive = v; }
+        bool IsFluidActive() const { return m_FluidActive; }
+
         // Render stats (modified by RenderCommand::DrawIndexed)
         RenderStats& GetStats() { return m_Stats; }
         const RenderStats& GetStats() const { return m_Stats; }
@@ -67,6 +75,10 @@ namespace Engine
         float GetParticleComputeGpuMs() const
         {
             return m_ParticleUsingCuda ? m_ParticleComputeCudaMs : m_ParticleComputeGPU.GetElapsedMs();
+        }
+        float GetFluidComputeGpuMs() const
+        {
+            return m_FluidUsingCuda ? m_FluidComputeCudaMs : m_FluidComputeGPU.GetElapsedMs();
         }
 
         // Frame time history (ring buffer for PlotLines)
@@ -103,6 +115,12 @@ namespace Engine
         GPUTimerQuery m_ParticleComputeGPU;
         float m_ParticleComputeCudaMs = 0.0f;
         bool m_ParticleUsingCuda = false;
+
+        // Fluid GPU timers
+        GPUTimerQuery m_FluidComputeGPU;
+        float m_FluidComputeCudaMs = 0.0f;
+        bool m_FluidUsingCuda = false;
+        bool m_FluidActive = false;
 
         // Render stats
         RenderStats m_Stats;

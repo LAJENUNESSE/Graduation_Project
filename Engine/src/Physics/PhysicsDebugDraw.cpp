@@ -100,6 +100,26 @@ namespace Engine
             }
         }
 
+        // 流体边界盒
+        {
+            glm::vec3 fluidBoundaryColor = {0.2f, 0.8f, 1.0f}; // 青色
+            auto view = reg.view<TransformComponent, FluidEmitterComponent>();
+            for (auto entity : view)
+            {
+                auto& transform = view.get<TransformComponent>(entity);
+                auto& fluid = view.get<FluidEmitterComponent>(entity);
+                if (!fluid.UseBoundary)
+                    continue;
+
+                // BoundaryMin/Max 是相对 Transform 的偏移，转为世界空间 AABB
+                glm::vec3 worldMin = transform.Translation + fluid.BoundaryMin;
+                glm::vec3 worldMax = transform.Translation + fluid.BoundaryMax;
+                glm::vec3 center = (worldMin + worldMax) * 0.5f;
+                glm::vec3 halfExtents = (worldMax - worldMin) * 0.5f;
+                DrawBox(center, halfExtents, glm::vec3(0.0f), fluidBoundaryColor);
+            }
+        }
+
         if (!m_LineVertices.empty())
             Flush(camera.GetViewProjection());
     }

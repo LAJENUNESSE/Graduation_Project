@@ -45,6 +45,9 @@ docs/
 # Scripts
 scripts/
 
+# VTune Profiler
+vtune_results/
+
 # Temp
 temp/
 

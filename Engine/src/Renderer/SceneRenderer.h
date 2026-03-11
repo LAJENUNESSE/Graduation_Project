@@ -36,6 +36,8 @@ namespace Engine
         Scene* ActiveScene = nullptr;
         float DeltaTime = 0.0f;
 
+        bool IsSimulating = false; // true = Play 模式，FluidPass 可运行
+
         // 供 FluidPass 使用
         uint32_t SceneColorTexID = 0;
         uint32_t SceneDepthTexID = 0;
