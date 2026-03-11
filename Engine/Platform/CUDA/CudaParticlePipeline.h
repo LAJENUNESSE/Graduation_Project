@@ -44,4 +44,11 @@ namespace Engine { namespace CudaInterop {
     // 启动渲染参数内核。1 个线程：aliveCount -> instanceCount。
     void LaunchRenderArgs(void* counter, void* indirectArgs, void* stream);
 
+    // ---- CUDA event 计时辅助（void* = cudaEvent_t）----
+    void* CreateCudaEvent();
+    void  DestroyCudaEvent(void* event);
+    void  RecordCudaEvent(void* event, void* stream);
+    // 查询两个事件之间的 GPU 耗时（毫秒）。调用前必须确保 stop 事件已完成。
+    float CudaEventElapsedMs(void* start, void* stop);
+
 }} // namespace Engine::CudaInterop

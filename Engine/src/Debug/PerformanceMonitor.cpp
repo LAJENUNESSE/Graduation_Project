@@ -36,7 +36,7 @@ namespace Engine
             m_CsvFile << "Frame,Timestamp_s,FrameTime_ms,FPS,"
                       << "ShadowPass_CPU_ms,SceneRender_CPU_ms,ImGui_CPU_ms,"
                       << "PollEvents_CPU_ms,SwapBuffers_CPU_ms,"
-                      << "ShadowPass_GPU_ms,SceneRender_GPU_ms,"
+                      << "ShadowPass_GPU_ms,SceneRender_GPU_ms,ParticleCompute_GPU_ms,"
                       << "DrawCalls,Vertices,Triangles\n";
             ENGINE_CORE_INFO("Performance CSV: {}", filename.str());
         }
@@ -54,6 +54,7 @@ namespace Engine
         // Release GPU queries while GL context is still alive
         m_ShadowPassGPU.Destroy();
         m_SceneRenderGPU.Destroy();
+        m_ParticleComputeGPU.Destroy();
 
         if (m_CsvFile.is_open())
         {
@@ -101,6 +102,7 @@ namespace Engine
                       << std::setprecision(3) << m_SwapBuffersCpuMs << ","
                       << std::setprecision(3) << m_ShadowPassGPU.GetElapsedMs() << ","
                       << std::setprecision(3) << m_SceneRenderGPU.GetElapsedMs() << ","
+                      << std::setprecision(3) << GetParticleComputeGpuMs() << ","
                       << std::defaultfloat
                       << m_Stats.DrawCalls << ","
                       << m_Stats.Vertices << ","

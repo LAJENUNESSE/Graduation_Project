@@ -17,6 +17,8 @@
 #include "Platform/CUDA/CudaParticleTypes.h"
 #endif
 
+#include "Debug/PerformanceMonitor.h"
+
 namespace Engine
 {
 
@@ -105,6 +107,12 @@ namespace Engine
 
     ParticleSystemGPU::~ParticleSystemGPU()
     {
+#ifdef ENGINE_ENABLE_CUDA
+        if (m_CudaEventStart)
+            CudaInterop::DestroyCudaEvent(m_CudaEventStart);
+        if (m_CudaEventStop)
+            CudaInterop::DestroyCudaEvent(m_CudaEventStop);
+#endif
         if (m_ReadbackFence)
             glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
         if (m_ReadbackBuffer)
@@ -215,6 +223,8 @@ namespace Engine
                     m_CudaSlotIndirect >= 0)
                 {
                     m_UseCudaPath = true;
+                    m_CudaEventStart = CudaInterop::CreateCudaEvent();
+                    m_CudaEventStop  = CudaInterop::CreateCudaEvent();
                     ENGINE_INFO("[Particle] CUDA compute sidecar activated ({0} buffers registered).",
                                 m_CudaInterop->GetSlotCount());
                 }
@@ -346,6 +356,7 @@ namespace Engine
             if (m_CudaInterop->MapAll())
             {
                 void* stream = m_CudaInterop->GetStream();
+                CudaInterop::RecordCudaEvent(m_CudaEventStart, stream);
 
                 // Emit
                 if (emitCount > 0)
@@ -408,7 +419,11 @@ namespace Engine
                     m_CudaInterop->GetMappedPointer(m_CudaSlotIndirect),
                     stream);
 
+                CudaInterop::RecordCudaEvent(m_CudaEventStop, stream);
                 m_CudaInterop->UnmapAll();
+
+                float cudaMs = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
+                PerformanceMonitor::Get().SetParticleComputeCudaMs(cudaMs);
                 cudaSucceeded = true;
             }
             else
@@ -420,6 +435,8 @@ namespace Engine
         if (!cudaSucceeded)
 #endif
         { // GL Compute path
+        PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
+
         // Bind all buffers
         m_ParticleBuffer->Bind(0);
         m_DeadList->Bind(1);
@@ -641,7 +658,13 @@ namespace Engine
         m_RenderArgsShader->Bind();
         RenderCommand::DispatchCompute(1);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
+
+        PerformanceMonitor::Get().GetParticleComputeGPUTimer().End();
         } // GL Compute path
+
+#ifdef ENGINE_ENABLE_CUDA
+        PerformanceMonitor::Get().SetParticleUsingCuda(cudaSucceeded);
+#endif
 
         // ---- 异步回读：始终执行，用于 simulate 按存活数 dispatch + SPH + direct-draw ----
         {

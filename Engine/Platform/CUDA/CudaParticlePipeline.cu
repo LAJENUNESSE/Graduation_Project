@@ -217,4 +217,37 @@ void LaunchRenderArgs(void* counter, void* indirectArgs, void* stream)
         static_cast<IndirectDrawCommand*>(indirectArgs));
 }
 
+// ======================================================================
+// CUDA event 计时辅助
+// ======================================================================
+
+void* CreateCudaEvent()
+{
+    cudaEvent_t ev = nullptr;
+    cudaEventCreate(&ev);
+    return static_cast<void*>(ev);
+}
+
+void DestroyCudaEvent(void* event)
+{
+    if (event)
+        cudaEventDestroy(static_cast<cudaEvent_t>(event));
+}
+
+void RecordCudaEvent(void* event, void* stream)
+{
+    cudaEventRecord(static_cast<cudaEvent_t>(event),
+                    static_cast<cudaStream_t>(stream));
+}
+
+float CudaEventElapsedMs(void* start, void* stop)
+{
+    cudaEventSynchronize(static_cast<cudaEvent_t>(stop));
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms,
+                         static_cast<cudaEvent_t>(start),
+                         static_cast<cudaEvent_t>(stop));
+    return ms;
+}
+
 }} // namespace Engine::CudaInterop
