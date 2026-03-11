@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Platform/CUDA/CudaGLInteropContext.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
 #include "Core/Log.h"
 
 #ifdef _WIN32
@@ -41,6 +42,8 @@ namespace Engine
 
     bool CudaGLInteropContext::ProbeDeviceMatch()
     {
+        if (CudaInterop::IsCudaPoisoned()) return false;
+
         unsigned int count = 0;
         int device = -1;
         cudaError_t err = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
@@ -62,23 +65,16 @@ namespace Engine
         if (err != cudaSuccess || count == 0)
         {
             ENGINE_CORE_ERROR("[CUDA] No CUDA device matching GL context");
+            CudaInterop::PoisonCuda("No CUDA device matching GL context");
             return;
         }
 
-        err = cudaSetDevice(device);
-        if (err != cudaSuccess)
-        {
-            CUDA_LOG_ERR(cudaSetDevice, err);
+        if (!CUDA_CHECK(cudaSetDevice(device)))
             return;
-        }
         m_Impl->deviceId = device;
 
-        err = cudaStreamCreate(&m_Impl->stream);
-        if (err != cudaSuccess)
-        {
-            CUDA_LOG_ERR(cudaStreamCreate, err);
+        if (!CUDA_CHECK(cudaStreamCreate(&m_Impl->stream)))
             return;
-        }
 
         cudaDeviceProp prop{};
         cudaGetDeviceProperties(&prop, device);
@@ -133,6 +129,7 @@ namespace Engine
 
     bool CudaGLInteropContext::MapAll()
     {
+        if (CudaInterop::IsCudaPoisoned()) return false;
         if (m_Impl->mapped || m_Impl->slots.empty())
             return false;
 
@@ -145,6 +142,7 @@ namespace Engine
         if (err != cudaSuccess)
         {
             ENGINE_CORE_ERROR("[CUDA] MapAll failed: {0}", CudaErrStr(err));
+            CudaInterop::PoisonCuda("cudaGraphicsMapResources failed");
             return false;
         }
 
@@ -159,6 +157,7 @@ namespace Engine
                 cudaGraphicsUnmapResources(n, res.data(), m_Impl->stream);
                 for (auto& s : m_Impl->slots)
                     s.mappedPtr = nullptr;
+                CudaInterop::PoisonCuda("cudaGraphicsResourceGetMappedPointer failed");
                 return false;
             }
         }

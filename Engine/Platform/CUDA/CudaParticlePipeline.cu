@@ -3,6 +3,7 @@
 
 #include "Platform/CUDA/CudaParticlePipeline.h"
 #include "Platform/CUDA/CudaParticleTypes.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
 
 #include <cstdint>
 #include <cuda_runtime.h>
@@ -195,31 +196,36 @@ namespace Engine
 
         void LaunchEmit(void* particles, void* deadList, void* counter, const EmitParams& params, void* stream)
         {
-            if (params.emitCount == 0)
+            if (IsCudaPoisoned() || params.emitCount == 0)
                 return;
 
             uint32_t blocks = (params.emitCount + 63) / 64;
             EmitKernel<<<blocks, 64, 0, static_cast<cudaStream_t>(stream)>>>(
                 static_cast<GPUParticle*>(particles), static_cast<uint32_t*>(deadList),
                 static_cast<CounterData*>(counter), params);
+            CUDA_CHECK_KERNEL("EmitKernel");
         }
 
         void LaunchSimulate(void* particles, void* deadList, void* aliveList, void* counter,
                             const SimulateParams& params, void* stream)
         {
-            if (params.maxParticles == 0)
+            if (IsCudaPoisoned() || params.maxParticles == 0)
                 return;
 
             uint32_t blocks = (params.maxParticles + 255) / 256;
             SimulateKernel<<<blocks, 256, 0, static_cast<cudaStream_t>(stream)>>>(
                 static_cast<GPUParticle*>(particles), static_cast<uint32_t*>(deadList),
                 static_cast<uint32_t*>(aliveList), static_cast<CounterData*>(counter), params);
+            CUDA_CHECK_KERNEL("SimulateKernel");
         }
 
         void LaunchRenderArgs(void* counter, void* indirectArgs, void* stream)
         {
+            if (IsCudaPoisoned()) return;
+
             RenderArgsKernel<<<1, 1, 0, static_cast<cudaStream_t>(stream)>>>(
                 static_cast<CounterData*>(counter), static_cast<IndirectDrawCommand*>(indirectArgs));
+            CUDA_CHECK_KERNEL("RenderArgsKernel");
         }
 
         // ======================================================================
@@ -228,8 +234,9 @@ namespace Engine
 
         void* CreateCudaEvent()
         {
+            if (IsCudaPoisoned()) return nullptr;
             cudaEvent_t ev = nullptr;
-            cudaEventCreate(&ev);
+            CUDA_CHECK(cudaEventCreate(&ev));
             return static_cast<void*>(ev);
         }
 
@@ -241,14 +248,16 @@ namespace Engine
 
         void RecordCudaEvent(void* event, void* stream)
         {
-            cudaEventRecord(static_cast<cudaEvent_t>(event), static_cast<cudaStream_t>(stream));
+            if (IsCudaPoisoned() || !event) return;
+            CUDA_CHECK(cudaEventRecord(static_cast<cudaEvent_t>(event), static_cast<cudaStream_t>(stream)));
         }
 
         float CudaEventElapsedMs(void* start, void* stop)
         {
-            cudaEventSynchronize(static_cast<cudaEvent_t>(stop));
+            if (IsCudaPoisoned() || !start || !stop) return 0.0f;
+            CUDA_CHECK(cudaEventSynchronize(static_cast<cudaEvent_t>(stop)));
             float ms = 0.0f;
-            cudaEventElapsedTime(&ms, static_cast<cudaEvent_t>(start), static_cast<cudaEvent_t>(stop));
+            CUDA_CHECK(cudaEventElapsedTime(&ms, static_cast<cudaEvent_t>(start), static_cast<cudaEvent_t>(stop)));
             return ms;
         }
 

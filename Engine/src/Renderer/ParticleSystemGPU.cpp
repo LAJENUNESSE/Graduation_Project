@@ -15,6 +15,7 @@
 #include "Platform/CUDA/CudaGLInteropContext.h"
 #include "Platform/CUDA/CudaParticlePipeline.h"
 #include "Platform/CUDA/CudaParticleTypes.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
 #endif
 
 #include "Debug/PerformanceMonitor.h"
@@ -210,7 +211,7 @@ namespace Engine
         if (!m_CudaInitAttempted)
         {
             m_CudaInitAttempted = true;
-            if (CudaGLInteropContext::ProbeDeviceMatch())
+            if (!CudaInterop::IsCudaPoisoned() && CudaGLInteropContext::ProbeDeviceMatch())
             {
                 m_CudaInterop = CreateScope<CudaGLInteropContext>();
                 m_CudaSlotParticle = m_CudaInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
@@ -357,7 +358,7 @@ namespace Engine
 #ifdef ENGINE_ENABLE_CUDA
         // ---- CUDA compute sidecar path ----
         bool cudaSucceeded = false;
-        if (m_UseCudaPath && !sphEnabled)
+        if (m_UseCudaPath && !sphEnabled && !CudaInterop::IsCudaPoisoned())
         {
             if (m_CudaInterop->MapAll())
             {
@@ -422,9 +423,17 @@ namespace Engine
                 CudaInterop::RecordCudaEvent(m_CudaEventStop, stream);
                 m_CudaInterop->UnmapAll();
 
-                float cudaMs = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
-                PerformanceMonitor::Get().SetParticleComputeCudaMs(cudaMs);
-                cudaSucceeded = true;
+                if (CudaInterop::IsCudaPoisoned())
+                {
+                    ENGINE_WARN("[Particle] CUDA poisoned during compute; permanently falling back to GL compute.");
+                    m_UseCudaPath = false;
+                }
+                else
+                {
+                    float cudaMs = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
+                    PerformanceMonitor::Get().SetParticleComputeCudaMs(cudaMs);
+                    cudaSucceeded = true;
+                }
             }
             else
             {
