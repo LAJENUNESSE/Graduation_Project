@@ -15,14 +15,20 @@ jobs:
     name: Windows (MSVC)
     runs-on: windows-latest
 
+    env:
+      VCPKG_ROOT: C:/vcpkg
+
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake
         run: cmake --preset default
