@@ -1,0 +1,34 @@
+name: Build
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+
+      - name: Configure CMake
+        run: cmake --preset default
+
+      - name: Build Engine
+        run: cmake --build build --config RelWithDebInfo --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --config RelWithDebInfo --target Editor
