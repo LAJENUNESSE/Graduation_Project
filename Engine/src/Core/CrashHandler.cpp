@@ -1,7 +1,7 @@
+#include "engpch.h"
 #include "Core/CrashHandler.h"
 #include "Asset/PathUtils.h"
 #include "Core/Log.h"
-#include "engpch.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -10,8 +10,10 @@
 #include <system_error>
 
 #ifdef _WIN32
-#include <DbgHelp.h>
+// clang-format off
 #include <Windows.h>
+#include <DbgHelp.h>
+// clang-format on
 #pragma comment(lib, "Dbghelp.lib")
 #endif
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Core/Base.h"
 #include "Asset/AssetHandle.h"
+#include "Core/Base.h"
 #include "Renderer/VertexArray.h"
 
 #include <cstdint>
@@ -15,10 +15,10 @@ namespace Engine
     {
         Ref<VertexArray> VAO;
         uint32_t IndexCount = 0;
-        std::string DiffuseTexturePath;   // relative path (extracted from model)
-        AssetHandle DiffuseTextureAsset;  // loaded texture handle
-        std::string NormalTexturePath;    // relative path (extracted from model)
-        AssetHandle NormalTextureAsset;   // loaded normal map handle
+        std::string DiffuseTexturePath;  // relative path (extracted from model)
+        AssetHandle DiffuseTextureAsset; // loaded texture handle
+        std::string NormalTexturePath;   // relative path (extracted from model)
+        AssetHandle NormalTextureAsset;  // loaded normal map handle
     };
 
     class Mesh
@@ -26,36 +26,18 @@ namespace Engine
     public:
         ~Mesh() = default;
 
-        const std::vector<SubMesh>& GetSubMeshes() const
-        {
-            return m_SubMeshes;
-        }
+        const std::vector<SubMesh>& GetSubMeshes() const { return m_SubMeshes; }
 
-        size_t GetSubMeshCount() const
-        {
-            return m_SubMeshes.size();
-        }
+        size_t GetSubMeshCount() const { return m_SubMeshes.size(); }
 
         // Backward compat: first submesh
-        const Ref<VertexArray>& GetVertexArray() const
-        {
-            return m_SubMeshes[0].VAO;
-        }
+        const Ref<VertexArray>& GetVertexArray() const { return m_SubMeshes[0].VAO; }
 
-        uint32_t GetIndexCount() const
-        {
-            return m_SubMeshes[0].IndexCount;
-        }
+        uint32_t GetIndexCount() const { return m_SubMeshes[0].IndexCount; }
 
-        const std::string& GetMeshType() const
-        {
-            return m_MeshType;
-        }
+        const std::string& GetMeshType() const { return m_MeshType; }
 
-        const std::string& GetModelPath() const
-        {
-            return m_ModelPath;
-        }
+        const std::string& GetModelPath() const { return m_ModelPath; }
 
         static Ref<Mesh> CreateCube();
         static Ref<Mesh> CreatePlane();
@@ -87,7 +69,7 @@ namespace Engine
     private:
         std::vector<SubMesh> m_SubMeshes;
         std::string m_MeshType;
-        std::string m_ModelPath;   // non-empty for loaded models
+        std::string m_ModelPath; // non-empty for loaded models
     };
 
 } // namespace Engine

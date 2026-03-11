@@ -1,3 +1,4 @@
+#include "engpch.h"
 #include "Scene/Systems/VideoSystem.h"
 #include "Audio/AudioClip.h"
 #include "Audio/OpenALAudioEngine.h"
@@ -6,7 +7,6 @@
 #include "Media/FFmpegDecoder.h"
 #include "Renderer/Texture.h"
 #include "Scene/Components.h"
-#include "engpch.h"
 
 #include <cstring>
 

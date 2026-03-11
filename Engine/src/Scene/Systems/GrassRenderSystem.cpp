@@ -1,3 +1,4 @@
+#include "engpch.h"
 #include "Scene/Systems/GrassRenderSystem.h"
 #include "Asset/AssetManager.h"
 #include "Core/Log.h"
@@ -8,7 +9,6 @@
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
 #include "Terrain/TerrainMeshGenerator.h"
-#include "engpch.h"
 
 #include <algorithm>
 #include <cstring>

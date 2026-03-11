@@ -9,9 +9,11 @@
 #include "Scene/Scene.h"
 #include "UndoSystem.h"
 
-#include <ImGuizmo.h>
-#include <glm/gtc/type_ptr.hpp>
+// clang-format off
 #include <imgui.h>
+#include <ImGuizmo.h>
+// clang-format on
+#include <glm/gtc/type_ptr.hpp>
 
 namespace Engine
 {

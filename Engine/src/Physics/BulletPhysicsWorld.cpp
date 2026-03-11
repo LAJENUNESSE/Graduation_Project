@@ -1,24 +1,24 @@
 #include "engpch.h"
 #include "Physics/BulletPhysicsWorld.h"
-#include "Scene/Components.h"
-#include "Terrain/TerrainMeshGenerator.h"
-#include "Renderer/Mesh.h"
 #include "Asset/AssetManager.h"
 #include "Asset/PathUtils.h"
 #include "Core/Log.h"
+#include "Renderer/Mesh.h"
+#include "Scene/Components.h"
+#include "Terrain/TerrainMeshGenerator.h"
 
-#include <btBulletDynamicsCommon.h>
-#include <BulletCollision/CollisionShapes/btHeightfieldTerrainShape.h>
-#include <BulletCollision/CollisionShapes/btConvexHullShape.h>
 #include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
+#include <BulletCollision/CollisionShapes/btConvexHullShape.h>
+#include <BulletCollision/CollisionShapes/btHeightfieldTerrainShape.h>
 #include <BulletCollision/CollisionShapes/btTriangleMesh.h>
+#include <btBulletDynamicsCommon.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <assimp/Importer.hpp>
-#include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 namespace Engine
 {
@@ -47,14 +47,12 @@ namespace Engine
     }
 
     // 从模型文件加载顶点和索引数据（用于 MeshCollider）
-    static bool LoadMeshData(const std::string& filepath,
-                             std::vector<glm::vec3>& outVertices,
+    static bool LoadMeshData(const std::string& filepath, std::vector<glm::vec3>& outVertices,
                              std::vector<uint32_t>& outIndices)
     {
         Assimp::Importer importer;
         const std::string resolvedFilepath = PathUtils::ResolvePathString(filepath);
-        unsigned int flags = aiProcess_Triangulate
-                           | aiProcess_JoinIdenticalVertices;
+        unsigned int flags = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices;
 
         const aiScene* scene = importer.ReadFile(resolvedFilepath, flags);
         if (!scene || !scene->mRootNode)
@@ -86,9 +84,7 @@ namespace Engine
         return !outVertices.empty();
     }
 
-    BulletPhysicsWorld::BulletPhysicsWorld()
-    {
-    }
+    BulletPhysicsWorld::BulletPhysicsWorld() {}
 
     BulletPhysicsWorld::~BulletPhysicsWorld()
     {
@@ -252,7 +248,8 @@ namespace Engine
                 auto& mc = reg.get<MeshColliderComponent>(entity);
                 if (mc.Type == MeshColliderComponent::ColliderType::Static && mass > 0.0f)
                 {
-                    ENGINE_CORE_WARN("MeshCollider (Static) 不支持 Dynamic 刚体，强制设为 Static (entity={0})", entityId);
+                    ENGINE_CORE_WARN("MeshCollider (Static) 不支持 Dynamic 刚体，强制设为 Static (entity={0})",
+                                     entityId);
                     mass = 0.0f;
                 }
             }
@@ -324,16 +321,13 @@ namespace Engine
             if (!meshData || meshData->HeightData.empty())
                 continue;
 
-            auto* terrainShape = new btHeightfieldTerrainShape(
-                meshData->HeightmapWidth,
-                meshData->HeightmapHeight,
-                meshData->HeightData.data(),   // float* 必须持续有效
-                1.0f,                          // heightScale 参数（Bullet 内部乘数）
-                meshData->MinHeight,
-                meshData->MaxHeight,
-                1,            // upAxis = Y
-                PHY_FLOAT,
-                true);        // flipQuadEdges
+            auto* terrainShape = new btHeightfieldTerrainShape(meshData->HeightmapWidth, meshData->HeightmapHeight,
+                                                               meshData->HeightData.data(), // float* 必须持续有效
+                                                               1.0f, // heightScale 参数（Bullet 内部乘数）
+                                                               meshData->MinHeight, meshData->MaxHeight,
+                                                               1, // upAxis = Y
+                                                               PHY_FLOAT,
+                                                               true); // flipQuadEdges
 
             // localScaling 缩放到世界尺寸
             float cellSizeX = terrain.TerrainSize / (meshData->HeightmapWidth - 1);
@@ -365,7 +359,7 @@ namespace Engine
         if (!m_DynamicsWorld)
             return;
 
-        SyncFromECS(reg);  // Kinematic: ECS → Bullet（stepSimulation 前）
+        SyncFromECS(reg); // Kinematic: ECS → Bullet（stepSimulation 前）
         m_DynamicsWorld->stepSimulation(dt, 10, 1.0f / 60.0f);
         SyncToECS(reg);
         CollectCollisionEvents(reg);

@@ -6,10 +6,7 @@
 namespace Engine
 {
 
-    Material::Material(const Ref<Shader>& shader)
-        : m_Shader(shader)
-    {
-    }
+    Material::Material(const Ref<Shader>& shader) : m_Shader(shader) {}
 
     void Material::Bind() const
     {

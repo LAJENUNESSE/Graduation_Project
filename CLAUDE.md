@@ -31,10 +31,14 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 ```bash
 # ⚠️ 每条命令必须和变量赋值写在同一行（Claude Code 每次调用是独立 shell，变量不跨调用保留）
 
-# 配置（使用 CMakePresets.json 中的 default preset，含 vcpkg 工具链）
+# ── 配置（二选一）──────────────────────────────────────
+# 无 CUDA（default preset）
 CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" && "$CMAKE" --preset default
 
-# 构建（Visual Studio 生成器需指定 --config）
+# 有 CUDA（vs2022-cuda preset，需安装 NVIDIA CUDA Toolkit）
+CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" && "$CMAKE" --preset vs2022-cuda
+
+# ── 构建（Visual Studio 生成器需指定 --config）─────────
 CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" && "$CMAKE" --build build --config RelWithDebInfo --target Editor
 
 # Run
@@ -42,6 +46,7 @@ CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/ID
 ```
 
 > **注意：** Linux/Ninja 输出路径无配置子目录，Windows/VS 生成器输出路径含 `RelWithDebInfo/` 子目录。
+> 两个 preset 的输出目录相同（`build/`），切换 preset 后需重新配置但构建/运行路径不变。
 
 **Build targets:** `Engine` (static lib), `Editor` (exe), `Sandbox` (exe)
 
@@ -54,6 +59,7 @@ CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/ID
 | `Editor/` | 可视化编辑器（exe），链接 Engine |
 | `Engine/` | 引擎静态库（Core, Renderer, Scene, Reflection, Asset, Physics, Audio, Media, Terrain） |
 | `Engine/Platform/OpenGL/` | OpenGL 4.3 具体实现 |
+| `Engine/Platform/CUDA/` | CUDA compute sidecar（粒子/SPH，需 `ENGINE_ENABLE_CUDA=ON`） |
 | `vendor/` | 第三方库（glfw, glad, glm, entt, spdlog, imgui, imguizmo, yaml-cpp, stb_image, bullet3, assimp, tinyfiledialogs） |
 | `assets/` | 着色器(.glsl)、模型、纹理、场景(.scene = YAML) |
 
@@ -75,7 +81,7 @@ CMAKE="C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/ID
 - Scene files are YAML with `.scene` extension in `assets/scenes/`
 - Shaders are raw GLSL files in `assets/shaders/` — vertex and fragment combined in one file, separated by `#type vertex` / `#type fragment` / `#type compute` pragmas
 - New components must be registered with the reflection system (macros in header, `REGISTER_COMPONENT_*` in a .cpp) to appear in the editor and serialize correctly
-- Platform-specific code lives in `Engine/Platform/` (currently only `OpenGL/`)
+- Platform-specific code lives in `Engine/Platform/` (currently `OpenGL/` and `CUDA/`)
 - `Ref<T>` is `std::shared_ptr<T>`, `Scope<T>` is `std::unique_ptr<T>` (defined in `Core/Base.h`)
 
 ## Development Workflow

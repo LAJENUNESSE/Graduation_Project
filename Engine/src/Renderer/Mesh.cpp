@@ -2,16 +2,16 @@
 #include "Renderer/Mesh.h"
 #include "Asset/AssetManager.h"
 
-#include "Renderer/Buffer.h"
-#include "Core/Log.h"
 #include "Asset/PathUtils.h"
+#include "Core/Log.h"
+#include "Renderer/Buffer.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
 #include <assimp/Importer.hpp>
-#include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 #include <cmath>
 #include <filesystem>
@@ -223,12 +223,12 @@ namespace Engine
 
         auto vertexArray = VertexArray::Create();
 
-        auto vertexBuffer = VertexBuffer::Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
+        auto vertexBuffer =
+            VertexBuffer::Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
         vertexBuffer->SetLayout(GetMeshVertexLayout());
         vertexArray->AddVertexBuffer(vertexBuffer);
 
-        auto indexBuffer =
-            IndexBuffer::Create(indices.data(), static_cast<uint32_t>(indices.size()));
+        auto indexBuffer = IndexBuffer::Create(indices.data(), static_cast<uint32_t>(indices.size()));
         vertexArray->SetIndexBuffer(indexBuffer);
 
         return CreateRef<Mesh>(PrivateTag{}, vertexArray, static_cast<uint32_t>(indices.size()), "Sphere");
@@ -239,11 +239,8 @@ namespace Engine
         Assimp::Importer importer;
         const std::string resolvedFilepath = PathUtils::ResolvePathString(filepath);
 
-        unsigned int flags = aiProcess_Triangulate
-                           | aiProcess_GenSmoothNormals
-                           | aiProcess_FlipUVs
-                           | aiProcess_JoinIdenticalVertices
-                           | aiProcess_CalcTangentSpace;
+        unsigned int flags = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
+                             aiProcess_JoinIdenticalVertices | aiProcess_CalcTangentSpace;
 
         const aiScene* scene = importer.ReadFile(resolvedFilepath, flags);
 
@@ -328,13 +325,12 @@ namespace Engine
             // Create GPU buffers
             auto vertexArray = VertexArray::Create();
 
-            auto vertexBuffer = VertexBuffer::Create(
-                vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
+            auto vertexBuffer =
+                VertexBuffer::Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
             vertexBuffer->SetLayout(GetMeshVertexLayout());
             vertexArray->AddVertexBuffer(vertexBuffer);
 
-            auto indexBuffer = IndexBuffer::Create(
-                indices.data(), static_cast<uint32_t>(indices.size()));
+            auto indexBuffer = IndexBuffer::Create(indices.data(), static_cast<uint32_t>(indices.size()));
             vertexArray->SetIndexBuffer(indexBuffer);
 
             SubMesh sub;
@@ -357,7 +353,8 @@ namespace Engine
                         std::filesystem::path fullTexPath = modelDir / texStr;
 
                         if (std::filesystem::exists(fullTexPath))
-                        {                            sub.DiffuseTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                        {
+                            sub.DiffuseTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
                             sub.DiffuseTextureAsset = AssetManager::Load<Texture2D>(sub.DiffuseTexturePath);
                         }
                     }
@@ -367,8 +364,8 @@ namespace Engine
                 if (mat->GetTextureCount(aiTextureType_NORMALS) > 0 || mat->GetTextureCount(aiTextureType_HEIGHT) > 0)
                 {
                     aiString texPath;
-                    aiTextureType normalType = (mat->GetTextureCount(aiTextureType_NORMALS) > 0)
-                        ? aiTextureType_NORMALS : aiTextureType_HEIGHT;
+                    aiTextureType normalType = (mat->GetTextureCount(aiTextureType_NORMALS) > 0) ? aiTextureType_NORMALS
+                                                                                                 : aiTextureType_HEIGHT;
                     mat->GetTexture(normalType, 0, &texPath);
 
                     std::string texStr = texPath.C_Str();
@@ -376,7 +373,8 @@ namespace Engine
                     {
                         std::filesystem::path fullTexPath = modelDir / texStr;
                         if (std::filesystem::exists(fullTexPath))
-                        {                            sub.NormalTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                        {
+                            sub.NormalTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
                             sub.NormalTextureAsset = AssetManager::Load<Texture2D>(sub.NormalTexturePath);
                         }
                     }

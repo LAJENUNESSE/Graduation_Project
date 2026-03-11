@@ -1,10 +1,10 @@
+#include "engpch.h"
 #include "Asset/AssetManager.h"
 #include "Asset/AsyncLoadQueue.h"
 #include "Asset/FileWatcher.h"
 #include "Core/Log.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
-#include "engpch.h"
 
 namespace Engine
 {

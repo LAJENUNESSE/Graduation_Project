@@ -1,6 +1,6 @@
+#include "engpch.h"
 #include "Core/Log.h"
 #include "Debug/GPUTimerQuery.h"
-#include "engpch.h"
 
 #include <glad/gl.h>
 

@@ -1,7 +1,7 @@
+#include "engpch.h"
 #include "Reflection/ComponentRegistry.h"
 #include "Scene/Components.h"
 #include "Scene/Scene.h"
-#include "engpch.h"
 
 #include <entt/entt.hpp>
 

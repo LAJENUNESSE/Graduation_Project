@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Renderer/RendererAPI.h"
 #include "Debug/PerformanceMonitor.h"
+#include "Renderer/RendererAPI.h"
 
 namespace Engine
 {
@@ -9,25 +9,16 @@ namespace Engine
     class RenderCommand
     {
     public:
-        static void Init()
-        {
-            s_RendererAPI->Init();
-        }
+        static void Init() { s_RendererAPI->Init(); }
 
         static void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
         {
             s_RendererAPI->SetViewport(x, y, width, height);
         }
 
-        static void SetClearColor(const glm::vec4& color)
-        {
-            s_RendererAPI->SetClearColor(color);
-        }
+        static void SetClearColor(const glm::vec4& color) { s_RendererAPI->SetClearColor(color); }
 
-        static void Clear()
-        {
-            s_RendererAPI->Clear();
-        }
+        static void Clear() { s_RendererAPI->Clear(); }
 
         static void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0)
         {
@@ -41,10 +32,7 @@ namespace Engine
             stats.Triangles += count / 3;
         }
 
-        static void DrawArrays(uint32_t count, uint32_t first = 0)
-        {
-            s_RendererAPI->DrawArrays(count, first);
-        }
+        static void DrawArrays(uint32_t count, uint32_t first = 0) { s_RendererAPI->DrawArrays(count, first); }
 
         static void DrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t first = 0)
         {
@@ -56,35 +44,17 @@ namespace Engine
             stats.Triangles += (count / 3) * instanceCount;
         }
 
-        static void DrawLines(uint32_t count, uint32_t first = 0)
-        {
-            s_RendererAPI->DrawLines(count, first);
-        }
+        static void DrawLines(uint32_t count, uint32_t first = 0) { s_RendererAPI->DrawLines(count, first); }
 
-        static void SetDepthTest(bool enable)
-        {
-            s_RendererAPI->SetDepthTest(enable);
-        }
+        static void SetDepthTest(bool enable) { s_RendererAPI->SetDepthTest(enable); }
 
-        static void SetDepthFunc(DepthFunc func)
-        {
-            s_RendererAPI->SetDepthFunc(func);
-        }
+        static void SetDepthFunc(DepthFunc func) { s_RendererAPI->SetDepthFunc(func); }
 
-        static void SetCullFace(bool enable)
-        {
-            s_RendererAPI->SetCullFace(enable);
-        }
+        static void SetCullFace(bool enable) { s_RendererAPI->SetCullFace(enable); }
 
-        static void SetCullFaceMode(CullFaceMode mode)
-        {
-            s_RendererAPI->SetCullFaceMode(mode);
-        }
+        static void SetCullFaceMode(CullFaceMode mode) { s_RendererAPI->SetCullFaceMode(mode); }
 
-        static void SetLineWidth(float width)
-        {
-            s_RendererAPI->SetLineWidth(width);
-        }
+        static void SetLineWidth(float width) { s_RendererAPI->SetLineWidth(width); }
 
         static void BindTextureUnit(uint32_t slot, uint32_t textureID)
         {
@@ -96,30 +66,18 @@ namespace Engine
             s_RendererAPI->BindCubemapUnit(slot, textureID);
         }
 
-        static void ClearColorOnly()
-        {
-            s_RendererAPI->ClearColorOnly();
-        }
+        static void ClearColorOnly() { s_RendererAPI->ClearColorOnly(); }
 
-        static int GetBoundFramebufferID()
-        {
-            return s_RendererAPI->GetBoundFramebufferID();
-        }
+        static int GetBoundFramebufferID() { return s_RendererAPI->GetBoundFramebufferID(); }
 
-        static void BindFramebufferByID(int id)
-        {
-            s_RendererAPI->BindFramebufferByID(id);
-        }
+        static void BindFramebufferByID(int id) { s_RendererAPI->BindFramebufferByID(id); }
 
         static void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1)
         {
             s_RendererAPI->DispatchCompute(groupsX, groupsY, groupsZ);
         }
 
-        static void MemoryBarrier(uint32_t barriers)
-        {
-            s_RendererAPI->MemoryBarrier(barriers);
-        }
+        static void MemoryBarrier(uint32_t barriers) { s_RendererAPI->MemoryBarrier(barriers); }
 
         static void DrawArraysIndirect(uint32_t bufferID)
         {
@@ -129,15 +87,9 @@ namespace Engine
             stats.DrawCalls++;
         }
 
-        static void SetDepthMask(bool enable)
-        {
-            s_RendererAPI->SetDepthMask(enable);
-        }
+        static void SetDepthMask(bool enable) { s_RendererAPI->SetDepthMask(enable); }
 
-        static void SetBlendFunc(BlendFactor src, BlendFactor dst)
-        {
-            s_RendererAPI->SetBlendFunc(src, dst);
-        }
+        static void SetBlendFunc(BlendFactor src, BlendFactor dst) { s_RendererAPI->SetBlendFunc(src, dst); }
 
     private:
         static Scope<RendererAPI> s_RendererAPI;

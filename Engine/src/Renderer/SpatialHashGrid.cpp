@@ -1,7 +1,7 @@
+#include "engpch.h"
 #include "Renderer/SpatialHashGrid.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
-#include "engpch.h"
 
 #include <cmath>
 #include <glad/gl.h>
