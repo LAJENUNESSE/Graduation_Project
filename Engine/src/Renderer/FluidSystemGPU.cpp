@@ -13,7 +13,10 @@
 #include "Platform/CUDA/CudaParticlePipeline.h"
 #include "Platform/CUDA/CudaParticleTypes.h"
 #include "Platform/CUDA/CudaSPHPipeline.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
 #endif
+
+#include "Debug/PerformanceMonitor.h"
 
 namespace Engine
 {
@@ -119,7 +122,7 @@ namespace Engine
         if (!m_CudaInitAttempted)
         {
             m_CudaInitAttempted = true;
-            if (CudaGLInteropContext::ProbeDeviceMatch())
+            if (!CudaInterop::IsCudaPoisoned() && CudaGLInteropContext::ProbeDeviceMatch())
             {
                 m_CudaInterop = CreateScope<CudaGLInteropContext>();
                 m_CudaSlotParticle =
@@ -127,10 +130,17 @@ namespace Engine
                 if (m_CudaSlotParticle >= 0)
                 {
                     m_CudaSPHCtx = CudaInterop::CreateSPHContext(m_ParticleCount, 64, MAX_RIGID_BODIES);
-                    m_CudaEventStart = CudaInterop::CreateCudaEvent();
-                    m_CudaEventStop = CudaInterop::CreateCudaEvent();
-                    m_UseCudaPath = true;
-                    ENGINE_INFO("[Fluid] CUDA SPH sidecar activated.");
+                    if (m_CudaSPHCtx)
+                    {
+                        m_CudaEventStart = CudaInterop::CreateCudaEvent();
+                        m_CudaEventStop = CudaInterop::CreateCudaEvent();
+                        m_UseCudaPath = true;
+                        ENGINE_INFO("[Fluid] CUDA SPH sidecar activated.");
+                    }
+                    else
+                    {
+                        ENGINE_WARN("[Fluid] CUDA CreateSPHContext failed (out of memory?), staying on GL path.");
+                    }
                 }
                 else
                 {
@@ -139,7 +149,7 @@ namespace Engine
             }
             else
             {
-                ENGINE_WARN("[Fluid] CUDA ProbeDeviceMatch failed, staying on GL path.");
+                ENGINE_WARN("[Fluid] CUDA ProbeDeviceMatch failed or CUDA poisoned, staying on GL path.");
             }
         }
 #endif
@@ -271,7 +281,7 @@ namespace Engine
 
 #ifdef ENGINE_ENABLE_CUDA
         bool cudaSucceeded = false;
-        if (m_UseCudaPath)
+        if (m_UseCudaPath && !CudaInterop::IsCudaPoisoned())
         {
             if (m_CudaInterop->MapAll())
             {
@@ -386,12 +396,12 @@ namespace Engine
                 sp.gravity[0] = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.x;
                 sp.gravity[1] = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.y;
                 sp.gravity[2] = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.z;
-                sp.boundaryMin[0] = emitter.BoundaryMin.x;
-                sp.boundaryMin[1] = emitter.BoundaryMin.y;
-                sp.boundaryMin[2] = emitter.BoundaryMin.z;
-                sp.boundaryMax[0] = emitter.BoundaryMax.x;
-                sp.boundaryMax[1] = emitter.BoundaryMax.y;
-                sp.boundaryMax[2] = emitter.BoundaryMax.z;
+                sp.boundaryMin[0] = emitterPos.x + emitter.BoundaryMin.x;
+                sp.boundaryMin[1] = emitterPos.y + emitter.BoundaryMin.y;
+                sp.boundaryMin[2] = emitterPos.z + emitter.BoundaryMin.z;
+                sp.boundaryMax[0] = emitterPos.x + emitter.BoundaryMax.x;
+                sp.boundaryMax[1] = emitterPos.y + emitter.BoundaryMax.y;
+                sp.boundaryMax[2] = emitterPos.z + emitter.BoundaryMax.z;
                 sp.useBoundary = emitter.UseBoundary ? 1 : 0;
                 sp.particleCount = static_cast<int>(m_ParticleCount);
                 CudaInterop::LaunchSPHSimulate(devParticles, sp, stream);
@@ -399,9 +409,17 @@ namespace Engine
                 CudaInterop::RecordCudaEvent(m_CudaEventStop, stream);
                 m_CudaInterop->UnmapAll();
 
-                float ms = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
-                ENGINE_INFO("[Fluid] CUDA SPH frame: {:.2f} ms", ms);
-                cudaSucceeded = true;
+                if (CudaInterop::IsCudaPoisoned())
+                {
+                    ENGINE_WARN("[Fluid] CUDA poisoned during compute; falling back to GL.");
+                    m_UseCudaPath = false;
+                }
+                else
+                {
+                    float ms = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
+                    PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
+                    cudaSucceeded = true;
+                }
             }
             else
             {
@@ -412,6 +430,7 @@ namespace Engine
         if (!cudaSucceeded)
 #endif
         { // ---- GL Compute 路径（原有代码）----
+            PerformanceMonitor::Get().GetFluidComputeGPUTimer().Begin();
 
             // Bind particle + alive list
             m_ParticleBuffer->Bind(0);
@@ -558,15 +577,25 @@ namespace Engine
             m_SimulateShader->SetFloat3("u_Gravity", simGravity);
             m_SimulateShader->SetFloat("u_Damping", emitter.Damping);
             m_SimulateShader->SetInt("u_ParticleCount", static_cast<int>(m_ParticleCount));
-            m_SimulateShader->SetFloat3("u_BoundaryMin", emitter.BoundaryMin);
-            m_SimulateShader->SetFloat3("u_BoundaryMax", emitter.BoundaryMax);
+            m_SimulateShader->SetFloat3("u_BoundaryMin", emitterPos + emitter.BoundaryMin);
+            m_SimulateShader->SetFloat3("u_BoundaryMax", emitterPos + emitter.BoundaryMax);
             m_SimulateShader->SetInt("u_UseBoundary", emitter.UseBoundary ? 1 : 0);
 
             uint32_t simGroups = (m_ParticleCount + 255) / 256;
             RenderCommand::DispatchCompute(simGroups);
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
+            PerformanceMonitor::Get().GetFluidComputeGPUTimer().End();
         } // end if (!cudaSucceeded)
+
+        PerformanceMonitor::Get().SetFluidUsingCuda(
+#ifdef ENGINE_ENABLE_CUDA
+            cudaSucceeded
+#else
+            false
+#endif
+        );
+        PerformanceMonitor::Get().SetFluidActive(true);
     }
 
 } // namespace Engine

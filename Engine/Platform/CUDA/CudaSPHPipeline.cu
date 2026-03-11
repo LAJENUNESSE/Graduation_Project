@@ -4,6 +4,7 @@
 
 #include "Platform/CUDA/CudaParticleTypes.h"
 #include "Platform/CUDA/CudaSPHPipeline.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
 
 #include <cuda_runtime.h>
 #include <cub/device/device_scan.cuh>
@@ -34,6 +35,8 @@ struct SPHContextImpl
 
 void* CreateSPHContext(uint32_t maxParticles, uint32_t gridSize, uint32_t maxRigidBodies)
 {
+    if (IsCudaPoisoned()) return nullptr;
+
     SPHContextImpl* ctx = new SPHContextImpl{};
     ctx->maxParticles   = maxParticles;
     ctx->gridSize       = gridSize;
@@ -41,19 +44,29 @@ void* CreateSPHContext(uint32_t maxParticles, uint32_t gridSize, uint32_t maxRig
 
     uint32_t totalCells = gridSize * gridSize * gridSize;
 
-    cudaMalloc(&ctx->d_cellHash,      maxParticles  * sizeof(uint32_t));
-    cudaMalloc(&ctx->d_cellCount,     totalCells    * sizeof(uint32_t));
-    cudaMalloc(&ctx->d_cellStart,     totalCells    * sizeof(uint32_t));
-    cudaMalloc(&ctx->d_sortedIndices, maxParticles  * sizeof(uint32_t));
-    cudaMalloc(&ctx->d_pcisph,        maxParticles  * sizeof(PCISPHData));
-    cudaMalloc(&ctx->d_rigidBody,     maxRigidBodies * sizeof(RigidBodyData));
+    bool ok = true;
+    ok = ok && CUDA_CHECK(cudaMalloc(&ctx->d_cellHash,      maxParticles   * sizeof(uint32_t)));
+    ok = ok && CUDA_CHECK(cudaMalloc(&ctx->d_cellCount,     totalCells     * sizeof(uint32_t)));
+    ok = ok && CUDA_CHECK(cudaMalloc(&ctx->d_cellStart,     totalCells     * sizeof(uint32_t)));
+    ok = ok && CUDA_CHECK(cudaMalloc(&ctx->d_sortedIndices, maxParticles   * sizeof(uint32_t)));
+    ok = ok && CUDA_CHECK(cudaMalloc(&ctx->d_pcisph,        maxParticles   * sizeof(PCISPHData)));
+    ok = ok && CUDA_CHECK(cudaMalloc(&ctx->d_rigidBody,     maxRigidBodies * sizeof(RigidBodyData)));
 
-    // 调用一次 ExclusiveSum（空输入）来探测 CUB 临时内存大小
-    ctx->cubTempBytes = 0;
-    cub::DeviceScan::ExclusiveSum(nullptr, ctx->cubTempBytes,
-                                  ctx->d_cellCount, ctx->d_cellStart,
-                                  (int)totalCells);
-    cudaMalloc(&ctx->d_cubTemp, ctx->cubTempBytes);
+    if (ok)
+    {
+        // 调用一次 ExclusiveSum（空输入）来探测 CUB 临时内存大小
+        ctx->cubTempBytes = 0;
+        cub::DeviceScan::ExclusiveSum(nullptr, ctx->cubTempBytes,
+                                      ctx->d_cellCount, ctx->d_cellStart,
+                                      (int)totalCells);
+        ok = CUDA_CHECK(cudaMalloc(&ctx->d_cubTemp, ctx->cubTempBytes));
+    }
+
+    if (!ok)
+    {
+        DestroySPHContext(static_cast<void*>(ctx));
+        return nullptr;
+    }
 
     return static_cast<void*>(ctx);
 }
@@ -74,11 +87,12 @@ void DestroySPHContext(void* ctxPtr)
 
 void SPHUploadRigidBodies(void* ctxPtr, const void* cpuData, uint32_t count)
 {
+    if (IsCudaPoisoned()) return;
     SPHContextImpl* ctx = static_cast<SPHContextImpl*>(ctxPtr);
     if (!ctx || count == 0 || !cpuData) return;
     uint32_t uploadCount = (count < ctx->maxRigidBodies) ? count : ctx->maxRigidBodies;
-    cudaMemcpy(ctx->d_rigidBody, cpuData,
-               uploadCount * sizeof(RigidBodyData), cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(ctx->d_rigidBody, cpuData,
+               uploadCount * sizeof(RigidBodyData), cudaMemcpyHostToDevice));
 }
 
 // ======================================================================
@@ -278,6 +292,8 @@ __global__ static void ClearGridKernel(uint32_t* d_cellCount, uint32_t* d_cellSt
 void LaunchSPHGridBuild(void* ctxPtr, void* particles, uint32_t aliveCount,
                         int gridSize, float cellSize, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
@@ -288,24 +304,29 @@ void LaunchSPHGridBuild(void* ctxPtr, void* particles, uint32_t aliveCount,
 
     // 清零
     ClearGridKernel<<<blockCells, 256, 0, strm>>>(ctx->d_cellCount, ctx->d_cellStart, totalCells);
+    CUDA_CHECK_KERNEL("ClearGridKernel");
 
     // 步骤 1：Hash
     HashKernel<<<blockParts, 256, 0, strm>>>(devP, ctx->d_cellHash, ctx->d_cellCount,
                                               aliveCount, gridSize, cellSize);
+    CUDA_CHECK_KERNEL("HashKernel");
 
     // 步骤 2：CUB prefix sum（ExclusiveSum：cellCount → cellStart）
     cub::DeviceScan::ExclusiveSum(ctx->d_cubTemp, ctx->cubTempBytes,
                                   ctx->d_cellCount, ctx->d_cellStart,
                                   (int)totalCells, strm);
+    CUDA_CHECK_KERNEL("CUB::ExclusiveSum");
 
     // 步骤 3：Scatter（将 cellStart 用作临时写偏移，atomicAdd 会破坏其原始值）
     ScatterKernel<<<blockParts, 256, 0, strm>>>(ctx->d_cellHash, ctx->d_cellStart,
                                                  ctx->d_sortedIndices, aliveCount);
+    CUDA_CHECK_KERNEL("ScatterKernel");
 
     // 步骤 4：恢复 cellStart（scatter 的 atomicAdd 把它改坏了，重新用 prefix sum 恢复）
     cub::DeviceScan::ExclusiveSum(ctx->d_cubTemp, ctx->cubTempBytes,
                                   ctx->d_cellCount, ctx->d_cellStart,
                                   (int)totalCells, strm);
+    CUDA_CHECK_KERNEL("CUB::ExclusiveSum(restore)");
 }
 
 // ======================================================================
@@ -356,6 +377,8 @@ __global__ static void DensityKernel(
 
 void LaunchSPHDensity(void* ctxPtr, void* particles, const SPHParams& p, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
@@ -363,6 +386,7 @@ void LaunchSPHDensity(void* ctxPtr, void* particles, const SPHParams& p, void* s
     uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
     DensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount,
                                              ctx->d_sortedIndices, p);
+    CUDA_CHECK_KERNEL("DensityKernel");
 }
 
 // ======================================================================
@@ -482,6 +506,8 @@ __global__ static void ForceKernel(
 void LaunchSPHForce(void* ctxPtr, void* particles, const SPHParams& p,
                     const PCISPHIterParams& ip, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
@@ -489,6 +515,7 @@ void LaunchSPHForce(void* ctxPtr, void* particles, const SPHParams& p,
     uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
     ForceKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount,
                                            ctx->d_sortedIndices, ctx->d_rigidBody, p, ip);
+    CUDA_CHECK_KERNEL("ForceKernel");
 }
 
 // ======================================================================
@@ -595,6 +622,8 @@ __global__ static void PCISPHInitKernel(
 
 void LaunchPCISPHInit(void* ctxPtr, void* particles, const SPHParams& p, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
@@ -602,6 +631,7 @@ void LaunchPCISPHInit(void* ctxPtr, void* particles, const SPHParams& p, void* s
     uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
     PCISPHInitKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellStart,
                                                 ctx->d_cellCount, ctx->d_sortedIndices, p);
+    CUDA_CHECK_KERNEL("PCISPHInitKernel");
 }
 
 // ======================================================================
@@ -625,12 +655,15 @@ __global__ static void PCISPHPredictKernel(
 
 void LaunchPCISPHPredict(void* ctxPtr, void* particles, float dt, int aliveCount, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
 
     uint32_t blocks = ((uint32_t)aliveCount + 255) / 256;
     PCISPHPredictKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, dt, (uint32_t)aliveCount);
+    CUDA_CHECK_KERNEL("PCISPHPredictKernel");
 }
 
 // ======================================================================
@@ -697,6 +730,8 @@ __global__ static void PCISPHDensityKernel(
 void LaunchPCISPHDensity(void* ctxPtr, void* particles, const SPHParams& p,
                           const PCISPHIterParams& ip, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
@@ -705,6 +740,7 @@ void LaunchPCISPHDensity(void* ctxPtr, void* particles, const SPHParams& p,
     PCISPHDensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellStart,
                                                    ctx->d_cellCount, ctx->d_sortedIndices,
                                                    p, ip.pcisphDelta);
+    CUDA_CHECK_KERNEL("PCISPHDensityKernel");
 }
 
 // ======================================================================
@@ -805,6 +841,8 @@ __global__ static void PCISPHForceKernel(
 void LaunchPCISPHForce(void* ctxPtr, void* particles, const SPHParams& p,
                         const PCISPHIterParams& ip, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
@@ -813,6 +851,7 @@ void LaunchPCISPHForce(void* ctxPtr, void* particles, const SPHParams& p,
     PCISPHForceKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellStart,
                                                  ctx->d_cellCount, ctx->d_sortedIndices,
                                                  ctx->d_rigidBody, p, ip);
+    CUDA_CHECK_KERNEL("PCISPHForceKernel");
 }
 
 // ======================================================================
@@ -832,12 +871,15 @@ __global__ static void PCISPHApplyKernel(
 
 void LaunchPCISPHApply(void* ctxPtr, void* particles, int aliveCount, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
     cudaStream_t    strm = static_cast<cudaStream_t>(stream);
     GPUParticle*    devP = static_cast<GPUParticle*>(particles);
 
     uint32_t blocks = ((uint32_t)aliveCount + 255) / 256;
     PCISPHApplyKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, (uint32_t)aliveCount);
+    CUDA_CHECK_KERNEL("PCISPHApplyKernel");
 }
 
 // ======================================================================
@@ -889,11 +931,14 @@ __global__ static void FluidSimulateKernel(
 
 void LaunchSPHSimulate(void* particles, const SPHSimulateParams& p, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     cudaStream_t strm = static_cast<cudaStream_t>(stream);
     GPUParticle* devP = static_cast<GPUParticle*>(particles);
 
     uint32_t blocks = ((uint32_t)p.particleCount + 255) / 256;
     FluidSimulateKernel<<<blocks, 256, 0, strm>>>(devP, p);
+    CUDA_CHECK_KERNEL("FluidSimulateKernel");
 }
 
 // ======================================================================
@@ -933,11 +978,14 @@ __global__ static void FluidEmitKernel(
 
 void LaunchSPHEmit(void* particles, const SPHEmitParams& p, void* stream)
 {
+    if (IsCudaPoisoned()) return;
+
     cudaStream_t strm = static_cast<cudaStream_t>(stream);
     GPUParticle* devP = static_cast<GPUParticle*>(particles);
 
     uint32_t blocks = ((uint32_t)p.particleCount + 255) / 256;
     FluidEmitKernel<<<blocks, 256, 0, strm>>>(devP, p);
+    CUDA_CHECK_KERNEL("FluidEmitKernel");
 }
 
 }} // namespace Engine::CudaInterop
