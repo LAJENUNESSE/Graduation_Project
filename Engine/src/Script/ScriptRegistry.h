@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Script/NativeScriptComponent.h"
+#include <functional>
 #include <string>
 #include <unordered_map>
-#include <functional>
 
 namespace Engine
 {
@@ -24,7 +24,7 @@ namespace Engine
         }
 
         void Register(const std::string& name, const char* displayName,
-                       std::function<std::shared_ptr<ScriptableEntity>()> factory)
+                      std::function<std::shared_ptr<ScriptableEntity>()> factory)
         {
             m_Scripts[name] = {displayName, std::move(factory)};
         }
@@ -37,12 +37,8 @@ namespace Engine
 
             nsc.ScriptName = name;
             auto factory = it->second.Factory;
-            nsc.InstantiateScript = [factory](NativeScriptComponent& comp) {
-                comp.Instance = factory();
-            };
-            nsc.DestroyScript = [](NativeScriptComponent& comp) {
-                comp.Instance.reset();
-            };
+            nsc.InstantiateScript = [factory](NativeScriptComponent& comp) { comp.Instance = factory(); };
+            nsc.DestroyScript = [](NativeScriptComponent& comp) { comp.Instance.reset(); };
         }
 
         const std::unordered_map<std::string, ScriptEntry>& GetAll() const { return m_Scripts; }
@@ -55,13 +51,11 @@ namespace Engine
 } // namespace Engine
 
 // 注册脚本宏
-#define REGISTER_SCRIPT(ScriptClass, displayName) \
-    static bool s_Registered_##ScriptClass = []() -> bool { \
-        ::Engine::ScriptRegistry::Instance().Register( \
-            #ScriptClass, displayName, \
-            []() -> std::shared_ptr<::Engine::ScriptableEntity> { \
-                return std::make_shared<ScriptClass>(); \
-            } \
-        ); \
-        return true; \
+#define REGISTER_SCRIPT(ScriptClass, displayName)                                                                      \
+    static bool s_Registered_##ScriptClass = []() -> bool                                                              \
+    {                                                                                                                  \
+        ::Engine::ScriptRegistry::Instance().Register(#ScriptClass, displayName,                                       \
+                                                      []() -> std::shared_ptr<::Engine::ScriptableEntity>              \
+                                                      { return std::make_shared<ScriptClass>(); });                    \
+        return true;                                                                                                   \
     }();

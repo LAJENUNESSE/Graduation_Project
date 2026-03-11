@@ -1,12 +1,12 @@
-#include "engpch.h"
 #include "Scene/Systems/VideoSystem.h"
-#include "Scene/Components.h"
-#include "Media/FFmpegDecoder.h"
-#include "Audio/OpenALAudioEngine.h"
 #include "Audio/AudioClip.h"
-#include "Renderer/Texture.h"
+#include "Audio/OpenALAudioEngine.h"
 #include "Core/Base.h"
 #include "Core/Log.h"
+#include "Media/FFmpegDecoder.h"
+#include "Renderer/Texture.h"
+#include "Scene/Components.h"
+#include "engpch.h"
 
 #include <cstring>
 
@@ -51,18 +51,20 @@ namespace Engine
 
             // 创建解码器（RAII，unique_ptr 管理生命周期）
             vp.RuntimeDecoder = std::make_unique<FFmpegDecoder>();
-            vp.IsPlaying = false;  // OnUpdate 中检测连接完成后再设为 true
+            vp.IsPlaying = false; // OnUpdate 中检测连接完成后再设为 true
 
             // 后台线程打开流，避免阻塞主线程
             std::string url = vp.StreamURL;
             FFmpegDecoder* rawDecoder = vp.RuntimeDecoder.get();
             uint32_t eid = static_cast<uint32_t>(entity);
-            m_OpenThreads[eid] = std::thread([rawDecoder, url]() {
-                if (!rawDecoder->Open(url))
+            m_OpenThreads[eid] = std::thread(
+                [rawDecoder, url]()
                 {
-                    ENGINE_CORE_ERROR("[VideoSystem] 无法打开视频流: {}", url);
-                }
-            });
+                    if (!rawDecoder->Open(url))
+                    {
+                        ENGINE_CORE_ERROR("[VideoSystem] 无法打开视频流: {}", url);
+                    }
+                });
 
             ENGINE_CORE_INFO("[VideoSystem] 正在后台连接视频流: {}", vp.StreamURL);
         }
@@ -147,8 +149,7 @@ namespace Engine
                     int h = vp.RuntimeDecoder->GetVideoHeight();
                     if (w > 0 && h > 0)
                     {
-                        vp.RuntimeTexture = Texture2D::Create(static_cast<uint32_t>(w),
-                                                              static_cast<uint32_t>(h));
+                        vp.RuntimeTexture = Texture2D::Create(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
                         ENGINE_CORE_INFO("[VideoSystem] 创建视频纹理 {}x{}", w, h);
                     }
                 }
@@ -177,8 +178,8 @@ namespace Engine
                 }
 
                 vp.IsPlaying = true;
-                ENGINE_CORE_INFO("[VideoSystem] 视频流已就绪: 视频={}x{}",
-                    vp.RuntimeDecoder->GetVideoWidth(), vp.RuntimeDecoder->GetVideoHeight());
+                ENGINE_CORE_INFO("[VideoSystem] 视频流已就绪: 视频={}x{}", vp.RuntimeDecoder->GetVideoWidth(),
+                                 vp.RuntimeDecoder->GetVideoHeight());
             }
 
             if (!vp.IsPlaying)

@@ -1,5 +1,5 @@
-#include "engpch.h"
 #include "Platform/OpenGL/OpenGLBuffer.h"
+#include "engpch.h"
 
 #include <glad/gl.h>
 

@@ -1,5 +1,5 @@
-#include "engpch.h"
 #include "Core/FileDialogs.h"
+#include "engpch.h"
 
 #include <tinyfiledialogs.h>
 
@@ -38,13 +38,12 @@ namespace Engine
         std::vector<std::string> storage;
         auto patterns = SplitFilter(filter, storage);
 
-        const char* result = tinyfd_openFileDialog(
-            "打开文件",                                              // title
-            "",                                                      // default path
-            static_cast<int>(patterns.size()),                       // number of filter patterns
-            patterns.empty() ? nullptr : patterns.data(),            // filter patterns
-            description,                                             // filter description
-            0                                                        // allow multiple selects
+        const char* result = tinyfd_openFileDialog("打开文件",                        // title
+                                                   "",                                // default path
+                                                   static_cast<int>(patterns.size()), // number of filter patterns
+                                                   patterns.empty() ? nullptr : patterns.data(), // filter patterns
+                                                   description,                                  // filter description
+                                                   0 // allow multiple selects
         );
 
         return result ? std::string(result) : std::string();
@@ -58,16 +57,14 @@ namespace Engine
         std::vector<std::string> storage;
         auto patterns = SplitFilter(filter, storage);
 
-        const char* result = tinyfd_saveFileDialog(
-            "保存文件",                                              // title
-            "",                                                      // default path
-            static_cast<int>(patterns.size()),                       // number of filter patterns
-            patterns.empty() ? nullptr : patterns.data(),            // filter patterns
-            description                                              // filter description
+        const char* result = tinyfd_saveFileDialog("保存文件",                        // title
+                                                   "",                                // default path
+                                                   static_cast<int>(patterns.size()), // number of filter patterns
+                                                   patterns.empty() ? nullptr : patterns.data(), // filter patterns
+                                                   description                                   // filter description
         );
 
         return result ? std::string(result) : std::string();
     }
 
 } // namespace Engine
-

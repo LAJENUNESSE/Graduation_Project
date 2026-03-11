@@ -1,12 +1,12 @@
-#include "engpch.h"
 #include "Physics/PhysicsWorld.h"
-#include "Scene/Components.h"
 #include "Core/Log.h"
+#include "Scene/Components.h"
+#include "engpch.h"
 
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 namespace Engine
 {
@@ -25,11 +25,12 @@ namespace Engine
         glm::vec3 ComputeWorldAABBHalfExtents(const glm::vec3& localHalfExtents, const glm::quat& rotation)
         {
             const glm::mat3 basis = glm::mat3_cast(rotation);
-            return {
-                std::abs(basis[0][0]) * localHalfExtents.x + std::abs(basis[1][0]) * localHalfExtents.y + std::abs(basis[2][0]) * localHalfExtents.z,
-                std::abs(basis[0][1]) * localHalfExtents.x + std::abs(basis[1][1]) * localHalfExtents.y + std::abs(basis[2][1]) * localHalfExtents.z,
-                std::abs(basis[0][2]) * localHalfExtents.x + std::abs(basis[1][2]) * localHalfExtents.y + std::abs(basis[2][2]) * localHalfExtents.z
-            };
+            return {std::abs(basis[0][0]) * localHalfExtents.x + std::abs(basis[1][0]) * localHalfExtents.y +
+                        std::abs(basis[2][0]) * localHalfExtents.z,
+                    std::abs(basis[0][1]) * localHalfExtents.x + std::abs(basis[1][1]) * localHalfExtents.y +
+                        std::abs(basis[2][1]) * localHalfExtents.z,
+                    std::abs(basis[0][2]) * localHalfExtents.x + std::abs(basis[1][2]) * localHalfExtents.y +
+                        std::abs(basis[2][2]) * localHalfExtents.z};
         }
     } // namespace
 
@@ -117,11 +118,15 @@ namespace Engine
         {
             entt::entity entity;
             glm::vec3 worldPos;
-            enum Type { Box, Sphere } type;
-            glm::vec3 halfExtents;        // Box/OBB 本地半尺寸
-            glm::quat rotation;           // Box 朝向
+            enum Type
+            {
+                Box,
+                Sphere
+            } type;
+            glm::vec3 halfExtents;          // Box/OBB 本地半尺寸
+            glm::quat rotation;             // Box 朝向
             glm::vec3 worldAABBHalfExtents; // 用于保守 Box-Box 检测
-            float radius;                 // Sphere
+            float radius;                   // Sphere
         };
 
         std::vector<ColliderInfo> colliders;
@@ -231,10 +236,8 @@ namespace Engine
 
     // ===== 碰撞检测算法 =====
 
-    bool PhysicsWorld::SphereSphere(
-        const glm::vec3& posA, float radiusA,
-        const glm::vec3& posB, float radiusB,
-        CollisionInfo& info)
+    bool PhysicsWorld::SphereSphere(const glm::vec3& posA, float radiusA, const glm::vec3& posB, float radiusB,
+                                    CollisionInfo& info)
     {
         glm::vec3 diff = posB - posA;
         float dist = glm::length(diff);
@@ -249,22 +252,23 @@ namespace Engine
         return true;
     }
 
-    bool PhysicsWorld::AABBAABB(
-        const glm::vec3& posA, const glm::vec3& halfA,
-        const glm::vec3& posB, const glm::vec3& halfB,
-        CollisionInfo& info)
+    bool PhysicsWorld::AABBAABB(const glm::vec3& posA, const glm::vec3& halfA, const glm::vec3& posB,
+                                const glm::vec3& halfB, CollisionInfo& info)
     {
         glm::vec3 diff = posB - posA;
 
         // 6 轴分离检测
         float overlapX = (halfA.x + halfB.x) - std::abs(diff.x);
-        if (overlapX <= 0) return false;
+        if (overlapX <= 0)
+            return false;
 
         float overlapY = (halfA.y + halfB.y) - std::abs(diff.y);
-        if (overlapY <= 0) return false;
+        if (overlapY <= 0)
+            return false;
 
         float overlapZ = (halfA.z + halfB.z) - std::abs(diff.z);
-        if (overlapZ <= 0) return false;
+        if (overlapZ <= 0)
+            return false;
 
         // 选择穿透最小的轴作为碰撞法线
         if (overlapX <= overlapY && overlapX <= overlapZ)
@@ -287,10 +291,8 @@ namespace Engine
         return true;
     }
 
-    bool PhysicsWorld::SphereAABB(
-        const glm::vec3& spherePos, float sphereRadius,
-        const glm::vec3& boxPos, const glm::vec3& boxHalf,
-        CollisionInfo& info)
+    bool PhysicsWorld::SphereAABB(const glm::vec3& spherePos, float sphereRadius, const glm::vec3& boxPos,
+                                  const glm::vec3& boxHalf, CollisionInfo& info)
     {
         // 找 AABB 上距离球心最近的点
         glm::vec3 localSphere = spherePos - boxPos;
@@ -342,11 +344,8 @@ namespace Engine
         return true;
     }
 
-    bool PhysicsWorld::SphereOBB(
-        const glm::vec3& spherePos, float sphereRadius,
-        const glm::vec3& boxPos, const glm::vec3& boxHalf,
-        const glm::quat& boxRotation,
-        CollisionInfo& info)
+    bool PhysicsWorld::SphereOBB(const glm::vec3& spherePos, float sphereRadius, const glm::vec3& boxPos,
+                                 const glm::vec3& boxHalf, const glm::quat& boxRotation, CollisionInfo& info)
     {
         const glm::quat inverseRotation = glm::inverse(boxRotation);
         const glm::vec3 localSphere = inverseRotation * (spherePos - boxPos);
@@ -406,8 +405,8 @@ namespace Engine
 
     void PhysicsWorld::ResolveCollisions(entt::registry& reg)
     {
-        constexpr float SLOP = 0.005f;       // 允许的微小穿透量（防抖动）
-        constexpr float BAUMGARTE = 0.2f;    // 速度级 Baumgarte 偏置系数
+        constexpr float SLOP = 0.005f;    // 允许的微小穿透量（防抖动）
+        constexpr float BAUMGARTE = 0.2f; // 速度级 Baumgarte 偏置系数
         constexpr float EPSILON = 1e-6f;
         constexpr float REST_THRESHOLD = 0.5f; // 低于此速度视为静止，取消弹性
 
@@ -417,10 +416,10 @@ namespace Engine
             auto entityB = contact.entityB;
 
             // 获取刚体组件（如果有）
-            RigidBodyComponent* rbA = reg.all_of<RigidBodyComponent>(entityA)
-                ? &reg.get<RigidBodyComponent>(entityA) : nullptr;
-            RigidBodyComponent* rbB = reg.all_of<RigidBodyComponent>(entityB)
-                ? &reg.get<RigidBodyComponent>(entityB) : nullptr;
+            RigidBodyComponent* rbA =
+                reg.all_of<RigidBodyComponent>(entityA) ? &reg.get<RigidBodyComponent>(entityA) : nullptr;
+            RigidBodyComponent* rbB =
+                reg.all_of<RigidBodyComponent>(entityB) ? &reg.get<RigidBodyComponent>(entityB) : nullptr;
 
             // 至少一个需要是 Dynamic
             bool aIsDynamic = rbA && rbA->Type == RigidBodyComponent::BodyType::Dynamic;
@@ -461,10 +460,10 @@ namespace Engine
             glm::vec3 rB = contact.contactPoint - transformB.Translation;
 
             // 接触点速度（线速度 + 角速度×r）
-            glm::vec3 vA = (rbA ? rbA->LinearVelocity : glm::vec3(0))
-                + (rbA ? glm::cross(rbA->AngularVelocity, rA) : glm::vec3(0));
-            glm::vec3 vB = (rbB ? rbB->LinearVelocity : glm::vec3(0))
-                + (rbB ? glm::cross(rbB->AngularVelocity, rB) : glm::vec3(0));
+            glm::vec3 vA = (rbA ? rbA->LinearVelocity : glm::vec3(0)) +
+                           (rbA ? glm::cross(rbA->AngularVelocity, rA) : glm::vec3(0));
+            glm::vec3 vB = (rbB ? rbB->LinearVelocity : glm::vec3(0)) +
+                           (rbB ? glm::cross(rbB->AngularVelocity, rB) : glm::vec3(0));
 
             // 相对速度
             glm::vec3 vRel = vB - vA;
@@ -475,8 +474,7 @@ namespace Engine
                 continue;
 
             // 弹性系数：低速碰撞时置零，防止无限微弹跳导致逐步下沉
-            float e = std::min(rbA ? rbA->Restitution : 0.0f,
-                               rbB ? rbB->Restitution : 0.0f);
+            float e = std::min(rbA ? rbA->Restitution : 0.0f, rbB ? rbB->Restitution : 0.0f);
             if (std::abs(vn) < REST_THRESHOLD)
                 e = 0.0f;
 
@@ -500,7 +498,8 @@ namespace Engine
                 continue;
 
             float j = (-(1.0f + e) * vn + biasPenetration) / denominator;
-            if (j < 0.0f) j = 0.0f; // 冲量只推开，不拉近
+            if (j < 0.0f)
+                j = 0.0f; // 冲量只推开，不拉近
 
             // 施加法线冲量
             glm::vec3 impulse = j * n;
@@ -519,14 +518,13 @@ namespace Engine
             }
 
             // ===== 库仑摩擦 =====
-            float friction = std::sqrt(
-                (rbA ? rbA->Friction : 0.5f) * (rbB ? rbB->Friction : 0.5f));
+            float friction = std::sqrt((rbA ? rbA->Friction : 0.5f) * (rbB ? rbB->Friction : 0.5f));
 
             // 重新计算切向速度
-            vA = (rbA ? rbA->LinearVelocity : glm::vec3(0))
-                + (rbA ? glm::cross(rbA->AngularVelocity, rA) : glm::vec3(0));
-            vB = (rbB ? rbB->LinearVelocity : glm::vec3(0))
-                + (rbB ? glm::cross(rbB->AngularVelocity, rB) : glm::vec3(0));
+            vA = (rbA ? rbA->LinearVelocity : glm::vec3(0)) +
+                 (rbA ? glm::cross(rbA->AngularVelocity, rA) : glm::vec3(0));
+            vB = (rbB ? rbB->LinearVelocity : glm::vec3(0)) +
+                 (rbB ? glm::cross(rbB->AngularVelocity, rB) : glm::vec3(0));
             vRel = vB - vA;
 
             glm::vec3 vTangent = vRel - glm::dot(vRel, n) * n;

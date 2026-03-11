@@ -25,10 +25,7 @@
 namespace Engine
 {
 
-    EditorLayer::EditorLayer()
-        : Layer("EditorLayer")
-    {
-    }
+    EditorLayer::EditorLayer() : Layer("EditorLayer") {}
 
     EditorLayer::~EditorLayer() = default;
 
@@ -57,12 +54,8 @@ namespace Engine
         m_RenderController = CreateScope<EditorRenderController>();
 
         m_ViewportController->Initialize();
-        m_RenderController->Initialize(m_SceneRenderer.get(),
-                                       m_PostProcessing.get(),
-                                       m_PostProcessingSettings.get(),
-                                       m_ViewportController.get(),
-                                       m_PanelCoordinator.get(),
-                                       m_PhysicsDebugDraw.get(),
+        m_RenderController->Initialize(m_SceneRenderer.get(), m_PostProcessing.get(), m_PostProcessingSettings.get(),
+                                       m_ViewportController.get(), m_PanelCoordinator.get(), m_PhysicsDebugDraw.get(),
                                        &m_ShowPhysicsColliders);
         m_RenderController->Attach();
         m_SceneSession->Initialize(&m_RenderController->GetSceneRenderer());
@@ -99,12 +92,9 @@ namespace Engine
         EditorViewportContext viewportContext = m_ViewportController->BeginViewportWindow();
         if (m_SceneSession->GetState() == SceneState::Edit)
         {
-            m_SelectionGizmoController->UpdateHoveredEntity(viewportContext,
-                                                            m_ViewportController->GetPickingFramebuffer(),
-                                                            m_ActiveScene);
-            m_SelectionGizmoController->RenderGizmos(viewportContext,
-                                                     m_ViewportController->GetCamera(),
-                                                     m_ActiveScene);
+            m_SelectionGizmoController->UpdateHoveredEntity(
+                viewportContext, m_ViewportController->GetPickingFramebuffer(), m_ActiveScene);
+            m_SelectionGizmoController->RenderGizmos(viewportContext, m_ViewportController->GetCamera(), m_ActiveScene);
         }
         m_ViewportController->EndViewportWindow();
     }
@@ -136,10 +126,8 @@ namespace Engine
     void EditorLayer::NewScene()
     {
         glm::vec2 renderSize = m_ViewportController->GetRenderSize();
-        m_SceneSession->CreateNewScene(
-            m_ActiveScene,
-            static_cast<uint32_t>(renderSize.x),
-            static_cast<uint32_t>(renderSize.y));
+        m_SceneSession->CreateNewScene(m_ActiveScene, static_cast<uint32_t>(renderSize.x),
+                                       static_cast<uint32_t>(renderSize.y));
 
         ApplyActiveSceneContext(true);
     }
@@ -156,12 +144,8 @@ namespace Engine
         glm::vec2 renderSize = m_ViewportController->GetRenderSize();
 
         EditorRenderSettings renderSettings;
-        if (!m_SceneSession->OpenSceneFromPath(
-                m_ActiveScene,
-                filepath,
-                static_cast<uint32_t>(renderSize.x),
-                static_cast<uint32_t>(renderSize.y),
-                &renderSettings))
+        if (!m_SceneSession->OpenSceneFromPath(m_ActiveScene, filepath, static_cast<uint32_t>(renderSize.x),
+                                               static_cast<uint32_t>(renderSize.y), &renderSettings))
         {
             return;
         }
@@ -177,9 +161,7 @@ namespace Engine
             return;
 
         Ref<Scene> sceneToSave = m_SceneSession->GetSceneForSaving(m_ActiveScene);
-        m_SceneSession->SaveSceneToPath(sceneToSave,
-                                        filepath,
-                                        m_RenderController->CollectRenderSettings(sceneToSave));
+        m_SceneSession->SaveSceneToPath(sceneToSave, filepath, m_RenderController->CollectRenderSettings(sceneToSave));
     }
 
     void EditorLayer::OnScenePlay()
@@ -254,26 +236,16 @@ namespace Engine
     void EditorLayer::ConfigureEditorPanels()
     {
         m_HierarchyPanel->SetCommandHistory(m_CommandHistory.get());
-        m_AssetBrowserPanel->SetSceneOpenCallback([this](const std::string& path) {
-            OpenScene(path);
-        });
+        m_AssetBrowserPanel->SetSceneOpenCallback([this](const std::string& path) { OpenScene(path); });
 
-        m_RenderSettingsPanel->SetContext(&m_RenderController->GetSceneRenderer(),
-                                          m_RenderController->GetPostProcessingSettings(),
-                                          m_ViewportController->GetHDRFramebuffer(),
-                                          m_ActiveScene,
-                                          &m_ShowPhysicsColliders);
-        m_RenderSettingsPanel->SetMSAAChangedCallback([this](uint32_t samples) {
-            m_RenderController->ApplyMSAASamples(samples);
-        });
+        m_RenderSettingsPanel->SetContext(
+            &m_RenderController->GetSceneRenderer(), m_RenderController->GetPostProcessingSettings(),
+            m_ViewportController->GetHDRFramebuffer(), m_ActiveScene, &m_ShowPhysicsColliders);
+        m_RenderSettingsPanel->SetMSAAChangedCallback([this](uint32_t samples)
+                                                      { m_RenderController->ApplyMSAASamples(samples); });
 
-        m_PanelCoordinator->Initialize(
-            m_HierarchyPanel.get(),
-            m_PropertiesPanel.get(),
-            m_ConsolePanel.get(),
-            m_AssetBrowserPanel.get(),
-            m_RenderSettingsPanel.get(),
-            m_CommandHistory.get());
+        m_PanelCoordinator->Initialize(m_HierarchyPanel.get(), m_PropertiesPanel.get(), m_ConsolePanel.get(),
+                                       m_AssetBrowserPanel.get(), m_RenderSettingsPanel.get(), m_CommandHistory.get());
         m_SelectionGizmoController->Initialize(m_PanelCoordinator.get(), m_CommandHistory.get());
     }
 
@@ -284,5 +256,3 @@ namespace Engine
     }
 
 } // namespace Engine
-
-

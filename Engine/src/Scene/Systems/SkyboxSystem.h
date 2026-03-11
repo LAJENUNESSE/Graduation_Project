@@ -2,8 +2,8 @@
 
 #include "Core/Base.h"
 #include "Renderer/Shader.h"
-#include "Renderer/VertexArray.h"
 #include "Renderer/Texture.h"
+#include "Renderer/VertexArray.h"
 
 #include <glm/glm.hpp>
 #include <string>
@@ -43,9 +43,9 @@ namespace Engine
         Ref<Shader> m_PrefilterShader;
         Ref<Shader> m_BRDFLutShader;
 
-        uint32_t m_IrradianceMapID = 0;   // GL cubemap texture ID
-        uint32_t m_PrefilterMapID = 0;     // GL cubemap texture ID
-        uint32_t m_BRDFLutID = 0;          // GL 2D texture ID
+        uint32_t m_IrradianceMapID = 0; // GL cubemap texture ID
+        uint32_t m_PrefilterMapID = 0;  // GL cubemap texture ID
+        uint32_t m_BRDFLutID = 0;       // GL 2D texture ID
         bool m_IBLReady = false;
 
         static constexpr int IRRADIANCE_SIZE = 32;

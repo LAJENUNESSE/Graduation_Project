@@ -1,12 +1,12 @@
-#include "engpch.h"
 #include "Platform/CUDA/CudaGLInteropContext.h"
 #include "Core/Log.h"
+#include "engpch.h"
 
 #ifdef _WIN32
-#include <windows.h>   // WINGDIAPI / APIENTRY — required before <GL/gl.h>
+#include <windows.h> // WINGDIAPI / APIENTRY — required before <GL/gl.h>
 #endif
-#include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include <cuda_runtime.h>
 
 namespace Engine
 {
@@ -18,8 +18,7 @@ namespace Engine
         return cudaGetErrorString(err);
     }
 
-    #define CUDA_LOG_ERR(call, err) \
-        ENGINE_CORE_ERROR("[CUDA] {0} failed: {1}", #call, CudaErrStr(err))
+#define CUDA_LOG_ERR(call, err) ENGINE_CORE_ERROR("[CUDA] {0} failed: {1}", #call, CudaErrStr(err))
 
     // ------------------------------------------------------------------ 实现
 
@@ -27,15 +26,15 @@ namespace Engine
     {
         struct Slot
         {
-            cudaGraphicsResource_t resource  = nullptr;
-            void*                  mappedPtr = nullptr;
-            std::string            name;
+            cudaGraphicsResource_t resource = nullptr;
+            void* mappedPtr = nullptr;
+            std::string name;
         };
 
         std::vector<Slot> slots;
-        cudaStream_t      stream   = nullptr;
-        int               deviceId = -1;
-        bool              mapped   = false;
+        cudaStream_t stream = nullptr;
+        int deviceId = -1;
+        bool mapped = false;
     };
 
     // ------------------------------------------------------------------ 静态
@@ -43,12 +42,11 @@ namespace Engine
     bool CudaGLInteropContext::ProbeDeviceMatch()
     {
         unsigned int count = 0;
-        int          device = -1;
-        cudaError_t  err = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
+        int device = -1;
+        cudaError_t err = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
         if (err != cudaSuccess || count == 0)
         {
-            ENGINE_CORE_WARN("[CUDA] ProbeDeviceMatch: count={0}, err={1}",
-                             count, cudaGetErrorString(err));
+            ENGINE_CORE_WARN("[CUDA] ProbeDeviceMatch: count={0}, err={1}", count, cudaGetErrorString(err));
             return false;
         }
         return true;
@@ -56,12 +54,11 @@ namespace Engine
 
     // ------------------------------------------------------------------ 构造/析构
 
-    CudaGLInteropContext::CudaGLInteropContext()
-        : m_Impl(CreateScope<Impl>())
+    CudaGLInteropContext::CudaGLInteropContext() : m_Impl(CreateScope<Impl>())
     {
         unsigned int count = 0;
-        int          device = -1;
-        cudaError_t  err = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
+        int device = -1;
+        cudaError_t err = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
         if (err != cudaSuccess || count == 0)
         {
             ENGINE_CORE_ERROR("[CUDA] No CUDA device matching GL context");
@@ -69,16 +66,23 @@ namespace Engine
         }
 
         err = cudaSetDevice(device);
-        if (err != cudaSuccess) { CUDA_LOG_ERR(cudaSetDevice, err); return; }
+        if (err != cudaSuccess)
+        {
+            CUDA_LOG_ERR(cudaSetDevice, err);
+            return;
+        }
         m_Impl->deviceId = device;
 
         err = cudaStreamCreate(&m_Impl->stream);
-        if (err != cudaSuccess) { CUDA_LOG_ERR(cudaStreamCreate, err); return; }
+        if (err != cudaSuccess)
+        {
+            CUDA_LOG_ERR(cudaStreamCreate, err);
+            return;
+        }
 
         cudaDeviceProp prop{};
         cudaGetDeviceProperties(&prop, device);
-        ENGINE_CORE_INFO("[CUDA] Device {0}: {1} (SM {2}.{3})",
-                         device, prop.name, prop.major, prop.minor);
+        ENGINE_CORE_INFO("[CUDA] Device {0}: {1} (SM {2}.{3})", device, prop.name, prop.major, prop.minor);
     }
 
     CudaGLInteropContext::~CudaGLInteropContext()
@@ -98,13 +102,12 @@ namespace Engine
     int CudaGLInteropContext::RegisterBuffer(uint32_t glBufferID, const char* debugName)
     {
         cudaGraphicsResource_t resource = nullptr;
-        cudaError_t err = cudaGraphicsGLRegisterBuffer(
-            &resource, glBufferID, cudaGraphicsRegisterFlagsNone);
+        cudaError_t err = cudaGraphicsGLRegisterBuffer(&resource, glBufferID, cudaGraphicsRegisterFlagsNone);
 
         if (err != cudaSuccess)
         {
-            ENGINE_CORE_ERROR("[CUDA] RegisterBuffer '{0}' (GL id={1}) failed: {2}",
-                              debugName, glBufferID, CudaErrStr(err));
+            ENGINE_CORE_ERROR("[CUDA] RegisterBuffer '{0}' (GL id={1}) failed: {2}", debugName, glBufferID,
+                              CudaErrStr(err));
             return -1;
         }
 
@@ -151,10 +154,11 @@ namespace Engine
             err = cudaGraphicsResourceGetMappedPointer(&m_Impl->slots[i].mappedPtr, &sz, res[i]);
             if (err != cudaSuccess)
             {
-                ENGINE_CORE_ERROR("[CUDA] GetMappedPointer slot {0} ('{1}') failed: {2}",
-                                  i, m_Impl->slots[i].name, CudaErrStr(err));
+                ENGINE_CORE_ERROR("[CUDA] GetMappedPointer slot {0} ('{1}') failed: {2}", i, m_Impl->slots[i].name,
+                                  CudaErrStr(err));
                 cudaGraphicsUnmapResources(n, res.data(), m_Impl->stream);
-                for (auto& s : m_Impl->slots) s.mappedPtr = nullptr;
+                for (auto& s : m_Impl->slots)
+                    s.mappedPtr = nullptr;
                 return false;
             }
         }
@@ -170,7 +174,8 @@ namespace Engine
 
         // 调试同步——仅当 ENGINE_CUDA_DEBUG_SYNC=1 时。
         // 发布路径依赖 cudaGraphicsUnmapResources 的隐式同步。
-        static const bool sDebugSync = []{
+        static const bool sDebugSync = []
+        {
             const char* e = std::getenv("ENGINE_CUDA_DEBUG_SYNC");
             return e && e[0] == '1';
         }();
@@ -198,8 +203,14 @@ namespace Engine
         return m_Impl->slots[slot].mappedPtr;
     }
 
-    void* CudaGLInteropContext::GetStream() const { return m_Impl->stream; }
-    bool  CudaGLInteropContext::IsMapped()  const { return m_Impl->mapped; }
+    void* CudaGLInteropContext::GetStream() const
+    {
+        return m_Impl->stream;
+    }
+    bool CudaGLInteropContext::IsMapped() const
+    {
+        return m_Impl->mapped;
+    }
 
     int CudaGLInteropContext::GetSlotCount() const
     {

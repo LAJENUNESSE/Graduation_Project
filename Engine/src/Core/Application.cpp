@@ -1,14 +1,14 @@
-#include "engpch.h"
 #include "Core/Application.h"
-#include "Core/Log.h"
+#include "Asset/AssetManager.h"
 #include "Core/Assert.h"
+#include "Core/Log.h"
 #include "Core/Timestep.h"
+#include "Debug/PerformanceMonitor.h"
+#include "Debug/ProfileTimer.h"
 #include "Events/ApplicationEvent.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Renderer/Renderer.h"
-#include "Asset/AssetManager.h"
-#include "Debug/PerformanceMonitor.h"
-#include "Debug/ProfileTimer.h"
+#include "engpch.h"
 
 #include <GLFW/glfw3.h>
 #include <thread>

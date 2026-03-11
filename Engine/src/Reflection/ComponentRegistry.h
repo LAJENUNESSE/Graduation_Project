@@ -15,10 +15,7 @@ namespace Engine
             return s_Instance;
         }
 
-        void Register(const ComponentMeta& meta)
-        {
-            m_Metas.push_back(meta);
-        }
+        void Register(const ComponentMeta& meta) { m_Metas.push_back(meta); }
 
         const std::vector<ComponentMeta>& GetAll() const { return m_Metas; }
 

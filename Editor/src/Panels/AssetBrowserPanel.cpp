@@ -1,12 +1,12 @@
 #include "Panels/AssetBrowserPanel.h"
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 #include "Renderer/Texture.h"
-#include "Asset/PathUtils.h"
 #include "Scene/SceneSerializer.h"
 
-#include <imgui.h>
 #include <algorithm>
 #include <cstdio>
+#include <imgui.h>
 #include <system_error>
 
 #ifdef _WIN32
@@ -35,7 +35,8 @@ namespace Engine
             }
             else
             {
-                std::snprintf(buffer, sizeof(buffer), "%.1f GB", static_cast<double>(fileSize) / (1024.0 * 1024.0 * 1024.0));
+                std::snprintf(buffer, sizeof(buffer), "%.1f GB",
+                              static_cast<double>(fileSize) / (1024.0 * 1024.0 * 1024.0));
             }
 
             return buffer;
@@ -45,8 +46,7 @@ namespace Engine
         {
             std::string ext = path.extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
-                   ext == ".bmp" || ext == ".tga" || ext == ".hdr";
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga" || ext == ".hdr";
         }
 
         bool IsSceneFile(const std::filesystem::path& path)
@@ -124,7 +124,8 @@ namespace Engine
         }
 
         ec.clear();
-        if (std::filesystem::exists(m_RootDirectory, ec) && !ec && std::filesystem::is_directory(m_RootDirectory, ec) && !ec)
+        if (std::filesystem::exists(m_RootDirectory, ec) && !ec && std::filesystem::is_directory(m_RootDirectory, ec) &&
+            !ec)
         {
             m_CurrentDirectory = m_RootDirectory;
             return true;
@@ -160,7 +161,8 @@ namespace Engine
             return false;
         }
 
-        std::filesystem::directory_iterator it(directory, std::filesystem::directory_options::skip_permission_denied, ec);
+        std::filesystem::directory_iterator it(directory, std::filesystem::directory_options::skip_permission_denied,
+                                               ec);
         if (ec)
         {
             SetFilesystemError(BuildFilesystemError("打开目录失败", directory, ec));
@@ -182,8 +184,7 @@ namespace Engine
         return true;
     }
 
-    bool AssetBrowserPanel::TryBuildRelativePath(const std::filesystem::path& path,
-                                                 const std::filesystem::path& base,
+    bool AssetBrowserPanel::TryBuildRelativePath(const std::filesystem::path& path, const std::filesystem::path& base,
                                                  std::filesystem::path& outRelative)
     {
         std::error_code ec;
@@ -400,7 +401,8 @@ namespace Engine
         if (!EnsureCurrentDirectoryValid())
             return;
 
-        if (ImGui::BeginPopupContextWindow("AssetBrowserContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+        if (ImGui::BeginPopupContextWindow("AssetBrowserContextMenu",
+                                           ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
         {
             ImGui::MenuItem("刷新");
 #ifdef _WIN32
@@ -416,15 +418,17 @@ namespace Engine
         if (!TryEnumerateDirectory(m_CurrentDirectory, entries))
             return;
 
-        std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-            std::error_code aEc;
-            std::error_code bEc;
-            bool aIsDirectory = a.is_directory(aEc) && !aEc;
-            bool bIsDirectory = b.is_directory(bEc) && !bEc;
-            if (aIsDirectory != bIsDirectory)
-                return aIsDirectory;
-            return a.path().filename() < b.path().filename();
-        });
+        std::sort(entries.begin(), entries.end(),
+                  [](const auto& a, const auto& b)
+                  {
+                      std::error_code aEc;
+                      std::error_code bEc;
+                      bool aIsDirectory = a.is_directory(aEc) && !aEc;
+                      bool bIsDirectory = b.is_directory(bEc) && !bEc;
+                      if (aIsDirectory != bIsDirectory)
+                          return aIsDirectory;
+                      return a.path().filename() < b.path().filename();
+                  });
 
         float cellSize = 80.0f;
         float padding = 8.0f;

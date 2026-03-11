@@ -4,9 +4,9 @@
 #include "Renderer/Material.h"
 #include "Renderer/VertexArray.h"
 
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <vector>
-#include <algorithm>
 
 namespace Engine
 {

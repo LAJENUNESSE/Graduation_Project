@@ -8,9 +8,9 @@
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 namespace Engine
 {
@@ -21,7 +21,11 @@ namespace Engine
     class PhysicsWorld;
     class BulletPhysicsWorld;
 
-    enum class PhysicsBackend { Custom = 0, Bullet = 1 };
+    enum class PhysicsBackend
+    {
+        Custom = 0,
+        Bullet = 1
+    };
 
     class Scene
     {
@@ -65,16 +69,9 @@ namespace Engine
         ShadowSettings& GetShadowSettings();
         void ResizeShadowMap(int resolution);
 
-        template <typename... Components>
-        auto GetAllEntitiesWith()
-        {
-            return m_Registry.view<Components...>();
-        }
+        template <typename... Components> auto GetAllEntitiesWith() { return m_Registry.view<Components...>(); }
 
-        entt::registry& GetRegistry()
-        {
-            return m_Registry;
-        }
+        entt::registry& GetRegistry() { return m_Registry; }
 
         PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
         void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }

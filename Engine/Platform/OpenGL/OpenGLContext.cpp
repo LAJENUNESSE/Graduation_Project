@@ -1,8 +1,8 @@
-#include "engpch.h"
 #include "Platform/OpenGL/OpenGLContext.h"
+#include "engpch.h"
 
-#include <glad/gl.h>
 #include <GLFW/glfw3.h>
+#include <glad/gl.h>
 
 #include "Core/Assert.h"
 #include "Core/Log.h"

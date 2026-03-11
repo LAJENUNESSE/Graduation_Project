@@ -8,15 +8,16 @@
 #include "Renderer/Texture.h"
 #include "Script/ScriptRegistry.h"
 
+#include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <glm/gtc/type_ptr.hpp>
 
 namespace Engine
 {
     namespace
     {
-        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel, std::string& outPath)
+        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel,
+                                       std::string& outPath)
         {
             std::string selectedPath = FileDialogs::OpenFile(filter, description);
             if (selectedPath.empty())
@@ -29,8 +30,8 @@ namespace Engine
             return false;
         }
 
-        bool TryNormalizeProjectAssetPath(const std::string& candidatePath, const char* assetLabel, std::string& outPath,
-                                          bool warnOnFailure = true)
+        bool TryNormalizeProjectAssetPath(const std::string& candidatePath, const char* assetLabel,
+                                          std::string& outPath, bool warnOnFailure = true)
         {
             if (candidatePath.empty())
             {
@@ -121,7 +122,8 @@ namespace Engine
                     ImGui::PopFont();
                     ImGui::PopStyleColor(3);
                     ImGui::SameLine();
-                    ImGui::DragFloat((std::string("##") + axisLabel).c_str(), &values[axisIndex], 0.1f, 0.0f, 0.0f, "%.2f");
+                    ImGui::DragFloat((std::string("##") + axisLabel).c_str(), &values[axisIndex], 0.1f, 0.0f, 0.0f,
+                                     "%.2f");
                     ImGui::PopItemWidth();
                 };
 
@@ -268,7 +270,8 @@ namespace Engine
                 char normalPathBuf[256];
                 memset(normalPathBuf, 0, sizeof(normalPathBuf));
                 std::strncpy(normalPathBuf, normalPath.c_str(), sizeof(normalPathBuf) - 1);
-                if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf),
+                                     ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     std::string newPath(normalPathBuf);
                     if (!newPath.empty())
@@ -565,7 +568,8 @@ namespace Engine
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_AUDIO"))
                 {
                     std::string normalizedPath;
-                    if (TryNormalizeProjectAssetPath(static_cast<const char*>(payload->Data), "音频", normalizedPath, false))
+                    if (TryNormalizeProjectAssetPath(static_cast<const char*>(payload->Data), "音频", normalizedPath,
+                                                     false))
                         component.AudioPath = normalizedPath;
                 }
                 ImGui::EndDragDropTarget();
@@ -626,10 +630,11 @@ namespace Engine
                 ImGui::Separator();
                 ImGui::Text("视频预览");
                 float w = ImGui::GetContentRegionAvail().x;
-                float aspect = (float)component.RuntimeTexture->GetWidth() / (float)component.RuntimeTexture->GetHeight();
+                float aspect =
+                    (float)component.RuntimeTexture->GetWidth() / (float)component.RuntimeTexture->GetHeight();
                 float h = w / aspect;
-                ImGui::Image((ImTextureID)(uintptr_t)component.RuntimeTexture->GetRendererID(),
-                             ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)(uintptr_t)component.RuntimeTexture->GetRendererID(), ImVec2(w, h),
+                             ImVec2(0, 1), ImVec2(1, 0));
             }
 
             if (component.RuntimeDecoder)

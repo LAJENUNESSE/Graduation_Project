@@ -1,10 +1,10 @@
-#include "engpch.h"
 #include "Physics/PhysicsDebugDraw.h"
-#include "Scene/Components.h"
-#include "Terrain/TerrainMeshGenerator.h"
-#include "Renderer/Shader.h"
 #include "Renderer/EditorCamera.h"
 #include "Renderer/RenderCommand.h"
+#include "Renderer/Shader.h"
+#include "Scene/Components.h"
+#include "Terrain/TerrainMeshGenerator.h"
+#include "engpch.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -110,20 +110,16 @@ namespace Engine
         m_LineVertices.push_back({to, color});
     }
 
-    void PhysicsDebugDraw::DrawBox(const glm::vec3& center, const glm::vec3& half, const glm::vec3& rotation, const glm::vec3& color)
+    void PhysicsDebugDraw::DrawBox(const glm::vec3& center, const glm::vec3& half, const glm::vec3& rotation,
+                                   const glm::vec3& color)
     {
         // 用四元数旋转 8 个局部顶点到世界空间
         glm::quat q(rotation);
 
         glm::vec3 localVerts[8] = {
-            {-half.x, -half.y, -half.z},
-            { half.x, -half.y, -half.z},
-            { half.x,  half.y, -half.z},
-            {-half.x,  half.y, -half.z},
-            {-half.x, -half.y,  half.z},
-            { half.x, -half.y,  half.z},
-            { half.x,  half.y,  half.z},
-            {-half.x,  half.y,  half.z},
+            {-half.x, -half.y, -half.z}, {half.x, -half.y, -half.z}, {half.x, half.y, -half.z},
+            {-half.x, half.y, -half.z},  {-half.x, -half.y, half.z}, {half.x, -half.y, half.z},
+            {half.x, half.y, half.z},    {-half.x, half.y, half.z},
         };
 
         glm::vec3 v[8];
@@ -132,14 +128,20 @@ namespace Engine
 
         // 12 条边
         // 底面
-        DrawLine(v[0], v[1], color); DrawLine(v[1], v[2], color);
-        DrawLine(v[2], v[3], color); DrawLine(v[3], v[0], color);
+        DrawLine(v[0], v[1], color);
+        DrawLine(v[1], v[2], color);
+        DrawLine(v[2], v[3], color);
+        DrawLine(v[3], v[0], color);
         // 顶面
-        DrawLine(v[4], v[5], color); DrawLine(v[5], v[6], color);
-        DrawLine(v[6], v[7], color); DrawLine(v[7], v[4], color);
+        DrawLine(v[4], v[5], color);
+        DrawLine(v[5], v[6], color);
+        DrawLine(v[6], v[7], color);
+        DrawLine(v[7], v[4], color);
         // 竖边
-        DrawLine(v[0], v[4], color); DrawLine(v[1], v[5], color);
-        DrawLine(v[2], v[6], color); DrawLine(v[3], v[7], color);
+        DrawLine(v[0], v[4], color);
+        DrawLine(v[1], v[5], color);
+        DrawLine(v[2], v[6], color);
+        DrawLine(v[3], v[7], color);
     }
 
     void PhysicsDebugDraw::DrawSphere(const glm::vec3& center, float radius, const glm::vec3& color)
@@ -154,22 +156,16 @@ namespace Engine
             float a1 = (i + 1) * step;
 
             // XY 平面
-            DrawLine(
-                center + glm::vec3(std::cos(a0) * radius, std::sin(a0) * radius, 0),
-                center + glm::vec3(std::cos(a1) * radius, std::sin(a1) * radius, 0),
-                color);
+            DrawLine(center + glm::vec3(std::cos(a0) * radius, std::sin(a0) * radius, 0),
+                     center + glm::vec3(std::cos(a1) * radius, std::sin(a1) * radius, 0), color);
 
             // XZ 平面
-            DrawLine(
-                center + glm::vec3(std::cos(a0) * radius, 0, std::sin(a0) * radius),
-                center + glm::vec3(std::cos(a1) * radius, 0, std::sin(a1) * radius),
-                color);
+            DrawLine(center + glm::vec3(std::cos(a0) * radius, 0, std::sin(a0) * radius),
+                     center + glm::vec3(std::cos(a1) * radius, 0, std::sin(a1) * radius), color);
 
             // YZ 平面
-            DrawLine(
-                center + glm::vec3(0, std::cos(a0) * radius, std::sin(a0) * radius),
-                center + glm::vec3(0, std::cos(a1) * radius, std::sin(a1) * radius),
-                color);
+            DrawLine(center + glm::vec3(0, std::cos(a0) * radius, std::sin(a0) * radius),
+                     center + glm::vec3(0, std::cos(a1) * radius, std::sin(a1) * radius), color);
         }
     }
 
@@ -197,11 +193,7 @@ namespace Engine
             float v = static_cast<float>(iy) / static_cast<float>(hmH - 1);
             int idx = std::min(iy, hmH - 1) * hmW + std::min(ix, hmW - 1);
             float h = meshData->HeightData[idx];
-            return translation + glm::vec3(
-                u * size - halfSize,
-                h * heightScale,
-                v * size - halfSize
-            );
+            return translation + glm::vec3(u * size - halfSize, h * heightScale, v * size - halfSize);
         };
 
         // 画 X 方向线
@@ -233,8 +225,7 @@ namespace Engine
         m_LineShader->Bind();
         m_LineShader->SetMat4("u_ViewProjection", viewProjection);
 
-        m_LineVBO->SetData(m_LineVertices.data(),
-                           static_cast<uint32_t>(m_LineVertices.size() * sizeof(LineVertex)));
+        m_LineVBO->SetData(m_LineVertices.data(), static_cast<uint32_t>(m_LineVertices.size() * sizeof(LineVertex)));
 
         m_LineVAO->Bind();
         RenderCommand::SetLineWidth(2.0f);

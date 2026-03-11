@@ -1,12 +1,12 @@
-#include "engpch.h"
 #include "Scene/Systems/TerrainRenderSystem.h"
-#include "Scene/Components.h"
-#include "Terrain/TerrainMeshGenerator.h"
-#include "Renderer/RenderCommand.h"
-#include "Renderer/Renderer.h"
-#include "Renderer/EditorCamera.h"
 #include "Asset/AssetManager.h"
 #include "Core/Log.h"
+#include "Renderer/EditorCamera.h"
+#include "Renderer/RenderCommand.h"
+#include "Renderer/Renderer.h"
+#include "Scene/Components.h"
+#include "Terrain/TerrainMeshGenerator.h"
+#include "engpch.h"
 
 namespace Engine
 {
@@ -51,11 +51,9 @@ namespace Engine
             uint32_t eid = static_cast<uint32_t>(entity);
 
             auto& cache = m_Cache[eid];
-            bool needRebuild = tc.MeshDirty
-                || cache.HeightmapPath != tc.HeightmapPath
-                || cache.HeightScale != tc.HeightScale
-                || cache.TerrainSize != tc.TerrainSize
-                || cache.LODLevels != tc.LODLevels;
+            bool needRebuild = tc.MeshDirty || cache.HeightmapPath != tc.HeightmapPath ||
+                               cache.HeightScale != tc.HeightScale || cache.TerrainSize != tc.TerrainSize ||
+                               cache.LODLevels != tc.LODLevels;
 
             if (needRebuild && !tc.HeightmapPath.empty())
             {
@@ -66,8 +64,8 @@ namespace Engine
                     tc.RuntimeMeshData = nullptr;
                 }
 
-                auto meshData = TerrainMeshGenerator::Generate(
-                    tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
+                auto meshData =
+                    TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
 
                 tc.RuntimeMeshData = new TerrainMeshData(std::move(meshData));
                 tc.MeshDirty = false;
@@ -80,9 +78,8 @@ namespace Engine
         }
     }
 
-    void TerrainRenderSystem::Render(entt::registry& reg, const EditorCamera& camera,
-                                     const LightEnvironment& lights, const ShadowData& shadow,
-                                     const ShadowSettings& shadowSettings)
+    void TerrainRenderSystem::Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
+                                     const ShadowData& shadow, const ShadowSettings& shadowSettings)
     {
         auto view = reg.view<TransformComponent, TerrainComponent>();
         bool anyTerrain = false;
@@ -119,8 +116,10 @@ namespace Engine
             // LOD 选择
             float dist = glm::distance(camera.GetPosition(), transform.Translation);
             int lod = 0;
-            if (dist > tc.LODDistance2 && static_cast<int>(meshData->LODs.size()) >= 3) lod = 2;
-            else if (dist > tc.LODDistance1 && static_cast<int>(meshData->LODs.size()) >= 2) lod = 1;
+            if (dist > tc.LODDistance2 && static_cast<int>(meshData->LODs.size()) >= 3)
+                lod = 2;
+            else if (dist > tc.LODDistance1 && static_cast<int>(meshData->LODs.size()) >= 2)
+                lod = 1;
 
             // 设置变换
             m_TerrainShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
@@ -149,7 +148,8 @@ namespace Engine
             const int normalUnits[4] = {11, 12, 13, 14};
             const char* albedoNames[4] = {"u_Layer0Albedo", "u_Layer1Albedo", "u_Layer2Albedo", "u_Layer3Albedo"};
             const char* normalNames[4] = {"u_Layer0Normal", "u_Layer1Normal", "u_Layer2Normal", "u_Layer3Normal"};
-            const char* hasNormalNames[4] = {"u_HasLayer0Normal", "u_HasLayer1Normal", "u_HasLayer2Normal", "u_HasLayer3Normal"};
+            const char* hasNormalNames[4] = {"u_HasLayer0Normal", "u_HasLayer1Normal", "u_HasLayer2Normal",
+                                             "u_HasLayer3Normal"};
 
             float tilings[4], metallics[4], roughnesses[4];
             for (int i = 0; i < 4; i++)
@@ -183,15 +183,12 @@ namespace Engine
             }
 
             // 预生成的 uniform 名称数组，避免每帧循环内的字符串拼接
-            static const char* s_LayerTiling[] = {
-                "u_LayerTiling[0]", "u_LayerTiling[1]", "u_LayerTiling[2]", "u_LayerTiling[3]"
-            };
-            static const char* s_LayerMetallic[] = {
-                "u_LayerMetallic[0]", "u_LayerMetallic[1]", "u_LayerMetallic[2]", "u_LayerMetallic[3]"
-            };
-            static const char* s_LayerRoughness[] = {
-                "u_LayerRoughness[0]", "u_LayerRoughness[1]", "u_LayerRoughness[2]", "u_LayerRoughness[3]"
-            };
+            static const char* s_LayerTiling[] = {"u_LayerTiling[0]", "u_LayerTiling[1]", "u_LayerTiling[2]",
+                                                  "u_LayerTiling[3]"};
+            static const char* s_LayerMetallic[] = {"u_LayerMetallic[0]", "u_LayerMetallic[1]", "u_LayerMetallic[2]",
+                                                    "u_LayerMetallic[3]"};
+            static const char* s_LayerRoughness[] = {"u_LayerRoughness[0]", "u_LayerRoughness[1]",
+                                                     "u_LayerRoughness[2]", "u_LayerRoughness[3]"};
 
             // 上传数组 uniform
             for (int i = 0; i < 4; i++)

@@ -1,23 +1,23 @@
-#include "engpch.h"
 #include "Scene/Scene.h"
+#include "Core/Log.h"
+#include "Physics/BulletPhysicsWorld.h"
+#include "Physics/PhysicsWorld.h"
+#include "Reflection/ComponentPolicies.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Renderer/EditorCamera.h"
+#include "Renderer/SceneRenderer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptableEntity.h"
-#include "Reflection/ComponentRegistry.h"
-#include "Reflection/ComponentPolicies.h"
-#include "Renderer/SceneRenderer.h"
-#include "Renderer/EditorCamera.h"
-#include "Physics/PhysicsWorld.h"
-#include "Physics/BulletPhysicsWorld.h"
 #include "Terrain/TerrainMeshGenerator.h"
-#include "Core/Log.h"
+#include "engpch.h"
 
 #include <set>
 
 #define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 namespace Engine
@@ -28,9 +28,7 @@ namespace Engine
         ComponentRegistry::EnsureRegistered();
     }
 
-    Scene::~Scene()
-    {
-    }
+    Scene::~Scene() {}
 
     Entity Scene::CreateEntity(const std::string& name)
     {
@@ -70,8 +68,8 @@ namespace Engine
                     auto& parentChildren = parent.GetComponent<RelationshipComponent>().Children;
                     UUID myUUID = entity.GetUUID();
                     parentChildren.erase(
-                        std::remove_if(parentChildren.begin(), parentChildren.end(),
-                            [myUUID](UUID id) { return static_cast<uint64_t>(id) == static_cast<uint64_t>(myUUID); }),
+                        std::remove_if(parentChildren.begin(), parentChildren.end(), [myUUID](UUID id)
+                                       { return static_cast<uint64_t>(id) == static_cast<uint64_t>(myUUID); }),
                         parentChildren.end());
                 }
             }
@@ -109,8 +107,8 @@ namespace Engine
                     auto& oldParentChildren = oldParent.GetComponent<RelationshipComponent>().Children;
                     UUID childUUID = child.GetUUID();
                     oldParentChildren.erase(
-                        std::remove_if(oldParentChildren.begin(), oldParentChildren.end(),
-                            [childUUID](UUID id) { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
+                        std::remove_if(oldParentChildren.begin(), oldParentChildren.end(), [childUUID](UUID id)
+                                       { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
                         oldParentChildren.end());
                 }
                 oldChildRel.ParentID = 0;
@@ -161,8 +159,8 @@ namespace Engine
             auto& parentChildren = parent.GetComponent<RelationshipComponent>().Children;
             UUID childUUID = child.GetUUID();
             parentChildren.erase(
-                std::remove_if(parentChildren.begin(), parentChildren.end(),
-                    [childUUID](UUID id) { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
+                std::remove_if(parentChildren.begin(), parentChildren.end(), [childUUID](UUID id)
+                               { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
                 parentChildren.end());
         }
 
@@ -291,9 +289,14 @@ namespace Engine
                 // 1) 碰撞粒子触发（仅 Enter 事件）
                 if (event.Type == CollisionEventType::Enter)
                 {
-                    auto tryTriggerBurst = [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal) {
-                        if (!m_Registry.valid(triggerEntity)) return;
-                        if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(triggerEntity)) return;
+                    auto tryTriggerBurst =
+                        [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal)
+                    {
+                        if (!m_Registry.valid(triggerEntity))
+                            return;
+                        if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(
+                                triggerEntity))
+                            return;
 
                         // entity pair 去重
                         uint32_t a = static_cast<uint32_t>(triggerEntity);
@@ -306,8 +309,10 @@ namespace Engine
                         auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(triggerEntity);
                         auto& emitter = m_Registry.get<ParticleEmitterComponent>(triggerEntity);
 
-                        if (!trigger.Enabled) return;
-                        if (event.Impulse < trigger.MinImpulse) return;
+                        if (!trigger.Enabled)
+                            return;
+                        if (event.Impulse < trigger.MinImpulse)
+                            return;
 
                         // 按冲量比例缩放爆发数（MinImpulse 最小 0.001 防除零）
                         float safeMinImpulse = std::max(trigger.MinImpulse, 0.001f);
@@ -316,11 +321,10 @@ namespace Engine
                         emitter.CollisionBurstCount += burst;
 
                         // 限制每帧碰撞爆发数
-                        emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
-                            trigger.MaxBurstPerFrame);
+                        emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount, trigger.MaxBurstPerFrame);
                         // 限制总碰撞爆发不超过粒子池容量
-                        emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount,
-                            static_cast<int>(emitter.MaxParticles));
+                        emitter.CollisionBurstCount =
+                            std::min(emitter.CollisionBurstCount, static_cast<int>(emitter.MaxParticles));
 
                         if (trigger.UseCollisionNormal)
                             emitter.EmitDirection = normal;
@@ -331,13 +335,17 @@ namespace Engine
                 }
 
                 // 2) 碰撞回调分发到 NativeScript
-                auto dispatchCallback = [&](entt::entity selfEntity, entt::entity otherEntity,
-                                            const glm::vec3& contactNormal) {
-                    if (!m_Registry.valid(selfEntity)) return;
-                    if (!m_Registry.all_of<NativeScriptComponent>(selfEntity)) return;
+                auto dispatchCallback =
+                    [&](entt::entity selfEntity, entt::entity otherEntity, const glm::vec3& contactNormal)
+                {
+                    if (!m_Registry.valid(selfEntity))
+                        return;
+                    if (!m_Registry.all_of<NativeScriptComponent>(selfEntity))
+                        return;
 
                     auto& nsc = m_Registry.get<NativeScriptComponent>(selfEntity);
-                    if (!nsc.Instance) return;
+                    if (!nsc.Instance)
+                        return;
 
                     Entity otherWrapped = {otherEntity, this};
 
@@ -421,8 +429,8 @@ namespace Engine
                     auto& tc = m_Registry.get<TerrainComponent>(entity);
                     if (!tc.RuntimeMeshData && !tc.HeightmapPath.empty())
                     {
-                        auto meshData = TerrainMeshGenerator::Generate(
-                            tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
+                        auto meshData = TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale,
+                                                                       tc.LODLevels);
                         tc.RuntimeMeshData = new TerrainMeshData(std::move(meshData));
                         tc.MeshDirty = false;
                     }
@@ -530,7 +538,7 @@ namespace Engine
             if (srcReg.all_of<MeshRendererComponent>(srcEntity))
             {
                 auto mrc = srcReg.get<MeshRendererComponent>(srcEntity);
-                mrc.CachedMaterials.clear();  // 避免拷贝场景与原场景共享 Material
+                mrc.CachedMaterials.clear(); // 避免拷贝场景与原场景共享 Material
                 newEntity.AddComponent<MeshRendererComponent>(mrc);
             }
 
@@ -552,8 +560,8 @@ namespace Engine
             if (srcReg.all_of<TerrainComponent>(srcEntity))
             {
                 auto tc = srcReg.get<TerrainComponent>(srcEntity);
-                tc.RuntimeMeshData = nullptr;  // 清除运行时指针
-                tc.MeshDirty = true;           // 新场景重建网格
+                tc.RuntimeMeshData = nullptr; // 清除运行时指针
+                tc.MeshDirty = true;          // 新场景重建网格
                 newEntity.AddComponent<TerrainComponent>(tc);
             }
 
@@ -616,9 +624,8 @@ namespace Engine
             ++dstEntityCount;
         }
 
-        ENGINE_CORE_INFO("[SceneLifecycle] Scene::Copy completed srcEntities={0}, dstEntities={1}",
-            srcEntityCount,
-            dstEntityCount);
+        ENGINE_CORE_INFO("[SceneLifecycle] Scene::Copy completed srcEntities={0}, dstEntities={1}", srcEntityCount,
+                         dstEntityCount);
 
         return newScene;
     }

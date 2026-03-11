@@ -1,15 +1,15 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Scene/Scene.h"
-#include "Scene/Entity.h"
 #include "Scene/Components.h"
+#include "Scene/Entity.h"
+#include "Scene/Scene.h"
 
-#include <string>
-#include <stack>
-#include <vector>
-#include <functional>
 #include <any>
+#include <functional>
+#include <stack>
+#include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -56,9 +56,9 @@ namespace Engine
     class TransformChangeCommand : public ICommand
     {
     public:
-        TransformChangeCommand(Entity entity,
-                                const glm::vec3& oldTranslation, const glm::vec3& oldRotation, const glm::vec3& oldScale,
-                                const glm::vec3& newTranslation, const glm::vec3& newRotation, const glm::vec3& newScale);
+        TransformChangeCommand(Entity entity, const glm::vec3& oldTranslation, const glm::vec3& oldRotation,
+                               const glm::vec3& oldScale, const glm::vec3& newTranslation, const glm::vec3& newRotation,
+                               const glm::vec3& newScale);
 
         void Execute() override;
         void Undo() override;
@@ -71,7 +71,6 @@ namespace Engine
         glm::vec3 m_OldTranslation, m_OldRotation, m_OldScale;
         glm::vec3 m_NewTranslation, m_NewRotation, m_NewScale;
     };
-
 
     class MultiTransformChangeCommand : public ICommand
     {
@@ -158,9 +157,7 @@ namespace Engine
     public:
         using ApplyFn = std::function<void(const std::any&)>;
 
-        PropertyChangeCommand(const std::string& description,
-                               std::any oldValue, std::any newValue,
-                               ApplyFn applyFn);
+        PropertyChangeCommand(const std::string& description, std::any oldValue, std::any newValue, ApplyFn applyFn);
 
         void Execute() override;
         void Undo() override;
@@ -188,8 +185,8 @@ namespace Engine
     private:
         Ref<Scene> m_Scene;
         UUID m_ChildUUID;
-        UUID m_OldParentUUID;   // 0 = 原来是根节点
-        UUID m_NewParentUUID;   // 0 = 解除父子关系
+        UUID m_OldParentUUID; // 0 = 原来是根节点
+        UUID m_NewParentUUID; // 0 = 解除父子关系
         // 保存变更前子实体的本地 Transform，用于精确还原
         glm::vec3 m_OldTranslation, m_OldRotation, m_OldScale;
     };

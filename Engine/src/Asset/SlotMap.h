@@ -1,16 +1,15 @@
 #pragma once
 
-#include "Core/Base.h"
 #include "Asset/AssetHandle.h"
+#include "Core/Base.h"
 
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace Engine
 {
 
-    template <typename T>
-    class SlotMap
+    template <typename T> class SlotMap
     {
     public:
         SlotMap()
