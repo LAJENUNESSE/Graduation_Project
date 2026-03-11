@@ -378,7 +378,7 @@ namespace Engine
         m_PassQueue.push_back(
             {"FluidPass", [this](RenderContext& ctx)
              {
-                 if (!ctx.ActiveScene)
+                 if (!ctx.ActiveScene || !ctx.IsSimulating)
                      return;
 
                  auto fluidView = ctx.ActiveScene->GetRegistry().view<TransformComponent, FluidEmitterComponent>();
