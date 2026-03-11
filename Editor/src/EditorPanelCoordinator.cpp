@@ -117,6 +117,8 @@ namespace Engine
         ImGui::Text("GPU 耗时 (上一帧):");
         ImGui::Text("  阴影Pass:  %.3f ms", pm.GetShadowPassGpuMs());
         ImGui::Text("  场景渲染:  %.3f ms", pm.GetSceneRenderGpuMs());
+        ImGui::Text("  粒子Compute: %.3f ms [%s]", pm.GetParticleComputeGpuMs(),
+                     pm.IsParticleUsingCuda() ? "CUDA" : "GL");
 
         ImGui::Separator();
         const auto& stats = pm.GetStats();

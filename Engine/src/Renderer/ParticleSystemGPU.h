@@ -105,6 +105,10 @@ namespace Engine
         int  m_CudaSlotAliveList = -1;
         int  m_CudaSlotCounter   = -1;
         int  m_CudaSlotIndirect  = -1;
+
+        // CUDA event 计时
+        void* m_CudaEventStart = nullptr;
+        void* m_CudaEventStop  = nullptr;
 #endif
 
         void InitSPH(float smoothingRadius);
