@@ -4,9 +4,9 @@
 #include "Debug/GPUTimerQuery.h"
 
 #include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <string>
-#include <cstdint>
 
 namespace Engine
 {
@@ -66,8 +66,7 @@ namespace Engine
         float GetSceneRenderGpuMs() const { return m_SceneRenderGPU.GetElapsedMs(); }
         float GetParticleComputeGpuMs() const
         {
-            return m_ParticleUsingCuda ? m_ParticleComputeCudaMs
-                                       : m_ParticleComputeGPU.GetElapsedMs();
+            return m_ParticleUsingCuda ? m_ParticleComputeCudaMs : m_ParticleComputeGPU.GetElapsedMs();
         }
 
         // Frame time history (ring buffer for PlotLines)

@@ -1,5 +1,5 @@
-#include "Renderer/VertexArray.h"
 #include "engpch.h"
+#include "Renderer/VertexArray.h"
 
 #include "Core/Assert.h"
 #include "Platform/OpenGL/OpenGLVertexArray.h"

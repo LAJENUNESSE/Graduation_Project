@@ -1,3 +1,4 @@
+#include "engpch.h"
 #include "Scene/Systems/TerrainRenderSystem.h"
 #include "Asset/AssetManager.h"
 #include "Core/Log.h"
@@ -6,7 +7,6 @@
 #include "Renderer/Renderer.h"
 #include "Scene/Components.h"
 #include "Terrain/TerrainMeshGenerator.h"
-#include "engpch.h"
 
 namespace Engine
 {

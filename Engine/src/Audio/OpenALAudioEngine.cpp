@@ -1,7 +1,7 @@
+#include "engpch.h"
 #include "Audio/OpenALAudioEngine.h"
 #include "Audio/AudioClip.h"
 #include "Core/Log.h"
-#include "engpch.h"
 
 #include <AL/al.h>
 #include <AL/alc.h>

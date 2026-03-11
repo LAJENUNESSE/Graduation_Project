@@ -1,9 +1,9 @@
+#include "engpch.h"
 #include "Scene/Systems/MeshRenderSystem.h"
 #include "Asset/AssetManager.h"
 #include "Renderer/Material.h"
 #include "Renderer/Mesh.h"
 #include "Scene/Components.h"
-#include "engpch.h"
 
 namespace Engine
 {

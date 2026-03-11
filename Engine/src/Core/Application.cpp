@@ -1,3 +1,4 @@
+#include "engpch.h"
 #include "Core/Application.h"
 #include "Asset/AssetManager.h"
 #include "Core/Assert.h"
@@ -8,7 +9,6 @@
 #include "Events/ApplicationEvent.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Renderer/Renderer.h"
-#include "engpch.h"
 
 #include <GLFW/glfw3.h>
 #include <thread>

@@ -1,7 +1,7 @@
+#include "engpch.h"
 #include "Audio/AudioClip.h"
 #include "Asset/PathUtils.h"
 #include "Core/Log.h"
-#include "engpch.h"
 
 #include <AL/al.h>
 namespace Engine

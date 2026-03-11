@@ -4,20 +4,19 @@
 #include "Core/Application.h"
 #include "Core/Log.h"
 
+// clang-format off
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <ImGuizmo.h>
+// clang-format on
 
 #include <GLFW/glfw3.h>
 
 namespace Engine
 {
 
-    ImGuiLayer::ImGuiLayer()
-        : Layer("ImGuiLayer")
-    {
-    }
+    ImGuiLayer::ImGuiLayer() : Layer("ImGuiLayer") {}
 
     void ImGuiLayer::OnAttach()
     {
@@ -35,7 +34,7 @@ namespace Engine
         const std::string fontPath =
             PathUtils::ResolvePath((PathUtils::GetEditorAssetRoot() / "fonts" / "NotoSansSC-Regular.ttf")).string();
         ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 18.0f, nullptr,
-                                                     io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+                                                    io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
         if (!font)
         {
             ENGINE_CORE_WARN("Failed to load Chinese font, falling back to default font");
@@ -51,8 +50,7 @@ namespace Engine
             style.Colors[ImGuiCol_WindowBg].w = 1.0f;
         }
 
-        GLFWwindow* window =
-            static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
+        GLFWwindow* window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
         ImGui_ImplGlfw_InitForOpenGL(window, false);
         ImGui_ImplOpenGL3_Init("#version 330");
     }
@@ -102,4 +100,3 @@ namespace Engine
     }
 
 } // namespace Engine
-

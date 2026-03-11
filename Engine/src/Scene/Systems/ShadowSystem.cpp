@@ -1,3 +1,4 @@
+#include "engpch.h"
 #include "Scene/Systems/ShadowSystem.h"
 #include "Asset/AssetManager.h"
 #include "Debug/PerformanceMonitor.h"
@@ -5,7 +6,6 @@
 #include "Renderer/Mesh.h"
 #include "Renderer/RenderCommand.h"
 #include "Scene/Components.h"
-#include "engpch.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>

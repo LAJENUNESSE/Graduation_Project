@@ -1,3 +1,4 @@
+#include "engpch.h"
 #include "Scene/Scene.h"
 #include "Core/Log.h"
 #include "Physics/BulletPhysicsWorld.h"
@@ -11,7 +12,6 @@
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptableEntity.h"
 #include "Terrain/TerrainMeshGenerator.h"
-#include "engpch.h"
 
 #include <set>
 

@@ -1,8 +1,8 @@
 #include "engpch.h"
 #include "Core/Window.h"
 #include "Core/Assert.h"
-#include "Core/Log.h"
 #include "Core/KeyCodes.h"
+#include "Core/Log.h"
 #include "Core/MouseCodes.h"
 
 #include "Platform/OpenGL/OpenGLContext.h"
@@ -13,8 +13,10 @@
 
 #include "Debug/PerformanceMonitor.h"
 
+// clang-format off
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
+// clang-format on
 #include <imgui_impl_glfw.h>
 
 #ifdef __linux__
@@ -127,8 +129,8 @@ namespace Engine
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-        m_Window = glfwCreateWindow(static_cast<int>(props.Width), static_cast<int>(props.Height),
-                                    m_Data.Title.c_str(), nullptr, nullptr);
+        m_Window = glfwCreateWindow(static_cast<int>(props.Width), static_cast<int>(props.Height), m_Data.Title.c_str(),
+                                    nullptr, nullptr);
         if (!m_Window)
         {
             ENGINE_CORE_ERROR("Failed to create GLFW window!");
@@ -145,112 +147,115 @@ namespace Engine
         SetRawMouseInput(false);
 
         glfwSetWindowFocusCallback(m_Window, [](GLFWwindow* window, int focused)
-        {
-            ImGui_ImplGlfw_WindowFocusCallback(window, focused);
-        });
+                                   { ImGui_ImplGlfw_WindowFocusCallback(window, focused); });
 
         glfwSetCursorEnterCallback(m_Window, [](GLFWwindow* window, int entered)
-        {
-            ImGui_ImplGlfw_CursorEnterCallback(window, entered);
-        });
+                                   { ImGui_ImplGlfw_CursorEnterCallback(window, entered); });
 
-        glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
-        {
-            WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
-            data.Width = width;
-            data.Height = height;
+        glfwSetWindowSizeCallback(m_Window,
+                                  [](GLFWwindow* window, int width, int height)
+                                  {
+                                      WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                      data.Width = width;
+                                      data.Height = height;
 
-            WindowResizeEvent event(width, height);
-            data.EventCallback(event);
-        });
+                                      WindowResizeEvent event(width, height);
+                                      data.EventCallback(event);
+                                  });
 
-        glfwSetWindowCloseCallback(m_Window, [](GLFWwindow* window)
-        {
-            WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
-            WindowCloseEvent event;
-            data.EventCallback(event);
-        });
+        glfwSetWindowCloseCallback(m_Window,
+                                   [](GLFWwindow* window)
+                                   {
+                                       WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                       WindowCloseEvent event;
+                                       data.EventCallback(event);
+                                   });
 
-        glfwSetKeyCallback(m_Window, [](GLFWwindow* window, int key, int scancode, int action, int mods)
-        {
-            ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+        glfwSetKeyCallback(m_Window,
+                           [](GLFWwindow* window, int key, int scancode, int action, int mods)
+                           {
+                               ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 
-            WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                               WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
 
-            switch (action)
-            {
-                case GLFW_PRESS:
-                {
-                    KeyPressedEvent event(key, 0);
-                    data.EventCallback(event);
-                    break;
-                }
-                case GLFW_RELEASE:
-                {
-                    KeyReleasedEvent event(key);
-                    data.EventCallback(event);
-                    break;
-                }
-                case GLFW_REPEAT:
-                {
-                    KeyPressedEvent event(key, 1);
-                    data.EventCallback(event);
-                    break;
-                }
-            }
-        });
+                               switch (action)
+                               {
+                               case GLFW_PRESS:
+                               {
+                                   KeyPressedEvent event(key, 0);
+                                   data.EventCallback(event);
+                                   break;
+                               }
+                               case GLFW_RELEASE:
+                               {
+                                   KeyReleasedEvent event(key);
+                                   data.EventCallback(event);
+                                   break;
+                               }
+                               case GLFW_REPEAT:
+                               {
+                                   KeyPressedEvent event(key, 1);
+                                   data.EventCallback(event);
+                                   break;
+                               }
+                               }
+                           });
 
-        glfwSetCharCallback(m_Window, [](GLFWwindow* window, unsigned int keycode)
-        {
-            ImGui_ImplGlfw_CharCallback(window, keycode);
+        glfwSetCharCallback(m_Window,
+                            [](GLFWwindow* window, unsigned int keycode)
+                            {
+                                ImGui_ImplGlfw_CharCallback(window, keycode);
 
-            WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
-            KeyTypedEvent event(static_cast<int>(keycode));
-            data.EventCallback(event);
-        });
+                                WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                KeyTypedEvent event(static_cast<int>(keycode));
+                                data.EventCallback(event);
+                            });
 
-        glfwSetMouseButtonCallback(m_Window, [](GLFWwindow* window, int button, int action, int mods)
-        {
-            ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+        glfwSetMouseButtonCallback(m_Window,
+                                   [](GLFWwindow* window, int button, int action, int mods)
+                                   {
+                                       ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 
-            WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                       WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
 
-            switch (action)
-            {
-                case GLFW_PRESS:
-                {
-                    MouseButtonPressedEvent event(button);
-                    data.EventCallback(event);
-                    break;
-                }
-                case GLFW_RELEASE:
-                {
-                    MouseButtonReleasedEvent event(button);
-                    data.EventCallback(event);
-                    break;
-                }
-            }
-        });
+                                       switch (action)
+                                       {
+                                       case GLFW_PRESS:
+                                       {
+                                           MouseButtonPressedEvent event(button);
+                                           data.EventCallback(event);
+                                           break;
+                                       }
+                                       case GLFW_RELEASE:
+                                       {
+                                           MouseButtonReleasedEvent event(button);
+                                           data.EventCallback(event);
+                                           break;
+                                       }
+                                       }
+                                   });
 
-        glfwSetScrollCallback(m_Window, [](GLFWwindow* window, double xOffset, double yOffset)
-        {
-            ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
+        glfwSetScrollCallback(m_Window,
+                              [](GLFWwindow* window, double xOffset, double yOffset)
+                              {
+                                  ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
 
-            WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
-            MouseScrolledEvent event(static_cast<float>(xOffset), static_cast<float>(yOffset));
-            data.EventCallback(event);
-        });
+                                  WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                  MouseScrolledEvent event(static_cast<float>(xOffset), static_cast<float>(yOffset));
+                                  data.EventCallback(event);
+                              });
 
-        glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xPos, double yPos)
-        {
-            WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
-            data.PendingMouseX = static_cast<float>(xPos);
-            data.PendingMouseY = static_cast<float>(yPos);
-            data.HasPendingMouseMove = true;
+        glfwSetCursorPosCallback(m_Window,
+                                 [](GLFWwindow* window, double xPos, double yPos)
+                                 {
+                                     WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                     data.PendingMouseX = static_cast<float>(xPos);
+                                     data.PendingMouseY = static_cast<float>(yPos);
+                                     data.HasPendingMouseMove = true;
 
-            if (data.CurrentCursorMode == CursorMode::Normal)
-                ImGui_ImplGlfw_CursorPosCallback(window, xPos, yPos);
-        });
+                                     if (data.CurrentCursorMode == CursorMode::Normal)
+                                         ImGui_ImplGlfw_CursorPosCallback(window, xPos, yPos);
+                                 });
     }
 
     void GLFWWindowImpl::Shutdown()

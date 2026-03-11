@@ -3,13 +3,14 @@
 #include "Asset/PathUtils.h"
 #include "Core/Log.h"
 
-extern "C" {
+extern "C"
+{
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
-#include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 namespace Engine
 {
@@ -30,18 +31,17 @@ namespace Engine
 
         // 1. Open input (with timeout for network streams)
         AVDictionary* opts = nullptr;
-        bool isNetworkStream = url.find("rtsp://") == 0 || url.find("rtmp://") == 0
-                            || url.find("rtp://")  == 0 || url.find("udp://")  == 0
-                            || url.find("http://") == 0 || url.find("https://") == 0;
+        bool isNetworkStream = url.find("rtsp://") == 0 || url.find("rtmp://") == 0 || url.find("rtp://") == 0 ||
+                               url.find("udp://") == 0 || url.find("http://") == 0 || url.find("https://") == 0;
         const std::string sourcePath = isNetworkStream ? url : PathUtils::ResolvePathString(url);
         if (isNetworkStream)
         {
-            av_dict_set(&opts, "rtsp_transport", "tcp", 0);       // RTSP 强制 TCP（避免 WSL2 UDP 问题）
-            av_dict_set(&opts, "stimeout",   "5000000", 0);       // RTSP 连接超时 5秒（微秒）
-            av_dict_set(&opts, "timeout",    "5000000", 0);       // 通用超时 5秒
-            av_dict_set(&opts, "fflags",     "nobuffer", 0);      // 禁用输入缓冲，降低延迟
-            av_dict_set(&opts, "analyzeduration", "1000000", 0);  // 探测时间 1秒
-            av_dict_set(&opts, "probesize",  "500000", 0);        // 探测数据量 500KB
+            av_dict_set(&opts, "rtsp_transport", "tcp", 0);      // RTSP 强制 TCP（避免 WSL2 UDP 问题）
+            av_dict_set(&opts, "stimeout", "5000000", 0);        // RTSP 连接超时 5秒（微秒）
+            av_dict_set(&opts, "timeout", "5000000", 0);         // 通用超时 5秒
+            av_dict_set(&opts, "fflags", "nobuffer", 0);         // 禁用输入缓冲，降低延迟
+            av_dict_set(&opts, "analyzeduration", "1000000", 0); // 探测时间 1秒
+            av_dict_set(&opts, "probesize", "500000", 0);        // 探测数据量 500KB
         }
         ENGINE_CORE_INFO("FFmpegDecoder::Open — 正在打开: {}", url);
         int ret = avformat_open_input(&m_FormatCtx, sourcePath.c_str(), nullptr, &opts);
@@ -83,7 +83,8 @@ namespace Engine
             const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
             if (!codec)
             {
-                ENGINE_CORE_ERROR("FFmpegDecoder::Open — 未找到视频解码器: codec_id={}", (int)stream->codecpar->codec_id);
+                ENGINE_CORE_ERROR("FFmpegDecoder::Open — 未找到视频解码器: codec_id={}",
+                                  (int)stream->codecpar->codec_id);
                 m_VideoStreamIdx = -1;
             }
             else
@@ -127,10 +128,8 @@ namespace Engine
             m_VideoWidth = m_VideoCodecCtx->width;
             m_VideoHeight = m_VideoCodecCtx->height;
 
-            m_SwsCtx = sws_getContext(
-                m_VideoWidth, m_VideoHeight, m_VideoCodecCtx->pix_fmt,
-                m_VideoWidth, m_VideoHeight, AV_PIX_FMT_RGBA,
-                SWS_BILINEAR, nullptr, nullptr, nullptr);
+            m_SwsCtx = sws_getContext(m_VideoWidth, m_VideoHeight, m_VideoCodecCtx->pix_fmt, m_VideoWidth,
+                                      m_VideoHeight, AV_PIX_FMT_RGBA, SWS_BILINEAR, nullptr, nullptr, nullptr);
 
             if (!m_SwsCtx)
             {
@@ -146,8 +145,8 @@ namespace Engine
                 for (auto& buf : m_FrameBuffers)
                     buf.resize(frameSize, 0);
 
-                ENGINE_CORE_INFO("FFmpegDecoder::Open — 视频流: {}x{}, pix_fmt={}",
-                                 m_VideoWidth, m_VideoHeight, (int)m_VideoCodecCtx->pix_fmt);
+                ENGINE_CORE_INFO("FFmpegDecoder::Open — 视频流: {}x{}, pix_fmt={}", m_VideoWidth, m_VideoHeight,
+                                 (int)m_VideoCodecCtx->pix_fmt);
             }
         }
 
@@ -158,7 +157,8 @@ namespace Engine
             const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
             if (!codec)
             {
-                ENGINE_CORE_ERROR("FFmpegDecoder::Open — 未找到音频解码器: codec_id={}", (int)stream->codecpar->codec_id);
+                ENGINE_CORE_ERROR("FFmpegDecoder::Open — 未找到音频解码器: codec_id={}",
+                                  (int)stream->codecpar->codec_id);
                 m_AudioStreamIdx = -1;
             }
             else
@@ -211,12 +211,12 @@ namespace Engine
                 AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
                 AVChannelLayout inLayout = m_AudioCodecCtx->ch_layout;
 
-                av_opt_set_chlayout(m_SwrCtx, "in_chlayout",  &inLayout, 0);
-                av_opt_set_int(m_SwrCtx, "in_sample_rate",     m_AudioCodecCtx->sample_rate, 0);
+                av_opt_set_chlayout(m_SwrCtx, "in_chlayout", &inLayout, 0);
+                av_opt_set_int(m_SwrCtx, "in_sample_rate", m_AudioCodecCtx->sample_rate, 0);
                 av_opt_set_sample_fmt(m_SwrCtx, "in_sample_fmt", m_AudioCodecCtx->sample_fmt, 0);
 
                 av_opt_set_chlayout(m_SwrCtx, "out_chlayout", &outLayout, 0);
-                av_opt_set_int(m_SwrCtx, "out_sample_rate",    44100, 0);
+                av_opt_set_int(m_SwrCtx, "out_sample_rate", 44100, 0);
                 av_opt_set_sample_fmt(m_SwrCtx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
 
                 ret = swr_init(m_SwrCtx);
@@ -327,9 +327,12 @@ namespace Engine
         if (!packet || !frame || !rgbaFrame)
         {
             ENGINE_CORE_ERROR("FFmpegDecoder::DecodeLoop — 分配 AVPacket/AVFrame 失败");
-            if (packet)    av_packet_free(&packet);
-            if (frame)     av_frame_free(&frame);
-            if (rgbaFrame) av_frame_free(&rgbaFrame);
+            if (packet)
+                av_packet_free(&packet);
+            if (frame)
+                av_frame_free(&frame);
+            if (rgbaFrame)
+                av_frame_free(&rgbaFrame);
             m_Running.store(false);
             return;
         }
@@ -338,8 +341,8 @@ namespace Engine
         bool rgbaAllocated = false;
         if (m_VideoCodecCtx)
         {
-            int ret = av_image_alloc(rgbaFrame->data, rgbaFrame->linesize,
-                                     m_VideoWidth, m_VideoHeight, AV_PIX_FMT_RGBA, 1);
+            int ret =
+                av_image_alloc(rgbaFrame->data, rgbaFrame->linesize, m_VideoWidth, m_VideoHeight, AV_PIX_FMT_RGBA, 1);
             if (ret < 0)
             {
                 char errBuf[AV_ERROR_MAX_STRING_SIZE];
@@ -384,14 +387,12 @@ namespace Engine
                 while (avcodec_receive_frame(m_VideoCodecCtx, frame) == 0)
                 {
                     // Convert to RGBA
-                    sws_scale(m_SwsCtx,
-                              frame->data, frame->linesize, 0, m_VideoHeight,
-                              rgbaFrame->data, rgbaFrame->linesize);
+                    sws_scale(m_SwsCtx, frame->data, frame->linesize, 0, m_VideoHeight, rgbaFrame->data,
+                              rgbaFrame->linesize);
 
                     // Write to triple buffer (lock-free)
                     int writeIdx = m_WriteIdx.load();
-                    memcpy(m_FrameBuffers[writeIdx].data(),
-                           rgbaFrame->data[0],
+                    memcpy(m_FrameBuffers[writeIdx].data(), rgbaFrame->data[0],
                            static_cast<size_t>(m_VideoWidth) * m_VideoHeight * 4);
                     m_DisplayIdx.store(writeIdx);
                     m_WriteIdx.store((writeIdx + 1) % 3);
@@ -418,9 +419,8 @@ namespace Engine
                     // Resample to S16 stereo
                     std::vector<int16_t> tempBuf(static_cast<size_t>(outSamples) * 2); // stereo = 2 channels
                     uint8_t* outPtr = reinterpret_cast<uint8_t*>(tempBuf.data());
-                    int converted = swr_convert(m_SwrCtx,
-                                                &outPtr, outSamples,
-                                                (const uint8_t**)frame->data, frame->nb_samples);
+                    int converted =
+                        swr_convert(m_SwrCtx, &outPtr, outSamples, (const uint8_t**)frame->data, frame->nb_samples);
                     if (converted < 0)
                     {
                         char errBuf[AV_ERROR_MAX_STRING_SIZE];

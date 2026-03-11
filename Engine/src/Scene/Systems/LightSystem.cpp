@@ -1,6 +1,6 @@
+#include "engpch.h"
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Components.h"
-#include "engpch.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>

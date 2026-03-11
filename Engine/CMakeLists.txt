@@ -139,6 +139,12 @@ if(ENGINE_ENABLE_CUDA)
     target_sources(Engine PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaGLInteropContext.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
+    )
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
     )
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_CUDA=1)
     target_include_directories(Engine PRIVATE ${CUDAToolkit_INCLUDE_DIRS})

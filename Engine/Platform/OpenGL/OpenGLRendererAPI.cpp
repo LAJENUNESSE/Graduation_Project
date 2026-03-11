@@ -1,6 +1,6 @@
+#include "engpch.h"
 #include "Platform/OpenGL/OpenGLRendererAPI.h"
 #include "Core/Assert.h"
-#include "engpch.h"
 
 #include <glad/gl.h>
 

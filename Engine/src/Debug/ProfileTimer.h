@@ -9,8 +9,7 @@ namespace Engine
     {
     public:
         ProfileTimer(const char* name, float* outputMs)
-            : m_Name(name), m_OutputMs(outputMs),
-              m_StartTime(std::chrono::high_resolution_clock::now())
+            : m_Name(name), m_OutputMs(outputMs), m_StartTime(std::chrono::high_resolution_clock::now())
         {
         }
 
@@ -38,5 +37,4 @@ namespace Engine
 #define PROFILE_CONCAT_INNER(a, b) a##b
 #define PROFILE_CONCAT(a, b) PROFILE_CONCAT_INNER(a, b)
 
-#define PROFILE_SCOPE(name, outputPtr) \
-    ::Engine::ProfileTimer PROFILE_CONCAT(profileTimer_, __LINE__)(name, outputPtr)
+#define PROFILE_SCOPE(name, outputPtr) ::Engine::ProfileTimer PROFILE_CONCAT(profileTimer_, __LINE__)(name, outputPtr)
