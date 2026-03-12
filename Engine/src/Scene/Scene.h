@@ -77,6 +77,10 @@ namespace Engine
         void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
 
     private:
+        void OnTerrainComponentDestroyed(entt::registry& registry, entt::entity entity);
+        void OnParticleEmitterDestroyed(entt::registry& registry, entt::entity entity);
+        void OnFluidEmitterDestroyed(entt::registry& registry, entt::entity entity);
+
         entt::registry m_Registry;
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;

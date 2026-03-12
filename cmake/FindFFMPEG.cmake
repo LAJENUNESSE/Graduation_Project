@@ -1,0 +1,10 @@
+# FindFFMPEG.cmake
+find_path(FFMPEG_INCLUDE_DIRS libavcodec/avcodec.h)
+find_library(AVCODEC_LIBRARY avcodec)
+find_library(AVFORMAT_LIBRARY avformat)
+find_library(AVUTIL_LIBRARY avutil)
+find_library(SWSCALE_LIBRARY swscale)
+find_library(SWRESAMPLE_LIBRARY swresample)
+set(FFMPEG_LIBRARIES ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SWRESAMPLE_LIBRARY})
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(FFMPEG DEFAULT_MSG FFMPEG_LIBRARIES FFMPEG_INCLUDE_DIRS)

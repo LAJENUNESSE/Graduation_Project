@@ -86,6 +86,10 @@ namespace Engine
         // IBL 调试模式
         int& GetIBLDebugMode() { return m_IBLDebugMode; }
 
+        // 清理缓存系统
+        void RemoveParticleSystem(uint32_t entityID);
+        void RemoveFluidSystem(uint32_t entityID);
+
         // 供 MSAA 解析后单独绘制流体，避免颜色被 blit 覆盖
         void RenderFluidPass();
 

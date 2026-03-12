@@ -60,6 +60,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/VertexArray.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Entity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Scene.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Services/TransformHierarchyService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneCamera.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneSerializer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Systems/AudioSystem.cpp

@@ -12,6 +12,7 @@
 #include "Script/ScriptableEntity.h"
 #include "Terrain/TerrainMeshGenerator.h"
 #include "engpch.h"
+#include "Scene/Services/TransformHierarchyService.h"
 
 #include <set>
 
@@ -26,9 +27,49 @@ namespace Engine
     Scene::Scene()
     {
         ComponentRegistry::EnsureRegistered();
+
+        // 注册 TerrainComponent 销毁回调，避免 MeshData 泄漏
+        m_Registry.on_destroy<TerrainComponent>().connect<&Scene::OnTerrainComponentDestroyed>(this);
+        // 注册 ParticleEmitterComponent 和 FluidEmitterComponent 销毁回调，清理 SceneRenderer 缓存
+        m_Registry.on_destroy<ParticleEmitterComponent>().connect<&Scene::OnParticleEmitterDestroyed>(this);
+        m_Registry.on_destroy<FluidEmitterComponent>().connect<&Scene::OnFluidEmitterDestroyed>(this);
     }
 
-    Scene::~Scene() {}
+    Scene::~Scene()
+    {
+        // 触发所有存活实体的销毁回调，清理遗留资源
+        m_Registry.clear();
+
+        m_Registry.on_destroy<TerrainComponent>().disconnect<&Scene::OnTerrainComponentDestroyed>(this);
+        m_Registry.on_destroy<ParticleEmitterComponent>().disconnect<&Scene::OnParticleEmitterDestroyed>(this);
+        m_Registry.on_destroy<FluidEmitterComponent>().disconnect<&Scene::OnFluidEmitterDestroyed>(this);
+    }
+
+    void Scene::OnTerrainComponentDestroyed(entt::registry& registry, entt::entity entity)
+    {
+        auto& tc = registry.get<TerrainComponent>(entity);
+        if (tc.RuntimeMeshData)
+        {
+            delete tc.RuntimeMeshData;
+            tc.RuntimeMeshData = nullptr;
+        }
+    }
+
+    void Scene::OnParticleEmitterDestroyed(entt::registry& registry, entt::entity entity)
+    {
+        if (m_SceneRenderer)
+        {
+            m_SceneRenderer->RemoveParticleSystem(static_cast<uint32_t>(entity));
+        }
+    }
+
+    void Scene::OnFluidEmitterDestroyed(entt::registry& registry, entt::entity entity)
+    {
+        if (m_SceneRenderer)
+        {
+            m_SceneRenderer->RemoveFluidSystem(static_cast<uint32_t>(entity));
+        }
+    }
 
     Entity Scene::CreateEntity(const std::string& name)
     {
@@ -225,23 +266,8 @@ namespace Engine
 
     glm::mat4 Scene::GetWorldTransform(Entity entity)
     {
-        if (!entity || !entity.HasComponent<TransformComponent>())
-            return glm::mat4(1.0f);
-
-        glm::mat4 localTransform = entity.GetComponent<TransformComponent>().GetTransform();
-
-        if (entity.HasComponent<RelationshipComponent>())
-        {
-            auto& rel = entity.GetComponent<RelationshipComponent>();
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                Entity parent = FindEntityByUUID(rel.ParentID);
-                if (parent)
-                    return GetWorldTransform(parent) * localTransform;
-            }
-        }
-
-        return localTransform;
+        if (!entity) return glm::mat4(1.0f);
+        return TransformHierarchyService::ComputeWorldTransform(m_Registry, entity);
     }
 
     std::vector<Entity> Scene::GetRootEntities()

@@ -7,35 +7,14 @@
 #include "Scene/Components.h"
 #include "engpch.h"
 
+#include "Scene/Services/TransformHierarchyService.h"
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 namespace Engine
 {
-
-    // 递归计算世界变换矩阵
-    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
-    {
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 localMatrix = transform.GetTransform();
-
-        if (reg.all_of<RelationshipComponent>(entity))
-        {
-            auto& rel = reg.get<RelationshipComponent>(entity);
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                auto view = reg.view<IDComponent>();
-                for (auto e : view)
-                {
-                    if (view.get<IDComponent>(e).ID == rel.ParentID)
-                        return ComputeWorldTransform(reg, e) * localMatrix;
-                }
-            }
-        }
-
-        return localMatrix;
-    }
 
     // 渲染所有网格到当前绑定的深度 FBO
     static void RenderMeshesToDepth(entt::registry& reg, const Ref<Shader>& depthShader, const glm::mat4& lightSpaceMat)
@@ -50,7 +29,7 @@ namespace Engine
             Mesh* mesh = AssetManager::Get<Mesh>(meshRenderer.MeshAsset);
             if (mesh)
             {
-                depthShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
+                depthShader->SetMat4("u_Transform", TransformHierarchyService::ComputeWorldTransform(reg, entity));
                 for (const auto& subMesh : mesh->GetSubMeshes())
                 {
                     subMesh.VAO->Bind();

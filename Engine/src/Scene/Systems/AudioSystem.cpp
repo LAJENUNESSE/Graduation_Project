@@ -23,6 +23,8 @@ namespace Engine
 
     void AudioSystem::OnRuntimeStart(entt::registry& reg)
     {
+        reg.on_destroy<AudioSourceComponent>().connect<&AudioSystem::OnAudioSourceDestroyed>(this);
+
         auto& audio = OpenALAudioEngine::Get();
 
         auto view = reg.view<AudioSourceComponent>();
@@ -95,29 +97,35 @@ namespace Engine
         }
     }
 
+    void AudioSystem::OnAudioSourceDestroyed(entt::registry& reg, entt::entity entity)
+    {
+        auto& asc = reg.get<AudioSourceComponent>(entity);
+        auto& audio = OpenALAudioEngine::Get();
+
+        if (asc.RuntimeSource != 0)
+        {
+            audio.Stop(asc.RuntimeSource);
+            audio.DestroySource(asc.RuntimeSource);
+            asc.RuntimeSource = 0;
+        }
+
+        if (asc.RuntimeBuffer != 0)
+        {
+            audio.DestroyBuffer(asc.RuntimeBuffer);
+            asc.RuntimeBuffer = 0;
+        }
+
+        asc.IsPlaying = false;
+    }
+
     void AudioSystem::OnRuntimeStop(entt::registry& reg)
     {
-        auto& audio = OpenALAudioEngine::Get();
+        reg.on_destroy<AudioSourceComponent>().disconnect<&AudioSystem::OnAudioSourceDestroyed>(this);
 
         auto view = reg.view<AudioSourceComponent>();
         for (auto entity : view)
         {
-            auto& asc = view.get<AudioSourceComponent>(entity);
-
-            if (asc.RuntimeSource != 0)
-            {
-                audio.Stop(asc.RuntimeSource);
-                audio.DestroySource(asc.RuntimeSource);
-                asc.RuntimeSource = 0;
-            }
-
-            if (asc.RuntimeBuffer != 0)
-            {
-                audio.DestroyBuffer(asc.RuntimeBuffer);
-                asc.RuntimeBuffer = 0;
-            }
-
-            asc.IsPlaying = false;
+            OnAudioSourceDestroyed(reg, entity);
         }
 
         ENGINE_CORE_INFO("[AudioSystem] 运行时音频资源已清理");

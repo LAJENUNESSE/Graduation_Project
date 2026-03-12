@@ -419,6 +419,16 @@ namespace Engine
         m_FluidRenderer.Init(viewportWidth, viewportHeight);
     }
 
+    void SceneRenderer::RemoveParticleSystem(uint32_t entityID)
+    {
+        m_ParticleSystems.erase(entityID);
+    }
+
+    void SceneRenderer::RemoveFluidSystem(uint32_t entityID)
+    {
+        m_FluidSystems.erase(entityID);
+    }
+
     void SceneRenderer::Shutdown()
     {
         m_VideoSystem.Shutdown();

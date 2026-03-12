@@ -41,6 +41,8 @@ namespace Engine
 
     void VideoSystem::OnRuntimeStart(entt::registry& reg)
     {
+        reg.on_destroy<VideoPlayerComponent>().connect<&VideoSystem::OnVideoPlayerDestroyed>(this);
+
         auto view = reg.view<VideoPlayerComponent>();
         for (auto entity : view)
         {
@@ -49,8 +51,8 @@ namespace Engine
             if (vp.StreamURL.empty())
                 continue;
 
-            // 创建解码器（RAII，unique_ptr 管理生命周期）
-            vp.RuntimeDecoder = std::make_unique<FFmpegDecoder>();
+            // 创建解码器
+            vp.RuntimeDecoder = std::make_shared<FFmpegDecoder>();
             vp.IsPlaying = false; // OnUpdate 中检测连接完成后再设为 true
 
             // 后台线程打开流，避免阻塞主线程
@@ -70,58 +72,64 @@ namespace Engine
         }
     }
 
+    void VideoSystem::OnVideoPlayerDestroyed(entt::registry& reg, entt::entity entity)
+    {
+        auto& vp = reg.get<VideoPlayerComponent>(entity);
+        auto& audio = OpenALAudioEngine::Get();
+
+        // 先 join 后台打开线程，确保 Open() 已完成
+        uint32_t eid = static_cast<uint32_t>(entity);
+        if (auto it = m_OpenThreads.find(eid); it != m_OpenThreads.end())
+        {
+            if (it->second.joinable())
+                it->second.join();
+            m_OpenThreads.erase(it);
+        }
+
+        // 关闭并销毁解码器
+        if (vp.RuntimeDecoder)
+        {
+            vp.RuntimeDecoder->Close();
+            vp.RuntimeDecoder.reset();
+        }
+
+        // 销毁音频源（必须先停止并反入队所有缓冲区）
+        if (vp.RuntimeAudioSource != 0)
+        {
+            audio.Stop(vp.RuntimeAudioSource);
+            // 反入队所有已处理的缓冲区
+            int processed = audio.GetProcessedBuffers(vp.RuntimeAudioSource);
+            while (processed > 0)
+            {
+                audio.UnqueueBuffer(vp.RuntimeAudioSource);
+                processed--;
+            }
+            audio.DestroySource(vp.RuntimeAudioSource);
+            vp.RuntimeAudioSource = 0;
+        }
+
+        // 销毁音频缓冲区
+        for (uint32_t buf : vp.RuntimeAudioBuffers)
+        {
+            if (buf != 0)
+                audio.DestroyBuffer(buf);
+        }
+        vp.RuntimeAudioBuffers.clear();
+
+        // 释放纹理（Ref 自动清理）
+        vp.RuntimeTexture = nullptr;
+
+        vp.IsPlaying = false;
+    }
+
     void VideoSystem::OnRuntimeStop(entt::registry& reg)
     {
-        auto& audio = OpenALAudioEngine::Get();
+        reg.on_destroy<VideoPlayerComponent>().disconnect<&VideoSystem::OnVideoPlayerDestroyed>(this);
 
         auto view = reg.view<VideoPlayerComponent>();
         for (auto entity : view)
         {
-            auto& vp = view.get<VideoPlayerComponent>(entity);
-
-            // 先 join 后台打开线程，确保 Open() 已完成
-            uint32_t eid = static_cast<uint32_t>(entity);
-            if (auto it = m_OpenThreads.find(eid); it != m_OpenThreads.end())
-            {
-                if (it->second.joinable())
-                    it->second.join();
-                m_OpenThreads.erase(it);
-            }
-
-            // 关闭并销毁解码器
-            if (vp.RuntimeDecoder)
-            {
-                vp.RuntimeDecoder->Close();
-                vp.RuntimeDecoder.reset();
-            }
-
-            // 销毁音频源（必须先停止并反入队所有缓冲区）
-            if (vp.RuntimeAudioSource != 0)
-            {
-                audio.Stop(vp.RuntimeAudioSource);
-                // 反入队所有已处理的缓冲区
-                int processed = audio.GetProcessedBuffers(vp.RuntimeAudioSource);
-                while (processed > 0)
-                {
-                    audio.UnqueueBuffer(vp.RuntimeAudioSource);
-                    processed--;
-                }
-                audio.DestroySource(vp.RuntimeAudioSource);
-                vp.RuntimeAudioSource = 0;
-            }
-
-            // 销毁音频缓冲区
-            for (uint32_t buf : vp.RuntimeAudioBuffers)
-            {
-                if (buf != 0)
-                    audio.DestroyBuffer(buf);
-            }
-            vp.RuntimeAudioBuffers.clear();
-
-            // 释放纹理（Ref 自动清理）
-            vp.RuntimeTexture = nullptr;
-
-            vp.IsPlaying = false;
+            OnVideoPlayerDestroyed(reg, entity);
         }
 
         ENGINE_CORE_INFO("[VideoSystem] 运行时视频资源已清理");

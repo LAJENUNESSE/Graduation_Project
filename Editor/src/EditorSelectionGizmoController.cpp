@@ -9,9 +9,12 @@
 #include "Scene/Scene.h"
 #include "UndoSystem.h"
 
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include <imgui.h>
+#include <imgui_internal.h>
+
 #include <ImGuizmo.h>
 #include <glm/gtc/type_ptr.hpp>
-#include <imgui.h>
 
 namespace Engine
 {

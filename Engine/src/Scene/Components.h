@@ -450,7 +450,7 @@ namespace Engine
         float Volume = 1.0f; // 视频音轨音量
 
         // 运行时状态（不序列化）
-        std::unique_ptr<FFmpegDecoder> RuntimeDecoder = nullptr;
+        std::shared_ptr<FFmpegDecoder> RuntimeDecoder = nullptr;
         uint32_t RuntimeAudioSource = 0;
         Ref<Texture2D> RuntimeTexture = nullptr;
         std::vector<uint32_t> RuntimeAudioBuffers;

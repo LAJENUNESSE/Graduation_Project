@@ -1,6 +1,7 @@
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Components.h"
 #include "engpch.h"
+#include "Scene/Services/TransformHierarchyService.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -10,29 +11,6 @@
 
 namespace Engine
 {
-
-    // 递归计算世界变换矩阵
-    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
-    {
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 localMatrix = transform.GetTransform();
-
-        if (reg.all_of<RelationshipComponent>(entity))
-        {
-            auto& rel = reg.get<RelationshipComponent>(entity);
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                auto view = reg.view<IDComponent>();
-                for (auto e : view)
-                {
-                    if (view.get<IDComponent>(e).ID == rel.ParentID)
-                        return ComputeWorldTransform(reg, e) * localMatrix;
-                }
-            }
-        }
-
-        return localMatrix;
-    }
 
     LightEnvironment LightSystem::CollectLights(entt::registry& reg)
     {
@@ -44,7 +22,7 @@ namespace Engine
             auto& light = lightView.get<LightComponent>(entity);
 
             // 使用世界变换计算光源位置和方向
-            glm::mat4 worldMat = ComputeWorldTransform(reg, entity);
+            glm::mat4 worldMat = TransformHierarchyService::ComputeWorldTransform(reg, entity);
             glm::vec3 worldPos = glm::vec3(worldMat[3]);
             glm::vec3 forward = glm::normalize(glm::mat3(worldMat) * glm::vec3(0.0f, 0.0f, -1.0f));
 
