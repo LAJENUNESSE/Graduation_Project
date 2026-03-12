@@ -13,11 +13,15 @@
 namespace Engine
 {
 
-    // VideoPlayerComponent 特殊成员函数定义（需要 FFmpegDecoder 完整类型）
-    VideoPlayerComponent::VideoPlayerComponent() = default;
-    VideoPlayerComponent::~VideoPlayerComponent() = default;
-    VideoPlayerComponent::VideoPlayerComponent(VideoPlayerComponent&&) noexcept = default;
-    VideoPlayerComponent& VideoPlayerComponent::operator=(VideoPlayerComponent&&) noexcept = default;
+    // VideoRuntimeState 特殊成员函数（需要 FFmpegDecoder 完整类型）
+    VideoRuntimeState::VideoRuntimeState() = default;
+    VideoRuntimeState::~VideoRuntimeState()
+    {
+        if (OpenThread.joinable())
+            OpenThread.join();
+    }
+    VideoRuntimeState::VideoRuntimeState(VideoRuntimeState&&) noexcept = default;
+    VideoRuntimeState& VideoRuntimeState::operator=(VideoRuntimeState&&) noexcept = default;
 
     // AL_FORMAT_STEREO16 = 0x1103
     static constexpr uint32_t kALFormatStereo16 = 0x1103;
@@ -30,13 +34,7 @@ namespace Engine
 
     void VideoSystem::Shutdown()
     {
-        // 等待所有后台打开线程完成
-        for (auto& [id, t] : m_OpenThreads)
-        {
-            if (t.joinable())
-                t.join();
-        }
-        m_OpenThreads.clear();
+        m_Store.Clear();
     }
 
     void VideoSystem::OnRuntimeStart(entt::registry& reg)
@@ -49,15 +47,15 @@ namespace Engine
             if (vp.StreamURL.empty())
                 continue;
 
-            // 创建解码器（RAII，unique_ptr 管理生命周期）
-            vp.RuntimeDecoder = std::make_unique<FFmpegDecoder>();
-            vp.IsPlaying = false; // OnUpdate 中检测连接完成后再设为 true
+            uint32_t eid = static_cast<uint32_t>(entity);
+            VideoRuntimeState state;
+            state.Decoder = std::make_unique<FFmpegDecoder>();
+            state.IsPlaying = false;
 
             // 后台线程打开流，避免阻塞主线程
             std::string url = vp.StreamURL;
-            FFmpegDecoder* rawDecoder = vp.RuntimeDecoder.get();
-            uint32_t eid = static_cast<uint32_t>(entity);
-            m_OpenThreads[eid] = std::thread(
+            FFmpegDecoder* rawDecoder = state.Decoder.get();
+            state.OpenThread = std::thread(
                 [rawDecoder, url]()
                 {
                     if (!rawDecoder->Open(url))
@@ -67,6 +65,7 @@ namespace Engine
                 });
 
             ENGINE_CORE_INFO("[VideoSystem] 正在后台连接视频流: {}", vp.StreamURL);
+            m_Store.Insert(eid, std::move(state));
         }
     }
 
@@ -74,55 +73,40 @@ namespace Engine
     {
         auto& audio = OpenALAudioEngine::Get();
 
-        auto view = reg.view<VideoPlayerComponent>();
-        for (auto entity : view)
+        for (auto& [eid, state] : m_Store)
         {
-            auto& vp = view.get<VideoPlayerComponent>(entity);
-
-            // 先 join 后台打开线程，确保 Open() 已完成
-            uint32_t eid = static_cast<uint32_t>(entity);
-            if (auto it = m_OpenThreads.find(eid); it != m_OpenThreads.end())
-            {
-                if (it->second.joinable())
-                    it->second.join();
-                m_OpenThreads.erase(it);
-            }
+            // join 后台打开线程
+            if (state.OpenThread.joinable())
+                state.OpenThread.join();
 
             // 关闭并销毁解码器
-            if (vp.RuntimeDecoder)
+            if (state.Decoder)
             {
-                vp.RuntimeDecoder->Close();
-                vp.RuntimeDecoder.reset();
+                state.Decoder->Close();
+                state.Decoder.reset();
             }
 
-            // 销毁音频源（必须先停止并反入队所有缓冲区）
-            if (vp.RuntimeAudioSource != 0)
+            // 销毁音频源
+            if (state.AudioSource != 0)
             {
-                audio.Stop(vp.RuntimeAudioSource);
-                // 反入队所有已处理的缓冲区
-                int processed = audio.GetProcessedBuffers(vp.RuntimeAudioSource);
+                audio.Stop(state.AudioSource);
+                int processed = audio.GetProcessedBuffers(state.AudioSource);
                 while (processed > 0)
                 {
-                    audio.UnqueueBuffer(vp.RuntimeAudioSource);
+                    audio.UnqueueBuffer(state.AudioSource);
                     processed--;
                 }
-                audio.DestroySource(vp.RuntimeAudioSource);
-                vp.RuntimeAudioSource = 0;
+                audio.DestroySource(state.AudioSource);
             }
 
             // 销毁音频缓冲区
-            for (uint32_t buf : vp.RuntimeAudioBuffers)
+            for (uint32_t buf : state.AudioBuffers)
             {
                 if (buf != 0)
                     audio.DestroyBuffer(buf);
             }
-            vp.RuntimeAudioBuffers.clear();
-
-            // 释放纹理（Ref 自动清理）
-            vp.RuntimeTexture = nullptr;
-
-            vp.IsPlaying = false;
         }
+        m_Store.Clear();
 
         ENGINE_CORE_INFO("[VideoSystem] 运行时视频资源已清理");
     }
@@ -135,135 +119,173 @@ namespace Engine
         for (auto entity : view)
         {
             auto& vp = view.get<VideoPlayerComponent>(entity);
+            uint32_t eid = static_cast<uint32_t>(entity);
+            auto* state = m_Store.Get(eid);
 
-            if (!vp.RuntimeDecoder)
+            if (!state || !state->Decoder)
                 continue;
 
             // === 延迟初始化：后台 Open() 完成后在主线程创建 GPU 资源 ===
-            if (!vp.IsPlaying && vp.RuntimeDecoder->IsOpen())
+            if (!state->IsPlaying && state->Decoder->IsOpen())
             {
                 // 视频纹理（必须在主线程创建 OpenGL 对象）
-                if (vp.RuntimeDecoder->HasVideoStream())
+                if (state->Decoder->HasVideoStream())
                 {
-                    int w = vp.RuntimeDecoder->GetVideoWidth();
-                    int h = vp.RuntimeDecoder->GetVideoHeight();
+                    int w = state->Decoder->GetVideoWidth();
+                    int h = state->Decoder->GetVideoHeight();
                     if (w > 0 && h > 0)
                     {
-                        vp.RuntimeTexture = Texture2D::Create(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+                        state->Texture = Texture2D::Create(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
                         ENGINE_CORE_INFO("[VideoSystem] 创建视频纹理 {}x{}", w, h);
                     }
                 }
 
                 // 音频流
-                if (vp.RuntimeDecoder->HasAudioStream())
+                if (state->Decoder->HasAudioStream())
                 {
-                    vp.RuntimeAudioSource = audio.CreateSource();
-                    audio.SetSourceVolume(vp.RuntimeAudioSource, vp.Volume);
-                    audio.SetSourceSpatial(vp.RuntimeAudioSource, false);
+                    state->AudioSource = audio.CreateSource();
+                    audio.SetSourceVolume(state->AudioSource, vp.Volume);
+                    audio.SetSourceSpatial(state->AudioSource, false);
 
-                    vp.RuntimeAudioBuffers.resize(kStreamingBufferCount);
+                    state->AudioBuffers.resize(kStreamingBufferCount);
                     for (int i = 0; i < kStreamingBufferCount; i++)
                     {
                         AudioClip emptyClip;
-                        emptyClip.SampleRate = static_cast<uint32_t>(vp.RuntimeDecoder->GetAudioSampleRate());
+                        emptyClip.SampleRate = static_cast<uint32_t>(state->Decoder->GetAudioSampleRate());
                         emptyClip.Channels = 2;
                         emptyClip.BitsPerSample = 16;
                         emptyClip.ALFormat = kALFormatStereo16;
                         emptyClip.Data.resize(4, 0);
-                        vp.RuntimeAudioBuffers[i] = audio.CreateBuffer(emptyClip);
+                        state->AudioBuffers[i] = audio.CreateBuffer(emptyClip);
                     }
                     for (int i = 0; i < kStreamingBufferCount; i++)
-                        audio.QueueBuffer(vp.RuntimeAudioSource, vp.RuntimeAudioBuffers[i]);
-                    audio.Resume(vp.RuntimeAudioSource);
+                        audio.QueueBuffer(state->AudioSource, state->AudioBuffers[i]);
+                    audio.Resume(state->AudioSource);
                 }
 
-                vp.IsPlaying = true;
-                ENGINE_CORE_INFO("[VideoSystem] 视频流已就绪: 视频={}x{}", vp.RuntimeDecoder->GetVideoWidth(),
-                                 vp.RuntimeDecoder->GetVideoHeight());
+                state->IsPlaying = true;
+                ENGINE_CORE_INFO("[VideoSystem] 视频流已就绪: 视频={}x{}", state->Decoder->GetVideoWidth(),
+                                 state->Decoder->GetVideoHeight());
             }
 
-            if (!vp.IsPlaying)
+            if (!state->IsPlaying)
                 continue;
 
             // === 视频帧更新 ===
-            if (vp.RuntimeDecoder->HasNewVideoFrame() && vp.RuntimeTexture)
+            if (state->Decoder->HasNewVideoFrame() && state->Texture)
             {
-                const uint8_t* frameData = vp.RuntimeDecoder->GetVideoFrameRGBA();
+                const uint8_t* frameData = state->Decoder->GetVideoFrameRGBA();
                 if (frameData)
                 {
-                    int w = vp.RuntimeDecoder->GetVideoWidth();
-                    int h = vp.RuntimeDecoder->GetVideoHeight();
+                    int w = state->Decoder->GetVideoWidth();
+                    int h = state->Decoder->GetVideoHeight();
                     uint32_t dataSize = static_cast<uint32_t>(w * h * 4);
-                    vp.RuntimeTexture->SetData((void*)frameData, dataSize);
+                    state->Texture->SetData((void*)frameData, dataSize);
                 }
             }
 
             // === 音频流更新 ===
-            if (vp.RuntimeDecoder->HasAudioStream() && vp.RuntimeAudioSource != 0)
+            if (state->Decoder->HasAudioStream() && state->AudioSource != 0)
             {
                 // 同步音量
-                audio.SetSourceVolume(vp.RuntimeAudioSource, vp.Volume);
+                audio.SetSourceVolume(state->AudioSource, vp.Volume);
 
-                // 处理已播放完的缓冲区：反入队 → 填充新数据 → 重新入队
-                int processed = audio.GetProcessedBuffers(vp.RuntimeAudioSource);
+                // 处理已播放完的缓冲区
+                int processed = audio.GetProcessedBuffers(state->AudioSource);
                 while (processed > 0)
                 {
-                    uint32_t buf = audio.UnqueueBuffer(vp.RuntimeAudioSource);
+                    uint32_t buf = audio.UnqueueBuffer(state->AudioSource);
 
                     int sampleCount = 0;
-                    const int16_t* audioData = vp.RuntimeDecoder->GetAudioData(sampleCount);
+                    const int16_t* audioData = state->Decoder->GetAudioData(sampleCount);
                     if (audioData && sampleCount > 0)
                     {
-                        // 用新的音频数据重新填充缓冲区
                         AudioClip clip;
-                        clip.SampleRate = static_cast<uint32_t>(vp.RuntimeDecoder->GetAudioSampleRate());
-                        clip.Channels = 2; // 立体声（FFmpeg SwrContext 会重采样为立体声）
+                        clip.SampleRate = static_cast<uint32_t>(state->Decoder->GetAudioSampleRate());
+                        clip.Channels = 2;
                         clip.BitsPerSample = 16;
                         clip.ALFormat = kALFormatStereo16;
                         size_t byteSize = static_cast<size_t>(sampleCount) * 2 * sizeof(int16_t);
                         clip.Data.resize(byteSize);
                         std::memcpy(clip.Data.data(), audioData, byteSize);
 
-                        // 销毁旧缓冲区，创建新的并入队
                         audio.DestroyBuffer(buf);
                         buf = audio.CreateBuffer(clip);
                     }
 
-                    audio.QueueBuffer(vp.RuntimeAudioSource, buf);
+                    audio.QueueBuffer(state->AudioSource, buf);
                     processed--;
                 }
 
-                // 检查是否因数据耗尽而停止（buffer underrun），重新启动
-                if (!audio.IsPlaying(vp.RuntimeAudioSource))
+                // 检查是否因数据耗尽而停止
+                if (!audio.IsPlaying(state->AudioSource))
                 {
-                    audio.Resume(vp.RuntimeAudioSource);
+                    audio.Resume(state->AudioSource);
                 }
             }
 
-            // 检查解码器是否仍在运行（流是否结束）
-            if (!vp.RuntimeDecoder->IsOpen())
+            // 检查解码器是否仍在运行
+            if (!state->Decoder->IsOpen())
             {
                 if (vp.Loop)
                 {
-                    // 循环模式：重新打开流
-                    vp.RuntimeDecoder->Close();
-                    if (vp.RuntimeDecoder->Open(vp.StreamURL))
+                    state->Decoder->Close();
+                    if (state->Decoder->Open(vp.StreamURL))
                     {
                         ENGINE_CORE_INFO("[VideoSystem] 循环重新打开视频流: {}", vp.StreamURL);
                     }
                     else
                     {
                         ENGINE_CORE_WARN("[VideoSystem] 无法重新打开视频流: {}", vp.StreamURL);
-                        vp.IsPlaying = false;
+                        state->IsPlaying = false;
                     }
                 }
                 else
                 {
-                    vp.IsPlaying = false;
+                    state->IsPlaying = false;
                     ENGINE_CORE_INFO("[VideoSystem] 视频流播放完毕: {}", vp.StreamURL);
                 }
             }
         }
+    }
+
+    void VideoSystem::DestroyEntityVideo(uint32_t entityID)
+    {
+        auto* state = m_Store.Get(entityID);
+        if (!state)
+            return;
+
+        auto& audio = OpenALAudioEngine::Get();
+
+        // join 后台线程
+        if (state->OpenThread.joinable())
+            state->OpenThread.join();
+
+        if (state->Decoder)
+        {
+            state->Decoder->Close();
+            state->Decoder.reset();
+        }
+
+        if (state->AudioSource != 0)
+        {
+            audio.Stop(state->AudioSource);
+            int processed = audio.GetProcessedBuffers(state->AudioSource);
+            while (processed > 0)
+            {
+                audio.UnqueueBuffer(state->AudioSource);
+                processed--;
+            }
+            audio.DestroySource(state->AudioSource);
+        }
+
+        for (uint32_t buf : state->AudioBuffers)
+        {
+            if (buf != 0)
+                audio.DestroyBuffer(buf);
+        }
+
+        m_Store.Remove(entityID);
     }
 
 } // namespace Engine

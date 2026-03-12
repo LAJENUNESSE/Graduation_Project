@@ -4,6 +4,7 @@
 #include "Renderer/Material.h"
 #include "Renderer/Mesh.h"
 #include "Scene/Components.h"
+#include "Scene/Runtime/VideoRuntimeStore.h"
 
 namespace Engine
 {
@@ -33,7 +34,8 @@ namespace Engine
     }
 
     void MeshRenderSystem::SubmitRenderPackets(entt::registry& reg, RenderQueue& queue, const Ref<Shader>& pbrShader,
-                                               const Ref<Texture2D>& whiteTexture)
+                                               const Ref<Texture2D>& whiteTexture,
+                                               const VideoRuntimeStore* videoStore)
     {
         auto meshView = reg.view<TransformComponent, MeshRendererComponent>();
         for (auto entity : meshView)
@@ -55,13 +57,14 @@ namespace Engine
                     m = CreateRef<Material>(pbrShader);
             }
 
-            // 在 submesh 循环之前检查 VideoPlayerComponent，避免每个 submesh 重复查询
+            // 在 submesh 循环之前检查 VideoPlayerComponent，从 VideoRuntimeStore 获取纹理
             Ref<Texture2D> videoTex;
-            if (reg.any_of<VideoPlayerComponent>(entity))
+            if (videoStore && reg.any_of<VideoPlayerComponent>(entity))
             {
-                auto& vc = reg.get<VideoPlayerComponent>(entity);
-                if (vc.RuntimeTexture && vc.IsPlaying)
-                    videoTex = vc.RuntimeTexture;
+                uint32_t eid = static_cast<uint32_t>(entity);
+                auto* videoState = videoStore->Get(eid);
+                if (videoState && videoState->Texture && videoState->IsPlaying)
+                    videoTex = videoState->Texture;
             }
 
             for (size_t i = 0; i < subMeshes.size(); ++i)

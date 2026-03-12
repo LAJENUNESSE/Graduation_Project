@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Scene/Runtime/VideoRuntimeStore.h"
+
 #include <entt/entt.hpp>
-#include <thread>
-#include <unordered_map>
 
 namespace Engine
 {
@@ -17,9 +17,13 @@ namespace Engine
         void OnRuntimeStop(entt::registry& reg);
         void OnUpdate(entt::registry& reg, float dt);
 
+        void DestroyEntityVideo(uint32_t entityID);
+
+        VideoRuntimeStore& GetStore() { return m_Store; }
+        const VideoRuntimeStore& GetStore() const { return m_Store; }
+
     private:
-        // 后台打开视频流的线程，按 entity ID 索引
-        std::unordered_map<uint32_t, std::thread> m_OpenThreads;
+        VideoRuntimeStore m_Store;
     };
 
 } // namespace Engine

@@ -22,6 +22,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Engine
@@ -77,6 +78,10 @@ namespace Engine
         AudioSystem& GetAudioSystem() { return m_AudioSystem; }
         VideoSystem& GetVideoSystem() { return m_VideoSystem; }
         FluidRenderer& GetFluidRenderer() { return m_FluidRenderer; }
+
+        // 逐实体释放粒子/流体 GPU 缓存
+        void ReleaseParticleSystem(uint32_t entityID);
+        void ReleaseFluidSystem(uint32_t entityID);
 
         // SSAO 设置
         bool& GetSSAOEnabled() { return m_SSAOEnabled; }
@@ -145,6 +150,7 @@ namespace Engine
 
         // Fluid systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<FluidSystemGPU>> m_FluidSystems;
+        std::unordered_set<uint32_t> m_FluidEmitted; // 替代 FluidEmitterComponent::Emitted
         FluidRenderer m_FluidRenderer;
         Scene* m_LastScene = nullptr;
         float m_TotalTime = 0.0f;

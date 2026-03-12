@@ -6,6 +6,8 @@
 #include "Core/Log.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
+#include "Scene/Runtime/AudioRuntimeStore.h"
+#include "Scene/Runtime/VideoRuntimeStore.h"
 #include "Script/ScriptRegistry.h"
 
 #include <glm/gtc/type_ptr.hpp>
@@ -551,7 +553,7 @@ namespace Engine
             }
         }
 
-        void DrawAudioSourceInspector(AudioSourceComponent& component)
+        void DrawAudioSourceInspector(AudioSourceComponent& component, const AudioRuntimeState* runtimeState)
         {
             char pathBuf[256];
             memset(pathBuf, 0, sizeof(pathBuf));
@@ -599,10 +601,10 @@ namespace Engine
             ImGui::Checkbox("循环", &component.Loop);
             ImGui::Checkbox("启动时播放", &component.PlayOnStart);
 
-            if (component.RuntimeSource != 0)
+            if (runtimeState && runtimeState->Source != 0)
             {
                 ImGui::Separator();
-                ImGui::Text("状态: %s", component.IsPlaying ? "播放中" : "已停止");
+                ImGui::Text("状态: %s", runtimeState->IsPlaying ? "播放中" : "已停止");
             }
         }
 
@@ -612,7 +614,7 @@ namespace Engine
             ImGui::TextWrapped("场景中只有一个监听器应当激活。监听器位置跟随实体变换。");
         }
 
-        void DrawVideoPlayerInspector(VideoPlayerComponent& component)
+        void DrawVideoPlayerInspector(VideoPlayerComponent& component, const VideoRuntimeState* runtimeState)
         {
             char urlBuf[512];
             memset(urlBuf, 0, sizeof(urlBuf));
@@ -625,22 +627,22 @@ namespace Engine
             ImGui::Checkbox("启动时播放##Video", &component.PlayOnStart);
             ImGui::Checkbox("循环##Video", &component.Loop);
 
-            if (component.RuntimeTexture)
+            if (runtimeState && runtimeState->Texture)
             {
                 ImGui::Separator();
                 ImGui::Text("视频预览");
                 float w = ImGui::GetContentRegionAvail().x;
                 float aspect =
-                    (float)component.RuntimeTexture->GetWidth() / (float)component.RuntimeTexture->GetHeight();
+                    (float)runtimeState->Texture->GetWidth() / (float)runtimeState->Texture->GetHeight();
                 float h = w / aspect;
-                ImGui::Image((ImTextureID)(uintptr_t)component.RuntimeTexture->GetRendererID(), ImVec2(w, h),
+                ImGui::Image((ImTextureID)(uintptr_t)runtimeState->Texture->GetRendererID(), ImVec2(w, h),
                              ImVec2(0, 1), ImVec2(1, 0));
             }
 
-            if (component.RuntimeDecoder)
+            if (runtimeState && runtimeState->Decoder)
             {
                 ImGui::Separator();
-                ImGui::Text("状态: %s", component.IsPlaying ? "播放中" : "已停止");
+                ImGui::Text("状态: %s", runtimeState->IsPlaying ? "播放中" : "已停止");
             }
         }
 

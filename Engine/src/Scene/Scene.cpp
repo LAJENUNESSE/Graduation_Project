@@ -9,6 +9,7 @@
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
+#include "Scene/Runtime/RuntimeComponents.h"
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptableEntity.h"
 #include "Terrain/TerrainMeshGenerator.h"
@@ -426,17 +427,20 @@ namespace Engine
             m_BulletPhysicsWorld = std::make_unique<BulletPhysicsWorld>();
             m_BulletPhysicsWorld->Init();
 
-            // 在创建物理体之前，确保地形网格数据已生成（Scene::Copy 会清空 RuntimeMeshData）
+            // 在创建物理体之前，确保地形网格数据已生成（Scene::Copy 不拷贝 runtime 组件）
             {
                 auto terrainView = m_Registry.view<TransformComponent, TerrainComponent>();
                 for (auto entity : terrainView)
                 {
                     auto& tc = m_Registry.get<TerrainComponent>(entity);
-                    if (!tc.RuntimeMeshData && !tc.HeightmapPath.empty())
+                    bool hasRuntimeMesh = m_Registry.all_of<TerrainRuntimeComponent>(entity) &&
+                                          m_Registry.get<TerrainRuntimeComponent>(entity).MeshData;
+                    if (!hasRuntimeMesh && !tc.HeightmapPath.empty())
                     {
                         auto meshData = TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale,
                                                                        tc.LODLevels);
-                        tc.RuntimeMeshData = new TerrainMeshData(std::move(meshData));
+                        auto& rtc = m_Registry.get_or_emplace<TerrainRuntimeComponent>(entity);
+                        rtc.MeshData = std::make_unique<TerrainMeshData>(std::move(meshData));
                         tc.MeshDirty = false;
                     }
                 }
@@ -461,6 +465,36 @@ namespace Engine
                     }
                 }
             }
+        }
+
+        // 注册 lifecycle coordinator 清理回调
+        m_LifecycleCoordinator.ClearAll();
+        m_LifecycleCoordinator.RegisterEntityCleanup([](entt::registry& reg, entt::entity e)
+        {
+            if (reg.all_of<TerrainRuntimeComponent>(e))
+                reg.remove<TerrainRuntimeComponent>(e);
+        });
+        if (m_SceneRenderer)
+        {
+            auto* renderer = m_SceneRenderer;
+            m_LifecycleCoordinator.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
+            {
+                if (reg.all_of<AudioSourceComponent>(e))
+                    renderer->GetAudioSystem().DestroyEntityAudio(static_cast<uint32_t>(e));
+            });
+            m_LifecycleCoordinator.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
+            {
+                if (reg.all_of<VideoPlayerComponent>(e))
+                    renderer->GetVideoSystem().DestroyEntityVideo(static_cast<uint32_t>(e));
+            });
+            m_LifecycleCoordinator.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
+            {
+                uint32_t eid = static_cast<uint32_t>(e);
+                if (reg.all_of<ParticleEmitterComponent>(e))
+                    renderer->ReleaseParticleSystem(eid);
+                if (reg.all_of<FluidEmitterComponent>(e))
+                    renderer->ReleaseFluidSystem(eid);
+            });
         }
 
         // Audio + Video 系统启动
@@ -567,8 +601,7 @@ namespace Engine
             if (srcReg.all_of<TerrainComponent>(srcEntity))
             {
                 auto tc = srcReg.get<TerrainComponent>(srcEntity);
-                tc.RuntimeMeshData = nullptr; // 清除运行时指针
-                tc.MeshDirty = true;          // 新场景重建网格
+                tc.MeshDirty = true; // 新场景重建网格（runtime 组件不拷贝）
                 newEntity.AddComponent<TerrainComponent>(tc);
             }
 
@@ -590,31 +623,17 @@ namespace Engine
                 // Instance 不拷贝（运行时创建）
             }
 
-            // AudioSourceComponent: 拷贝配置，清除运行时状态
+            // AudioSourceComponent: 直接拷贝（runtime 状态已移入 AudioRuntimeStore）
             if (srcReg.all_of<AudioSourceComponent>(srcEntity))
-            {
-                auto asc = srcReg.get<AudioSourceComponent>(srcEntity);
-                asc.RuntimeSource = 0;
-                asc.RuntimeBuffer = 0;
-                asc.IsPlaying = false;
-                newEntity.AddComponent<AudioSourceComponent>(asc);
-            }
+                newEntity.AddComponent<AudioSourceComponent>(srcReg.get<AudioSourceComponent>(srcEntity));
 
             // AudioListenerComponent
             if (srcReg.all_of<AudioListenerComponent>(srcEntity))
                 newEntity.AddComponent<AudioListenerComponent>(srcReg.get<AudioListenerComponent>(srcEntity));
 
-            // VideoPlayerComponent: 拷贝配置，清除运行时状态（move-only，手动构建）
+            // VideoPlayerComponent: 直接拷贝（runtime 状态已移入 VideoRuntimeStore）
             if (srcReg.all_of<VideoPlayerComponent>(srcEntity))
-            {
-                auto& srcVpc = srcReg.get<VideoPlayerComponent>(srcEntity);
-                auto& dstVpc = newEntity.AddComponent<VideoPlayerComponent>();
-                dstVpc.StreamURL = srcVpc.StreamURL;
-                dstVpc.PlayOnStart = srcVpc.PlayOnStart;
-                dstVpc.Loop = srcVpc.Loop;
-                dstVpc.Volume = srcVpc.Volume;
-                // 运行时状态保持默认（nullptr / 0 / false）
-            }
+                newEntity.AddComponent<VideoPlayerComponent>(srcReg.get<VideoPlayerComponent>(srcEntity));
         }
 
         size_t srcEntityCount = 0;
