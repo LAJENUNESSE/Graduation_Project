@@ -29,7 +29,8 @@ namespace Engine
                     const ShadowData& shadow, const ShadowSettings& shadowSettings, float totalTime);
 
     private:
-        void RebuildGrass(uint32_t eid, struct TerrainComponent& tc, const struct TransformComponent& transform);
+        void RebuildGrass(uint32_t eid, struct TerrainComponent& tc, const struct TransformComponent& transform,
+                          struct TerrainMeshData* meshData);
 
         Ref<Shader> m_PlacementShader;
         Ref<Shader> m_RenderArgsShader;

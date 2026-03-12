@@ -8,6 +8,7 @@
 #include "Renderer/RendererAPI.h"
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
+#include "Scene/Runtime/RuntimeComponents.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
 #include <algorithm>
@@ -149,7 +150,10 @@ namespace Engine
 
             if (dirty)
             {
-                RebuildGrass(eid, tc, transform);
+                TerrainMeshData* meshData = nullptr;
+                if (reg.all_of<TerrainRuntimeComponent>(entity))
+                    meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
+                RebuildGrass(eid, tc, transform, meshData);
 
                 cache.GrassEnabled = tc.GrassEnabled;
                 cache.GrassDensity = tc.GrassDensity;
@@ -190,9 +194,9 @@ namespace Engine
         }
     }
 
-    void GrassRenderSystem::RebuildGrass(uint32_t eid, TerrainComponent& tc, const TransformComponent& transform)
+    void GrassRenderSystem::RebuildGrass(uint32_t eid, TerrainComponent& tc, const TransformComponent& transform,
+                                         TerrainMeshData* meshData)
     {
-        auto* meshData = tc.RuntimeMeshData;
         if (!meshData || meshData->HeightData.empty())
         {
             ENGINE_WARN("[Grass] Entity {} has no terrain mesh data, skipping grass rebuild.", eid);

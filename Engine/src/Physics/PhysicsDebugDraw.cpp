@@ -4,6 +4,7 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Shader.h"
 #include "Scene/Components.h"
+#include "Scene/Runtime/RuntimeComponents.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
 #include <glm/glm.hpp>
@@ -192,7 +193,9 @@ namespace Engine
     void PhysicsDebugDraw::DrawTerrainWireframe(const glm::vec3& translation, entt::registry& reg, entt::entity entity)
     {
         auto& tc = reg.get<TerrainComponent>(entity);
-        auto* meshData = tc.RuntimeMeshData;
+        auto* meshData = reg.all_of<TerrainRuntimeComponent>(entity)
+                             ? reg.get<TerrainRuntimeComponent>(entity).MeshData.get()
+                             : nullptr;
         if (!meshData || meshData->HeightData.empty())
             return;
 
