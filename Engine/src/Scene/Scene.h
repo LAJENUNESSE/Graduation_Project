@@ -3,6 +3,8 @@
 #include "Core/Base.h"
 #include "Core/Timestep.h"
 #include "Core/UUID.h"
+#include "Scene/SceneEntityIndex.h"
+#include "Scene/Runtime/ResourceLifecycleCoordinator.h"
 #include "Scene/Systems/ShadowSystem.h"
 
 #include <entt/entt.hpp>
@@ -72,12 +74,16 @@ namespace Engine
         template <typename... Components> auto GetAllEntitiesWith() { return m_Registry.view<Components...>(); }
 
         entt::registry& GetRegistry() { return m_Registry; }
+        const SceneEntityIndex& GetEntityIndex() const { return m_EntityIndex; }
+        ResourceLifecycleCoordinator& GetLifecycleCoordinator() { return m_LifecycleCoordinator; }
 
         PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
         void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
 
     private:
         entt::registry m_Registry;
+        SceneEntityIndex m_EntityIndex;
+        ResourceLifecycleCoordinator m_LifecycleCoordinator;
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;
 

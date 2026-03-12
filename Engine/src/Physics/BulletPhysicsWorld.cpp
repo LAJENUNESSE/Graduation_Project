@@ -5,6 +5,7 @@
 #include "Core/Log.h"
 #include "Renderer/Mesh.h"
 #include "Scene/Components.h"
+#include "Scene/Runtime/RuntimeComponents.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
 #include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
@@ -317,7 +318,9 @@ namespace Engine
             auto& terrain = terrainView.get<TerrainComponent>(entity);
             uint32_t entityId = static_cast<uint32_t>(entity);
 
-            auto* meshData = terrain.RuntimeMeshData;
+            auto* meshData = reg.all_of<TerrainRuntimeComponent>(entity)
+                                 ? reg.get<TerrainRuntimeComponent>(entity).MeshData.get()
+                                 : nullptr;
             if (!meshData || meshData->HeightData.empty())
                 continue;
 

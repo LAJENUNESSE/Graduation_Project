@@ -408,7 +408,6 @@ namespace Engine
 
         // 运行时（不序列化）
         bool MeshDirty = true;
-        TerrainMeshData* RuntimeMeshData = nullptr;
 
         TerrainComponent() = default;
         TerrainComponent(const TerrainComponent&) = default;

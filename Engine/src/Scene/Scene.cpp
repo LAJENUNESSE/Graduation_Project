@@ -28,7 +28,10 @@ namespace Engine
         ComponentRegistry::EnsureRegistered();
     }
 
-    Scene::~Scene() {}
+    Scene::~Scene()
+    {
+        m_LifecycleCoordinator.CleanupSceneDestroy();
+    }
 
     Entity Scene::CreateEntity(const std::string& name)
     {
@@ -42,6 +45,7 @@ namespace Engine
         entity.AddComponent<TagComponent>(name);
         entity.AddComponent<TransformComponent>();
         entity.AddComponent<RelationshipComponent>();
+        m_EntityIndex.Insert(uuid, entity);
         return entity;
     }
 
@@ -78,7 +82,11 @@ namespace Engine
         if (m_BulletPhysicsWorld)
             m_BulletPhysicsWorld->DestroyBody((entt::entity)entity);
 
+        m_LifecycleCoordinator.PreDestroyEntity(m_Registry, entity);
+
+        UUID uuid = entity.GetUUID();
         m_Registry.destroy(entity);
+        m_EntityIndex.Remove(uuid);
     }
 
     void Scene::SetParent(Entity child, Entity parent)
@@ -198,12 +206,9 @@ namespace Engine
 
     Entity Scene::FindEntityByUUID(UUID uuid)
     {
-        auto view = m_Registry.view<IDComponent>();
-        for (auto entity : view)
-        {
-            if (view.get<IDComponent>(entity).ID == uuid)
-                return Entity{entity, this};
-        }
+        entt::entity entity = m_EntityIndex.Find(uuid);
+        if (entity != entt::null && m_Registry.valid(entity))
+            return Entity{entity, this};
         return {};
     }
 
@@ -482,6 +487,8 @@ namespace Engine
             m_SceneRenderer->GetVideoSystem().OnRuntimeStop(m_Registry);
             m_SceneRenderer->GetAudioSystem().OnRuntimeStop(m_Registry);
         }
+
+        m_LifecycleCoordinator.CleanupRuntimeStop(m_Registry);
 
         // NativeScript OnDestroy
         {

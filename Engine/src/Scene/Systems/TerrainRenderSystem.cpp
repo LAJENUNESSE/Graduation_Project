@@ -6,6 +6,7 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Renderer.h"
 #include "Scene/Components.h"
+#include "Scene/Runtime/RuntimeComponents.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
 namespace Engine
@@ -57,17 +58,12 @@ namespace Engine
 
             if (needRebuild && !tc.HeightmapPath.empty())
             {
-                // 释放旧数据
-                if (tc.RuntimeMeshData)
-                {
-                    delete tc.RuntimeMeshData;
-                    tc.RuntimeMeshData = nullptr;
-                }
-
                 auto meshData =
                     TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
 
-                tc.RuntimeMeshData = new TerrainMeshData(std::move(meshData));
+                // 写入 TerrainRuntimeComponent（懒创建）
+                auto& rtc = reg.get_or_emplace<TerrainRuntimeComponent>(entity);
+                rtc.MeshData = std::make_unique<TerrainMeshData>(std::move(meshData));
                 tc.MeshDirty = false;
 
                 cache.HeightmapPath = tc.HeightmapPath;
@@ -87,7 +83,9 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = tc.RuntimeMeshData;
+            TerrainMeshData* meshData = nullptr;
+            if (reg.all_of<TerrainRuntimeComponent>(entity))
+                meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
             if (!meshData || meshData->LODs.empty())
                 continue;
 
@@ -214,7 +212,9 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = tc.RuntimeMeshData;
+            TerrainMeshData* meshData = nullptr;
+            if (reg.all_of<TerrainRuntimeComponent>(entity))
+                meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
             if (!meshData || meshData->LODs.empty())
                 continue;
 
