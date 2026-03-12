@@ -20,8 +20,6 @@ namespace Engine
     class Mesh;
     class Texture2D;
     class Material;
-    class FFmpegDecoder;
-    struct TerrainMeshData;
 
     struct IDComponent
     {
@@ -424,11 +422,6 @@ namespace Engine
         bool PlayOnStart = true;
         bool Spatial = true; // true=3D空间音效, false=2D
 
-        // 运行时状态（不序列化）
-        uint32_t RuntimeSource = 0;
-        uint32_t RuntimeBuffer = 0;
-        bool IsPlaying = false;
-
         AudioSourceComponent() = default;
         AudioSourceComponent(const AudioSourceComponent&) = default;
     };
@@ -448,17 +441,9 @@ namespace Engine
         bool Loop = false;   // 仅本地文件有效
         float Volume = 1.0f; // 视频音轨音量
 
-        // 运行时状态（不序列化）
-        std::unique_ptr<FFmpegDecoder> RuntimeDecoder = nullptr;
-        uint32_t RuntimeAudioSource = 0;
-        Ref<Texture2D> RuntimeTexture = nullptr;
-        std::vector<uint32_t> RuntimeAudioBuffers;
-        bool IsPlaying = false;
-
-        VideoPlayerComponent();
-        ~VideoPlayerComponent();
-        VideoPlayerComponent(VideoPlayerComponent&&) noexcept;
-        VideoPlayerComponent& operator=(VideoPlayerComponent&&) noexcept;
+        VideoPlayerComponent() = default;
+        VideoPlayerComponent(const VideoPlayerComponent&) = default;
+        VideoPlayerComponent& operator=(const VideoPlayerComponent&) = default;
     };
 
     struct FluidEmitterComponent
@@ -504,9 +489,6 @@ namespace Engine
         int SmoothIterations = 2;
         float SmoothFilterRadius = 5.0f;
         float SmoothDepthFalloff = 100.0f;
-
-        // 运行时（不序列化）
-        bool Emitted = false;
 
         FluidEmitterComponent() = default;
         FluidEmitterComponent(const FluidEmitterComponent&) = default;

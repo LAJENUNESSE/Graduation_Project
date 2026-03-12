@@ -10,11 +10,14 @@
 namespace Engine
 {
 
+    class VideoRuntimeStore;
+
     class MeshRenderSystem
     {
     public:
         static void SubmitRenderPackets(entt::registry& reg, RenderQueue& queue, const Ref<Shader>& pbrShader,
-                                        const Ref<Texture2D>& whiteTexture);
+                                        const Ref<Texture2D>& whiteTexture,
+                                        const VideoRuntimeStore* videoStore = nullptr);
     };
 
 } // namespace Engine

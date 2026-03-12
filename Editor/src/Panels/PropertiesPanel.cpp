@@ -8,6 +8,7 @@
 #include "Reflection/ComponentPolicies.h"
 #include "Reflection/ComponentRegistry.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/SceneRenderer.h"
 #include "Renderer/Texture.h"
 #include "Scene/SceneCamera.h"
 #include "Script/NativeScriptComponent.h"
@@ -527,14 +528,28 @@ namespace Engine
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // AudioSource
-        DrawComponent<AudioSourceComponent>("\u97f3\u9891\u6e90", entity, [](auto& component)
-                                            { PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component); });
+        DrawComponent<AudioSourceComponent>("\u97f3\u9891\u6e90", entity, [entity](auto& component)
+        {
+            const AudioRuntimeState* audioState = nullptr;
+            auto* scene = entity.GetScene();
+            if (scene && scene->GetSceneRenderer())
+                audioState = scene->GetSceneRenderer()->GetAudioSystem().GetStore().Get(
+                    static_cast<uint32_t>((entt::entity)entity));
+            PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component, audioState);
+        });
         // AudioListener
         DrawComponent<AudioListenerComponent>("\u97f3\u9891\u76d1\u542c\u5668", entity, [](auto& component)
                                               { PropertiesPanelCustomDrawers::DrawAudioListenerInspector(component); });
         // VideoPlayer
-        DrawComponent<VideoPlayerComponent>("\u89c6\u9891\u64ad\u653e\u5668", entity, [](auto& component)
-                                            { PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component); });
+        DrawComponent<VideoPlayerComponent>("\u89c6\u9891\u64ad\u653e\u5668", entity, [entity](auto& component)
+        {
+            const VideoRuntimeState* videoState = nullptr;
+            auto* scene = entity.GetScene();
+            if (scene && scene->GetSceneRenderer())
+                videoState = scene->GetSceneRenderer()->GetVideoSystem().GetStore().Get(
+                    static_cast<uint32_t>((entt::entity)entity));
+            PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component, videoState);
+        });
         // ---- 反射组件统一绘制 ----
         {
             // DrawVec3Control 适配函数（包装成 AutoInspector 需要的签名）

@@ -77,8 +77,10 @@ namespace Engine
             audio.SetSourceMaxDistance(source, asc.MaxDistance);
             audio.SetSourceSpatial(source, asc.Spatial);
 
-            asc.RuntimeBuffer = buffer;
-            asc.RuntimeSource = source;
+            uint32_t eid = static_cast<uint32_t>(entity);
+            AudioRuntimeState state;
+            state.Source = source;
+            state.Buffer = buffer;
 
             if (asc.Spatial && reg.all_of<TransformComponent>(entity))
             {
@@ -89,9 +91,11 @@ namespace Engine
             if (asc.PlayOnStart)
             {
                 audio.Play(source, buffer, asc.Loop);
-                asc.IsPlaying = true;
+                state.IsPlaying = true;
                 ENGINE_CORE_INFO("[AudioSystem] 开始播放音频: {}", audioPath);
             }
+
+            m_Store.Insert(eid, state);
         }
     }
 
@@ -99,26 +103,17 @@ namespace Engine
     {
         auto& audio = OpenALAudioEngine::Get();
 
-        auto view = reg.view<AudioSourceComponent>();
-        for (auto entity : view)
+        for (auto& [eid, state] : m_Store)
         {
-            auto& asc = view.get<AudioSourceComponent>(entity);
-
-            if (asc.RuntimeSource != 0)
+            if (state.Source != 0)
             {
-                audio.Stop(asc.RuntimeSource);
-                audio.DestroySource(asc.RuntimeSource);
-                asc.RuntimeSource = 0;
+                audio.Stop(state.Source);
+                audio.DestroySource(state.Source);
             }
-
-            if (asc.RuntimeBuffer != 0)
-            {
-                audio.DestroyBuffer(asc.RuntimeBuffer);
-                asc.RuntimeBuffer = 0;
-            }
-
-            asc.IsPlaying = false;
+            if (state.Buffer != 0)
+                audio.DestroyBuffer(state.Buffer);
         }
+        m_Store.Clear();
 
         ENGINE_CORE_INFO("[AudioSystem] 运行时音频资源已清理");
     }
@@ -150,25 +145,44 @@ namespace Engine
             for (auto entity : sourceView)
             {
                 auto& asc = sourceView.get<AudioSourceComponent>(entity);
-
-                if (asc.RuntimeSource == 0)
+                uint32_t eid = static_cast<uint32_t>(entity);
+                auto* state = m_Store.Get(eid);
+                if (!state || state->Source == 0)
                     continue;
 
                 // 同步空间位置
                 if (asc.Spatial && reg.all_of<TransformComponent>(entity))
                 {
                     auto& tc = reg.get<TransformComponent>(entity);
-                    audio.SetSourcePosition(asc.RuntimeSource, tc.Translation);
+                    audio.SetSourcePosition(state->Source, tc.Translation);
                 }
 
                 // 同步音量和音调
-                audio.SetSourceVolume(asc.RuntimeSource, asc.Volume);
-                audio.SetSourcePitch(asc.RuntimeSource, asc.Pitch);
+                audio.SetSourceVolume(state->Source, asc.Volume);
+                audio.SetSourcePitch(state->Source, asc.Pitch);
 
                 // 更新播放状态
-                asc.IsPlaying = audio.IsPlaying(asc.RuntimeSource);
+                state->IsPlaying = audio.IsPlaying(state->Source);
             }
         }
+    }
+
+    void AudioSystem::DestroyEntityAudio(uint32_t entityID)
+    {
+        auto* state = m_Store.Get(entityID);
+        if (!state)
+            return;
+
+        auto& audio = OpenALAudioEngine::Get();
+        if (state->Source != 0)
+        {
+            audio.Stop(state->Source);
+            audio.DestroySource(state->Source);
+        }
+        if (state->Buffer != 0)
+            audio.DestroyBuffer(state->Buffer);
+
+        m_Store.Remove(entityID);
     }
 
 } // namespace Engine

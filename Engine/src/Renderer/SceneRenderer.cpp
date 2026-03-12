@@ -324,7 +324,7 @@ namespace Engine
 
                  m_RenderQueue.Clear();
                  MeshRenderSystem::SubmitRenderPackets(ctx.ActiveScene->GetRegistry(), m_RenderQueue, m_PBRShader,
-                                                       m_WhiteTexture);
+                                                       m_WhiteTexture, &m_VideoSystem.GetStore());
 
                  m_RenderQueue.Flush(ctx.Camera->GetViewProjection());
 
@@ -404,14 +404,14 @@ namespace Engine
                      {
                          system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
                          system->Init();
-                         emitter.Emitted = false; // 重建后需要重新发射
+                         m_FluidEmitted.erase(eid); // 重建后需要重新发射
                      }
 
                      // 首次发射
-                     if (!emitter.Emitted)
+                     if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
                      {
                          system->Emit(transform.Translation, emitter);
-                         emitter.Emitted = true;
+                         m_FluidEmitted.insert(eid);
                      }
 
                      // 每帧模拟
@@ -436,6 +436,7 @@ namespace Engine
         m_GrassSystem.Shutdown();
         m_ParticleSystems.clear();
         m_FluidSystems.clear();
+        m_FluidEmitted.clear();
         m_FluidRenderer.Shutdown();
 
         // 清理 SSAO 噪声纹理
@@ -452,6 +453,7 @@ namespace Engine
         {
             m_ParticleSystems.clear();
             m_FluidSystems.clear();
+            m_FluidEmitted.clear();
             m_GrassSystem.Shutdown();
             m_LastScene = scene;
         }
@@ -643,4 +645,16 @@ namespace Engine
 
         pickingFBO->Unbind();
     }
+
+    void SceneRenderer::ReleaseParticleSystem(uint32_t entityID)
+    {
+        m_ParticleSystems.erase(entityID);
+    }
+
+    void SceneRenderer::ReleaseFluidSystem(uint32_t entityID)
+    {
+        m_FluidSystems.erase(entityID);
+        m_FluidEmitted.erase(entityID);
+    }
+
 } // namespace Engine
