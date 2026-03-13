@@ -18,6 +18,7 @@ namespace Engine
 {
 
     class EditorCamera;
+    class SceneEntityIndex;
 
     class GrassRenderSystem
     {
@@ -26,7 +27,8 @@ namespace Engine
         void Shutdown();
         void UpdateGrassData(entt::registry& reg, float totalTime);
         void Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
-                    const ShadowData& shadow, const ShadowSettings& shadowSettings, float totalTime);
+                    const ShadowData& shadow, const ShadowSettings& shadowSettings, float totalTime,
+                    const SceneEntityIndex& index);
 
     private:
         void RebuildGrass(uint32_t eid, struct TerrainComponent& tc, const struct TransformComponent& transform,

@@ -9,6 +9,8 @@
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
 #include "Scene/Runtime/RuntimeComponents.h"
+#include "Scene/WorldTransformService.h"
+#include "Scene/SceneEntityIndex.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
 #include <algorithm>
@@ -17,29 +19,6 @@
 
 namespace Engine
 {
-
-    // 递归计算世界变换矩阵
-    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
-    {
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 localMatrix = transform.GetTransform();
-
-        if (reg.all_of<RelationshipComponent>(entity))
-        {
-            auto& rel = reg.get<RelationshipComponent>(entity);
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                auto view = reg.view<IDComponent>();
-                for (auto e : view)
-                {
-                    if (view.get<IDComponent>(e).ID == rel.ParentID)
-                        return ComputeWorldTransform(reg, e) * localMatrix;
-                }
-            }
-        }
-
-        return localMatrix;
-    }
 
     namespace
     {
@@ -295,7 +274,8 @@ namespace Engine
     }
 
     void GrassRenderSystem::Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
-                                   const ShadowData& shadow, const ShadowSettings& shadowSettings, float totalTime)
+                                   const ShadowData& shadow, const ShadowSettings& shadowSettings, float totalTime,
+                                   const SceneEntityIndex& index)
     {
         if (!RendererCapabilities::Get().SupportsComputeShaders)
             return;
@@ -337,7 +317,7 @@ namespace Engine
             auto& inst = it->second;
             auto& transform = view.get<TransformComponent>(entity);
 
-            m_BillboardShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
+            m_BillboardShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index));
             m_BillboardShader->SetInt("u_EntityID", static_cast<int>(eid));
 
             // 绑定草地纹理 (unit 2)

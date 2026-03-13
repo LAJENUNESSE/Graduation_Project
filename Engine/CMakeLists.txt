@@ -61,7 +61,10 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Entity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Scene.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneEntityIndex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/WorldTransformService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneHierarchyService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Runtime/ResourceLifecycleCoordinator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Runtime/SceneRuntimeCoordinator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneCamera.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneSerializer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Systems/AudioSystem.cpp

@@ -49,10 +49,12 @@ namespace Engine
         float AmbientStrength = 0.3f;
     };
 
+    class SceneEntityIndex;
+
     class LightSystem
     {
     public:
-        static LightEnvironment CollectLights(entt::registry& reg);
+        static LightEnvironment CollectLights(entt::registry& reg, const SceneEntityIndex& index);
         static void UploadToShader(const Ref<Shader>& shader, const LightEnvironment& env);
     };
 

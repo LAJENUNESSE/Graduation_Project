@@ -6,6 +6,8 @@
 #include "Renderer/Mesh.h"
 #include "Renderer/RenderCommand.h"
 #include "Scene/Components.h"
+#include "Scene/WorldTransformService.h"
+#include "Scene/SceneEntityIndex.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
@@ -14,31 +16,9 @@
 namespace Engine
 {
 
-    // 递归计算世界变换矩阵
-    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
-    {
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 localMatrix = transform.GetTransform();
-
-        if (reg.all_of<RelationshipComponent>(entity))
-        {
-            auto& rel = reg.get<RelationshipComponent>(entity);
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                auto view = reg.view<IDComponent>();
-                for (auto e : view)
-                {
-                    if (view.get<IDComponent>(e).ID == rel.ParentID)
-                        return ComputeWorldTransform(reg, e) * localMatrix;
-                }
-            }
-        }
-
-        return localMatrix;
-    }
-
     // 渲染所有网格到当前绑定的深度 FBO
-    static void RenderMeshesToDepth(entt::registry& reg, const Ref<Shader>& depthShader, const glm::mat4& lightSpaceMat)
+    static void RenderMeshesToDepth(entt::registry& reg, const Ref<Shader>& depthShader, const glm::mat4& lightSpaceMat,
+                                    const SceneEntityIndex& index)
     {
         depthShader->Bind();
         depthShader->SetMat4("u_LightSpaceMatrix", lightSpaceMat);
@@ -50,7 +30,7 @@ namespace Engine
             Mesh* mesh = AssetManager::Get<Mesh>(meshRenderer.MeshAsset);
             if (mesh)
             {
-                depthShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
+                depthShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index));
                 for (const auto& subMesh : mesh->GetSubMeshes())
                 {
                     subMesh.VAO->Bind();
@@ -188,7 +168,7 @@ namespace Engine
         return lightProj * lightView;
     }
 
-    ShadowData ShadowSystem::Execute(entt::registry& reg, const LightEnvironment& lights)
+    ShadowData ShadowSystem::Execute(entt::registry& reg, const LightEnvironment& lights, const SceneEntityIndex& index)
     {
         ShadowData data;
 
@@ -239,7 +219,7 @@ namespace Engine
         RenderCommand::Clear();
         RenderCommand::SetCullFaceMode(CullFaceMode::Front);
 
-        RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix);
+        RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix, index);
 
         RenderCommand::SetCullFaceMode(CullFaceMode::Back);
         m_ShadowMapFBO->Unbind();
@@ -251,7 +231,8 @@ namespace Engine
         return data;
     }
 
-    ShadowData ShadowSystem::ExecuteCSM(entt::registry& reg, const LightEnvironment& lights, const EditorCamera& camera)
+    ShadowData ShadowSystem::ExecuteCSM(entt::registry& reg, const LightEnvironment& lights, const EditorCamera& camera,
+                                         const SceneEntityIndex& index)
     {
         ShadowData data;
 
@@ -303,7 +284,7 @@ namespace Engine
             m_ShadowMapFBO->Bind();
             RenderCommand::Clear();
             RenderCommand::SetCullFaceMode(CullFaceMode::Front);
-            RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix);
+            RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix, index);
             RenderCommand::SetCullFaceMode(CullFaceMode::Back);
             m_ShadowMapFBO->Unbind();
 
@@ -349,7 +330,7 @@ namespace Engine
             RenderCommand::Clear();
             RenderCommand::SetCullFaceMode(CullFaceMode::Front);
 
-            RenderMeshesToDepth(reg, m_DepthShader, data.CascadeLightSpaceMatrices[i]);
+            RenderMeshesToDepth(reg, m_DepthShader, data.CascadeLightSpaceMatrices[i], index);
 
             RenderCommand::SetCullFaceMode(CullFaceMode::Back);
             m_CascadeFBOs[i]->Unbind();

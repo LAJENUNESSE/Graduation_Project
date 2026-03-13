@@ -15,6 +15,7 @@ namespace Engine
 {
 
     class EditorCamera;
+    class SceneEntityIndex;
 
     class TerrainRenderSystem
     {
@@ -22,8 +23,8 @@ namespace Engine
         void Init();
         void UpdateTerrainMeshes(entt::registry& reg);
         void Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
-                    const ShadowData& shadow, const ShadowSettings& shadowSettings);
-        void RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader);
+                    const ShadowData& shadow, const ShadowSettings& shadowSettings, const SceneEntityIndex& index);
+        void RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader, const SceneEntityIndex& index);
 
     private:
         Ref<Shader> m_TerrainShader;
