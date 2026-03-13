@@ -12,8 +12,8 @@ paths:
 | 目录 | 职责 |
 |------|------|
 | `src/Core/` | 应用主循环、Layer、事件系统、输入、窗口 |
-| `src/Renderer/` | 渲染抽象层、多 Pass 管线、材质、粒子 |
-| `src/Scene/` | ECS（EnTT）、组件、渲染系统 |
+| `src/Renderer/` | 渲染抽象层、多 Pass 管线、材质、粒子、流体、IBL |
+| `src/Scene/` | ECS（EnTT）、组件、渲染系统、façade 架构 + 服务层 |
 | `src/Reflection/` | 编译期反射宏、组件注册、自动序列化/Inspector |
 | `src/Asset/` | SlotMap 资源池、异步加载、热重载 |
 | `src/Physics/` | Bullet3 物理 + 简易自研碰撞 |
@@ -21,7 +21,11 @@ paths:
 | `src/Media/` | FFmpeg 视频解码（RTSP/文件） |
 | `src/Terrain/` | 高度图地形网格生成 |
 | `src/Script/` | NativeScript 基类与注册表 |
+| `src/Events/` | 事件类型定义（窗口、键盘、鼠标、应用） |
+| `src/Debug/` | 调试工具（物理线框可视化等） |
+| `src/ImGui/` | ImGui 后端集成与辅助 |
 | `Platform/OpenGL/` | OpenGL 4.3 具体实现 |
+| `Platform/CUDA/` | CUDA compute sidecar（粒子/SPH），含错误检测 + 全局中毒回退 |
 
 ## 关键约定
 
@@ -29,3 +33,4 @@ paths:
 - 预编译头 `engpch.h` 由 CMake 自动注入，无需手动 include
 - 新组件必须走反射注册流程才能出现在编辑器和序列化中
 - 平台相关代码只放在 `Platform/` 下，`src/` 层仅使用抽象接口
+- CUDA 路径需保留 OpenGL Compute 回退（非 NVIDIA GPU 兼容）

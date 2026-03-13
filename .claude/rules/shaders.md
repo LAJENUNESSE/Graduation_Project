@@ -35,9 +35,11 @@ layout(local_size_x = 256) in;
 | PBR / TerrainPBR | PBR 材质着色器 | `PBR.glsl`, `TerrainPBR.glsl` |
 | particle_* | GPU 粒子系统 | `particle_emit.glsl`, `particle_simulate.glsl` |
 | grass_* | GPU 草地 | `grass_placement.glsl`, `grass_billboard.glsl` |
-| sph_* / fluid_* | SPH 流体模拟 | `sph_density.glsl`, `fluid_render.glsl` |
+| sph_* / fluid_* | SPH 流体模拟 | `sph_density.glsl`, `fluid_composite.glsl` |
 | sph_pcisph_* | PCISPH 变体 | `sph_pcisph_predict.glsl` |
 | grid_* | 空间哈希网格 | `grid_hash.glsl`, `grid_prefix_sum.glsl` |
+| IBL_* | IBL 预计算 | `IBL_Irradiance.glsl`, `IBL_Prefilter.glsl`, `IBL_BRDF_LUT.glsl` |
+| 后处理 | 屏幕空间效果 | `SSAO.glsl`, `GaussianBlur.glsl`, `ToneMapping.glsl` |
 
 ## 顶点布局约定
 

@@ -56,12 +56,13 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 
 | 目录 | 职责 |
 |------|------|
-| `Editor/` | 可视化编辑器（exe），链接 Engine |
-| `Engine/` | 引擎静态库（Core, Renderer, Scene, Reflection, Asset, Physics, Audio, Media, Terrain） |
+| `Editor/` | 可视化编辑器（exe），分层协调式架构（EditorLayer → 控制器/面板） |
+| `Engine/` | 引擎静态库（Core, Renderer, Scene, Reflection, Asset, Physics, Audio, Media, Terrain, Script, Events, Debug, ImGui） |
 | `Engine/Platform/OpenGL/` | OpenGL 4.3 具体实现 |
-| `Engine/Platform/CUDA/` | CUDA compute sidecar（粒子/SPH，需 `ENGINE_ENABLE_CUDA=ON`） |
-| `vendor/` | 第三方库（glfw, glad, glm, entt, spdlog, imgui, imguizmo, yaml-cpp, stb_image, bullet3, assimp, tinyfiledialogs） |
-| `assets/` | 着色器(.glsl)、模型、纹理、场景(.scene = YAML) |
+| `Engine/Platform/CUDA/` | CUDA compute sidecar（粒子/SPH，需 `ENGINE_ENABLE_CUDA=ON`），含错误检测 + 全局中毒回退 |
+| `vendor/` | 第三方库（glfw, glad-generated, glm, entt, spdlog, imgui, imguizmo, yaml-cpp, stb_image, bullet3, assimp, tinyfiledialogs） |
+| `assets/` | 着色器(.glsl ×36)、模型、纹理、场景(.scene = YAML) |
+| `docs/` | 深度调研报告（CUDA 迁移、UE 反射、功能审查等） |
 
 各模块的详细约定见 `.claude/rules/` 下的路径限定规则文件。
 
@@ -83,6 +84,17 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 - New components must be registered with the reflection system (macros in header, `REGISTER_COMPONENT_*` in a .cpp) to appear in the editor and serialize correctly
 - Platform-specific code lives in `Engine/Platform/` (currently `OpenGL/` and `CUDA/`)
 - `Ref<T>` is `std::shared_ptr<T>`, `Scope<T>` is `std::unique_ptr<T>` (defined in `Core/Base.h`)
+- **Scene 架构**：Scene 为 façade，复杂逻辑委托给 SceneRuntimeCoordinator / SceneHierarchyService / WorldTransformService，运行时资源由 RuntimeStore 管理
+- **Editor 架构**：EditorLayer 是主协调器，职责分散到 EditorSceneSession / EditorShell / EditorPanelCoordinator / EditorRenderController / EditorViewportController + UndoSystem
+- **CUDA sidecar**：粒子和 SPH 管线有 CUDA 加速路径，含错误检测 + 全局中毒回退到 OpenGL Compute
+
+## License
+
+LGPL v2.1+（FFmpeg 以 DLL 动态链接）
+
+## CI/CD
+
+GitHub Actions — CMake 构建 + CodeQL 安全分析
 
 ## Development Workflow
 
@@ -91,6 +103,6 @@ Always follow this workflow:
 1. Explore relevant files
 2. Plan the change
 3. Implement a small step
-4. Create snapshot
-5. Run tests
+4. Create git commit
+5. Build and verify
 6. Continue
