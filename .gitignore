@@ -40,7 +40,8 @@ pic/
 logs/
 
 # Doc
-docs/
+docs/*
+!docs/*.md
 
 # Scripts
 scripts/
