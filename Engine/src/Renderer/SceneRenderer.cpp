@@ -383,7 +383,7 @@ namespace Engine
         m_PassQueue.push_back(
             {"FluidPass", [this](RenderContext& ctx)
              {
-                 if (!ctx.Registry || !ctx.IsSimulating)
+                 if (!ctx.Registry)
                      return;
 
                  auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
@@ -443,6 +443,7 @@ namespace Engine
         m_FluidSystems.clear();
         m_FluidEmitted.clear();
         m_FluidRenderer.Shutdown();
+        m_BoundRegistry = nullptr;
 
         // 清理 SSAO 噪声纹理
         if (m_SSAONoiseTexID)
@@ -464,12 +465,13 @@ namespace Engine
 
     void SceneRenderer::BeginScene(const EditorCamera& camera, const SceneRenderInput& input)
     {
-        if (m_Context.Registry != input.Registry)
+        if (m_BoundRegistry != input.Registry)
         {
             m_ParticleSystems.clear();
             m_FluidSystems.clear();
             m_FluidEmitted.clear();
             m_GrassSystem.Shutdown();
+            m_BoundRegistry = input.Registry;
         }
 
         m_Context.Camera = const_cast<EditorCamera*>(&camera);

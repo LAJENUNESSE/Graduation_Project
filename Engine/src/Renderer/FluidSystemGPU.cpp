@@ -417,7 +417,8 @@ namespace Engine
                 else
                 {
                     float ms = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
-                    PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
+                    if (ms >= 0.0f)
+                        PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
                     cudaSucceeded = true;
                 }
             }

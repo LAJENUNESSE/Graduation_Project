@@ -255,7 +255,15 @@ namespace Engine
         float CudaEventElapsedMs(void* start, void* stop)
         {
             if (IsCudaPoisoned() || !start || !stop) return 0.0f;
-            CUDA_CHECK(cudaEventSynchronize(static_cast<cudaEvent_t>(stop)));
+            // 非阻塞查询：避免每帧 CPU/GPU 同步
+            cudaError_t queryErr = cudaEventQuery(static_cast<cudaEvent_t>(stop));
+            if (queryErr == cudaErrorNotReady)
+                return -1.0f; // 事件未完成，调用方应保留上一帧缓存值
+            if (queryErr != cudaSuccess)
+            {
+                PoisonCuda("cudaEventQuery failed");
+                return 0.0f;
+            }
             float ms = 0.0f;
             CUDA_CHECK(cudaEventElapsedTime(&ms, static_cast<cudaEvent_t>(start), static_cast<cudaEvent_t>(stop)));
             return ms;

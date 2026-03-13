@@ -75,7 +75,6 @@ namespace Engine
         {
             PROFILE_SCOPE("SceneRender", &sceneRenderCpuMs);
             m_SceneRenderer->BeginScene(m_ViewportController->GetCamera(), activeScene.get(), ts);
-            m_SceneRenderer->GetContext().IsSimulating = (sceneState == SceneState::Play);
             m_SceneRenderer->RenderPipeline(m_ViewportController->GetFramebuffer());
             if (sceneState == SceneState::Edit)
                 m_SceneRenderer->RenderEditorPicking(m_ViewportController->GetPickingFramebuffer());

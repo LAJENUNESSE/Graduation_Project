@@ -186,7 +186,12 @@ namespace Engine
         for (int i = 0; i < n; i++)
             res[i] = m_Impl->slots[i].resource;
 
-        cudaGraphicsUnmapResources(n, res.data(), m_Impl->stream);
+        cudaError_t err = cudaGraphicsUnmapResources(n, res.data(), m_Impl->stream);
+        if (err != cudaSuccess)
+        {
+            ENGINE_CORE_ERROR("[CUDA] UnmapAll failed: {0}", CudaErrStr(err));
+            CudaInterop::PoisonCuda("cudaGraphicsUnmapResources failed");
+        }
 
         for (auto& s : m_Impl->slots)
             s.mappedPtr = nullptr;

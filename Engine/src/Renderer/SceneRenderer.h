@@ -40,8 +40,6 @@ namespace Engine
         const SceneEntityIndex* EntityIndex = nullptr;
         float DeltaTime = 0.0f;
 
-        bool IsSimulating = false; // true = Play 模式，FluidPass 可运行
-
         // 供 FluidPass 使用
         uint32_t SceneColorTexID = 0;
         uint32_t SceneDepthTexID = 0;
@@ -148,6 +146,9 @@ namespace Engine
         float m_SSAOIntensity = 1.5f;
         int m_IBLDebugMode = 0; // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
         Ref<VertexArray> m_FullscreenQuadVAO;
+
+        // 追踪当前绑定的 registry，用于检测场景切换（不受 EndScene 清空影响）
+        entt::registry* m_BoundRegistry = nullptr;
 
         // Particle systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<ParticleSystemGPU>> m_ParticleSystems;
