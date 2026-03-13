@@ -229,11 +229,6 @@ namespace Engine
         // 重新创建实体并恢复组件（使用原始 UUID 以保持父子关系引用）
         Entity entity = m_Scene->CreateEntityWithUUID(m_EntityUUID, m_EntityName);
 
-        entity.GetComponent<TransformComponent>() = m_TransformSnapshot;
-
-        if (m_HasRelationship)
-            entity.GetComponent<RelationshipComponent>() = m_RelationshipSnapshot;
-
         // 通过快照恢复所有组件
         uint32_t eid = static_cast<uint32_t>(static_cast<entt::entity>(entity));
         for (auto& snap : m_ComponentSnapshots)
@@ -242,6 +237,22 @@ namespace Engine
             if (meta && meta->Restore)
                 meta->Restore(*m_Scene, eid, snap.Data);
         }
+
+        if (m_HasRelationship)
+        {
+            auto& relationship = entity.GetComponent<RelationshipComponent>();
+            relationship.Children = m_RelationshipSnapshot.Children;
+
+            if (static_cast<uint64_t>(m_RelationshipSnapshot.ParentID) != 0)
+            {
+                Entity parent = m_Scene->FindEntityByUUID(m_RelationshipSnapshot.ParentID);
+                if (parent)
+                    m_Scene->SetParent(entity, parent);
+            }
+        }
+
+        // SetParent 会重算本地变换，这里最后覆盖回删除前快照。
+        entity.GetComponent<TransformComponent>() = m_TransformSnapshot;
     }
 
     std::string EntityDeleteCommand::GetDescription() const

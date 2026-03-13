@@ -272,6 +272,7 @@ namespace Engine
     ENGINE_PROPERTY(AudioListenerComponent, Active, "激活", Bool)
 
     REGISTER_COMPONENT_BEGIN(AudioListenerComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI)
     REGISTER_COMPONENT_PROPERTY(AudioListenerComponent, Active)
     REGISTER_COMPONENT_END(AudioListenerComponent)
 
