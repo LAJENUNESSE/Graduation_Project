@@ -8,6 +8,7 @@
 #include "Renderer/ParticleSystemGPU.h"
 #include "Renderer/PostProcessing.h"
 #include "Renderer/RenderQueue.h"
+#include "Renderer/SceneRenderInput.h"
 #include "Renderer/Shader.h"
 #include "Renderer/Texture.h"
 #include "Scene/Systems/AudioSystem.h"
@@ -34,7 +35,9 @@ namespace Engine
     struct RenderContext
     {
         EditorCamera* Camera = nullptr;
-        Scene* ActiveScene = nullptr;
+        Scene* ActiveScene = nullptr; // 兼容：部分 pass 仍需 Scene*
+        entt::registry* Registry = nullptr;
+        const SceneEntityIndex* EntityIndex = nullptr;
         float DeltaTime = 0.0f;
 
         bool IsSimulating = false; // true = Play 模式，FluidPass 可运行
@@ -63,6 +66,7 @@ namespace Engine
         void Shutdown();
 
         void BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime);
+        void BeginScene(const EditorCamera& camera, const SceneRenderInput& input);
         void Render();
         void EndScene();
 
@@ -152,7 +156,6 @@ namespace Engine
         std::unordered_map<uint32_t, Ref<FluidSystemGPU>> m_FluidSystems;
         std::unordered_set<uint32_t> m_FluidEmitted; // 替代 FluidEmitterComponent::Emitted
         FluidRenderer m_FluidRenderer;
-        Scene* m_LastScene = nullptr;
         float m_TotalTime = 0.0f;
 
         // 完整渲染管线依赖（由外部注入）

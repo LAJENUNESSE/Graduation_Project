@@ -13,6 +13,7 @@ namespace Engine
 {
 
     class EditorCamera;
+    class SceneEntityIndex;
 
     static constexpr int CSM_MAX_CASCADES = 4;
 
@@ -50,8 +51,9 @@ namespace Engine
     {
     public:
         void Init(const ShadowSettings& settings = {});
-        ShadowData Execute(entt::registry& reg, const LightEnvironment& lights);
-        ShadowData ExecuteCSM(entt::registry& reg, const LightEnvironment& lights, const EditorCamera& camera);
+        ShadowData Execute(entt::registry& reg, const LightEnvironment& lights, const SceneEntityIndex& index);
+        ShadowData ExecuteCSM(entt::registry& reg, const LightEnvironment& lights, const EditorCamera& camera,
+                              const SceneEntityIndex& index);
         void ResizeShadowMap(int resolution);
         ShadowSettings& GetSettings() { return m_Settings; }
         Ref<Shader> GetDepthShader() { return m_DepthShader; }

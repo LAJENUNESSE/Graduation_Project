@@ -120,13 +120,14 @@ namespace Engine
         }
 
         m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx)
-                               { m_LightEnv = LightSystem::CollectLights(ctx.ActiveScene->GetRegistry()); }});
+                               { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex); }});
 
         m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx)
                                {
                                    // 使用 CSM 版本
-                                   m_ShadowData = m_ShadowSystem.ExecuteCSM(ctx.ActiveScene->GetRegistry(), m_LightEnv,
-                                                                            *ctx.Camera);
+                                   m_ShadowData = m_ShadowSystem.ExecuteCSM(*ctx.Registry, m_LightEnv,
+                                                                            *ctx.Camera,
+                                                                            *ctx.EntityIndex);
 
                                    // 地形阴影深度渲染
                                    if (m_ShadowData.HasValidShadowCaster)
@@ -148,7 +149,8 @@ namespace Engine
                                            auto depthShader = m_ShadowSystem.GetDepthShader();
                                            depthShader->Bind();
                                            depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
-                                           m_TerrainSystem.RenderDepth(ctx.ActiveScene->GetRegistry(), depthShader);
+                                           m_TerrainSystem.RenderDepth(*ctx.Registry, depthShader,
+                                                                       *ctx.EntityIndex);
                                            RenderCommand::SetCullFaceMode(CullFaceMode::Back);
                                            m_ShadowSystem.GetShadowMapFBO()->Unbind();
                                        }
@@ -157,16 +159,18 @@ namespace Engine
 
         m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx)
                                {
-                                   m_TerrainSystem.UpdateTerrainMeshes(ctx.ActiveScene->GetRegistry());
-                                   m_TerrainSystem.Render(ctx.ActiveScene->GetRegistry(), *ctx.Camera, m_LightEnv,
-                                                          m_ShadowData, m_ShadowSystem.GetSettings());
+                                   m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
+                                   m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
+                                                          m_ShadowData, m_ShadowSystem.GetSettings(),
+                                                          *ctx.EntityIndex);
                                }});
 
         m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx)
                                {
-                                   m_GrassSystem.UpdateGrassData(ctx.ActiveScene->GetRegistry(), m_TotalTime);
-                                   m_GrassSystem.Render(ctx.ActiveScene->GetRegistry(), *ctx.Camera, m_LightEnv,
-                                                        m_ShadowData, m_ShadowSystem.GetSettings(), m_TotalTime);
+                                   m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
+                                   m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
+                                                        m_ShadowData, m_ShadowSystem.GetSettings(), m_TotalTime,
+                                                        *ctx.EntityIndex);
                                }});
 
         m_PassQueue.push_back({"SSAOPass", [this](RenderContext& ctx)
@@ -323,8 +327,9 @@ namespace Engine
                  }
 
                  m_RenderQueue.Clear();
-                 MeshRenderSystem::SubmitRenderPackets(ctx.ActiveScene->GetRegistry(), m_RenderQueue, m_PBRShader,
-                                                       m_WhiteTexture, &m_VideoSystem.GetStore());
+                 MeshRenderSystem::SubmitRenderPackets(*ctx.Registry, m_RenderQueue, m_PBRShader,
+                                                       m_WhiteTexture, &m_VideoSystem.GetStore(),
+                                                       ctx.EntityIndex);
 
                  m_RenderQueue.Flush(ctx.Camera->GetViewProjection());
 
@@ -339,10 +344,10 @@ namespace Engine
         m_PassQueue.push_back(
             {"ParticlePass", [this](RenderContext& ctx)
              {
-                 if (!ctx.ActiveScene)
+                 if (!ctx.Registry)
                      return;
 
-                 auto view = ctx.ActiveScene->GetRegistry().view<TransformComponent, ParticleEmitterComponent>();
+                 auto view = ctx.Registry->view<TransformComponent, ParticleEmitterComponent>();
 
                  for (auto entity : view)
                  {
@@ -358,7 +363,7 @@ namespace Engine
                          system->Init();
                      }
 
-                     system->Update(ctx.DeltaTime, transform.Translation, emitter, &ctx.ActiveScene->GetRegistry());
+                     system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
 
                      if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
                          RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
@@ -378,10 +383,10 @@ namespace Engine
         m_PassQueue.push_back(
             {"FluidPass", [this](RenderContext& ctx)
              {
-                 if (!ctx.ActiveScene || !ctx.IsSimulating)
+                 if (!ctx.Registry || !ctx.IsSimulating)
                      return;
 
-                 auto fluidView = ctx.ActiveScene->GetRegistry().view<TransformComponent, FluidEmitterComponent>();
+                 auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
 
                  // 一次性诊断：报告 FluidEmitter 实体数量
                  static bool s_FluidPassLogged = false;
@@ -415,7 +420,7 @@ namespace Engine
                      }
 
                      // 每帧模拟
-                     system->Update(ctx.DeltaTime, transform.Translation, emitter, &ctx.ActiveScene->GetRegistry());
+                     system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
 
                      // Screen-Space Fluid 渲染
                      m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(), emitter.ParticleCount,
@@ -449,19 +454,29 @@ namespace Engine
 
     void SceneRenderer::BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime)
     {
-        if (m_LastScene != scene)
+        SceneRenderInput input;
+        input.Registry = &scene->GetRegistry();
+        input.EntityIndex = &scene->GetEntityIndex();
+        input.DeltaTime = deltaTime;
+        BeginScene(camera, input);
+        m_Context.ActiveScene = scene; // 兼容：部分 pass 仍需 Scene*
+    }
+
+    void SceneRenderer::BeginScene(const EditorCamera& camera, const SceneRenderInput& input)
+    {
+        if (m_Context.Registry != input.Registry)
         {
             m_ParticleSystems.clear();
             m_FluidSystems.clear();
             m_FluidEmitted.clear();
             m_GrassSystem.Shutdown();
-            m_LastScene = scene;
         }
 
         m_Context.Camera = const_cast<EditorCamera*>(&camera);
-        m_Context.ActiveScene = scene;
-        m_Context.DeltaTime = deltaTime;
-        m_TotalTime += deltaTime;
+        m_Context.Registry = input.Registry;
+        m_Context.EntityIndex = input.EntityIndex;
+        m_Context.DeltaTime = input.DeltaTime;
+        m_TotalTime += input.DeltaTime;
     }
 
     void SceneRenderer::Render()
@@ -477,6 +492,8 @@ namespace Engine
     {
         m_Context.Camera = nullptr;
         m_Context.ActiveScene = nullptr;
+        m_Context.Registry = nullptr;
+        m_Context.EntityIndex = nullptr;
         m_Context.DeltaTime = 0.0f;
     }
 
@@ -633,7 +650,7 @@ namespace Engine
     }
     void SceneRenderer::RenderEditorPicking(const Ref<Framebuffer>& pickingFBO)
     {
-        if (!pickingFBO || !m_Context.Camera || !m_Context.ActiveScene)
+        if (!pickingFBO || !m_Context.Camera || !m_Context.Registry)
             return;
 
         pickingFBO->Bind();

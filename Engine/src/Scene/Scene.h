@@ -4,8 +4,8 @@
 #include "Core/Timestep.h"
 #include "Core/UUID.h"
 #include "Scene/SceneEntityIndex.h"
+#include "Scene/SceneEnvironmentState.h"
 #include "Scene/Runtime/ResourceLifecycleCoordinator.h"
-#include "Scene/Systems/ShadowSystem.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -20,8 +20,7 @@ namespace Engine
     class Entity;
     class EditorCamera;
     class SceneRenderer;
-    class PhysicsWorld;
-    class BulletPhysicsWorld;
+    class SceneRuntimeCoordinator;
 
     enum class PhysicsBackend
     {
@@ -58,7 +57,7 @@ namespace Engine
         void OnViewportResize(uint32_t width, uint32_t height);
 
         // 渲染器绑定
-        void SetSceneRenderer(SceneRenderer* renderer) { m_SceneRenderer = renderer; }
+        void SetSceneRenderer(SceneRenderer* renderer);
         SceneRenderer* GetSceneRenderer() const { return m_SceneRenderer; }
 
         // Skybox 委托
@@ -76,11 +75,14 @@ namespace Engine
         entt::registry& GetRegistry() { return m_Registry; }
         const SceneEntityIndex& GetEntityIndex() const { return m_EntityIndex; }
         ResourceLifecycleCoordinator& GetLifecycleCoordinator() { return m_LifecycleCoordinator; }
+        SceneEnvironmentState& GetEnvironmentState() { return m_EnvironmentState; }
 
         PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
         void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
 
     private:
+        void SyncEnvironmentFromRenderer();
+
         entt::registry m_Registry;
         SceneEntityIndex m_EntityIndex;
         ResourceLifecycleCoordinator m_LifecycleCoordinator;
@@ -90,15 +92,13 @@ namespace Engine
         // 渲染器引用（非所有权）
         SceneRenderer* m_SceneRenderer = nullptr;
 
-        // Physics
+        // 环境数据（Shadow + Skybox）：Scene 拥有，渲染器消费
+        SceneEnvironmentState m_EnvironmentState;
         PhysicsBackend m_PhysicsBackend = PhysicsBackend::Custom;
-        std::unique_ptr<PhysicsWorld> m_PhysicsWorld;
-        std::unique_ptr<BulletPhysicsWorld> m_BulletPhysicsWorld;
-
-        // 备份用的 ShadowSettings（SceneRenderer 为 null 时使用）
-        ShadowSettings m_FallbackShadowSettings;
+        std::unique_ptr<SceneRuntimeCoordinator> m_RuntimeCoordinator;
 
         friend class Entity;
     };
 
 } // namespace Engine
+
