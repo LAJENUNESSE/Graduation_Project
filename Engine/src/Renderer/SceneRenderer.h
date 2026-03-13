@@ -29,15 +29,14 @@
 namespace Engine
 {
 
-    class Scene;
     class EditorCamera;
 
     struct RenderContext
     {
         EditorCamera* Camera = nullptr;
-        Scene* ActiveScene = nullptr; // 兼容：部分 pass 仍需 Scene*
         entt::registry* Registry = nullptr;
         const SceneEntityIndex* EntityIndex = nullptr;
+        WorldTransformCache* TransformCache = nullptr;
         float DeltaTime = 0.0f;
 
         // 供 FluidPass 使用
@@ -63,7 +62,6 @@ namespace Engine
         void Init(uint32_t viewportWidth = 1280, uint32_t viewportHeight = 720);
         void Shutdown();
 
-        void BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime);
         void BeginScene(const EditorCamera& camera, const SceneRenderInput& input);
         void Render();
         void EndScene();

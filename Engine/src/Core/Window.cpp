@@ -252,9 +252,7 @@ namespace Engine
                                      data.PendingMouseX = static_cast<float>(xPos);
                                      data.PendingMouseY = static_cast<float>(yPos);
                                      data.HasPendingMouseMove = true;
-
-                                     if (data.CurrentCursorMode == CursorMode::Normal)
-                                         ImGui_ImplGlfw_CursorPosCallback(window, xPos, yPos);
+                                     // ImGui 回调移到 OnUpdate 中合并调用
                                  });
     }
 
@@ -286,6 +284,9 @@ namespace Engine
 
         if (m_Data.HasPendingMouseMove)
         {
+            // 合并本帧所有鼠标移动，只向 ImGui 发送最终位置
+            if (m_Data.CurrentCursorMode == CursorMode::Normal)
+                ImGui_ImplGlfw_CursorPosCallback(m_Window, m_Data.PendingMouseX, m_Data.PendingMouseY);
             MouseMovedEvent event(m_Data.PendingMouseX, m_Data.PendingMouseY);
             m_Data.EventCallback(event);
             m_Data.HasPendingMouseMove = false;

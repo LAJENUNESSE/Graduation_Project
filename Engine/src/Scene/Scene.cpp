@@ -122,6 +122,7 @@ namespace Engine
         if (!entity || !entity.HasComponent<TransformComponent>())
             return glm::mat4(1.0f);
 
+        // 编辑器/工具侧查询可能与同帧的 Transform 写入交错，不能复用渲染缓存。
         return WorldTransformService::ComputeWorldTransform(m_Registry, (entt::entity)entity, m_EntityIndex);
     }
 
@@ -136,11 +137,12 @@ namespace Engine
 
     void Scene::OnUpdateEditor(Timestep ts, EditorCamera& camera)
     {
-        // 编辑器模式：渲染由 EditorLayer 通过 SceneRenderer 驱动
+        m_TransformCache.BeginFrame();
     }
 
     void Scene::OnUpdateRuntime(Timestep ts, EditorCamera& camera)
     {
+        m_TransformCache.BeginFrame();
         m_RuntimeCoordinator->OnUpdateRuntime(ts, m_PhysicsBackend, m_SceneRenderer);
     }
 

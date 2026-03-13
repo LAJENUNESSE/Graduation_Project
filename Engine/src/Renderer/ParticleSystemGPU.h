@@ -107,9 +107,12 @@ namespace Engine
         int m_CudaSlotCounter = -1;
         int m_CudaSlotIndirect = -1;
 
-        // CUDA event 计时
+        // CUDA event 计时（Ping-pong 双缓冲，避免 GPU 同步阻塞）
         void* m_CudaEventStart = nullptr;
         void* m_CudaEventStop = nullptr;
+        void* m_PrevCudaStart = nullptr;
+        void* m_PrevCudaStop  = nullptr;
+        bool m_HasPrevCudaTiming = false;
 #endif
 
         void InitSPH(float smoothingRadius);

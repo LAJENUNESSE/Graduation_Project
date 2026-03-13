@@ -55,7 +55,7 @@ namespace Engine
 
     void TerrainRenderSystem::Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
                                      const ShadowData& shadow, const ShadowSettings& shadowSettings,
-                                     const SceneEntityIndex& index)
+                                     const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         auto view = reg.view<TransformComponent, TerrainComponent>();
         bool anyTerrain = false;
@@ -100,7 +100,7 @@ namespace Engine
                 lod = 1;
 
             // 设置变换
-            m_TerrainShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index));
+            m_TerrainShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
             m_TerrainShader->SetMat4("u_ViewProjection", camera.GetViewProjection());
             m_TerrainShader->SetInt("u_EntityID", static_cast<int>(eid));
 
@@ -187,7 +187,7 @@ namespace Engine
     }
 
     void TerrainRenderSystem::RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader,
-                                          const SceneEntityIndex& index)
+                                          const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         auto view = reg.view<TransformComponent, TerrainComponent>();
         for (auto entity : view)
@@ -200,7 +200,7 @@ namespace Engine
                 continue;
 
             auto& transform = view.get<TransformComponent>(entity);
-            depthShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index));
+            depthShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
 
             // 阴影用 LOD0（最高精度）
             meshData->LODs[0].VAO->Bind();

@@ -5,6 +5,7 @@
 #include "Core/UUID.h"
 #include "Scene/SceneEntityIndex.h"
 #include "Scene/SceneEnvironmentState.h"
+#include "Scene/WorldTransformCache.h"
 #include "Scene/Runtime/ResourceLifecycleCoordinator.h"
 
 #include <entt/entt.hpp>
@@ -76,6 +77,7 @@ namespace Engine
         const SceneEntityIndex& GetEntityIndex() const { return m_EntityIndex; }
         ResourceLifecycleCoordinator& GetLifecycleCoordinator() { return m_LifecycleCoordinator; }
         SceneEnvironmentState& GetEnvironmentState() { return m_EnvironmentState; }
+        WorldTransformCache& GetTransformCache() { return m_TransformCache; }
 
         PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
         void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
@@ -85,6 +87,7 @@ namespace Engine
 
         entt::registry m_Registry;
         SceneEntityIndex m_EntityIndex;
+        WorldTransformCache m_TransformCache;
         ResourceLifecycleCoordinator m_LifecycleCoordinator;
         uint32_t m_ViewportWidth = 0;
         uint32_t m_ViewportHeight = 0;

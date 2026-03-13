@@ -14,7 +14,8 @@ namespace Engine
     void MeshRenderSystem::SubmitRenderPackets(entt::registry& reg, RenderQueue& queue, const Ref<Shader>& pbrShader,
                                                const Ref<Texture2D>& whiteTexture,
                                                const VideoRuntimeStore* videoStore,
-                                               const SceneEntityIndex* index)
+                                               const SceneEntityIndex* index,
+                                               WorldTransformCache* cache)
     {
         auto meshView = reg.view<TransformComponent, MeshRendererComponent>();
         for (auto entity : meshView)
@@ -133,7 +134,7 @@ namespace Engine
                 RenderPacket packet;
                 packet.VAO = subMesh.VAO;
                 packet.Mat = mat;
-                packet.Transform = index ? WorldTransformService::ComputeWorldTransform(reg, entity, *index)
+                packet.Transform = index ? WorldTransformService::ComputeWorldTransform(reg, entity, *index, cache)
                                         : transform.GetTransform();
                 packet.EntityID = static_cast<int>(entity);
 
