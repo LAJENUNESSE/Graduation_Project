@@ -5,17 +5,36 @@ paths:
 
 # Scene（ECS）
 
-基于 EnTT 的实体组件系统。
+基于 EnTT 的实体组件系统，采用 **façade + 服务化** 分层架构。
+
+## 架构概览
+
+```
+Scene (façade)
+├── SceneEntityIndex          — UUID → entity O(1) 索引
+├── ResourceLifecycleCoordinator — 统一资源生命周期回调
+├── SceneEnvironmentState     — Shadow + Skybox 配置
+├── SceneRuntimeCoordinator   — 运行时逻辑隔离（物理/脚本/资源）
+│   ├── AudioRuntimeStore     — OpenAL Source/Buffer 容器
+│   └── VideoRuntimeStore     — FFmpegDecoder/Texture 容器
+└── Services (static)
+    ├── SceneHierarchyService — 父子关系管理
+    └── WorldTransformService — 世界坐标计算
+```
 
 ## 核心类
 
-- **Scene** — 持有 `entt::registry`、视口大小、物理世界；提供 `OnUpdateRuntime()` / `OnUpdateEditor()`
+- **Scene** — 轻量 façade，持有 `entt::registry` + 索引/协调器引用，提供 `OnUpdateRuntime()` / `OnUpdateEditor()`
 - **Entity** — 轻量包装 `{ entt::entity, Scene* }`，提供 `AddComponent<T>()`、`GetComponent<T>()` 等模板方法
 - **Components.h** — 所有组件结构体（POD，必须有默认构造和拷贝构造）
+- **SceneRuntimeCoordinator** — 隔离运行时逻辑（物理、脚本），持有 PhysicsWorld/BulletPhysicsWorld
+- **ResourceLifecycleCoordinator** — 三类清理回调：EntityCleanup / RuntimeStopCleanup / SceneDestroyCleanup
+- **SceneHierarchyService** — 静态工具类，SetParent/RemoveParent/GetChildren/IsAncestorOf/GetRootEntities
+- **WorldTransformService** — 静态工具类，ComputeWorldTransform（遍历父子链）
 
 ## 渲染系统（Systems/）
 
-静态类，通过 `registry.view<>()` 迭代，入口为静态方法 `Render(Scene& scene)`：
+静态类，通过 `registry.view<>()` 迭代，入口为静态方法：
 
 | 系统 | 职责 |
 |------|------|
@@ -25,12 +44,13 @@ paths:
 | LightSystem | 收集光照数据 |
 | TerrainRenderSystem | 地形 + Splatmap |
 | GrassRenderSystem | GPU 草地实例化 |
-| AudioSystem | 音频播放 |
-| VideoSystem | FFmpeg 视频流 |
+| AudioSystem | 音频播放（使用 AudioRuntimeStore） |
+| VideoSystem | FFmpeg 视频流（使用 VideoRuntimeStore） |
 
 ## 注意事项
 
 - 每个组件结构体必须有默认构造函数和拷贝构造函数
-- `Scene::OnRuntimeStart/Stop` 触发 NativeScript 生命周期
-- `Scene::DestroyEntity()` 必须先清理 Bullet 物理体
+- `Scene::OnRuntimeStart/Stop` 委托给 SceneRuntimeCoordinator
+- `Scene::DestroyEntity()` 会触发 ResourceLifecycleCoordinator 的 EntityCleanup 回调
 - 物理后端可选（Bullet 或自研），不能混用
+- Scene 是 façade — 新功能应考虑提取为 Service 或 Coordinator，不要直接膨胀 Scene 类
