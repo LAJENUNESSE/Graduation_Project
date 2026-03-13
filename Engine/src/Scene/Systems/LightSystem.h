@@ -50,11 +50,13 @@ namespace Engine
     };
 
     class SceneEntityIndex;
+    class WorldTransformCache;
 
     class LightSystem
     {
     public:
-        static LightEnvironment CollectLights(entt::registry& reg, const SceneEntityIndex& index);
+        static LightEnvironment CollectLights(entt::registry& reg, const SceneEntityIndex& index,
+                                               WorldTransformCache* cache = nullptr);
         static void UploadToShader(const Ref<Shader>& shader, const LightEnvironment& env);
     };
 

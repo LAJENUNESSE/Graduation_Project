@@ -6,6 +6,7 @@
 #include "EditorViewportController.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "Renderer/PostProcessing.h"
+#include "Renderer/SceneRenderInput.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Scene.h"
 
@@ -74,7 +75,12 @@ namespace Engine
         float sceneRenderCpuMs = 0.0f;
         {
             PROFILE_SCOPE("SceneRender", &sceneRenderCpuMs);
-            m_SceneRenderer->BeginScene(m_ViewportController->GetCamera(), activeScene.get(), ts);
+            SceneRenderInput input;
+            input.Registry = &activeScene->GetRegistry();
+            input.EntityIndex = &activeScene->GetEntityIndex();
+            input.DeltaTime = ts;
+            input.TransformCache = &activeScene->GetTransformCache();
+            m_SceneRenderer->BeginScene(m_ViewportController->GetCamera(), input);
             m_SceneRenderer->RenderPipeline(m_ViewportController->GetFramebuffer());
             if (sceneState == SceneState::Edit)
                 m_SceneRenderer->RenderEditorPicking(m_ViewportController->GetPickingFramebuffer());

@@ -275,7 +275,7 @@ namespace Engine
 
     void GrassRenderSystem::Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
                                    const ShadowData& shadow, const ShadowSettings& shadowSettings, float totalTime,
-                                   const SceneEntityIndex& index)
+                                   const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         if (!RendererCapabilities::Get().SupportsComputeShaders)
             return;
@@ -317,7 +317,7 @@ namespace Engine
             auto& inst = it->second;
             auto& transform = view.get<TransformComponent>(entity);
 
-            m_BillboardShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index));
+            m_BillboardShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
             m_BillboardShader->SetInt("u_EntityID", static_cast<int>(eid));
 
             // 绑定草地纹理 (unit 2)

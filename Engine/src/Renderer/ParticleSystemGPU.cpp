@@ -113,6 +113,10 @@ namespace Engine
             CudaInterop::DestroyCudaEvent(m_CudaEventStart);
         if (m_CudaEventStop)
             CudaInterop::DestroyCudaEvent(m_CudaEventStop);
+        if (m_PrevCudaStart)
+            CudaInterop::DestroyCudaEvent(m_PrevCudaStart);
+        if (m_PrevCudaStop)
+            CudaInterop::DestroyCudaEvent(m_PrevCudaStop);
 #endif
         if (m_ReadbackFence)
             glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
@@ -226,6 +230,8 @@ namespace Engine
                     m_UseCudaPath = true;
                     m_CudaEventStart = CudaInterop::CreateCudaEvent();
                     m_CudaEventStop = CudaInterop::CreateCudaEvent();
+                    m_PrevCudaStart = CudaInterop::CreateCudaEvent();
+                    m_PrevCudaStop  = CudaInterop::CreateCudaEvent();
                     ENGINE_INFO("[Particle] CUDA compute sidecar activated ({0} buffers registered).",
                                 m_CudaInterop->GetSlotCount());
                 }
@@ -430,9 +436,17 @@ namespace Engine
                 }
                 else
                 {
-                    float cudaMs = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
-                    if (cudaMs >= 0.0f)
-                        PerformanceMonitor::Get().SetParticleComputeCudaMs(cudaMs);
+                    // 延迟查询：读取上一帧的计时结果（此时 GPU 已完成，非阻塞）
+                    if (m_HasPrevCudaTiming && m_PrevCudaStop)
+                    {
+                        float ms = CudaInterop::CudaEventElapsedMs(m_PrevCudaStart, m_PrevCudaStop);
+                        if (ms >= 0.0f)
+                            PerformanceMonitor::Get().SetParticleComputeCudaMs(ms);
+                    }
+                    // 交换事件对：当前帧的 start/stop 变成下帧待查询的 prev
+                    std::swap(m_CudaEventStart, m_PrevCudaStart);
+                    std::swap(m_CudaEventStop, m_PrevCudaStop);
+                    m_HasPrevCudaTiming = true;
                     cudaSucceeded = true;
                 }
             }

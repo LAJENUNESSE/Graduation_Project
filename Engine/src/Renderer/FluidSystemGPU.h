@@ -81,8 +81,12 @@ namespace Engine
         bool m_CudaInitAttempted = false;
         int m_CudaSlotParticle = -1;  // 仅 ParticleBuffer 注册 interop（渲染需要）
         void* m_CudaSPHCtx = nullptr; // CudaSPHContext（grid + PCISPH + rigidBody）
+        // CUDA event 计时（Ping-pong 双缓冲，避免 GPU 同步阻塞）
         void* m_CudaEventStart = nullptr;
         void* m_CudaEventStop = nullptr;
+        void* m_PrevCudaStart = nullptr;
+        void* m_PrevCudaStop  = nullptr;
+        bool m_HasPrevCudaTiming = false;
 #endif
     };
 

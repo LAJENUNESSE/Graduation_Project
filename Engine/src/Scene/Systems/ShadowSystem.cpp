@@ -18,7 +18,7 @@ namespace Engine
 
     // 渲染所有网格到当前绑定的深度 FBO
     static void RenderMeshesToDepth(entt::registry& reg, const Ref<Shader>& depthShader, const glm::mat4& lightSpaceMat,
-                                    const SceneEntityIndex& index)
+                                    const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         depthShader->Bind();
         depthShader->SetMat4("u_LightSpaceMatrix", lightSpaceMat);
@@ -30,7 +30,7 @@ namespace Engine
             Mesh* mesh = AssetManager::Get<Mesh>(meshRenderer.MeshAsset);
             if (mesh)
             {
-                depthShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index));
+                depthShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
                 for (const auto& subMesh : mesh->GetSubMeshes())
                 {
                     subMesh.VAO->Bind();
@@ -168,7 +168,8 @@ namespace Engine
         return lightProj * lightView;
     }
 
-    ShadowData ShadowSystem::Execute(entt::registry& reg, const LightEnvironment& lights, const SceneEntityIndex& index)
+    ShadowData ShadowSystem::Execute(entt::registry& reg, const LightEnvironment& lights, const SceneEntityIndex& index,
+                                      WorldTransformCache* cache)
     {
         ShadowData data;
 
@@ -219,7 +220,7 @@ namespace Engine
         RenderCommand::Clear();
         RenderCommand::SetCullFaceMode(CullFaceMode::Front);
 
-        RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix, index);
+        RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix, index, cache);
 
         RenderCommand::SetCullFaceMode(CullFaceMode::Back);
         m_ShadowMapFBO->Unbind();
@@ -232,7 +233,7 @@ namespace Engine
     }
 
     ShadowData ShadowSystem::ExecuteCSM(entt::registry& reg, const LightEnvironment& lights, const EditorCamera& camera,
-                                         const SceneEntityIndex& index)
+                                         const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         ShadowData data;
 
@@ -284,7 +285,7 @@ namespace Engine
             m_ShadowMapFBO->Bind();
             RenderCommand::Clear();
             RenderCommand::SetCullFaceMode(CullFaceMode::Front);
-            RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix, index);
+            RenderMeshesToDepth(reg, m_DepthShader, data.LightSpaceMatrix, index, cache);
             RenderCommand::SetCullFaceMode(CullFaceMode::Back);
             m_ShadowMapFBO->Unbind();
 
@@ -330,7 +331,7 @@ namespace Engine
             RenderCommand::Clear();
             RenderCommand::SetCullFaceMode(CullFaceMode::Front);
 
-            RenderMeshesToDepth(reg, m_DepthShader, data.CascadeLightSpaceMatrices[i], index);
+            RenderMeshesToDepth(reg, m_DepthShader, data.CascadeLightSpaceMatrices[i], index, cache);
 
             RenderCommand::SetCullFaceMode(CullFaceMode::Back);
             m_CascadeFBOs[i]->Unbind();

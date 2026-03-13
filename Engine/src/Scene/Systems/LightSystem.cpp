@@ -9,7 +9,8 @@
 namespace Engine
 {
 
-    LightEnvironment LightSystem::CollectLights(entt::registry& reg, const SceneEntityIndex& index)
+    LightEnvironment LightSystem::CollectLights(entt::registry& reg, const SceneEntityIndex& index,
+                                                WorldTransformCache* cache)
     {
         LightEnvironment env;
 
@@ -19,7 +20,7 @@ namespace Engine
             auto& light = lightView.get<LightComponent>(entity);
 
             // 使用世界变换计算光源位置和方向
-            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(reg, entity, index);
+            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(reg, entity, index, cache);
             glm::vec3 worldPos = glm::vec3(worldMat[3]);
             glm::vec3 forward = glm::normalize(glm::mat3(worldMat) * glm::vec3(0.0f, 0.0f, -1.0f));
 

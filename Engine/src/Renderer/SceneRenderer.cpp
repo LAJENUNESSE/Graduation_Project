@@ -11,7 +11,6 @@
 #include "Renderer/RendererAPI.h"
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
-#include "Scene/Scene.h"
 #include "Scene/Systems/MeshRenderSystem.h"
 
 #include <glad/gl.h>
@@ -120,14 +119,15 @@ namespace Engine
         }
 
         m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx)
-                               { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex); }});
+                               { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache); }});
 
         m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx)
                                {
                                    // 使用 CSM 版本
                                    m_ShadowData = m_ShadowSystem.ExecuteCSM(*ctx.Registry, m_LightEnv,
                                                                             *ctx.Camera,
-                                                                            *ctx.EntityIndex);
+                                                                            *ctx.EntityIndex,
+                                                                            ctx.TransformCache);
 
                                    // 地形阴影深度渲染
                                    if (m_ShadowData.HasValidShadowCaster)
@@ -150,7 +150,8 @@ namespace Engine
                                            depthShader->Bind();
                                            depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
                                            m_TerrainSystem.RenderDepth(*ctx.Registry, depthShader,
-                                                                       *ctx.EntityIndex);
+                                                                       *ctx.EntityIndex,
+                                                                       ctx.TransformCache);
                                            RenderCommand::SetCullFaceMode(CullFaceMode::Back);
                                            m_ShadowSystem.GetShadowMapFBO()->Unbind();
                                        }
@@ -162,7 +163,7 @@ namespace Engine
                                    m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
                                    m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
                                                           m_ShadowData, m_ShadowSystem.GetSettings(),
-                                                          *ctx.EntityIndex);
+                                                          *ctx.EntityIndex, ctx.TransformCache);
                                }});
 
         m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx)
@@ -170,7 +171,7 @@ namespace Engine
                                    m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
                                    m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
                                                         m_ShadowData, m_ShadowSystem.GetSettings(), m_TotalTime,
-                                                        *ctx.EntityIndex);
+                                                        *ctx.EntityIndex, ctx.TransformCache);
                                }});
 
         m_PassQueue.push_back({"SSAOPass", [this](RenderContext& ctx)
@@ -329,7 +330,7 @@ namespace Engine
                  m_RenderQueue.Clear();
                  MeshRenderSystem::SubmitRenderPackets(*ctx.Registry, m_RenderQueue, m_PBRShader,
                                                        m_WhiteTexture, &m_VideoSystem.GetStore(),
-                                                       ctx.EntityIndex);
+                                                       ctx.EntityIndex, ctx.TransformCache);
 
                  m_RenderQueue.Flush(ctx.Camera->GetViewProjection());
 
@@ -453,16 +454,6 @@ namespace Engine
         }
     }
 
-    void SceneRenderer::BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime)
-    {
-        SceneRenderInput input;
-        input.Registry = &scene->GetRegistry();
-        input.EntityIndex = &scene->GetEntityIndex();
-        input.DeltaTime = deltaTime;
-        BeginScene(camera, input);
-        m_Context.ActiveScene = scene; // 兼容：部分 pass 仍需 Scene*
-    }
-
     void SceneRenderer::BeginScene(const EditorCamera& camera, const SceneRenderInput& input)
     {
         if (m_BoundRegistry != input.Registry)
@@ -477,6 +468,7 @@ namespace Engine
         m_Context.Camera = const_cast<EditorCamera*>(&camera);
         m_Context.Registry = input.Registry;
         m_Context.EntityIndex = input.EntityIndex;
+        m_Context.TransformCache = input.TransformCache;
         m_Context.DeltaTime = input.DeltaTime;
         m_TotalTime += input.DeltaTime;
     }
@@ -493,9 +485,9 @@ namespace Engine
     void SceneRenderer::EndScene()
     {
         m_Context.Camera = nullptr;
-        m_Context.ActiveScene = nullptr;
         m_Context.Registry = nullptr;
         m_Context.EntityIndex = nullptr;
+        m_Context.TransformCache = nullptr;
         m_Context.DeltaTime = 0.0f;
     }
 
