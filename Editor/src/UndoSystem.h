@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/UUID.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Scene/Scene.h"
@@ -125,29 +126,23 @@ namespace Engine
         std::string GetDescription() const override;
 
     private:
+        struct ComponentSnapshot
+        {
+            std::string TypeName;
+            std::any Data;
+        };
+
         Ref<Scene> m_Scene;
-        entt::entity m_EntityHandle;
+        UUID m_EntityUUID;
         std::string m_EntityName;
-        // 保存实体组件快照用于恢复
+
+        // 核心组件快照（始终存在）
         TransformComponent m_TransformSnapshot;
-        bool m_HasMeshRenderer = false;
-        MeshRendererComponent m_MeshRendererSnapshot;
-        bool m_HasLight = false;
-        LightComponent m_LightSnapshot;
-        bool m_HasCamera = false;
-        CameraComponent m_CameraSnapshot;
-        bool m_HasRigidBody = false;
-        RigidBodyComponent m_RigidBodySnapshot;
-        bool m_HasBoxCollider = false;
-        BoxColliderComponent m_BoxColliderSnapshot;
-        bool m_HasSphereCollider = false;
-        SphereColliderComponent m_SphereColliderSnapshot;
-        bool m_HasParticle = false;
-        ParticleEmitterComponent m_ParticleSnapshot;
-        bool m_HasAudioSource = false;
-        AudioSourceComponent m_AudioSourceSnapshot;
-        bool m_HasAudioListener = false;
-        AudioListenerComponent m_AudioListenerSnapshot;
+        bool m_HasRelationship = false;
+        RelationshipComponent m_RelationshipSnapshot;
+
+        // 数据驱动组件快照（通过 ComponentRegistry 自动收集）
+        std::vector<ComponentSnapshot> m_ComponentSnapshots;
     };
 
     // ========== 泛型属性修改命令 ==========

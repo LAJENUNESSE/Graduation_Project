@@ -2,6 +2,7 @@
 
 #include "Reflection/PropertyInfo.h"
 
+#include <any>
 #include <cstddef>
 #include <functional>
 #include <string>
@@ -23,6 +24,19 @@ namespace Engine
         std::function<void*(Scene&, uint32_t)> Get;
         std::function<void(Scene&, uint32_t)> Remove;
         std::function<void(Scene&, uint32_t, Scene&, uint32_t)> Copy;
+
+        // 策略标志（替代 ComponentPolicies.h）
+        enum Flag : uint32_t
+        {
+            None         = 0,
+            CustomUI     = 1 << 0, // 保留手写 Inspector（跳过自动绘制）
+            CustomSerial = 1 << 1, // 保留手写序列化（跳过 AutoSerializer）
+        };
+        uint32_t Flags = None;
+
+        // 类型擦除的快照/恢复（用于 Undo 系统）
+        std::function<std::any(Scene&, uint32_t)> Snapshot;
+        std::function<void(Scene&, uint32_t, const std::any&)> Restore;
     };
 
 } // namespace Engine
@@ -83,6 +97,9 @@ namespace Engine
         }                                                                                                              \
     }
 
+// 设置策略标志（在 REGISTER_COMPONENT_BEGIN/END 块内使用）
+#define REGISTER_COMPONENT_FLAGS(flags) meta.Flags = (flags);
+
 // 在 .cpp 中触发注册（组合所有属性 + 注册到全局表）
 // 使用 __VA_ARGS__ 展开所有字段
 #define REGISTER_COMPONENT_BEGIN(CompType) static bool s_Registered_##CompType = []() -> bool { \
@@ -104,6 +121,13 @@ namespace Engine
                 auto comp = src.GetRegistry().get<::Engine::CompType>(static_cast<entt::entity>(srcEntity)); \
                 dst.GetRegistry().emplace_or_replace<::Engine::CompType>(static_cast<entt::entity>(dstEntity), comp); \
             } \
+        }; \
+        meta.Snapshot = [](::Engine::Scene& scene, uint32_t entity) -> std::any { \
+            return scene.GetRegistry().get<::Engine::CompType>(static_cast<entt::entity>(entity)); \
+        }; \
+        meta.Restore = [](::Engine::Scene& scene, uint32_t entity, const std::any& data) { \
+            scene.GetRegistry().emplace_or_replace<::Engine::CompType>( \
+                static_cast<entt::entity>(entity), std::any_cast<const ::Engine::CompType&>(data)); \
         };
 
 #define REGISTER_COMPONENT_PROPERTY(CompType, field) _Reflect_##CompType::_Prop_##field::Register(meta);

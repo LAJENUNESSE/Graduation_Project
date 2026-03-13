@@ -5,7 +5,6 @@
 #include "Core/Log.h"
 #include "Panels/PropertiesPanelCustomDrawers.h"
 #include "Reflection/AutoInspector.h"
-#include "Reflection/ComponentPolicies.h"
 #include "Reflection/ComponentRegistry.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/SceneRenderer.h"
@@ -282,6 +281,7 @@ namespace Engine
 
         if (ImGui::BeginPopup("AddComponent"))
         {
+            // Camera 需要特殊初始化（默认参数设置），保留手写
             if (!entity.HasComponent<CameraComponent>())
             {
                 if (ImGui::MenuItem("相机"))
@@ -291,51 +291,7 @@ namespace Engine
                 }
             }
 
-            if (!entity.HasComponent<MeshRendererComponent>())
-            {
-                if (ImGui::MenuItem("网格渲染器"))
-                {
-                    entity.AddComponent<MeshRendererComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-
-            // 反射组件自动添加菜单
-            {
-                auto* scene = entity.GetScene();
-                uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
-                for (auto& meta : ComponentRegistry::Instance().GetAll())
-                {
-                    if (scene && !meta.Has(*scene, entityId) &&
-                        !ComponentPolicies::IsCustomAddMenuComponentType(meta.TypeName))
-                    {
-                        if (ImGui::MenuItem(meta.DisplayName))
-                        {
-                            meta.Add(*scene, entityId);
-                            ImGui::CloseCurrentPopup();
-                        }
-                    }
-                }
-            }
-
-            if (!entity.HasComponent<TerrainComponent>())
-            {
-                if (ImGui::MenuItem("地形"))
-                {
-                    entity.AddComponent<TerrainComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-
-            if (!entity.HasComponent<ParticleEmitterComponent>())
-            {
-                if (ImGui::MenuItem("粒子发射器"))
-                {
-                    entity.AddComponent<ParticleEmitterComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-
+            // NativeScript 无法通过反射初始化（需要 ScriptRegistry 绑定），保留手写
             if (!entity.HasComponent<NativeScriptComponent>())
             {
                 if (ImGui::MenuItem("脚本"))
@@ -345,30 +301,25 @@ namespace Engine
                 }
             }
 
-            if (!entity.HasComponent<AudioSourceComponent>())
+            // 所有 ComponentRegistry 注册的组件统一添加菜单
             {
-                if (ImGui::MenuItem("音频源"))
+                auto* scene = entity.GetScene();
+                uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+                for (auto& meta : ComponentRegistry::Instance().GetAll())
                 {
-                    entity.AddComponent<AudioSourceComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
+                    // 跳过 Camera 和 NativeScript（上方已手写添加）
+                    if (std::string_view(meta.TypeName) == "CameraComponent" ||
+                        std::string_view(meta.TypeName) == "NativeScriptComponent")
+                        continue;
 
-            if (!entity.HasComponent<AudioListenerComponent>())
-            {
-                if (ImGui::MenuItem("音频监听器"))
-                {
-                    entity.AddComponent<AudioListenerComponent>();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-
-            if (!entity.HasComponent<VideoPlayerComponent>())
-            {
-                if (ImGui::MenuItem("视频播放器"))
-                {
-                    entity.AddComponent<VideoPlayerComponent>();
-                    ImGui::CloseCurrentPopup();
+                    if (scene && !meta.Has(*scene, entityId))
+                    {
+                        if (ImGui::MenuItem(meta.DisplayName))
+                        {
+                            meta.Add(*scene, entityId);
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
                 }
             }
 
@@ -564,7 +515,7 @@ namespace Engine
             for (auto& meta : ComponentRegistry::Instance().GetAll())
             {
                 if (scene && meta.Has(*scene, entityId) &&
-                    !ComponentPolicies::IsCustomInspectorComponentType(meta.TypeName))
+                    !(meta.Flags & ComponentMeta::CustomUI))
                 {
                     DrawComponent_Auto(meta.DisplayName, entity, meta, drawVec3Wrapper);
                 }
