@@ -1,7 +1,6 @@
 #include "engpch.h"
 #include "Scene/Scene.h"
 #include "Core/Log.h"
-#include "Reflection/ComponentPolicies.h"
 #include "Reflection/ComponentRegistry.h"
 #include "Renderer/EditorCamera.h"
 #include "Renderer/SceneRenderer.h"
@@ -193,12 +192,12 @@ namespace Engine
             if (srcReg.all_of<CameraComponent>(srcEntity))
                 newEntity.AddComponent<CameraComponent>(srcReg.get<CameraComponent>(srcEntity));
 
-            // 反射注册的组件通过 ComponentRegistry 自动拷贝
+            // 反射注册的组件通过 ComponentRegistry 自动拷贝（跳过需要特殊处理的 CustomSerial 组件）
             uint32_t srcId = static_cast<uint32_t>(srcEntity);
             uint32_t dstId = static_cast<uint32_t>(static_cast<entt::entity>(newEntity));
             for (auto& meta : ComponentRegistry::Instance().GetAll())
             {
-                if (ComponentPolicies::IsCustomCopyComponentType(meta.TypeName))
+                if (meta.Flags & ComponentMeta::CustomSerial)
                     continue;
 
                 if (meta.Has(*src, srcId))
@@ -229,18 +228,6 @@ namespace Engine
                 dstNsc.DestroyScript = srcNsc.DestroyScript;
                 // Instance 不拷贝（运行时创建）
             }
-
-            // AudioSourceComponent: 直接拷贝（runtime 状态已移入 AudioRuntimeStore）
-            if (srcReg.all_of<AudioSourceComponent>(srcEntity))
-                newEntity.AddComponent<AudioSourceComponent>(srcReg.get<AudioSourceComponent>(srcEntity));
-
-            // AudioListenerComponent
-            if (srcReg.all_of<AudioListenerComponent>(srcEntity))
-                newEntity.AddComponent<AudioListenerComponent>(srcReg.get<AudioListenerComponent>(srcEntity));
-
-            // VideoPlayerComponent: 直接拷贝（runtime 状态已移入 VideoRuntimeStore）
-            if (srcReg.all_of<VideoPlayerComponent>(srcEntity))
-                newEntity.AddComponent<VideoPlayerComponent>(srcReg.get<VideoPlayerComponent>(srcEntity));
         }
 
         size_t srcEntityCount = 0;
@@ -291,6 +278,16 @@ namespace Engine
             renderer->GetSkyboxSystem().ClearSkybox();
         else
             renderer->GetSkyboxSystem().LoadSkybox(m_EnvironmentState.SkyboxFacePaths);
+
+        // 注册编辑态粒子/流体清理回调（运行时 OnRuntimeStart 会 ClearAll 后重新注册完整版本）
+        m_LifecycleCoordinator.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
+        {
+            uint32_t eid = static_cast<uint32_t>(e);
+            if (reg.all_of<ParticleEmitterComponent>(e))
+                renderer->ReleaseParticleSystem(eid);
+            if (reg.all_of<FluidEmitterComponent>(e))
+                renderer->ReleaseFluidSystem(eid);
+        });
     }
 
     // Skybox 委托

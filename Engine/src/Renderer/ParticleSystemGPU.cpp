@@ -431,7 +431,8 @@ namespace Engine
                 else
                 {
                     float cudaMs = CudaInterop::CudaEventElapsedMs(m_CudaEventStart, m_CudaEventStop);
-                    PerformanceMonitor::Get().SetParticleComputeCudaMs(cudaMs);
+                    if (cudaMs >= 0.0f)
+                        PerformanceMonitor::Get().SetParticleComputeCudaMs(cudaMs);
                     cudaSucceeded = true;
                 }
             }
