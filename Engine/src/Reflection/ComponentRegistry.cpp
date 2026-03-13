@@ -2,6 +2,7 @@
 #include "Reflection/ComponentRegistry.h"
 #include "Scene/Components.h"
 #include "Scene/Scene.h"
+#include "Script/NativeScriptComponent.h"
 
 #include <entt/entt.hpp>
 
@@ -236,6 +237,101 @@ namespace Engine
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothDepthFalloff)
     REGISTER_COMPONENT_END(FluidEmitterComponent)
 
+    // ---- AudioSourceComponent 反射 ----
+
+    ENGINE_COMPONENT(AudioSourceComponent, "音频源")
+    ENGINE_PROPERTY_EX(AudioSourceComponent, AudioPath, "音频路径", AssetPath, hints.FileFilter = "*.wav;*.mp3;*.ogg";
+                       hints.FileDesc = "音频文件")
+    ENGINE_PROPERTY_EX(AudioSourceComponent, Volume, "音量", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
+                       hints.Max = 2.0f; hints.Format = "%.2f")
+    ENGINE_PROPERTY_EX(AudioSourceComponent, Pitch, "音调", Float, hints.Speed = 0.01f; hints.Min = 0.1f;
+                       hints.Max = 3.0f; hints.Format = "%.2f")
+    ENGINE_PROPERTY_EX(AudioSourceComponent, MinDistance, "最小距离", Float, hints.Speed = 0.1f; hints.Min = 0.0f;
+                       hints.Max = 100.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY_EX(AudioSourceComponent, MaxDistance, "最大距离", Float, hints.Speed = 1.0f; hints.Min = 0.0f;
+                       hints.Max = 1000.0f; hints.Format = "%.1f")
+    ENGINE_PROPERTY(AudioSourceComponent, Loop, "循环", Bool)
+    ENGINE_PROPERTY(AudioSourceComponent, PlayOnStart, "启动播放", Bool)
+    ENGINE_PROPERTY(AudioSourceComponent, Spatial, "3D空间音效", Bool)
+
+    REGISTER_COMPONENT_BEGIN(AudioSourceComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, AudioPath)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, Volume)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, Pitch)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, MinDistance)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, MaxDistance)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, Loop)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, PlayOnStart)
+    REGISTER_COMPONENT_PROPERTY(AudioSourceComponent, Spatial)
+    REGISTER_COMPONENT_END(AudioSourceComponent)
+
+    // ---- AudioListenerComponent 反射 ----
+
+    ENGINE_COMPONENT(AudioListenerComponent, "音频监听器")
+    ENGINE_PROPERTY(AudioListenerComponent, Active, "激活", Bool)
+
+    REGISTER_COMPONENT_BEGIN(AudioListenerComponent)
+    REGISTER_COMPONENT_PROPERTY(AudioListenerComponent, Active)
+    REGISTER_COMPONENT_END(AudioListenerComponent)
+
+    // ---- VideoPlayerComponent 反射 ----
+
+    ENGINE_COMPONENT(VideoPlayerComponent, "视频播放器")
+    ENGINE_PROPERTY(VideoPlayerComponent, StreamURL, "流地址", String)
+    ENGINE_PROPERTY(VideoPlayerComponent, PlayOnStart, "启动播放", Bool)
+    ENGINE_PROPERTY(VideoPlayerComponent, Loop, "循环", Bool)
+    ENGINE_PROPERTY_EX(VideoPlayerComponent, Volume, "音量", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
+                       hints.Max = 2.0f; hints.Format = "%.2f")
+
+    REGISTER_COMPONENT_BEGIN(VideoPlayerComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI)
+    REGISTER_COMPONENT_PROPERTY(VideoPlayerComponent, StreamURL)
+    REGISTER_COMPONENT_PROPERTY(VideoPlayerComponent, PlayOnStart)
+    REGISTER_COMPONENT_PROPERTY(VideoPlayerComponent, Loop)
+    REGISTER_COMPONENT_PROPERTY(VideoPlayerComponent, Volume)
+    REGISTER_COMPONENT_END(VideoPlayerComponent)
+
+    // ---- ParticleEmitterComponent 反射（仅注册，CustomUI | CustomSerial）----
+
+    ENGINE_COMPONENT(ParticleEmitterComponent, "粒子发射器")
+
+    REGISTER_COMPONENT_BEGIN(ParticleEmitterComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI | ComponentMeta::CustomSerial)
+    REGISTER_COMPONENT_END(ParticleEmitterComponent)
+
+    // ---- CameraComponent 反射（仅注册，CustomUI | CustomSerial）----
+
+    ENGINE_COMPONENT(CameraComponent, "相机")
+
+    REGISTER_COMPONENT_BEGIN(CameraComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI | ComponentMeta::CustomSerial)
+    REGISTER_COMPONENT_END(CameraComponent)
+
+    // ---- MeshRendererComponent 反射（仅注册，CustomUI | CustomSerial）----
+
+    ENGINE_COMPONENT(MeshRendererComponent, "网格渲染器")
+
+    REGISTER_COMPONENT_BEGIN(MeshRendererComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI | ComponentMeta::CustomSerial)
+    REGISTER_COMPONENT_END(MeshRendererComponent)
+
+    // ---- TerrainComponent 反射（仅注册，CustomUI | CustomSerial）----
+
+    ENGINE_COMPONENT(TerrainComponent, "地形")
+
+    REGISTER_COMPONENT_BEGIN(TerrainComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI | ComponentMeta::CustomSerial)
+    REGISTER_COMPONENT_END(TerrainComponent)
+
+    // ---- NativeScriptComponent 反射（仅注册，CustomUI | CustomSerial）----
+
+    ENGINE_COMPONENT(NativeScriptComponent, "脚本")
+
+    REGISTER_COMPONENT_BEGIN(NativeScriptComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI | ComponentMeta::CustomSerial)
+    REGISTER_COMPONENT_END(NativeScriptComponent)
+
     // 强制链接：引用所有注册变量，防止链接器丢弃
     void ComponentRegistry::EnsureRegistered()
     {
@@ -246,6 +342,14 @@ namespace Engine
         (void)s_Registered_RigidBodyComponent;
         (void)s_Registered_LightComponent;
         (void)s_Registered_FluidEmitterComponent;
+        (void)s_Registered_AudioSourceComponent;
+        (void)s_Registered_AudioListenerComponent;
+        (void)s_Registered_VideoPlayerComponent;
+        (void)s_Registered_ParticleEmitterComponent;
+        (void)s_Registered_CameraComponent;
+        (void)s_Registered_MeshRendererComponent;
+        (void)s_Registered_TerrainComponent;
+        (void)s_Registered_NativeScriptComponent;
     }
 
 } // namespace Engine
