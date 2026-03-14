@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Renderer/FluidSystemGPU.h"
+#include "Renderer/SPHCommon.h"
 #include "Core/Log.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
@@ -31,21 +32,9 @@ namespace Engine
         glm::vec4 params; // z=density(SPH), w=pressure(SPH)
     };
 
-    // Must match GPU GPURigidBody struct: 7 x vec4 = 112 bytes
-    struct FluidGPURigidBody
-    {
-        glm::vec4 posAndType;
-        glm::vec4 rotCol0;
-        glm::vec4 rotCol1;
-        glm::vec4 rotCol2;
-        glm::vec4 halfExtents;
-        glm::vec4 linearVel;
-        glm::vec4 angularVel;
-    };
-
 #ifdef ENGINE_ENABLE_CUDA
     static_assert(sizeof(FluidGPUParticle) == sizeof(CudaInterop::GPUParticle), "FluidGPUParticle size mismatch");
-    static_assert(sizeof(FluidGPURigidBody) == sizeof(CudaInterop::RigidBodyData), "FluidGPURigidBody size mismatch");
+    static_assert(sizeof(GPURigidBodyData) == sizeof(CudaInterop::RigidBodyData), "GPURigidBodyData size mismatch");
     static_assert(offsetof(FluidGPUParticle, posAndLife) == offsetof(CudaInterop::GPUParticle, posAndLife),
                   "posAndLife offset mismatch");
     static_assert(offsetof(FluidGPUParticle, velAndMaxLife) == offsetof(CudaInterop::GPUParticle, velAndMaxLife),
@@ -56,13 +45,13 @@ namespace Engine
                   "endColor offset mismatch");
     static_assert(offsetof(FluidGPUParticle, params) == offsetof(CudaInterop::GPUParticle, params),
                   "params offset mismatch");
-    static_assert(offsetof(FluidGPURigidBody, posAndType) == offsetof(CudaInterop::RigidBodyData, posAndType),
+    static_assert(offsetof(GPURigidBodyData, posAndType) == offsetof(CudaInterop::RigidBodyData, posAndType),
                   "posAndType offset mismatch");
-    static_assert(offsetof(FluidGPURigidBody, rotCol0) == offsetof(CudaInterop::RigidBodyData, rotCol0),
+    static_assert(offsetof(GPURigidBodyData, rotCol0) == offsetof(CudaInterop::RigidBodyData, rotCol0),
                   "rotCol0 offset mismatch");
-    static_assert(offsetof(FluidGPURigidBody, halfExtents) == offsetof(CudaInterop::RigidBodyData, halfExtents),
+    static_assert(offsetof(GPURigidBodyData, halfExtents) == offsetof(CudaInterop::RigidBodyData, halfExtents),
                   "halfExtents offset mismatch");
-    static_assert(offsetof(FluidGPURigidBody, linearVel) == offsetof(CudaInterop::RigidBodyData, linearVel),
+    static_assert(offsetof(GPURigidBodyData, linearVel) == offsetof(CudaInterop::RigidBodyData, linearVel),
                   "linearVel offset mismatch");
 #endif
 
@@ -73,14 +62,7 @@ namespace Engine
 #ifdef ENGINE_ENABLE_CUDA
         if (m_CudaSPHCtx)
             CudaInterop::DestroySPHContext(m_CudaSPHCtx);
-        if (m_CudaEventStart)
-            CudaInterop::DestroyCudaEvent(m_CudaEventStart);
-        if (m_CudaEventStop)
-            CudaInterop::DestroyCudaEvent(m_CudaEventStop);
-        if (m_PrevCudaStart)
-            CudaInterop::DestroyCudaEvent(m_PrevCudaStart);
-        if (m_PrevCudaStop)
-            CudaInterop::DestroyCudaEvent(m_PrevCudaStop);
+        m_CudaTiming.Destroy();
 #endif
     }
 
@@ -96,15 +78,7 @@ namespace Engine
         m_SimulateShader = Shader::Create("assets/shaders/fluid_simulate.glsl");
 
         // Reuse existing SPH shaders
-        m_SPHDensityShader = Shader::Create("assets/shaders/sph_density.glsl");
-        m_SPHForceShader = Shader::Create("assets/shaders/sph_force.glsl");
-
-        // PCISPH shaders
-        m_PCISPHInitShader = Shader::Create("assets/shaders/sph_pcisph_init.glsl");
-        m_PCISPHPredictShader = Shader::Create("assets/shaders/sph_pcisph_predict.glsl");
-        m_PCISPHDensityShader = Shader::Create("assets/shaders/sph_pcisph_density.glsl");
-        m_PCISPHForceShader = Shader::Create("assets/shaders/sph_pcisph_force.glsl");
-        m_PCISPHApplyShader = Shader::Create("assets/shaders/sph_pcisph_apply.glsl");
+        m_SPHShaders = SPHShaderSet::Load();
 
         // Particle buffer: zero-initialized, 80 bytes per particle
         uint32_t totalBytes = m_ParticleCount * sizeof(FluidGPUParticle);
@@ -136,10 +110,7 @@ namespace Engine
                     m_CudaSPHCtx = CudaInterop::CreateSPHContext(m_ParticleCount, 64, MAX_RIGID_BODIES);
                     if (m_CudaSPHCtx)
                     {
-                        m_CudaEventStart = CudaInterop::CreateCudaEvent();
-                        m_CudaEventStop  = CudaInterop::CreateCudaEvent();
-                        m_PrevCudaStart  = CudaInterop::CreateCudaEvent();
-                        m_PrevCudaStop   = CudaInterop::CreateCudaEvent();
+                        m_CudaTiming.Init();
                         m_UseCudaPath = true;
                         ENGINE_INFO("[Fluid] CUDA SPH sidecar activated.");
                     }
@@ -184,65 +155,7 @@ namespace Engine
     {
         if (m_RigidBodyBuffer)
             return;
-        m_RigidBodyBuffer = ShaderStorageBuffer::Create(MAX_RIGID_BODIES * sizeof(FluidGPURigidBody), 3);
-    }
-
-    uint32_t FluidSystemGPU::UploadRigidBodies(entt::registry* registry)
-    {
-        if (!registry || !m_RigidBodyBuffer)
-            return 0;
-
-        std::vector<FluidGPURigidBody> bodies;
-        bodies.reserve(MAX_RIGID_BODIES);
-
-        // 收集所有具有碰撞器的实体（不要求有 RigidBodyComponent）
-        auto boxView = registry->view<TransformComponent, BoxColliderComponent>();
-        for (auto entity : boxView)
-        {
-            if (bodies.size() >= MAX_RIGID_BODIES)
-                break;
-
-            auto& tc = boxView.get<TransformComponent>(entity);
-            auto& bc = boxView.get<BoxColliderComponent>(entity);
-            glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
-
-            FluidGPURigidBody body{};
-            body.posAndType = glm::vec4(tc.Translation + bc.Offset, 0.0f);
-            body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
-            body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
-            body.rotCol2 = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
-            body.halfExtents = glm::vec4(bc.HalfExtents * tc.Scale, 0.0f);
-            body.linearVel = glm::vec4(0.0f);
-            body.angularVel = glm::vec4(0.0f);
-            bodies.push_back(body);
-        }
-
-        auto sphereView = registry->view<TransformComponent, SphereColliderComponent>();
-        for (auto entity : sphereView)
-        {
-            if (bodies.size() >= MAX_RIGID_BODIES)
-                break;
-
-            auto& tc = sphereView.get<TransformComponent>(entity);
-            auto& sc = sphereView.get<SphereColliderComponent>(entity);
-            glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
-
-            FluidGPURigidBody body{};
-            body.posAndType = glm::vec4(tc.Translation + sc.Offset, 1.0f);
-            body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
-            body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
-            body.rotCol2 = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
-            float maxScale = std::max({tc.Scale.x, tc.Scale.y, tc.Scale.z});
-            body.halfExtents = glm::vec4(sc.Radius * maxScale, 0.0f, 0.0f, 0.0f);
-            body.linearVel = glm::vec4(0.0f);
-            body.angularVel = glm::vec4(0.0f);
-            bodies.push_back(body);
-        }
-
-        if (!bodies.empty())
-            m_RigidBodyBuffer->SetData(bodies.data(), static_cast<uint32_t>(bodies.size() * sizeof(FluidGPURigidBody)));
-
-        return static_cast<uint32_t>(bodies.size());
+        m_RigidBodyBuffer = ShaderStorageBuffer::Create(MAX_RIGID_BODIES * sizeof(GPURigidBodyData), 3);
     }
 
     void FluidSystemGPU::Emit(const glm::vec3& emitterPos, const FluidEmitterComponent& emitter)
@@ -278,12 +191,7 @@ namespace Engine
             InitSPH(emitter.SmoothingRadius);
 
         // CPU-side kernel constant precomputation
-        float h = emitter.SmoothingRadius;
-        float h2 = h * h;
-        float h6 = h2 * h2 * h2;
-        float h9 = h6 * h2 * h;
-        float poly6Coeff = 315.0f / (64.0f * glm::pi<float>() * h9);
-        float spikyCoeff = -45.0f / (glm::pi<float>() * h6);
+        SPHKernelParams kp = SPHKernelParams::Compute(emitter.SmoothingRadius);
 
 #ifdef ENGINE_ENABLE_CUDA
         bool cudaSucceeded = false;
@@ -293,18 +201,18 @@ namespace Engine
             {
                 void* stream = m_CudaInterop->GetStream();
                 void* devParticles = m_CudaInterop->GetMappedPointer(m_CudaSlotParticle);
-                CudaInterop::RecordCudaEvent(m_CudaEventStart, stream);
+                CudaInterop::RecordCudaEvent(m_CudaTiming.EventStart, stream);
 
-                float cellSize = 2.0f * h;
+                float cellSize = 2.0f * kp.h;
 
                 // Grid Build（内部用 CUB prefix sum，替代 3 dispatch）
                 CudaInterop::LaunchSPHGridBuild(m_CudaSPHCtx, devParticles, m_ParticleCount, 64, cellSize, stream);
 
                 // 构造 SPHParams
                 CudaInterop::SPHParams p{};
-                p.smoothingRadius = h;
-                p.poly6Coeff = poly6Coeff;
-                p.spikyCoeff = spikyCoeff;
+                p.smoothingRadius = kp.h;
+                p.poly6Coeff = kp.poly6Coeff;
+                p.spikyCoeff = kp.spikyCoeff;
                 p.particleMass = emitter.ParticleMass;
                 p.restDensity = emitter.RestDensity;
                 p.gasConstant = emitter.GasConstant;
@@ -323,7 +231,7 @@ namespace Engine
                 uint32_t cudaRigidBodyCount = 0;
                 if (emitter.RigidBodyCoupling && registry)
                 {
-                    std::vector<FluidGPURigidBody> bodies;
+                    std::vector<GPURigidBodyData> bodies;
                     bodies.reserve(MAX_RIGID_BODIES);
                     auto boxView = registry->view<TransformComponent, BoxColliderComponent>();
                     for (auto entity : boxView)
@@ -333,7 +241,7 @@ namespace Engine
                         auto& tc = boxView.get<TransformComponent>(entity);
                         auto& bc = boxView.get<BoxColliderComponent>(entity);
                         glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
-                        FluidGPURigidBody body{};
+                        GPURigidBodyData body{};
                         body.posAndType = glm::vec4(tc.Translation + bc.Offset, 0.0f);
                         body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
                         body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
@@ -351,7 +259,7 @@ namespace Engine
                         auto& tc = sphereView.get<TransformComponent>(entity);
                         auto& sc = sphereView.get<SphereColliderComponent>(entity);
                         glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
-                        FluidGPURigidBody body{};
+                        GPURigidBodyData body{};
                         body.posAndType = glm::vec4(tc.Translation + sc.Offset, 1.0f);
                         body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
                         body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
@@ -412,7 +320,7 @@ namespace Engine
                 sp.particleCount = static_cast<int>(m_ParticleCount);
                 CudaInterop::LaunchSPHSimulate(devParticles, sp, stream);
 
-                CudaInterop::RecordCudaEvent(m_CudaEventStop, stream);
+                CudaInterop::RecordCudaEvent(m_CudaTiming.EventStop, stream);
                 m_CudaInterop->UnmapAll();
 
                 if (CudaInterop::IsCudaPoisoned())
@@ -423,16 +331,14 @@ namespace Engine
                 else
                 {
                     // 延迟查询：读取上一帧的计时结果（此时 GPU 已完成，非阻塞）
-                    if (m_HasPrevCudaTiming && m_PrevCudaStop)
+                    if (m_CudaTiming.HasPrevTiming && m_CudaTiming.PrevStop)
                     {
-                        float ms = CudaInterop::CudaEventElapsedMs(m_PrevCudaStart, m_PrevCudaStop);
+                        float ms = CudaInterop::CudaEventElapsedMs(m_CudaTiming.PrevStart, m_CudaTiming.PrevStop);
                         if (ms >= 0.0f)
                             PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
                     }
                     // 交换事件对：当前帧的 start/stop 变成下帧待查询的 prev
-                    std::swap(m_CudaEventStart, m_PrevCudaStart);
-                    std::swap(m_CudaEventStop, m_PrevCudaStop);
-                    m_HasPrevCudaTiming = true;
+                    m_CudaTiming.SwapEvents();
                     cudaSucceeded = true;
                 }
             }
@@ -459,15 +365,15 @@ namespace Engine
             m_Grid.Build(m_ParticleCount);
 
             // SPH Density
-            m_SPHDensityShader->Bind();
-            m_SPHDensityShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
-            m_SPHDensityShader->SetFloat("u_SmoothingRadius", h);
-            m_SPHDensityShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
-            m_SPHDensityShader->SetFloat("u_RestDensity", emitter.RestDensity);
-            m_SPHDensityShader->SetFloat("u_GasConstant", emitter.GasConstant);
-            m_SPHDensityShader->SetInt("u_GridSize", gridSize);
-            m_SPHDensityShader->SetFloat("u_CellSize", cellSize);
-            m_SPHDensityShader->SetFloat("u_Poly6Coeff", poly6Coeff);
+            m_SPHShaders.DensityShader->Bind();
+            m_SPHShaders.DensityShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+            m_SPHShaders.DensityShader->SetFloat("u_SmoothingRadius", kp.h);
+            m_SPHShaders.DensityShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
+            m_SPHShaders.DensityShader->SetFloat("u_RestDensity", emitter.RestDensity);
+            m_SPHShaders.DensityShader->SetFloat("u_GasConstant", emitter.GasConstant);
+            m_SPHShaders.DensityShader->SetInt("u_GridSize", gridSize);
+            m_SPHShaders.DensityShader->SetFloat("u_CellSize", cellSize);
+            m_SPHShaders.DensityShader->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
 
             uint32_t sphGroups = (m_ParticleCount + 255) / 256;
             RenderCommand::DispatchCompute(sphGroups);
@@ -482,7 +388,8 @@ namespace Engine
                 if (emitter.RigidBodyCoupling && registry)
                 {
                     InitRigidBodyBuffer();
-                    rigidBodyCount = UploadRigidBodies(registry);
+                    rigidBodyCount = UploadRigidBodiesToBuffer(
+                        registry, m_RigidBodyBuffer, MAX_RIGID_BODIES, RigidBodyUploadFilter::AllColliders);
                 }
 
                 m_PCISPHBuffer->Bind(1);
@@ -490,17 +397,17 @@ namespace Engine
                     m_RigidBodyBuffer->Bind(3);
 
                 // PCISPH Init
-                m_PCISPHInitShader->Bind();
-                m_PCISPHInitShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
-                m_PCISPHInitShader->SetFloat("u_SmoothingRadius", h);
-                m_PCISPHInitShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
-                m_PCISPHInitShader->SetFloat("u_Viscosity", emitter.Viscosity);
-                m_PCISPHInitShader->SetFloat("u_DeltaTime", clampedDt);
-                m_PCISPHInitShader->SetInt("u_GridSize", gridSize);
-                m_PCISPHInitShader->SetFloat("u_CellSize", cellSize);
-                m_PCISPHInitShader->SetFloat3("u_Gravity", emitter.Gravity);
-                m_PCISPHInitShader->SetFloat("u_SurfaceTension", emitter.SurfaceTension);
-                m_PCISPHInitShader->SetFloat("u_SpikyCoeff", spikyCoeff);
+                m_SPHShaders.PCISPHInit->Bind();
+                m_SPHShaders.PCISPHInit->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                m_SPHShaders.PCISPHInit->SetFloat("u_SmoothingRadius", kp.h);
+                m_SPHShaders.PCISPHInit->SetFloat("u_ParticleMass", emitter.ParticleMass);
+                m_SPHShaders.PCISPHInit->SetFloat("u_Viscosity", emitter.Viscosity);
+                m_SPHShaders.PCISPHInit->SetFloat("u_DeltaTime", clampedDt);
+                m_SPHShaders.PCISPHInit->SetInt("u_GridSize", gridSize);
+                m_SPHShaders.PCISPHInit->SetFloat("u_CellSize", cellSize);
+                m_SPHShaders.PCISPHInit->SetFloat3("u_Gravity", emitter.Gravity);
+                m_SPHShaders.PCISPHInit->SetFloat("u_SurfaceTension", emitter.SurfaceTension);
+                m_SPHShaders.PCISPHInit->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
                 RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
@@ -510,71 +417,72 @@ namespace Engine
                 for (int iter = 0; iter < iterations; iter++)
                 {
                     // Predict: x* = pos + dt * v*
-                    m_PCISPHPredictShader->Bind();
-                    m_PCISPHPredictShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
-                    m_PCISPHPredictShader->SetFloat("u_DeltaTime", clampedDt);
+                    m_SPHShaders.PCISPHPredict->Bind();
+                    m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                    m_SPHShaders.PCISPHPredict->SetFloat("u_DeltaTime", clampedDt);
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
                     // Density: 在预测位置上计算密度和压力
-                    m_PCISPHDensityShader->Bind();
-                    m_PCISPHDensityShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
-                    m_PCISPHDensityShader->SetFloat("u_SmoothingRadius", h);
-                    m_PCISPHDensityShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
-                    m_PCISPHDensityShader->SetFloat("u_RestDensity", emitter.RestDensity);
-                    m_PCISPHDensityShader->SetFloat("u_PCISPHDelta", emitter.PCISPHDelta);
-                    m_PCISPHDensityShader->SetInt("u_GridSize", gridSize);
-                    m_PCISPHDensityShader->SetFloat("u_CellSize", cellSize);
-                    m_PCISPHDensityShader->SetFloat("u_Poly6Coeff", poly6Coeff);
+                    m_SPHShaders.PCISPHDensity->Bind();
+                    m_SPHShaders.PCISPHDensity->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_SmoothingRadius", kp.h);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_ParticleMass", emitter.ParticleMass);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_RestDensity", emitter.RestDensity);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_PCISPHDelta", emitter.PCISPHDelta);
+                    m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
                     // Force: 压力梯度力 + 刚体边界力 → v* += a_pressure * dt
-                    m_PCISPHForceShader->Bind();
-                    m_PCISPHForceShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
-                    m_PCISPHForceShader->SetFloat("u_SmoothingRadius", h);
-                    m_PCISPHForceShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
-                    m_PCISPHForceShader->SetFloat("u_DeltaTime", clampedDt);
-                    m_PCISPHForceShader->SetInt("u_GridSize", gridSize);
-                    m_PCISPHForceShader->SetFloat("u_CellSize", cellSize);
-                    m_PCISPHForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
-                    m_PCISPHForceShader->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
-                    m_PCISPHForceShader->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
-                    m_PCISPHForceShader->SetFloat("u_SpikyCoeff", spikyCoeff);
+                    m_SPHShaders.PCISPHForce->Bind();
+                    m_SPHShaders.PCISPHForce->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                    m_SPHShaders.PCISPHForce->SetFloat("u_SmoothingRadius", kp.h);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_ParticleMass", emitter.ParticleMass);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_DeltaTime", clampedDt);
+                    m_SPHShaders.PCISPHForce->SetInt("u_GridSize", gridSize);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_CellSize", cellSize);
+                    m_SPHShaders.PCISPHForce->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
+                    m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
                 }
 
                 // Apply: 将最终预测速度写回粒子（每帧都执行）
-                m_PCISPHApplyShader->Bind();
-                m_PCISPHApplyShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                m_SPHShaders.PCISPHApply->Bind();
+                m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
                 RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
             }
             else
             {
                 // --- WCSPH path ---
-                m_SPHForceShader->Bind();
-                m_SPHForceShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
-                m_SPHForceShader->SetFloat("u_SmoothingRadius", h);
-                m_SPHForceShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
-                m_SPHForceShader->SetFloat("u_Viscosity", emitter.Viscosity);
-                m_SPHForceShader->SetFloat("u_DeltaTime", clampedDt);
-                m_SPHForceShader->SetInt("u_GridSize", gridSize);
-                m_SPHForceShader->SetFloat("u_CellSize", cellSize);
-                m_SPHForceShader->SetFloat("u_SurfaceTension", emitter.SurfaceTension);
-                m_SPHForceShader->SetFloat("u_SpikyCoeff", spikyCoeff);
+                m_SPHShaders.ForceShader->Bind();
+                m_SPHShaders.ForceShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                m_SPHShaders.ForceShader->SetFloat("u_SmoothingRadius", kp.h);
+                m_SPHShaders.ForceShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
+                m_SPHShaders.ForceShader->SetFloat("u_Viscosity", emitter.Viscosity);
+                m_SPHShaders.ForceShader->SetFloat("u_DeltaTime", clampedDt);
+                m_SPHShaders.ForceShader->SetInt("u_GridSize", gridSize);
+                m_SPHShaders.ForceShader->SetFloat("u_CellSize", cellSize);
+                m_SPHShaders.ForceShader->SetFloat("u_SurfaceTension", emitter.SurfaceTension);
+                m_SPHShaders.ForceShader->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
 
                 uint32_t rigidBodyCount = 0;
                 if (emitter.RigidBodyCoupling && registry)
                 {
                     InitRigidBodyBuffer();
-                    rigidBodyCount = UploadRigidBodies(registry);
+                    rigidBodyCount = UploadRigidBodiesToBuffer(
+                        registry, m_RigidBodyBuffer, MAX_RIGID_BODIES, RigidBodyUploadFilter::AllColliders);
                     m_RigidBodyBuffer->Bind(3);
                 }
-                m_SPHForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
-                m_SPHForceShader->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
-                m_SPHForceShader->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
+                m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
+                m_SPHShaders.ForceShader->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
+                m_SPHShaders.ForceShader->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
 
                 RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);

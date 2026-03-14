@@ -45,7 +45,8 @@ namespace Engine
         return activeScene;
     }
 
-    void EditorSceneSession::CreateNewScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight)
+    Ref<Scene> EditorSceneSession::PrepareScene(Ref<Scene>& activeScene, uint32_t viewportWidth,
+                                                uint32_t viewportHeight)
     {
         if (m_State == SceneState::Play)
             EndPlay(activeScene);
@@ -59,6 +60,12 @@ namespace Engine
         m_RuntimeScene = nullptr;
         activeScene = m_EditorScene;
 
+        return newScene;
+    }
+
+    void EditorSceneSession::CreateNewScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight)
+    {
+        PrepareScene(activeScene, viewportWidth, viewportHeight);
         ENGINE_INFO("[EditorEvent] NewScene ready, entities={0}", CountSceneEntities(activeScene));
     }
 

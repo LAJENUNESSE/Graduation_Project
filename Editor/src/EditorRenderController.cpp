@@ -95,17 +95,34 @@ namespace Engine
         SyncHDRFramebufferBindings();
     }
 
+    void EditorRenderController::SyncSSAOSettings(EditorRenderSettings& settings, bool toRenderer)
+    {
+        if (toRenderer)
+        {
+            m_SceneRenderer->GetSSAOEnabled() = settings.SSAOEnabled;
+            m_SceneRenderer->GetSSAORadius() = settings.SSAORadius;
+            m_SceneRenderer->GetSSAOBias() = settings.SSAOBias;
+            m_SceneRenderer->GetSSAOKernelSize() = settings.SSAOKernelSize;
+            m_SceneRenderer->GetSSAOIntensity() = settings.SSAOIntensity;
+        }
+        else
+        {
+            settings.SSAOEnabled = m_SceneRenderer->GetSSAOEnabled();
+            settings.SSAORadius = m_SceneRenderer->GetSSAORadius();
+            settings.SSAOBias = m_SceneRenderer->GetSSAOBias();
+            settings.SSAOKernelSize = m_SceneRenderer->GetSSAOKernelSize();
+            settings.SSAOIntensity = m_SceneRenderer->GetSSAOIntensity();
+        }
+    }
+
     void EditorRenderController::ApplyRenderSettings(const Ref<Scene>& activeScene,
                                                      const EditorRenderSettings& renderSettings)
     {
         *m_PostProcessingSettings = renderSettings.PostProcessing;
         activeScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
 
-        m_SceneRenderer->GetSSAOEnabled() = renderSettings.SSAOEnabled;
-        m_SceneRenderer->GetSSAORadius() = renderSettings.SSAORadius;
-        m_SceneRenderer->GetSSAOBias() = renderSettings.SSAOBias;
-        m_SceneRenderer->GetSSAOKernelSize() = renderSettings.SSAOKernelSize;
-        m_SceneRenderer->GetSSAOIntensity() = renderSettings.SSAOIntensity;
+        // toRenderer=true 路径只从 settings 读取，不会修改
+        SyncSSAOSettings(const_cast<EditorRenderSettings&>(renderSettings), true);
 
         if (renderSettings.MSAASamples != m_ViewportController->GetHDRFramebuffer()->GetSpecification().Samples)
             ApplyMSAASamples(renderSettings.MSAASamples);
@@ -113,17 +130,13 @@ namespace Engine
             SyncHDRFramebufferBindings();
     }
 
-    EditorRenderSettings EditorRenderController::CollectRenderSettings(const Ref<Scene>& activeScene) const
+    EditorRenderSettings EditorRenderController::CollectRenderSettings(const Ref<Scene>& activeScene)
     {
         EditorRenderSettings renderSettings;
         renderSettings.PostProcessing = *m_PostProcessingSettings;
         renderSettings.MSAASamples = m_ViewportController->GetHDRFramebuffer()->GetSpecification().Samples;
         renderSettings.PhysicsBackend = static_cast<int>(activeScene->GetPhysicsBackend());
-        renderSettings.SSAOEnabled = m_SceneRenderer->GetSSAOEnabled();
-        renderSettings.SSAORadius = m_SceneRenderer->GetSSAORadius();
-        renderSettings.SSAOBias = m_SceneRenderer->GetSSAOBias();
-        renderSettings.SSAOKernelSize = m_SceneRenderer->GetSSAOKernelSize();
-        renderSettings.SSAOIntensity = m_SceneRenderer->GetSSAOIntensity();
+        SyncSSAOSettings(renderSettings, false);
         return renderSettings;
     }
 

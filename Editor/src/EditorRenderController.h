@@ -29,12 +29,14 @@ namespace Engine
 
         void ApplyMSAASamples(uint32_t samples);
         void ApplyRenderSettings(const Ref<Scene>& activeScene, const EditorRenderSettings& renderSettings);
-        EditorRenderSettings CollectRenderSettings(const Ref<Scene>& activeScene) const;
+        EditorRenderSettings CollectRenderSettings(const Ref<Scene>& activeScene);
 
         SceneRenderer& GetSceneRenderer() const;
         PostProcessingSettings* GetPostProcessingSettings() const { return m_PostProcessingSettings; }
 
     private:
+        // direction: true = settings→renderer, false = renderer→settings
+        void SyncSSAOSettings(EditorRenderSettings& settings, bool toRenderer);
         void OnViewportResized(uint32_t width, uint32_t height);
         void SyncHDRFramebufferBindings();
 
