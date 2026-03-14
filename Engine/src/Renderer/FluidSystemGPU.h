@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Renderer/Shader.h"
+#include "Renderer/SPHCommon.h"
 #include "Renderer/SpatialHashGrid.h"
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/VertexArray.h"
@@ -44,9 +45,8 @@ namespace Engine
         Ref<Shader> m_EmitShader;
         Ref<Shader> m_SimulateShader;
 
-        // SPH shaders (reused from particle system)
-        Ref<Shader> m_SPHDensityShader;
-        Ref<Shader> m_SPHForceShader;
+        // SPH shaders (共享结构体)
+        SPHShaderSet m_SPHShaders;
 
         // Spatial hash grid (reused)
         SpatialHashGrid m_Grid;
@@ -59,21 +59,13 @@ namespace Engine
         float m_TotalTime = 0.0f;
 
         // PCISPH
-        Ref<Shader> m_PCISPHInitShader;
-        Ref<Shader> m_PCISPHPredictShader;
-        Ref<Shader> m_PCISPHDensityShader;
-        Ref<Shader> m_PCISPHForceShader;
-        Ref<Shader> m_PCISPHApplyShader;
-
         Ref<ShaderStorageBuffer> m_PCISPHBuffer;    // 48B/particle
         Ref<ShaderStorageBuffer> m_RigidBodyBuffer; // 112B × MAX_RIGID_BODIES
-        static constexpr uint32_t MAX_RIGID_BODIES = 64;
         bool m_PCISPHInitialized = false;
 
         void InitSPH(float smoothingRadius);
         void InitPCISPH();
         void InitRigidBodyBuffer();
-        uint32_t UploadRigidBodies(entt::registry* registry);
 
 #ifdef ENGINE_ENABLE_CUDA
         Scope<CudaGLInteropContext> m_CudaInterop;
@@ -81,12 +73,8 @@ namespace Engine
         bool m_CudaInitAttempted = false;
         int m_CudaSlotParticle = -1;  // 仅 ParticleBuffer 注册 interop（渲染需要）
         void* m_CudaSPHCtx = nullptr; // CudaSPHContext（grid + PCISPH + rigidBody）
-        // CUDA event 计时（Ping-pong 双缓冲，避免 GPU 同步阻塞）
-        void* m_CudaEventStart = nullptr;
-        void* m_CudaEventStop = nullptr;
-        void* m_PrevCudaStart = nullptr;
-        void* m_PrevCudaStop  = nullptr;
-        bool m_HasPrevCudaTiming = false;
+        // CUDA event 计时（Ping-pong 双缓冲）
+        CudaTimingHelper m_CudaTiming;
 #endif
     };
 

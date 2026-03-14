@@ -202,6 +202,28 @@ namespace Engine
         MeshColliderComponent(const MeshColliderComponent&) = default;
     };
 
+    // SPH 流体参数子结构体
+    struct SPHParams
+    {
+        bool Enabled = false;
+        float RestDensity = 200.0f;   // 静止密度 ρ_0
+        float GasConstant = 50.0f;    // 气体常数 k（刚度）
+        float Viscosity = 3.5f;       // 粘性系数 μ
+        float SmoothingRadius = 0.1f; // 光滑核半径 h
+        float ParticleMass = 0.02f;   // 单粒子质量 m
+
+        // PCISPH
+        bool PCISPHEnabled = true;
+        int PCISPHIterations = 3; // 1-8
+        float PCISPHDelta = 0.3f;
+        // 表面张力
+        float SurfaceTension = 0.0f; // γ, 0=关闭
+        // 刚体耦合
+        bool RigidBodyCoupling = false;
+        float BoundaryStiffness = 5000.0f;
+        float BoundaryDamping = 0.5f;
+    };
+
     struct ParticleEmitterComponent
     {
         // 预设
@@ -245,24 +267,8 @@ namespace Engine
         };
         BlendMode Blend = BlendMode::Additive;
 
-        // SPH 流体参数（SPHEnabled=true 时启用）
-        bool SPHEnabled = false;
-        float SPH_RestDensity = 200.0f;   // 静止密度 ρ_0
-        float SPH_GasConstant = 50.0f;    // 气体常数 k（刚度）
-        float SPH_Viscosity = 3.5f;       // 粘性系数 μ
-        float SPH_SmoothingRadius = 0.1f; // 光滑核半径 h
-        float SPH_ParticleMass = 0.02f;   // 单粒子质量 m
-
-        // PCISPH
-        bool SPH_PCISPHEnabled = true;
-        int SPH_PCISPHIterations = 3; // 1-8
-        float SPH_PCISPHDelta = 0.3f;
-        // 表面张力
-        float SPH_SurfaceTension = 0.0f; // γ, 0=关闭
-        // 刚体耦合
-        bool SPH_RigidBodyCoupling = false;
-        float SPH_BoundaryStiffness = 5000.0f;
-        float SPH_BoundaryDamping = 0.5f;
+        // SPH 流体参数（SPH.Enabled=true 时启用）
+        SPHParams SPH;
 
         // 运行时（不序列化）
         int CollisionBurstCount = 0; // 碰撞触发的爆发（帧末自动清零）
@@ -275,7 +281,7 @@ namespace Engine
         static void ApplyPreset(ParticleEmitterComponent& emitter, Preset preset)
         {
             emitter.CurrentPreset = preset;
-            emitter.SPHEnabled = false;
+            emitter.SPH.Enabled = false;
 
             switch (preset)
             {

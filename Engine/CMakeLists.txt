@@ -54,6 +54,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SceneRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Shader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SpatialHashGrid.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SPHCommon.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/StorageBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Texture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/UniformBuffer.cpp

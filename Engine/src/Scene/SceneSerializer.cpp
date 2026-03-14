@@ -322,19 +322,21 @@ namespace Engine
             out << YAML::Key << "Gravity" << YAML::Value << pe.Gravity;
             out << YAML::Key << "Damping" << YAML::Value << pe.Damping;
             out << YAML::Key << "BlendMode" << YAML::Value << static_cast<int>(pe.Blend);
-            out << YAML::Key << "SPHEnabled" << YAML::Value << pe.SPHEnabled;
-            out << YAML::Key << "SPH_RestDensity" << YAML::Value << pe.SPH_RestDensity;
-            out << YAML::Key << "SPH_GasConstant" << YAML::Value << pe.SPH_GasConstant;
-            out << YAML::Key << "SPH_Viscosity" << YAML::Value << pe.SPH_Viscosity;
-            out << YAML::Key << "SPH_SmoothingRadius" << YAML::Value << pe.SPH_SmoothingRadius;
-            out << YAML::Key << "SPH_ParticleMass" << YAML::Value << pe.SPH_ParticleMass;
-            out << YAML::Key << "SPH_PCISPHEnabled" << YAML::Value << pe.SPH_PCISPHEnabled;
-            out << YAML::Key << "SPH_PCISPHIterations" << YAML::Value << pe.SPH_PCISPHIterations;
-            out << YAML::Key << "SPH_PCISPHDelta" << YAML::Value << pe.SPH_PCISPHDelta;
-            out << YAML::Key << "SPH_SurfaceTension" << YAML::Value << pe.SPH_SurfaceTension;
-            out << YAML::Key << "SPH_RigidBodyCoupling" << YAML::Value << pe.SPH_RigidBodyCoupling;
-            out << YAML::Key << "SPH_BoundaryStiffness" << YAML::Value << pe.SPH_BoundaryStiffness;
-            out << YAML::Key << "SPH_BoundaryDamping" << YAML::Value << pe.SPH_BoundaryDamping;
+            out << YAML::Key << "SPH" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Enabled" << YAML::Value << pe.SPH.Enabled;
+            out << YAML::Key << "RestDensity" << YAML::Value << pe.SPH.RestDensity;
+            out << YAML::Key << "GasConstant" << YAML::Value << pe.SPH.GasConstant;
+            out << YAML::Key << "Viscosity" << YAML::Value << pe.SPH.Viscosity;
+            out << YAML::Key << "SmoothingRadius" << YAML::Value << pe.SPH.SmoothingRadius;
+            out << YAML::Key << "ParticleMass" << YAML::Value << pe.SPH.ParticleMass;
+            out << YAML::Key << "PCISPHEnabled" << YAML::Value << pe.SPH.PCISPHEnabled;
+            out << YAML::Key << "PCISPHIterations" << YAML::Value << pe.SPH.PCISPHIterations;
+            out << YAML::Key << "PCISPHDelta" << YAML::Value << pe.SPH.PCISPHDelta;
+            out << YAML::Key << "SurfaceTension" << YAML::Value << pe.SPH.SurfaceTension;
+            out << YAML::Key << "RigidBodyCoupling" << YAML::Value << pe.SPH.RigidBodyCoupling;
+            out << YAML::Key << "BoundaryStiffness" << YAML::Value << pe.SPH.BoundaryStiffness;
+            out << YAML::Key << "BoundaryDamping" << YAML::Value << pe.SPH.BoundaryDamping;
+            out << YAML::EndMap;
             out << YAML::EndMap;
         }
 
@@ -870,35 +872,73 @@ namespace Engine
                         if (mode >= 0 && mode <= 1)
                             pe.Blend = static_cast<ParticleEmitterComponent::BlendMode>(mode);
                     }
-                    if (particleEmitterComponent["SPHEnabled"])
-                        pe.SPHEnabled = particleEmitterComponent["SPHEnabled"].as<bool>();
-                    if (particleEmitterComponent["SPH_RestDensity"])
-                        pe.SPH_RestDensity = particleEmitterComponent["SPH_RestDensity"].as<float>();
-                    if (particleEmitterComponent["SPH_GasConstant"])
-                        pe.SPH_GasConstant = particleEmitterComponent["SPH_GasConstant"].as<float>();
-                    if (particleEmitterComponent["SPH_Viscosity"])
-                        pe.SPH_Viscosity = particleEmitterComponent["SPH_Viscosity"].as<float>();
-                    if (particleEmitterComponent["SPH_SmoothingRadius"])
-                        pe.SPH_SmoothingRadius = particleEmitterComponent["SPH_SmoothingRadius"].as<float>();
-                    if (particleEmitterComponent["SPH_ParticleMass"])
-                        pe.SPH_ParticleMass = particleEmitterComponent["SPH_ParticleMass"].as<float>();
-                    if (particleEmitterComponent["SPH_PCISPHEnabled"])
-                        pe.SPH_PCISPHEnabled = particleEmitterComponent["SPH_PCISPHEnabled"].as<bool>();
-                    if (particleEmitterComponent["SPH_PCISPHIterations"])
+                    // SPH 参数：新格式（嵌套 SPH 子节点）+ 旧格式回退
+                    auto sphNode = particleEmitterComponent["SPH"];
+                    if (sphNode && sphNode.IsMap())
                     {
-                        int iters = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
-                        pe.SPH_PCISPHIterations = std::clamp(iters, 1, 8);
+                        if (sphNode["Enabled"])
+                            pe.SPH.Enabled = sphNode["Enabled"].as<bool>();
+                        if (sphNode["RestDensity"])
+                            pe.SPH.RestDensity = sphNode["RestDensity"].as<float>();
+                        if (sphNode["GasConstant"])
+                            pe.SPH.GasConstant = sphNode["GasConstant"].as<float>();
+                        if (sphNode["Viscosity"])
+                            pe.SPH.Viscosity = sphNode["Viscosity"].as<float>();
+                        if (sphNode["SmoothingRadius"])
+                            pe.SPH.SmoothingRadius = sphNode["SmoothingRadius"].as<float>();
+                        if (sphNode["ParticleMass"])
+                            pe.SPH.ParticleMass = sphNode["ParticleMass"].as<float>();
+                        if (sphNode["PCISPHEnabled"])
+                            pe.SPH.PCISPHEnabled = sphNode["PCISPHEnabled"].as<bool>();
+                        if (sphNode["PCISPHIterations"])
+                        {
+                            int iters = sphNode["PCISPHIterations"].as<int>();
+                            pe.SPH.PCISPHIterations = std::clamp(iters, 1, 8);
+                        }
+                        if (sphNode["PCISPHDelta"])
+                            pe.SPH.PCISPHDelta = sphNode["PCISPHDelta"].as<float>();
+                        if (sphNode["SurfaceTension"])
+                            pe.SPH.SurfaceTension = sphNode["SurfaceTension"].as<float>();
+                        if (sphNode["RigidBodyCoupling"])
+                            pe.SPH.RigidBodyCoupling = sphNode["RigidBodyCoupling"].as<bool>();
+                        if (sphNode["BoundaryStiffness"])
+                            pe.SPH.BoundaryStiffness = sphNode["BoundaryStiffness"].as<float>();
+                        if (sphNode["BoundaryDamping"])
+                            pe.SPH.BoundaryDamping = sphNode["BoundaryDamping"].as<float>();
                     }
-                    if (particleEmitterComponent["SPH_PCISPHDelta"])
-                        pe.SPH_PCISPHDelta = particleEmitterComponent["SPH_PCISPHDelta"].as<float>();
-                    if (particleEmitterComponent["SPH_SurfaceTension"])
-                        pe.SPH_SurfaceTension = particleEmitterComponent["SPH_SurfaceTension"].as<float>();
-                    if (particleEmitterComponent["SPH_RigidBodyCoupling"])
-                        pe.SPH_RigidBodyCoupling = particleEmitterComponent["SPH_RigidBodyCoupling"].as<bool>();
-                    if (particleEmitterComponent["SPH_BoundaryStiffness"])
-                        pe.SPH_BoundaryStiffness = particleEmitterComponent["SPH_BoundaryStiffness"].as<float>();
-                    if (particleEmitterComponent["SPH_BoundaryDamping"])
-                        pe.SPH_BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
+                    else
+                    {
+                        // 旧格式回退：平铺键名
+                        if (particleEmitterComponent["SPHEnabled"])
+                            pe.SPH.Enabled = particleEmitterComponent["SPHEnabled"].as<bool>();
+                        if (particleEmitterComponent["SPH_RestDensity"])
+                            pe.SPH.RestDensity = particleEmitterComponent["SPH_RestDensity"].as<float>();
+                        if (particleEmitterComponent["SPH_GasConstant"])
+                            pe.SPH.GasConstant = particleEmitterComponent["SPH_GasConstant"].as<float>();
+                        if (particleEmitterComponent["SPH_Viscosity"])
+                            pe.SPH.Viscosity = particleEmitterComponent["SPH_Viscosity"].as<float>();
+                        if (particleEmitterComponent["SPH_SmoothingRadius"])
+                            pe.SPH.SmoothingRadius = particleEmitterComponent["SPH_SmoothingRadius"].as<float>();
+                        if (particleEmitterComponent["SPH_ParticleMass"])
+                            pe.SPH.ParticleMass = particleEmitterComponent["SPH_ParticleMass"].as<float>();
+                        if (particleEmitterComponent["SPH_PCISPHEnabled"])
+                            pe.SPH.PCISPHEnabled = particleEmitterComponent["SPH_PCISPHEnabled"].as<bool>();
+                        if (particleEmitterComponent["SPH_PCISPHIterations"])
+                        {
+                            int iters = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
+                            pe.SPH.PCISPHIterations = std::clamp(iters, 1, 8);
+                        }
+                        if (particleEmitterComponent["SPH_PCISPHDelta"])
+                            pe.SPH.PCISPHDelta = particleEmitterComponent["SPH_PCISPHDelta"].as<float>();
+                        if (particleEmitterComponent["SPH_SurfaceTension"])
+                            pe.SPH.SurfaceTension = particleEmitterComponent["SPH_SurfaceTension"].as<float>();
+                        if (particleEmitterComponent["SPH_RigidBodyCoupling"])
+                            pe.SPH.RigidBodyCoupling = particleEmitterComponent["SPH_RigidBodyCoupling"].as<bool>();
+                        if (particleEmitterComponent["SPH_BoundaryStiffness"])
+                            pe.SPH.BoundaryStiffness = particleEmitterComponent["SPH_BoundaryStiffness"].as<float>();
+                        if (particleEmitterComponent["SPH_BoundaryDamping"])
+                            pe.SPH.BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
+                    }
                 }
 
                 // NativeScriptComponent

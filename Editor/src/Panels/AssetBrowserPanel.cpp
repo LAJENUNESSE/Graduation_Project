@@ -1,6 +1,8 @@
 #include "Panels/AssetBrowserPanel.h"
+#include "Asset/AssetType.h"
 #include "Asset/PathUtils.h"
 #include "Core/Log.h"
+#include "EditorAssetDescriptor.h"
 #include "Renderer/Texture.h"
 #include "Scene/SceneSerializer.h"
 
@@ -40,37 +42,6 @@ namespace Engine
             }
 
             return buffer;
-        }
-
-        bool IsImageFile(const std::filesystem::path& path)
-        {
-            std::string ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga" || ext == ".hdr";
-        }
-
-        bool IsSceneFile(const std::filesystem::path& path)
-        {
-            return path.extension() == ".scene";
-        }
-
-        bool IsShaderFile(const std::filesystem::path& path)
-        {
-            return path.extension() == ".glsl";
-        }
-
-        bool IsModelFile(const std::filesystem::path& path)
-        {
-            std::string ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            return ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb";
-        }
-
-        bool IsAudioFile(const std::filesystem::path& path)
-        {
-            std::string ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            return ext == ".wav" || ext == ".mp3" || ext == ".ogg";
         }
 
         bool IsDirectoryPath(const std::filesystem::path& path)
@@ -218,16 +189,9 @@ namespace Engine
     {
         if (IsDirectoryPath(path))
             return "[D]";
-        if (IsImageFile(path))
-            return "[I]";
-        if (IsSceneFile(path))
-            return "[S]";
-        if (IsShaderFile(path))
-            return "[G]";
-        if (IsModelFile(path))
-            return "[M]";
-        if (IsAudioFile(path))
-            return "[A]";
+        AssetType type = AssetTypeFromPath(path);
+        if (type != AssetType::None)
+            return GetEditorAssetDescriptor(type).Icon;
         return "[F]";
     }
 
@@ -464,15 +428,8 @@ namespace Engine
             {
                 std::string relStr = PathUtils::ToProjectRelativeOrAbsolute(path);
 
-                const char* payloadType = "ASSET_PATH";
-                if (IsImageFile(path))
-                    payloadType = "ASSET_TEXTURE";
-                else if (IsModelFile(path))
-                    payloadType = "ASSET_MODEL";
-                else if (IsSceneFile(path))
-                    payloadType = "ASSET_SCENE";
-                else if (IsAudioFile(path))
-                    payloadType = "ASSET_AUDIO";
+                AssetType assetType = AssetTypeFromPath(path);
+                const char* payloadType = GetEditorAssetDescriptor(assetType).PayloadType;
 
                 ImGui::SetDragDropPayload(payloadType, relStr.c_str(), relStr.size() + 1);
                 ImGui::Text("%s %s", icon, filename.c_str());
@@ -521,15 +478,17 @@ namespace Engine
 
     void AssetBrowserPanel::OnFileDoubleClicked(const std::filesystem::path& path)
     {
-        if (IsSceneFile(path))
+        AssetType type = AssetTypeFromPath(path);
+        switch (type)
         {
+        case AssetType::Scene:
             if (m_OnSceneOpen)
                 m_OnSceneOpen(PathUtils::ToProjectRelativeOrAbsolute(path));
             else
                 ENGINE_INFO("双击场景文件: {0}", path.string());
-        }
-        else if (IsImageFile(path))
-        {
+            break;
+
+        case AssetType::Texture2D:
             m_ShowImagePreview = true;
             ClearImagePreview();
             m_PreviewImagePath = PathUtils::ToProjectRelativeOrAbsolute(path);
@@ -544,6 +503,10 @@ namespace Engine
             {
                 ENGINE_WARN("Failed to load preview texture: {0}", path.string());
             }
+            break;
+
+        default:
+            break;
         }
     }
 

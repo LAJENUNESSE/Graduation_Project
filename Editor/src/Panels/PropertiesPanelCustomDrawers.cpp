@@ -1,9 +1,11 @@
 #include "Panels/PropertiesPanelCustomDrawers.h"
 
 #include "Asset/AssetManager.h"
+#include "Asset/AssetType.h"
 #include "Asset/PathUtils.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
+#include "EditorAssetDescriptor.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
 #include "Scene/Runtime/AudioRuntimeStore.h"
@@ -172,13 +174,15 @@ namespace Engine
 
             auto acceptModelDrop = [&component]()
             {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL"))
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Mesh).PayloadType))
                 {
                     ApplyModelMeshPath(component, static_cast<const char*>(payload->Data));
                     return true;
                 }
 
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::None).PayloadType))
                 {
                     ApplyModelMeshPath(component, static_cast<const char*>(payload->Data));
                     return true;
@@ -236,7 +240,8 @@ namespace Engine
 
                 if (ImGui::BeginDragDropTarget())
                 {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE"))
+                    if (const ImGuiPayload* payload =
+                            ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Texture2D).PayloadType))
                     {
                         std::string droppedPath(static_cast<const char*>(payload->Data));
                         component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(droppedPath);
@@ -284,7 +289,8 @@ namespace Engine
 
                 if (ImGui::BeginDragDropTarget())
                 {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE"))
+                    if (const ImGuiPayload* payload =
+                            ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Texture2D).PayloadType))
                     {
                         std::string droppedPath(static_cast<const char*>(payload->Data));
                         component.NormalMapAsset = AssetManager::Load<Texture2D>(droppedPath);
@@ -520,36 +526,36 @@ namespace Engine
 
             ImGui::Separator();
             ImGui::Text("SPH 流体");
-            ImGui::Checkbox("启用 SPH", &component.SPHEnabled);
-            if (!component.SPHEnabled)
+            ImGui::Checkbox("启用 SPH", &component.SPH.Enabled);
+            if (!component.SPH.Enabled)
                 return;
 
-            ImGui::DragFloat("静止密度", &component.SPH_RestDensity, 10.0f, 100.0f, 10000.0f, "%.0f");
-            ImGui::DragFloat("气体常数", &component.SPH_GasConstant, 10.0f, 100.0f, 50000.0f, "%.0f");
-            ImGui::DragFloat("粘性系数", &component.SPH_Viscosity, 0.001f, 0.0f, 1.0f, "%.4f");
-            ImGui::DragFloat("光滑半径", &component.SPH_SmoothingRadius, 0.01f, 0.01f, 2.0f, "%.3f");
-            ImGui::DragFloat("粒子质量", &component.SPH_ParticleMass, 0.001f, 0.001f, 1.0f, "%.4f");
+            ImGui::DragFloat("静止密度", &component.SPH.RestDensity, 10.0f, 100.0f, 10000.0f, "%.0f");
+            ImGui::DragFloat("气体常数", &component.SPH.GasConstant, 10.0f, 100.0f, 50000.0f, "%.0f");
+            ImGui::DragFloat("粘性系数", &component.SPH.Viscosity, 0.001f, 0.0f, 1.0f, "%.4f");
+            ImGui::DragFloat("光滑半径", &component.SPH.SmoothingRadius, 0.01f, 0.01f, 2.0f, "%.3f");
+            ImGui::DragFloat("粒子质量", &component.SPH.ParticleMass, 0.001f, 0.001f, 1.0f, "%.4f");
 
             ImGui::Separator();
             ImGui::Text("PCISPH");
-            ImGui::Checkbox("启用 PCISPH", &component.SPH_PCISPHEnabled);
-            if (component.SPH_PCISPHEnabled)
+            ImGui::Checkbox("启用 PCISPH", &component.SPH.PCISPHEnabled);
+            if (component.SPH.PCISPHEnabled)
             {
-                ImGui::SliderInt("PCISPH 迭代次数", &component.SPH_PCISPHIterations, 1, 8);
-                ImGui::DragFloat("PCISPH 校正系数", &component.SPH_PCISPHDelta, 0.01f, 0.01f, 1.0f, "%.3f");
+                ImGui::SliderInt("PCISPH 迭代次数", &component.SPH.PCISPHIterations, 1, 8);
+                ImGui::DragFloat("PCISPH 校正系数", &component.SPH.PCISPHDelta, 0.01f, 0.01f, 1.0f, "%.3f");
             }
 
             ImGui::Separator();
             ImGui::Text("表面张力");
-            ImGui::DragFloat("表面张力系数", &component.SPH_SurfaceTension, 0.1f, 0.0f, 20.0f, "%.2f");
+            ImGui::DragFloat("表面张力系数", &component.SPH.SurfaceTension, 0.1f, 0.0f, 20.0f, "%.2f");
 
             ImGui::Separator();
             ImGui::Text("刚体耦合");
-            ImGui::Checkbox("启用刚体耦合", &component.SPH_RigidBodyCoupling);
-            if (component.SPH_RigidBodyCoupling)
+            ImGui::Checkbox("启用刚体耦合", &component.SPH.RigidBodyCoupling);
+            if (component.SPH.RigidBodyCoupling)
             {
-                ImGui::DragFloat("边界刚度", &component.SPH_BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
-                ImGui::DragFloat("边界阻尼", &component.SPH_BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
+                ImGui::DragFloat("边界刚度", &component.SPH.BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
+                ImGui::DragFloat("边界阻尼", &component.SPH.BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
             }
         }
 
@@ -567,7 +573,8 @@ namespace Engine
 
             if (ImGui::BeginDragDropTarget())
             {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_AUDIO"))
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Audio).PayloadType))
                 {
                     std::string normalizedPath;
                     if (TryNormalizeProjectAssetPath(static_cast<const char*>(payload->Data), "音频", normalizedPath,

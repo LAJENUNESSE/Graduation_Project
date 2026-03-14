@@ -4,20 +4,15 @@
 #include "Core/Application.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
+#include "EditorBootstrapper.h"
 #include "EditorPanelCoordinator.h"
 #include "EditorRenderController.h"
 #include "EditorSceneSession.h"
 #include "EditorSelectionGizmoController.h"
 #include "EditorShell.h"
 #include "EditorViewportController.h"
-#include "Panels/AssetBrowserPanel.h"
-#include "Panels/ConsolePanel.h"
-#include "Panels/PropertiesPanel.h"
 #include "Panels/RenderSettingsPanel.h"
-#include "Panels/SceneHierarchyPanel.h"
-#include "Physics/PhysicsDebugDraw.h"
 #include "Renderer/Mesh.h"
-#include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Components.h"
 #include "UndoSystem.h"
@@ -33,75 +28,59 @@ namespace Engine
     {
         ENGINE_INFO("EditorLayer OnAttach");
 
-        m_CommandHistory = CreateScope<CommandHistory>();
+        m_Boot = CreateScope<EditorBootstrapper>();
+        m_Boot->Assemble();
 
-        m_HierarchyPanel = CreateScope<SceneHierarchyPanel>();
-        m_PropertiesPanel = CreateScope<PropertiesPanel>();
-        m_ConsolePanel = CreateScope<ConsolePanel>();
-        m_AssetBrowserPanel = CreateScope<AssetBrowserPanel>();
-        m_RenderSettingsPanel = CreateScope<RenderSettingsPanel>();
-
-        m_SceneRenderer = CreateScope<SceneRenderer>();
-        m_PostProcessing = CreateScope<PostProcessing>();
-        m_PostProcessingSettings = CreateScope<PostProcessingSettings>();
-        m_PhysicsDebugDraw = CreateScope<PhysicsDebugDraw>();
-
-        m_SceneSession = CreateScope<EditorSceneSession>();
-        m_PanelCoordinator = CreateScope<EditorPanelCoordinator>();
-        m_SelectionGizmoController = CreateScope<EditorSelectionGizmoController>();
-        m_EditorShell = CreateScope<EditorShell>();
-        m_ViewportController = CreateScope<EditorViewportController>();
-        m_RenderController = CreateScope<EditorRenderController>();
-
-        m_ViewportController->Initialize();
-        m_RenderController->Initialize(m_SceneRenderer.get(), m_PostProcessing.get(), m_PostProcessingSettings.get(),
-                                       m_ViewportController.get(), m_PanelCoordinator.get(), m_PhysicsDebugDraw.get(),
-                                       &m_ShowPhysicsColliders);
-        m_RenderController->Attach();
-        m_SceneSession->Initialize(&m_RenderController->GetSceneRenderer());
+        // 这些回调捕获 EditorLayer::this，必须在 Assemble 之后设置
+        m_Boot->SetSceneOpenCallback([this](const std::string& path) { OpenScene(path); });
+        m_Boot->SetMSAAChangedCallback([this](uint32_t samples) { m_Boot->RenderController().ApplyMSAASamples(samples); });
 
         BootstrapDefaultScene();
-        ConfigureEditorPanels();
+
+        // RenderSettingsPanel 初始 context（需要 m_ActiveScene，所以在 BootstrapDefaultScene 之后）
+        m_Boot->GetRenderSettingsPanel().SetContext(
+            &m_Boot->RenderController().GetSceneRenderer(),
+            m_Boot->RenderController().GetPostProcessingSettings(),
+            m_Boot->ViewportController().GetHDRFramebuffer(), m_ActiveScene,
+            &m_Boot->ShowPhysicsColliders());
+
         ApplyActiveSceneContext(false);
-        m_ConsolePanel->RegisterSink();
     }
 
     void EditorLayer::OnDetach()
     {
         ENGINE_INFO("[EditorEvent] Detaching editor layer");
-        if (m_SceneSession && m_SceneSession->IsPlaying())
+        if (m_Boot->SceneSession().IsPlaying())
             OnSceneStop();
-        if (m_ConsolePanel)
-            m_ConsolePanel->UnregisterSink();
-        if (m_RenderController)
-            m_RenderController->Detach();
+        m_Boot->Teardown();
     }
 
     void EditorLayer::OnUpdate(Timestep ts)
     {
-        m_ViewportController->OnUpdate(ts, *m_ActiveScene);
+        m_Boot->ViewportController().OnUpdate(ts, *m_ActiveScene);
         AssetManager::Update(ts);
-        m_RenderController->OnUpdate(ts, m_ActiveScene, m_SceneSession->GetState());
+        m_Boot->RenderController().OnUpdate(ts, m_ActiveScene, m_Boot->SceneSession().GetState());
     }
 
     void EditorLayer::OnImGuiRender()
     {
-        HandleShellActions(m_EditorShell->Draw(BuildShellState()));
-        m_PanelCoordinator->RenderPanels();
+        HandleShellActions(m_Boot->Shell().Draw(BuildShellState()));
+        m_Boot->PanelCoordinator().RenderPanels();
 
-        EditorViewportContext viewportContext = m_ViewportController->BeginViewportWindow();
-        if (m_SceneSession->GetState() == SceneState::Edit)
+        EditorViewportContext viewportContext = m_Boot->ViewportController().BeginViewportWindow();
+        if (m_Boot->SceneSession().GetState() == SceneState::Edit)
         {
-            m_SelectionGizmoController->UpdateHoveredEntity(
-                viewportContext, m_ViewportController->GetPickingFramebuffer(), m_ActiveScene);
-            m_SelectionGizmoController->RenderGizmos(viewportContext, m_ViewportController->GetCamera(), m_ActiveScene);
+            m_Boot->SelectionGizmoController().UpdateHoveredEntity(
+                viewportContext, m_Boot->ViewportController().GetPickingFramebuffer(), m_ActiveScene);
+            m_Boot->SelectionGizmoController().RenderGizmos(
+                viewportContext, m_Boot->ViewportController().GetCamera(), m_ActiveScene);
         }
-        m_ViewportController->EndViewportWindow();
+        m_Boot->ViewportController().EndViewportWindow();
     }
 
     void EditorLayer::OnEvent(Event& event)
     {
-        m_ViewportController->OnEvent(event);
+        m_Boot->ViewportController().OnEvent(event);
 
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<KeyPressedEvent>(ENGINE_BIND_EVENT_FN(EditorLayer::OnKeyPressed));
@@ -110,24 +89,25 @@ namespace Engine
 
     bool EditorLayer::OnKeyPressed(KeyPressedEvent& e)
     {
-        HandleShellActions(m_EditorShell->OnKeyPressed(e, BuildShellState()));
-        if (m_SceneSession->GetState() == SceneState::Edit)
-            m_SelectionGizmoController->OnKeyPressed(e);
+        HandleShellActions(m_Boot->Shell().OnKeyPressed(e, BuildShellState()));
+        if (m_Boot->SceneSession().GetState() == SceneState::Edit)
+            m_Boot->SelectionGizmoController().OnKeyPressed(e);
         return false;
     }
 
     bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e)
     {
-        if (m_SceneSession->GetState() == SceneState::Edit)
-            m_SelectionGizmoController->OnMouseButtonPressed(e, m_ViewportController->GetContext(), m_ActiveScene);
+        if (m_Boot->SceneSession().GetState() == SceneState::Edit)
+            m_Boot->SelectionGizmoController().OnMouseButtonPressed(
+                e, m_Boot->ViewportController().GetContext(), m_ActiveScene);
         return false;
     }
 
     void EditorLayer::NewScene()
     {
-        glm::vec2 renderSize = m_ViewportController->GetRenderSize();
-        m_SceneSession->CreateNewScene(m_ActiveScene, static_cast<uint32_t>(renderSize.x),
-                                       static_cast<uint32_t>(renderSize.y));
+        glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
+        m_Boot->SceneSession().CreateNewScene(m_ActiveScene, static_cast<uint32_t>(renderSize.x),
+                                              static_cast<uint32_t>(renderSize.y));
 
         ApplyActiveSceneContext(true);
     }
@@ -141,16 +121,16 @@ namespace Engine
 
     void EditorLayer::OpenScene(const std::string& filepath)
     {
-        glm::vec2 renderSize = m_ViewportController->GetRenderSize();
+        glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
 
         EditorRenderSettings renderSettings;
-        if (!m_SceneSession->OpenSceneFromPath(m_ActiveScene, filepath, static_cast<uint32_t>(renderSize.x),
-                                               static_cast<uint32_t>(renderSize.y), &renderSettings))
+        if (!m_Boot->SceneSession().OpenSceneFromPath(m_ActiveScene, filepath, static_cast<uint32_t>(renderSize.x),
+                                                      static_cast<uint32_t>(renderSize.y), &renderSettings))
         {
             return;
         }
 
-        m_RenderController->ApplyRenderSettings(m_ActiveScene, renderSettings);
+        m_Boot->RenderController().ApplyRenderSettings(m_ActiveScene, renderSettings);
         ApplyActiveSceneContext(true);
     }
 
@@ -160,20 +140,21 @@ namespace Engine
         if (filepath.empty())
             return;
 
-        Ref<Scene> sceneToSave = m_SceneSession->GetSceneForSaving(m_ActiveScene);
-        m_SceneSession->SaveSceneToPath(sceneToSave, filepath, m_RenderController->CollectRenderSettings(sceneToSave));
+        Ref<Scene> sceneToSave = m_Boot->SceneSession().GetSceneForSaving(m_ActiveScene);
+        m_Boot->SceneSession().SaveSceneToPath(
+            sceneToSave, filepath, m_Boot->RenderController().CollectRenderSettings(sceneToSave));
     }
 
     void EditorLayer::OnScenePlay()
     {
-        m_SelectionGizmoController->ClearTransientState();
-        m_SceneSession->BeginPlay(m_ActiveScene);
+        m_Boot->SelectionGizmoController().ClearTransientState();
+        m_Boot->SceneSession().BeginPlay(m_ActiveScene);
         ApplyActiveSceneContext(false);
     }
 
     void EditorLayer::OnSceneStop()
     {
-        m_SceneSession->EndPlay(m_ActiveScene);
+        m_Boot->SceneSession().EndPlay(m_ActiveScene);
         ApplyActiveSceneContext(false);
     }
 
@@ -189,12 +170,12 @@ namespace Engine
             OnScenePlay();
         if (actions.RequestStop)
             OnSceneStop();
-        if (actions.RequestUndo && m_SceneSession->GetState() == SceneState::Edit)
-            m_CommandHistory->UndoCommand();
-        if (actions.RequestRedo && m_SceneSession->GetState() == SceneState::Edit)
-            m_CommandHistory->RedoCommand();
+        if (actions.RequestUndo && m_Boot->SceneSession().GetState() == SceneState::Edit)
+            m_Boot->GetCommandHistory().UndoCommand();
+        if (actions.RequestRedo && m_Boot->SceneSession().GetState() == SceneState::Edit)
+            m_Boot->GetCommandHistory().RedoCommand();
         if (actions.ToggleStatsPanel)
-            m_PanelCoordinator->ToggleStatsPanelVisible();
+            m_Boot->PanelCoordinator().ToggleStatsPanelVisible();
         if (actions.RequestCloseApplication)
             Application::Get().Close();
     }
@@ -202,20 +183,20 @@ namespace Engine
     EditorShellState EditorLayer::BuildShellState() const
     {
         EditorShellState state;
-        const bool allowHistoryActions = m_SceneSession->GetState() == SceneState::Edit;
-        state.CurrentSceneState = m_SceneSession->GetState();
-        state.CanUndo = allowHistoryActions && m_CommandHistory->CanUndo();
-        state.CanRedo = allowHistoryActions && m_CommandHistory->CanRedo();
-        state.UndoDescription = allowHistoryActions ? m_CommandHistory->GetUndoDescription() : "";
-        state.RedoDescription = allowHistoryActions ? m_CommandHistory->GetRedoDescription() : "";
-        state.ShowStatsPanel = m_PanelCoordinator->IsStatsPanelVisible();
+        const bool allowHistoryActions = m_Boot->SceneSession().GetState() == SceneState::Edit;
+        state.CurrentSceneState = m_Boot->SceneSession().GetState();
+        state.CanUndo = allowHistoryActions && m_Boot->GetCommandHistory().CanUndo();
+        state.CanRedo = allowHistoryActions && m_Boot->GetCommandHistory().CanRedo();
+        state.UndoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetUndoDescription() : "";
+        state.RedoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetRedoDescription() : "";
+        state.ShowStatsPanel = m_Boot->PanelCoordinator().IsStatsPanelVisible();
         return state;
     }
 
     void EditorLayer::BootstrapDefaultScene()
     {
         m_ActiveScene = CreateRef<Scene>();
-        m_ActiveScene->SetSceneRenderer(&m_RenderController->GetSceneRenderer());
+        m_ActiveScene->SetSceneRenderer(&m_Boot->RenderController().GetSceneRenderer());
 
         Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
         auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
@@ -230,29 +211,13 @@ namespace Engine
         auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
         lightTransform.Rotation = {glm::radians(-45.0f), glm::radians(30.0f), 0.0f};
 
-        m_SceneSession->SetEditorScene(m_ActiveScene);
-    }
-
-    void EditorLayer::ConfigureEditorPanels()
-    {
-        m_HierarchyPanel->SetCommandHistory(m_CommandHistory.get());
-        m_AssetBrowserPanel->SetSceneOpenCallback([this](const std::string& path) { OpenScene(path); });
-
-        m_RenderSettingsPanel->SetContext(
-            &m_RenderController->GetSceneRenderer(), m_RenderController->GetPostProcessingSettings(),
-            m_ViewportController->GetHDRFramebuffer(), m_ActiveScene, &m_ShowPhysicsColliders);
-        m_RenderSettingsPanel->SetMSAAChangedCallback([this](uint32_t samples)
-                                                      { m_RenderController->ApplyMSAASamples(samples); });
-
-        m_PanelCoordinator->Initialize(m_HierarchyPanel.get(), m_PropertiesPanel.get(), m_ConsolePanel.get(),
-                                       m_AssetBrowserPanel.get(), m_RenderSettingsPanel.get(), m_CommandHistory.get());
-        m_SelectionGizmoController->Initialize(m_PanelCoordinator.get(), m_CommandHistory.get());
+        m_Boot->SceneSession().SetEditorScene(m_ActiveScene);
     }
 
     void EditorLayer::ApplyActiveSceneContext(bool clearCommandHistory)
     {
-        m_PanelCoordinator->ApplyScene(m_ActiveScene, clearCommandHistory);
-        m_SelectionGizmoController->ClearTransientState();
+        m_Boot->PanelCoordinator().ApplyScene(m_ActiveScene, clearCommandHistory);
+        m_Boot->SelectionGizmoController().ClearTransientState();
     }
 
 } // namespace Engine
