@@ -45,6 +45,17 @@
       }
     },
     {
+      "name": "macos-default",
+      "displayName": "macOS (Ninja + vcpkg)",
+      "description": "macOS CI preset: compile-only verification (no GL 4.3 runtime on macOS)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
       "name": "clion",
       "displayName": "CLion (Ninja + vcpkg)",
       "description": "CLion 专用预设：Ninja 生成器 + vcpkg 工具链",

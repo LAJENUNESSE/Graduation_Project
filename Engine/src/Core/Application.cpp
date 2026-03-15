@@ -11,7 +11,11 @@
 #include "Renderer/Renderer.h"
 
 #include <GLFW/glfw3.h>
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <immintrin.h>
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#include <arm_acle.h>
+#endif
 #include <thread>
 
 #ifdef _WIN32
@@ -154,7 +158,15 @@ namespace Engine
                 while (glfwGetTime() < targetTime - 0.002)
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 while (glfwGetTime() < targetTime)
+                {
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
                     _mm_pause();
+#elif defined(__aarch64__) || defined(_M_ARM64)
+                    __yield();
+#else
+                    std::this_thread::yield();
+#endif
+                }
             }
         }
     }

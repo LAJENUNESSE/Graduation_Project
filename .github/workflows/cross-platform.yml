@@ -1,0 +1,184 @@
+name: Cross-Platform
+
+on:
+  schedule:
+    # 每周一 UTC 02:17 定时触发（避开整点减少并发）
+    - cron: '17 2 * * 1'
+
+  workflow_dispatch:
+    inputs:
+      run_macos:
+        description: 'Run macOS build'
+        type: boolean
+        default: true
+      run_fedora:
+        description: 'Run Fedora build'
+        type: boolean
+        default: true
+      run_alpine:
+        description: 'Run Alpine build'
+        type: boolean
+        default: true
+
+  pull_request:
+    branches: [main]
+    types: [labeled]
+
+concurrency:
+  group: cross-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── macOS (Apple Silicon) ─────────────────────────────
+  build-macos:
+    name: macOS (AppleClang, ARM64)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_macos) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'ci:cross-platform')
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    env:
+      VCPKG_ROOT: /usr/local/share/vcpkg
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install system dependencies
+        run: brew install ninja ccache nasm automake autoconf libtool pkg-config
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: macos-appleclang
+
+      - name: Bootstrap vcpkg
+        run: |
+          if [ ! -f "$VCPKG_ROOT/vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          fi
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics || true
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-macos-arm64-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset macos-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build Engine
+        run: cmake --build build --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --target Editor
+
+  # ── Fedora 40 (RHEL/CentOS 兼容层代理) ───────────────
+  build-fedora:
+    name: Fedora 40 (GCC)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_fedora) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'ci:cross-platform')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: fedora:40
+
+    env:
+      VCPKG_ROOT: /opt/vcpkg
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            git cmake ninja-build gcc gcc-c++ \
+            mesa-libGL-devel mesa-libGLU-devel \
+            libXrandr-devel libXinerama-devel libXcursor-devel libXi-devel libXext-devel \
+            wayland-devel libxkbcommon-devel \
+            nasm autoconf automake libtool pkgconf-pkg-config \
+            curl zip unzip tar \
+            kernel-headers \
+            perl-IPC-Cmd perl-FindBin
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Bootstrap vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-fedora40-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset linux-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache || cmake --preset linux-default
+
+      - name: Build Engine
+        run: cmake --build build --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --target Editor
+
+  # ── Alpine 3.20 (musl libc) ──────────────────────────
+  build-alpine:
+    name: Alpine 3.20 (musl + GCC)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_alpine) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'ci:cross-platform')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: alpine:3.20
+
+    env:
+      VCPKG_ROOT: /opt/vcpkg
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          apk add --no-cache \
+            git cmake ninja gcc g++ musl-dev linux-headers \
+            mesa-dev glu-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+            wayland-dev libxkbcommon-dev \
+            nasm autoconf automake libtool pkgconf \
+            curl zip unzip tar \
+            perl bash
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Bootstrap vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-alpine320-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset linux-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache || cmake --preset linux-default
+
+      - name: Build Engine
+        run: cmake --build build --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --target Editor
