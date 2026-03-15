@@ -50,3 +50,84 @@ jobs:
 
       - name: Build Editor
         run: cmake --build build --config RelWithDebInfo --target Editor
+
+  build-linux:
+    name: Linux (GCC)
+    runs-on: ubuntu-latest
+
+    env:
+      VCPKG_ROOT: /usr/local/share/vcpkg
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build \
+            libgl-dev libglu1-mesa-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev \
+            nasm autoconf automake libtool
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset linux-default
+
+      - name: Build Engine
+        run: cmake --build build --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --target Editor
+
+  build-linux-cuda:
+    name: Linux (GCC + CUDA)
+    runs-on: ubuntu-latest
+
+    env:
+      VCPKG_ROOT: /usr/local/share/vcpkg
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.23
+        with:
+          cuda: '12.6.3'
+          method: network
+          non-cuda-sub-packages: '["libcusparse-dev"]'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build \
+            libgl-dev libglu1-mesa-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev \
+            nasm autoconf automake libtool
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-linux-cuda-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset linux-cuda
+
+      - name: Build Engine
+        run: cmake --build build --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --target Editor
