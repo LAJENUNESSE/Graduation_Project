@@ -155,7 +155,16 @@ namespace Engine
         m_RuntimeScene = nullptr;
 
         if (activeScene)
+        {
             m_SceneRenderer->GetShadowSystem().GetSettings() = activeScene->GetShadowSettings();
+
+            // 恢复 skybox（与 Scene::SetSceneRenderer 逻辑一致）
+            const auto& skyboxPaths = activeScene->GetSkyboxFacePaths();
+            if (skyboxPaths.empty())
+                m_SceneRenderer->GetSkyboxSystem().ClearSkybox();
+            else
+                m_SceneRenderer->GetSkyboxSystem().LoadSkybox(skyboxPaths);
+        }
 
         m_State = SceneState::Edit;
         ENGINE_INFO("[EditorEvent] SceneStop completed, restored entities={0}", CountSceneEntities(activeScene));
