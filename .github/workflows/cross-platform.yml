@@ -30,6 +30,7 @@ concurrency:
 
 jobs:
   # ── macOS (Apple Silicon) ─────────────────────────────
+  # 用 Homebrew 装 FFmpeg/OpenAL，不走 vcpkg（绕过 openal-soft AppleClang 编译失败）
   build-macos:
     name: macOS (AppleClang, ARM64)
     if: >-
@@ -39,9 +40,6 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 60
 
-    env:
-      VCPKG_ROOT: /usr/local/share/vcpkg
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,28 +47,20 @@ jobs:
           fetch-depth: 1
 
       - name: Install system dependencies
-        run: brew install ninja ccache nasm automake autoconf libtool pkg-config
+        run: |
+          brew install ninja ccache pkg-config ffmpeg openal-soft
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1
         with:
           key: macos-appleclang
 
-      - name: Bootstrap vcpkg
-        run: |
-          if [ ! -f "$VCPKG_ROOT/vcpkg" ]; then
-            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          fi
-          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics || true
-
-      - name: Cache vcpkg packages
-        uses: actions/cache@v4
-        with:
-          path: build/vcpkg_installed
-          key: vcpkg-macos-arm64-${{ hashFiles('vcpkg.json') }}
-
       - name: Configure CMake
-        run: cmake --preset macos-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        run: |
+          cmake --preset macos-default \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openal-soft;/opt/homebrew/opt/ffmpeg"
 
       - name: Build Engine
         run: cmake --build build --target Engine
@@ -79,6 +69,7 @@ jobs:
         run: cmake --build build --target Editor
 
   # ── Fedora 40 (RHEL/CentOS 兼容层代理) ───────────────
+  # Fedora 用 vcpkg（glibc 环境，vcpkg 完全兼容）
   build-fedora:
     name: Fedora 40 (GCC)
     if: >-
@@ -132,6 +123,7 @@ jobs:
         run: cmake --build build --target Editor
 
   # ── Alpine 3.20 (musl libc) ──────────────────────────
+  # 用 apk 系统包装 FFmpeg/OpenAL，不走 vcpkg（samurai 不完全兼容 vcpkg 内部调用）
   build-alpine:
     name: Alpine 3.20 (musl + GCC)
     if: >-
@@ -143,10 +135,6 @@ jobs:
     container:
       image: alpine:3.20
 
-    env:
-      VCPKG_ROOT: /opt/vcpkg
-      VCPKG_FORCE_SYSTEM_BINARIES: 1
-
     steps:
       - name: Install system dependencies
         run: |
@@ -155,28 +143,16 @@ jobs:
             mesa-dev glu-dev \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
             wayland-dev libxkbcommon-dev \
-            nasm autoconf automake libtool pkgconf \
-            curl zip unzip tar \
-            perl bash
+            pkgconf \
+            ffmpeg-dev openal-soft-dev
 
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Bootstrap vcpkg
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
-
-      - name: Cache vcpkg packages
-        uses: actions/cache@v4
-        with:
-          path: build/vcpkg_installed
-          key: vcpkg-alpine320-${{ hashFiles('vcpkg.json') }}
-
       - name: Configure CMake
-        run: cmake --preset linux-default
+        run: cmake --preset linux-system
 
       - name: Build Engine
         run: cmake --build build --target Engine

@@ -45,15 +45,25 @@
       }
     },
     {
-      "name": "macos-default",
-      "displayName": "macOS (Ninja + vcpkg)",
-      "description": "macOS CI preset: compile-only verification (no GL 4.3 runtime on macOS)",
+      "name": "linux-system",
+      "displayName": "Linux (Ninja, system deps)",
+      "description": "Linux CI preset using system-installed FFmpeg/OpenAL (no vcpkg)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets"
+        "CMAKE_MODULE_PATH": "${sourceDir}/cmake"
+      }
+    },
+    {
+      "name": "macos-default",
+      "displayName": "macOS (Ninja, system deps)",
+      "description": "macOS CI preset: Homebrew deps, no vcpkg (compile-only, no GL 4.3 runtime)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_MODULE_PATH": "${sourceDir}/cmake"
       }
     },
     {
