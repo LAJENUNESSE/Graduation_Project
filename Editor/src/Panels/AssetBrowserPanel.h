@@ -30,8 +30,7 @@ namespace Engine
         bool EnsureCurrentDirectoryValid();
         bool TryEnumerateDirectory(const std::filesystem::path& directory,
                                    std::vector<std::filesystem::directory_entry>& outEntries);
-        bool TryBuildRelativePath(const std::filesystem::path& path,
-                                  const std::filesystem::path& base,
+        bool TryBuildRelativePath(const std::filesystem::path& path, const std::filesystem::path& base,
                                   std::filesystem::path& outRelative);
         bool TryGetFileSizeText(const std::filesystem::directory_entry& entry, std::string& outText);
         void SetFilesystemError(const std::string& message);

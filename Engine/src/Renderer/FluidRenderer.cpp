@@ -43,7 +43,8 @@ namespace Engine
 
     void FluidRenderer::Init(uint32_t width, uint32_t height)
     {
-        if (m_Initialized) return;
+        if (m_Initialized)
+            return;
 
         m_Width = width;
         m_Height = height;
@@ -51,16 +52,15 @@ namespace Engine
         CreateFullscreenQuad();
 
         // Shaders
-        m_DepthShader     = Shader::Create("assets/shaders/fluid_depth.glsl");
-        m_SmoothShader    = Shader::Create("assets/shaders/fluid_smooth.glsl");
+        m_DepthShader = Shader::Create("assets/shaders/fluid_depth.glsl");
+        m_SmoothShader = Shader::Create("assets/shaders/fluid_smooth.glsl");
         m_ThicknessShader = Shader::Create("assets/shaders/fluid_thickness.glsl");
         m_CompositeShader = Shader::Create("assets/shaders/fluid_composite.glsl");
 
         // Depth FBO: R32F color + depth attachment
         {
             FramebufferSpecification spec;
-            spec.Attachments = {FramebufferTextureFormat::R32F,
-                                FramebufferTextureFormat::DEPTH24STENCIL8};
+            spec.Attachments = {FramebufferTextureFormat::R32F, FramebufferTextureFormat::DEPTH24STENCIL8};
             spec.Width = width;
             spec.Height = height;
             m_DepthFBO = Framebuffer::Create(spec);
@@ -136,17 +136,13 @@ namespace Engine
         m_Initialized = false;
     }
 
-    void FluidRenderer::Render(const Ref<ShaderStorageBuffer>& particleBuffer,
-                                const Ref<VertexArray>& emptyVAO,
-                                uint32_t particleCount,
-                                float particleRadius,
-                                const glm::mat4& view,
-                                const glm::mat4& projection,
-                                uint32_t sceneColorTexID,
-                                uint32_t sceneDepthTexID,
-                                const FluidEmitterComponent& emitter)
+    void FluidRenderer::Render(const Ref<ShaderStorageBuffer>& particleBuffer, const Ref<VertexArray>& emptyVAO,
+                               uint32_t particleCount, float particleRadius, const glm::mat4& view,
+                               const glm::mat4& projection, uint32_t sceneColorTexID, uint32_t sceneDepthTexID,
+                               const FluidEmitterComponent& emitter)
     {
-        if (!m_Initialized || particleCount == 0) return;
+        if (!m_Initialized || particleCount == 0)
+            return;
 
         // Save caller's FBO and GL state
         int callerFBO = RenderCommand::GetBoundFramebufferID();

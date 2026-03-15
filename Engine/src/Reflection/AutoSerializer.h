@@ -2,7 +2,11 @@
 
 #include <string>
 
-namespace YAML { class Emitter; class Node; }
+namespace YAML
+{
+    class Emitter;
+    class Node;
+} // namespace YAML
 
 namespace Engine
 {

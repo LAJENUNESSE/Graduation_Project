@@ -1,16 +1,17 @@
 #include "engpch.h"
 #include "Core/Application.h"
-#include "Core/Log.h"
+#include "Asset/AssetManager.h"
 #include "Core/Assert.h"
+#include "Core/Log.h"
 #include "Core/Timestep.h"
+#include "Debug/PerformanceMonitor.h"
+#include "Debug/ProfileTimer.h"
 #include "Events/ApplicationEvent.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Renderer/Renderer.h"
-#include "Asset/AssetManager.h"
-#include "Debug/PerformanceMonitor.h"
-#include "Debug/ProfileTimer.h"
 
 #include <GLFW/glfw3.h>
+#include <immintrin.h>
 #include <thread>
 
 #ifdef _WIN32
@@ -146,13 +147,14 @@ namespace Engine
 
             PerformanceMonitor::Get().EndFrame();
 
+            // 混合睡眠策略：先粗粒度 sleep 让出 CPU，最后 2ms 用 _mm_pause 自旋等待以提高精度
             if (m_FrameRateLimitEnabled && !m_Window->IsVSync() && m_TargetFrameRate > 0.0f)
             {
-                float targetFrameTime = 1.0f / m_TargetFrameRate;
-                float elapsed = static_cast<float>(glfwGetTime()) - m_LastFrameTime;
-                float sleepTime = targetFrameTime - elapsed;
-                if (sleepTime > 0.001f)
-                    std::this_thread::sleep_for(std::chrono::duration<float>(sleepTime - 0.001f));
+                double targetTime = m_LastFrameTime + 1.0 / static_cast<double>(m_TargetFrameRate);
+                while (glfwGetTime() < targetTime - 0.002)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                while (glfwGetTime() < targetTime)
+                    _mm_pause();
             }
         }
     }

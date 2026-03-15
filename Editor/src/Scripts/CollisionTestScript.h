@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Script/ScriptableEntity.h"
 #include "Core/Log.h"
+#include "Script/ScriptableEntity.h"
 
 namespace Engine
 {
@@ -24,11 +24,10 @@ namespace Engine
             if (other && other.HasComponent<TagComponent>())
                 otherName = other.GetComponent<TagComponent>().Tag;
 
-            ENGINE_WARN("[碰撞进入] {} <-> {}  |  接触点: ({:.2f}, {:.2f}, {:.2f})  法线: ({:.2f}, {:.2f}, {:.2f})  冲量: {:.3f}",
-                        myTag.Tag, otherName,
-                        info.ContactPoint.x, info.ContactPoint.y, info.ContactPoint.z,
-                        info.ContactNormal.x, info.ContactNormal.y, info.ContactNormal.z,
-                        info.Impulse);
+            ENGINE_WARN("[碰撞进入] {} <-> {}  |  接触点: ({:.2f}, {:.2f}, {:.2f})  法线: ({:.2f}, {:.2f}, {:.2f})  "
+                        "冲量: {:.3f}",
+                        myTag.Tag, otherName, info.ContactPoint.x, info.ContactPoint.y, info.ContactPoint.z,
+                        info.ContactNormal.x, info.ContactNormal.y, info.ContactNormal.z, info.Impulse);
         }
 
         void OnCollisionStay(const CollisionCallbackInfo& info) override
@@ -71,10 +70,7 @@ namespace Engine
             ENGINE_INFO("[触发器退出] {} <-> {}", myTag.Tag, otherName);
         }
 
-        void OnDestroy() override
-        {
-            ENGINE_INFO("[碰撞测试] 脚本已销毁");
-        }
+        void OnDestroy() override { ENGINE_INFO("[碰撞测试] 脚本已销毁"); }
     };
 
 } // namespace Engine

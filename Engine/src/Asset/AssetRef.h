@@ -8,8 +8,7 @@ namespace Engine
     // Forward declaration — AssetManager is defined elsewhere
     class AssetManager;
 
-    template <typename T>
-    class AssetRef
+    template <typename T> class AssetRef
     {
     public:
         AssetRef() = default;

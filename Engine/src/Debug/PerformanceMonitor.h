@@ -4,9 +4,9 @@
 #include "Debug/GPUTimerQuery.h"
 
 #include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <string>
-#include <cstdint>
 
 namespace Engine
 {
@@ -43,6 +43,20 @@ namespace Engine
         // GPU timer queries (owned by monitor, used by Scene)
         GPUTimerQuery& GetShadowPassGPUTimer() { return m_ShadowPassGPU; }
         GPUTimerQuery& GetSceneRenderGPUTimer() { return m_SceneRenderGPU; }
+        GPUTimerQuery& GetParticleComputeGPUTimer() { return m_ParticleComputeGPU; }
+
+        // Particle compute timing (CUDA path sets result directly)
+        void SetParticleComputeCudaMs(float ms) { m_ParticleComputeCudaMs = ms; }
+        void SetParticleUsingCuda(bool v) { m_ParticleUsingCuda = v; }
+        bool IsParticleUsingCuda() const { return m_ParticleUsingCuda; }
+
+        // Fluid compute timing
+        GPUTimerQuery& GetFluidComputeGPUTimer() { return m_FluidComputeGPU; }
+        void SetFluidComputeCudaMs(float ms) { m_FluidComputeCudaMs = ms; }
+        void SetFluidUsingCuda(bool v) { m_FluidUsingCuda = v; }
+        bool IsFluidUsingCuda() const { return m_FluidUsingCuda; }
+        void SetFluidActive(bool v) { m_FluidActive = v; }
+        bool IsFluidActive() const { return m_FluidActive; }
 
         // Render stats (modified by RenderCommand::DrawIndexed)
         RenderStats& GetStats() { return m_Stats; }
@@ -58,6 +72,14 @@ namespace Engine
         float GetSwapBuffersCpuMs() const { return m_SwapBuffersCpuMs; }
         float GetShadowPassGpuMs() const { return m_ShadowPassGPU.GetElapsedMs(); }
         float GetSceneRenderGpuMs() const { return m_SceneRenderGPU.GetElapsedMs(); }
+        float GetParticleComputeGpuMs() const
+        {
+            return m_ParticleUsingCuda ? m_ParticleComputeCudaMs : m_ParticleComputeGPU.GetElapsedMs();
+        }
+        float GetFluidComputeGpuMs() const
+        {
+            return m_FluidUsingCuda ? m_FluidComputeCudaMs : m_FluidComputeGPU.GetElapsedMs();
+        }
 
         // Frame time history (ring buffer for PlotLines)
         static constexpr int FrameHistorySize = 120;
@@ -90,6 +112,15 @@ namespace Engine
         // GPU timers
         GPUTimerQuery m_ShadowPassGPU;
         GPUTimerQuery m_SceneRenderGPU;
+        GPUTimerQuery m_ParticleComputeGPU;
+        float m_ParticleComputeCudaMs = 0.0f;
+        bool m_ParticleUsingCuda = false;
+
+        // Fluid GPU timers
+        GPUTimerQuery m_FluidComputeGPU;
+        float m_FluidComputeCudaMs = 0.0f;
+        bool m_FluidUsingCuda = false;
+        bool m_FluidActive = false;
 
         // Render stats
         RenderStats m_Stats;

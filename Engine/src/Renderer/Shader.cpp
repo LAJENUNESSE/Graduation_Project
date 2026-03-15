@@ -13,8 +13,7 @@ namespace Engine
         return CreateRef<OpenGLShader>(filepath);
     }
 
-    Ref<Shader> Shader::Create(const std::string& name, const std::string& vertexSrc,
-                               const std::string& fragmentSrc)
+    Ref<Shader> Shader::Create(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
     {
         return CreateRef<OpenGLShader>(name, vertexSrc, fragmentSrc);
     }

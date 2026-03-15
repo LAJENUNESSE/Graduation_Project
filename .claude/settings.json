@@ -6,8 +6,29 @@
       "Bash(git log *)",
       "Bash(git diff *)",
       "Bash(git branch *)",
-      "WebSearch",
-      "Search"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git tag *)",
+      "Bash(date *)",
+      "Bash(echo *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(sort *)",
+      "Bash(grep *)",
+      "Bash(tr *)",
+      "WebSearch"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/secrets/*)",
+      "Read(**/*credential*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)"
     ]
   }
 }

@@ -3,8 +3,8 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
-#include "Renderer/RendererAPI.h"
 #include "Platform/OpenGL/OpenGLBuffer.h"
+#include "Renderer/RendererAPI.h"
 
 namespace Engine
 {

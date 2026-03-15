@@ -3,8 +3,8 @@
 #include "Core/Base.h"
 #include "Renderer/Shader.h"
 
-#include <glm/glm.hpp>
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 #include <vector>
 
 namespace Engine
@@ -49,10 +49,14 @@ namespace Engine
         float AmbientStrength = 0.3f;
     };
 
+    class SceneEntityIndex;
+    class WorldTransformCache;
+
     class LightSystem
     {
     public:
-        static LightEnvironment CollectLights(entt::registry& reg);
+        static LightEnvironment CollectLights(entt::registry& reg, const SceneEntityIndex& index,
+                                               WorldTransformCache* cache = nullptr);
         static void UploadToShader(const Ref<Shader>& shader, const LightEnvironment& env);
     };
 

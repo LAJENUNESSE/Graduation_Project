@@ -1,38 +1,18 @@
 #include "engpch.h"
 #include "Scene/Systems/TerrainRenderSystem.h"
-#include "Scene/Components.h"
-#include "Terrain/TerrainMeshGenerator.h"
-#include "Renderer/RenderCommand.h"
-#include "Renderer/Renderer.h"
-#include "Renderer/EditorCamera.h"
 #include "Asset/AssetManager.h"
 #include "Core/Log.h"
+#include "Renderer/EditorCamera.h"
+#include "Renderer/RenderCommand.h"
+#include "Renderer/Renderer.h"
+#include "Scene/Components.h"
+#include "Scene/Runtime/RuntimeComponents.h"
+#include "Scene/WorldTransformService.h"
+#include "Scene/SceneEntityIndex.h"
+#include "Terrain/TerrainMeshGenerator.h"
 
 namespace Engine
 {
-
-    // 递归计算世界变换矩阵
-    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
-    {
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 localMatrix = transform.GetTransform();
-
-        if (reg.all_of<RelationshipComponent>(entity))
-        {
-            auto& rel = reg.get<RelationshipComponent>(entity);
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                auto view = reg.view<IDComponent>();
-                for (auto e : view)
-                {
-                    if (view.get<IDComponent>(e).ID == rel.ParentID)
-                        return ComputeWorldTransform(reg, e) * localMatrix;
-                }
-            }
-        }
-
-        return localMatrix;
-    }
 
     void TerrainRenderSystem::Init()
     {
@@ -51,25 +31,18 @@ namespace Engine
             uint32_t eid = static_cast<uint32_t>(entity);
 
             auto& cache = m_Cache[eid];
-            bool needRebuild = tc.MeshDirty
-                || cache.HeightmapPath != tc.HeightmapPath
-                || cache.HeightScale != tc.HeightScale
-                || cache.TerrainSize != tc.TerrainSize
-                || cache.LODLevels != tc.LODLevels;
+            bool needRebuild = tc.MeshDirty || cache.HeightmapPath != tc.HeightmapPath ||
+                               cache.HeightScale != tc.HeightScale || cache.TerrainSize != tc.TerrainSize ||
+                               cache.LODLevels != tc.LODLevels;
 
             if (needRebuild && !tc.HeightmapPath.empty())
             {
-                // 释放旧数据
-                if (tc.RuntimeMeshData)
-                {
-                    delete tc.RuntimeMeshData;
-                    tc.RuntimeMeshData = nullptr;
-                }
+                auto meshData =
+                    TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
 
-                auto meshData = TerrainMeshGenerator::Generate(
-                    tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
-
-                tc.RuntimeMeshData = new TerrainMeshData(std::move(meshData));
+                // 写入 TerrainRuntimeComponent（懒创建）
+                auto& rtc = reg.get_or_emplace<TerrainRuntimeComponent>(entity);
+                rtc.MeshData = std::make_unique<TerrainMeshData>(std::move(meshData));
                 tc.MeshDirty = false;
 
                 cache.HeightmapPath = tc.HeightmapPath;
@@ -80,9 +53,9 @@ namespace Engine
         }
     }
 
-    void TerrainRenderSystem::Render(entt::registry& reg, const EditorCamera& camera,
-                                     const LightEnvironment& lights, const ShadowData& shadow,
-                                     const ShadowSettings& shadowSettings)
+    void TerrainRenderSystem::Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
+                                     const ShadowData& shadow, const ShadowSettings& shadowSettings,
+                                     const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         auto view = reg.view<TransformComponent, TerrainComponent>();
         bool anyTerrain = false;
@@ -90,7 +63,9 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = tc.RuntimeMeshData;
+            TerrainMeshData* meshData = nullptr;
+            if (reg.all_of<TerrainRuntimeComponent>(entity))
+                meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
             if (!meshData || meshData->LODs.empty())
                 continue;
 
@@ -119,11 +94,13 @@ namespace Engine
             // LOD 选择
             float dist = glm::distance(camera.GetPosition(), transform.Translation);
             int lod = 0;
-            if (dist > tc.LODDistance2 && static_cast<int>(meshData->LODs.size()) >= 3) lod = 2;
-            else if (dist > tc.LODDistance1 && static_cast<int>(meshData->LODs.size()) >= 2) lod = 1;
+            if (dist > tc.LODDistance2 && static_cast<int>(meshData->LODs.size()) >= 3)
+                lod = 2;
+            else if (dist > tc.LODDistance1 && static_cast<int>(meshData->LODs.size()) >= 2)
+                lod = 1;
 
             // 设置变换
-            m_TerrainShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
+            m_TerrainShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
             m_TerrainShader->SetMat4("u_ViewProjection", camera.GetViewProjection());
             m_TerrainShader->SetInt("u_EntityID", static_cast<int>(eid));
 
@@ -149,7 +126,8 @@ namespace Engine
             const int normalUnits[4] = {11, 12, 13, 14};
             const char* albedoNames[4] = {"u_Layer0Albedo", "u_Layer1Albedo", "u_Layer2Albedo", "u_Layer3Albedo"};
             const char* normalNames[4] = {"u_Layer0Normal", "u_Layer1Normal", "u_Layer2Normal", "u_Layer3Normal"};
-            const char* hasNormalNames[4] = {"u_HasLayer0Normal", "u_HasLayer1Normal", "u_HasLayer2Normal", "u_HasLayer3Normal"};
+            const char* hasNormalNames[4] = {"u_HasLayer0Normal", "u_HasLayer1Normal", "u_HasLayer2Normal",
+                                             "u_HasLayer3Normal"};
 
             float tilings[4], metallics[4], roughnesses[4];
             for (int i = 0; i < 4; i++)
@@ -183,15 +161,12 @@ namespace Engine
             }
 
             // 预生成的 uniform 名称数组，避免每帧循环内的字符串拼接
-            static const char* s_LayerTiling[] = {
-                "u_LayerTiling[0]", "u_LayerTiling[1]", "u_LayerTiling[2]", "u_LayerTiling[3]"
-            };
-            static const char* s_LayerMetallic[] = {
-                "u_LayerMetallic[0]", "u_LayerMetallic[1]", "u_LayerMetallic[2]", "u_LayerMetallic[3]"
-            };
-            static const char* s_LayerRoughness[] = {
-                "u_LayerRoughness[0]", "u_LayerRoughness[1]", "u_LayerRoughness[2]", "u_LayerRoughness[3]"
-            };
+            static const char* s_LayerTiling[] = {"u_LayerTiling[0]", "u_LayerTiling[1]", "u_LayerTiling[2]",
+                                                  "u_LayerTiling[3]"};
+            static const char* s_LayerMetallic[] = {"u_LayerMetallic[0]", "u_LayerMetallic[1]", "u_LayerMetallic[2]",
+                                                    "u_LayerMetallic[3]"};
+            static const char* s_LayerRoughness[] = {"u_LayerRoughness[0]", "u_LayerRoughness[1]",
+                                                     "u_LayerRoughness[2]", "u_LayerRoughness[3]"};
 
             // 上传数组 uniform
             for (int i = 0; i < 4; i++)
@@ -211,18 +186,21 @@ namespace Engine
             Renderer::EndScene();
     }
 
-    void TerrainRenderSystem::RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader)
+    void TerrainRenderSystem::RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader,
+                                          const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         auto view = reg.view<TransformComponent, TerrainComponent>();
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            auto* meshData = tc.RuntimeMeshData;
+            TerrainMeshData* meshData = nullptr;
+            if (reg.all_of<TerrainRuntimeComponent>(entity))
+                meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
             if (!meshData || meshData->LODs.empty())
                 continue;
 
             auto& transform = view.get<TransformComponent>(entity);
-            depthShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
+            depthShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
 
             // 阴影用 LOD0（最高精度）
             meshData->LODs[0].VAO->Bind();

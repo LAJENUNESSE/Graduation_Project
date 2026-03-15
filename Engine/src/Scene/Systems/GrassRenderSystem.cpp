@@ -1,44 +1,24 @@
 #include "engpch.h"
 #include "Scene/Systems/GrassRenderSystem.h"
-#include "Scene/Components.h"
-#include "Terrain/TerrainMeshGenerator.h"
+#include "Asset/AssetManager.h"
+#include "Core/Log.h"
+#include "Renderer/EditorCamera.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/RendererAPI.h"
 #include "Renderer/RendererCapabilities.h"
-#include "Renderer/EditorCamera.h"
-#include "Asset/AssetManager.h"
-#include "Core/Log.h"
+#include "Scene/Components.h"
+#include "Scene/Runtime/RuntimeComponents.h"
+#include "Scene/WorldTransformService.h"
+#include "Scene/SceneEntityIndex.h"
+#include "Terrain/TerrainMeshGenerator.h"
 
-#include <glad/gl.h>
-#include <cstring>
 #include <algorithm>
+#include <cstring>
+#include <glad/gl.h>
 
 namespace Engine
 {
-
-    // 递归计算世界变换矩阵
-    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
-    {
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 localMatrix = transform.GetTransform();
-
-        if (reg.all_of<RelationshipComponent>(entity))
-        {
-            auto& rel = reg.get<RelationshipComponent>(entity);
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                auto view = reg.view<IDComponent>();
-                for (auto e : view)
-                {
-                    if (view.get<IDComponent>(e).ID == rel.ParentID)
-                        return ComputeWorldTransform(reg, e) * localMatrix;
-                }
-            }
-        }
-
-        return localMatrix;
-    }
 
     namespace
     {
@@ -63,7 +43,7 @@ namespace Engine
         };
 
         static constexpr uint32_t MAX_GRASS_BLADES = 500000;
-    }
+    } // namespace
 
     void GrassRenderSystem::Init()
     {
@@ -73,9 +53,9 @@ namespace Engine
             return;
         }
 
-        m_PlacementShader  = Shader::Create("assets/shaders/grass_placement.glsl");
+        m_PlacementShader = Shader::Create("assets/shaders/grass_placement.glsl");
         m_RenderArgsShader = Shader::Create("assets/shaders/grass_render_args.glsl");
-        m_BillboardShader  = Shader::Create("assets/shaders/grass_billboard.glsl");
+        m_BillboardShader = Shader::Create("assets/shaders/grass_billboard.glsl");
 
         auto whiteHandle = AssetManager::Load<Texture2D>("builtin:white");
         m_WhiteTexture = AssetManager::GetRef<Texture2D>(whiteHandle);
@@ -141,19 +121,18 @@ namespace Engine
 
             // 脏检测
             auto& cache = m_Cache[eid];
-            bool dirty = cache.GrassEnabled != tc.GrassEnabled
-                || cache.GrassDensity != tc.GrassDensity
-                || cache.GrassHeight != tc.GrassHeight
-                || cache.GrassWidth != tc.GrassWidth
-                || cache.GrassWindStrength != tc.GrassWindStrength
-                || cache.TerrainSize != tc.TerrainSize
-                || cache.HeightScale != tc.HeightScale
-                || cache.HeightmapPath != tc.HeightmapPath
-                || cache.GrassTexture != tc.GrassTexture;
+            bool dirty = cache.GrassEnabled != tc.GrassEnabled || cache.GrassDensity != tc.GrassDensity ||
+                         cache.GrassHeight != tc.GrassHeight || cache.GrassWidth != tc.GrassWidth ||
+                         cache.GrassWindStrength != tc.GrassWindStrength || cache.TerrainSize != tc.TerrainSize ||
+                         cache.HeightScale != tc.HeightScale || cache.HeightmapPath != tc.HeightmapPath ||
+                         cache.GrassTexture != tc.GrassTexture;
 
             if (dirty)
             {
-                RebuildGrass(eid, tc, transform);
+                TerrainMeshData* meshData = nullptr;
+                if (reg.all_of<TerrainRuntimeComponent>(entity))
+                    meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
+                RebuildGrass(eid, tc, transform, meshData);
 
                 cache.GrassEnabled = tc.GrassEnabled;
                 cache.GrassDensity = tc.GrassDensity;
@@ -175,8 +154,8 @@ namespace Engine
                 if (!inst.ReadbackPending || !inst.ReadbackFence)
                     continue;
 
-                GLenum result = glClientWaitSync(
-                    static_cast<GLsync>(inst.ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+                GLenum result =
+                    glClientWaitSync(static_cast<GLsync>(inst.ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
 
                 if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED)
                 {
@@ -194,19 +173,18 @@ namespace Engine
         }
     }
 
-    void GrassRenderSystem::RebuildGrass(uint32_t eid, TerrainComponent& tc,
-                                          const TransformComponent& transform)
+    void GrassRenderSystem::RebuildGrass(uint32_t eid, TerrainComponent& tc, const TransformComponent& transform,
+                                         TerrainMeshData* meshData)
     {
-        auto* meshData = tc.RuntimeMeshData;
         if (!meshData || meshData->HeightData.empty())
         {
             ENGINE_WARN("[Grass] Entity {} has no terrain mesh data, skipping grass rebuild.", eid);
             return;
         }
 
-        uint32_t maxGrass = static_cast<uint32_t>(
-            std::min(static_cast<double>(tc.TerrainSize * tc.TerrainSize * tc.GrassDensity),
-                     static_cast<double>(MAX_GRASS_BLADES)));
+        uint32_t maxGrass =
+            static_cast<uint32_t>(std::min(static_cast<double>(tc.TerrainSize * tc.TerrainSize * tc.GrassDensity),
+                                           static_cast<double>(MAX_GRASS_BLADES)));
 
         if (maxGrass == 0)
         {
@@ -230,8 +208,7 @@ namespace Engine
 
         // 高度图 SSBO
         uint32_t heightBufSize = static_cast<uint32_t>(meshData->HeightData.size() * sizeof(float));
-        inst.HeightBuffer = ShaderStorageBuffer::CreateGPUOnly(
-            meshData->HeightData.data(), heightBufSize, 1);
+        inst.HeightBuffer = ShaderStorageBuffer::CreateGPUOnly(meshData->HeightData.data(), heightBufSize, 1);
 
         // Counter SSBO (dynamic, 需要 fallback 回读)
         GrassCounterData counter{0};
@@ -296,9 +273,9 @@ namespace Engine
         }
     }
 
-    void GrassRenderSystem::Render(entt::registry& reg, const EditorCamera& camera,
-                                    const LightEnvironment& lights, const ShadowData& shadow,
-                                    const ShadowSettings& shadowSettings, float totalTime)
+    void GrassRenderSystem::Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
+                                   const ShadowData& shadow, const ShadowSettings& shadowSettings, float totalTime,
+                                   const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         if (!RendererCapabilities::Get().SupportsComputeShaders)
             return;
@@ -329,16 +306,18 @@ namespace Engine
         for (auto entity : view)
         {
             auto& tc = view.get<TerrainComponent>(entity);
-            if (!tc.GrassEnabled) continue;
+            if (!tc.GrassEnabled)
+                continue;
 
             uint32_t eid = static_cast<uint32_t>(entity);
             auto it = m_Instances.find(eid);
-            if (it == m_Instances.end()) continue;
+            if (it == m_Instances.end())
+                continue;
 
             auto& inst = it->second;
             auto& transform = view.get<TransformComponent>(entity);
 
-            m_BillboardShader->SetMat4("u_Transform", ComputeWorldTransform(reg, entity));
+            m_BillboardShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
             m_BillboardShader->SetInt("u_EntityID", static_cast<int>(eid));
 
             // 绑定草地纹理 (unit 2)

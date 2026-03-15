@@ -2,8 +2,8 @@
 #include "Renderer/VertexArray.h"
 
 #include "Core/Assert.h"
-#include "Renderer/RendererAPI.h"
 #include "Platform/OpenGL/OpenGLVertexArray.h"
+#include "Renderer/RendererAPI.h"
 
 namespace Engine
 {

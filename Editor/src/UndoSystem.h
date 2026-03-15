@@ -1,15 +1,16 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Scene/Scene.h"
-#include "Scene/Entity.h"
+#include "Core/UUID.h"
 #include "Scene/Components.h"
+#include "Scene/Entity.h"
+#include "Scene/Scene.h"
 
-#include <string>
-#include <stack>
-#include <vector>
-#include <functional>
 #include <any>
+#include <functional>
+#include <stack>
+#include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -56,9 +57,9 @@ namespace Engine
     class TransformChangeCommand : public ICommand
     {
     public:
-        TransformChangeCommand(Entity entity,
-                                const glm::vec3& oldTranslation, const glm::vec3& oldRotation, const glm::vec3& oldScale,
-                                const glm::vec3& newTranslation, const glm::vec3& newRotation, const glm::vec3& newScale);
+        TransformChangeCommand(Entity entity, const glm::vec3& oldTranslation, const glm::vec3& oldRotation,
+                               const glm::vec3& oldScale, const glm::vec3& newTranslation, const glm::vec3& newRotation,
+                               const glm::vec3& newScale);
 
         void Execute() override;
         void Undo() override;
@@ -71,7 +72,6 @@ namespace Engine
         glm::vec3 m_OldTranslation, m_OldRotation, m_OldScale;
         glm::vec3 m_NewTranslation, m_NewRotation, m_NewScale;
     };
-
 
     class MultiTransformChangeCommand : public ICommand
     {
@@ -126,29 +126,23 @@ namespace Engine
         std::string GetDescription() const override;
 
     private:
+        struct ComponentSnapshot
+        {
+            std::string TypeName;
+            std::any Data;
+        };
+
         Ref<Scene> m_Scene;
-        entt::entity m_EntityHandle;
+        UUID m_EntityUUID;
         std::string m_EntityName;
-        // 保存实体组件快照用于恢复
+
+        // 核心组件快照（始终存在）
         TransformComponent m_TransformSnapshot;
-        bool m_HasMeshRenderer = false;
-        MeshRendererComponent m_MeshRendererSnapshot;
-        bool m_HasLight = false;
-        LightComponent m_LightSnapshot;
-        bool m_HasCamera = false;
-        CameraComponent m_CameraSnapshot;
-        bool m_HasRigidBody = false;
-        RigidBodyComponent m_RigidBodySnapshot;
-        bool m_HasBoxCollider = false;
-        BoxColliderComponent m_BoxColliderSnapshot;
-        bool m_HasSphereCollider = false;
-        SphereColliderComponent m_SphereColliderSnapshot;
-        bool m_HasParticle = false;
-        ParticleEmitterComponent m_ParticleSnapshot;
-        bool m_HasAudioSource = false;
-        AudioSourceComponent m_AudioSourceSnapshot;
-        bool m_HasAudioListener = false;
-        AudioListenerComponent m_AudioListenerSnapshot;
+        bool m_HasRelationship = false;
+        RelationshipComponent m_RelationshipSnapshot;
+
+        // 数据驱动组件快照（通过 ComponentRegistry 自动收集）
+        std::vector<ComponentSnapshot> m_ComponentSnapshots;
     };
 
     // ========== 泛型属性修改命令 ==========
@@ -158,9 +152,7 @@ namespace Engine
     public:
         using ApplyFn = std::function<void(const std::any&)>;
 
-        PropertyChangeCommand(const std::string& description,
-                               std::any oldValue, std::any newValue,
-                               ApplyFn applyFn);
+        PropertyChangeCommand(const std::string& description, std::any oldValue, std::any newValue, ApplyFn applyFn);
 
         void Execute() override;
         void Undo() override;
@@ -188,8 +180,8 @@ namespace Engine
     private:
         Ref<Scene> m_Scene;
         UUID m_ChildUUID;
-        UUID m_OldParentUUID;   // 0 = 原来是根节点
-        UUID m_NewParentUUID;   // 0 = 解除父子关系
+        UUID m_OldParentUUID; // 0 = 原来是根节点
+        UUID m_NewParentUUID; // 0 = 解除父子关系
         // 保存变更前子实体的本地 Transform，用于精确还原
         glm::vec3 m_OldTranslation, m_OldRotation, m_OldScale;
     };

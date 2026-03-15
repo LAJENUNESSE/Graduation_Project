@@ -1,30 +1,29 @@
 #include "engpch.h"
 #include "Scene/SceneSerializer.h"
 
-#include "Scene/Scene.h"
-#include "Scene/Entity.h"
-#include "Scene/Components.h"
-#include "Script/NativeScriptComponent.h"
-#include "Script/ScriptRegistry.h"
-#include "Reflection/ComponentRegistry.h"
-#include "Reflection/AutoSerializer.h"
-#include "Renderer/Mesh.h"
-#include "Renderer/Texture.h"
 #include "Asset/AssetManager.h"
 #include "Asset/PathUtils.h"
 #include "Core/Log.h"
+#include "Reflection/AutoSerializer.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Renderer/Mesh.h"
+#include "Renderer/Texture.h"
+#include "Scene/Components.h"
+#include "Scene/Entity.h"
+#include "Scene/Scene.h"
+#include "Script/NativeScriptComponent.h"
+#include "Script/ScriptRegistry.h"
 
 #include <yaml-cpp/yaml.h>
 
-#include <glm/glm.hpp>
 #include <filesystem>
 #include <fstream>
+#include <glm/glm.hpp>
 
 namespace YAML
 {
 
-    template <>
-    struct convert<glm::vec3>
+    template <> struct convert<glm::vec3>
     {
         static Node encode(const glm::vec3& rhs)
         {
@@ -48,8 +47,7 @@ namespace YAML
         }
     };
 
-    template <>
-    struct convert<glm::vec4>
+    template <> struct convert<glm::vec4>
     {
         static Node encode(const glm::vec4& rhs)
         {
@@ -75,8 +73,7 @@ namespace YAML
         }
     };
 
-    template <>
-    struct convert<glm::vec2>
+    template <> struct convert<glm::vec2>
     {
         static Node encode(const glm::vec2& rhs)
         {
@@ -124,10 +121,7 @@ namespace Engine
         return out;
     }
 
-    SceneSerializer::SceneSerializer(const Ref<Scene>& scene)
-        : m_Scene(scene)
-    {
-    }
+    SceneSerializer::SceneSerializer(const Ref<Scene>& scene) : m_Scene(scene) {}
 
     static void SerializeEntity(YAML::Emitter& out, Entity entity)
     {
@@ -182,10 +176,18 @@ namespace Engine
             const char* meshTypeStr = "Cube";
             switch (mrc.Type)
             {
-            case MeshType::Cube:   meshTypeStr = "Cube";   break;
-            case MeshType::Plane:  meshTypeStr = "Plane";  break;
-            case MeshType::Sphere: meshTypeStr = "Sphere"; break;
-            case MeshType::Model:  meshTypeStr = "Model";  break;
+            case MeshType::Cube:
+                meshTypeStr = "Cube";
+                break;
+            case MeshType::Plane:
+                meshTypeStr = "Plane";
+                break;
+            case MeshType::Sphere:
+                meshTypeStr = "Sphere";
+                break;
+            case MeshType::Model:
+                meshTypeStr = "Model";
+                break;
             }
             out << YAML::Key << "MeshType" << YAML::Value << meshTypeStr;
 
@@ -196,14 +198,17 @@ namespace Engine
             }
 
             out << YAML::Key << "Color" << YAML::Value << mrc.Color;
-            out << YAML::Key << "TexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.DiffuseTextureAsset);
+            out << YAML::Key << "TexturePath" << YAML::Value
+                << AssetManager::GetPath<Texture2D>(mrc.DiffuseTextureAsset);
             out << YAML::Key << "Tiling" << YAML::Value << mrc.Tiling;
             out << YAML::Key << "Shininess" << YAML::Value << mrc.Shininess;
             out << YAML::Key << "NormalMapPath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.NormalMapAsset);
             out << YAML::Key << "Metallic" << YAML::Value << mrc.Metallic;
             out << YAML::Key << "Roughness" << YAML::Value << mrc.Roughness;
-            out << YAML::Key << "MetallicTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.MetallicTextureAsset);
-            out << YAML::Key << "RoughnessTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.RoughnessTextureAsset);
+            out << YAML::Key << "MetallicTexturePath" << YAML::Value
+                << AssetManager::GetPath<Texture2D>(mrc.MetallicTextureAsset);
+            out << YAML::Key << "RoughnessTexturePath" << YAML::Value
+                << AssetManager::GetPath<Texture2D>(mrc.RoughnessTextureAsset);
             out << YAML::Key << "AOTexturePath" << YAML::Value << AssetManager::GetPath<Texture2D>(mrc.AOTextureAsset);
             out << YAML::EndMap;
         }
@@ -216,8 +221,7 @@ namespace Engine
             auto& cc = entity.GetComponent<CameraComponent>();
             auto& camera = cc.Camera;
 
-            out << YAML::Key << "ProjectionType"
-                << YAML::Value << static_cast<int>(camera.GetProjectionType());
+            out << YAML::Key << "ProjectionType" << YAML::Value << static_cast<int>(camera.GetProjectionType());
             out << YAML::Key << "PerspectiveFOV" << YAML::Value << camera.GetPerspectiveVerticalFOV();
             out << YAML::Key << "PerspectiveNear" << YAML::Value << camera.GetPerspectiveNearClip();
             out << YAML::Key << "PerspectiveFar" << YAML::Value << camera.GetPerspectiveFarClip();
@@ -229,11 +233,12 @@ namespace Engine
             out << YAML::EndMap;
         }
 
-        // LightComponent, RigidBodyComponent, BoxColliderComponent,
-        // SphereColliderComponent, CollisionParticleTriggerComponent
-        // 统一通过反射系统自动序列化
+        // 反射注册的组件统一通过 AutoSerializer 序列化（跳过 CustomSerial）
         for (auto& meta : ComponentRegistry::Instance().GetAll())
         {
+            if (meta.Flags & ComponentMeta::CustomSerial)
+                continue;
+
             uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
             auto* scene = entity.GetScene();
             if (scene && meta.Has(*scene, entityId))
@@ -268,8 +273,10 @@ namespace Engine
             for (int i = 0; i < 4; i++)
             {
                 std::string p = "Layer" + std::to_string(i);
-                out << YAML::Key << (p + "Texture") << YAML::Value << AssetManager::GetPath<Texture2D>(tc.LayerTextures[i]);
-                out << YAML::Key << (p + "NormalMap") << YAML::Value << AssetManager::GetPath<Texture2D>(tc.LayerNormalMaps[i]);
+                out << YAML::Key << (p + "Texture") << YAML::Value
+                    << AssetManager::GetPath<Texture2D>(tc.LayerTextures[i]);
+                out << YAML::Key << (p + "NormalMap") << YAML::Value
+                    << AssetManager::GetPath<Texture2D>(tc.LayerNormalMaps[i]);
                 out << YAML::Key << (p + "Tiling") << YAML::Value << tc.LayerTiling[i];
                 out << YAML::Key << (p + "Metallic") << YAML::Value << tc.LayerMetallic[i];
                 out << YAML::Key << (p + "Roughness") << YAML::Value << tc.LayerRoughness[i];
@@ -288,45 +295,9 @@ namespace Engine
             out << YAML::EndMap;
         }
 
-        // AudioSourceComponent
-        if (entity.HasComponent<AudioSourceComponent>())
-        {
-            out << YAML::Key << "AudioSourceComponent";
-            out << YAML::BeginMap;
-            auto& asc = entity.GetComponent<AudioSourceComponent>();
-            out << YAML::Key << "AudioPath" << YAML::Value << asc.AudioPath;
-            out << YAML::Key << "Volume" << YAML::Value << asc.Volume;
-            out << YAML::Key << "Pitch" << YAML::Value << asc.Pitch;
-            out << YAML::Key << "MinDistance" << YAML::Value << asc.MinDistance;
-            out << YAML::Key << "MaxDistance" << YAML::Value << asc.MaxDistance;
-            out << YAML::Key << "Loop" << YAML::Value << asc.Loop;
-            out << YAML::Key << "PlayOnStart" << YAML::Value << asc.PlayOnStart;
-            out << YAML::Key << "Spatial" << YAML::Value << asc.Spatial;
-            out << YAML::EndMap;
-        }
-
-        // AudioListenerComponent
-        if (entity.HasComponent<AudioListenerComponent>())
-        {
-            out << YAML::Key << "AudioListenerComponent";
-            out << YAML::BeginMap;
-            auto& alc = entity.GetComponent<AudioListenerComponent>();
-            out << YAML::Key << "Active" << YAML::Value << alc.Active;
-            out << YAML::EndMap;
-        }
-
-        // VideoPlayerComponent
-        if (entity.HasComponent<VideoPlayerComponent>())
-        {
-            out << YAML::Key << "VideoPlayerComponent";
-            out << YAML::BeginMap;
-            auto& vpc = entity.GetComponent<VideoPlayerComponent>();
-            out << YAML::Key << "StreamURL" << YAML::Value << vpc.StreamURL;
-            out << YAML::Key << "PlayOnStart" << YAML::Value << vpc.PlayOnStart;
-            out << YAML::Key << "Loop" << YAML::Value << vpc.Loop;
-            out << YAML::Key << "Volume" << YAML::Value << vpc.Volume;
-            out << YAML::EndMap;
-        }
+        // AudioSourceComponent — 通过反射 AutoSerializer 自动序列化
+        // AudioListenerComponent — 通过反射 AutoSerializer 自动序列化
+        // VideoPlayerComponent — 通过反射 AutoSerializer 自动序列化
 
         // ParticleEmitterComponent
         if (entity.HasComponent<ParticleEmitterComponent>())
@@ -351,19 +322,21 @@ namespace Engine
             out << YAML::Key << "Gravity" << YAML::Value << pe.Gravity;
             out << YAML::Key << "Damping" << YAML::Value << pe.Damping;
             out << YAML::Key << "BlendMode" << YAML::Value << static_cast<int>(pe.Blend);
-            out << YAML::Key << "SPHEnabled" << YAML::Value << pe.SPHEnabled;
-            out << YAML::Key << "SPH_RestDensity" << YAML::Value << pe.SPH_RestDensity;
-            out << YAML::Key << "SPH_GasConstant" << YAML::Value << pe.SPH_GasConstant;
-            out << YAML::Key << "SPH_Viscosity" << YAML::Value << pe.SPH_Viscosity;
-            out << YAML::Key << "SPH_SmoothingRadius" << YAML::Value << pe.SPH_SmoothingRadius;
-            out << YAML::Key << "SPH_ParticleMass" << YAML::Value << pe.SPH_ParticleMass;
-            out << YAML::Key << "SPH_PCISPHEnabled" << YAML::Value << pe.SPH_PCISPHEnabled;
-            out << YAML::Key << "SPH_PCISPHIterations" << YAML::Value << pe.SPH_PCISPHIterations;
-            out << YAML::Key << "SPH_PCISPHDelta" << YAML::Value << pe.SPH_PCISPHDelta;
-            out << YAML::Key << "SPH_SurfaceTension" << YAML::Value << pe.SPH_SurfaceTension;
-            out << YAML::Key << "SPH_RigidBodyCoupling" << YAML::Value << pe.SPH_RigidBodyCoupling;
-            out << YAML::Key << "SPH_BoundaryStiffness" << YAML::Value << pe.SPH_BoundaryStiffness;
-            out << YAML::Key << "SPH_BoundaryDamping" << YAML::Value << pe.SPH_BoundaryDamping;
+            out << YAML::Key << "SPH" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Enabled" << YAML::Value << pe.SPH.Enabled;
+            out << YAML::Key << "RestDensity" << YAML::Value << pe.SPH.RestDensity;
+            out << YAML::Key << "GasConstant" << YAML::Value << pe.SPH.GasConstant;
+            out << YAML::Key << "Viscosity" << YAML::Value << pe.SPH.Viscosity;
+            out << YAML::Key << "SmoothingRadius" << YAML::Value << pe.SPH.SmoothingRadius;
+            out << YAML::Key << "ParticleMass" << YAML::Value << pe.SPH.ParticleMass;
+            out << YAML::Key << "PCISPHEnabled" << YAML::Value << pe.SPH.PCISPHEnabled;
+            out << YAML::Key << "PCISPHIterations" << YAML::Value << pe.SPH.PCISPHIterations;
+            out << YAML::Key << "PCISPHDelta" << YAML::Value << pe.SPH.PCISPHDelta;
+            out << YAML::Key << "SurfaceTension" << YAML::Value << pe.SPH.SurfaceTension;
+            out << YAML::Key << "RigidBodyCoupling" << YAML::Value << pe.SPH.RigidBodyCoupling;
+            out << YAML::Key << "BoundaryStiffness" << YAML::Value << pe.SPH.BoundaryStiffness;
+            out << YAML::Key << "BoundaryDamping" << YAML::Value << pe.SPH.BoundaryDamping;
+            out << YAML::EndMap;
             out << YAML::EndMap;
         }
 
@@ -417,7 +390,8 @@ namespace Engine
         {
             const auto& skyboxPaths = m_Scene->GetSkyboxFacePaths();
             if (!skyboxPaths.empty())
-            {                std::vector<std::string> relativePaths;
+            {
+                std::vector<std::string> relativePaths;
                 for (const auto& p : skyboxPaths)
                     relativePaths.push_back(PathUtils::ToProjectRelativeOrAbsolute(p));
 
@@ -482,9 +456,12 @@ namespace Engine
 
     static MeshType MeshTypeFromString(const std::string& str)
     {
-        if (str == "Plane")  return MeshType::Plane;
-        if (str == "Sphere") return MeshType::Sphere;
-        if (str == "Model")  return MeshType::Model;
+        if (str == "Plane")
+            return MeshType::Plane;
+        if (str == "Sphere")
+            return MeshType::Sphere;
+        if (str == "Model")
+            return MeshType::Model;
         return MeshType::Cube;
     }
 
@@ -506,12 +483,14 @@ namespace Engine
         }
         catch (const YAML::ParserException& e)
         {
-            ENGINE_CORE_ERROR("Failed to parse scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath), e.what());
+            ENGINE_CORE_ERROR("Failed to parse scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath),
+                              e.what());
             return false;
         }
         catch (const YAML::BadFile& e)
         {
-            ENGINE_CORE_ERROR("Failed to open scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath), e.what());
+            ENGINE_CORE_ERROR("Failed to open scene file '{0}': {1}", PathUtils::PathToUtf8String(resolvedFilepath),
+                              e.what());
             return false;
         }
 
@@ -529,8 +508,10 @@ namespace Engine
             {
                 int res = shadowNode["MapResolution"].as<int>();
                 // 范围校验：256 ~ 8192
-                if (res < 256) res = 256;
-                if (res > 8192) res = 8192;
+                if (res < 256)
+                    res = 256;
+                if (res > 8192)
+                    res = 8192;
                 m_Scene->ResizeShadowMap(res);
             }
             if (shadowNode["Bias"])
@@ -562,8 +543,10 @@ namespace Engine
             if (renderNode["BloomIterations"])
             {
                 int iters = renderNode["BloomIterations"].as<int>();
-                if (iters < 1) iters = 1;
-                if (iters > 20) iters = 20;
+                if (iters < 1)
+                    iters = 1;
+                if (iters > 20)
+                    iters = 20;
                 outRenderSettings->PostProcessing.BloomIterations = iters;
             }
             if (renderNode["ToneMappingMode"])
@@ -634,9 +617,8 @@ namespace Engine
             Entity deserializedEntity;
             try
             {
-                uint64_t uuid = entityNode["Entity"]
-                    ? entityNode["Entity"].as<uint64_t>()
-                    : static_cast<uint64_t>(UUID());
+                uint64_t uuid =
+                    entityNode["Entity"] ? entityNode["Entity"].as<uint64_t>() : static_cast<uint64_t>(UUID());
 
                 std::string name;
                 auto tagComponent = entityNode["TagComponent"];
@@ -671,7 +653,8 @@ namespace Engine
                 {
                     auto& mrc = deserializedEntity.AddComponent<MeshRendererComponent>();
                     std::string meshType = meshRendererComponent["MeshType"]
-                        ? meshRendererComponent["MeshType"].as<std::string>() : "Cube";
+                                               ? meshRendererComponent["MeshType"].as<std::string>()
+                                               : "Cube";
 
                     // Read model path for Model type
                     std::string modelPath;
@@ -718,8 +701,10 @@ namespace Engine
                     if (meshRendererComponent["Roughness"])
                         mrc.Roughness = meshRendererComponent["Roughness"].as<float>();
 
-                    auto loadSafeTextureHandle = [](const YAML::Node& node, const std::string& key) -> AssetHandle {
-                        if (!node[key]) return {};
+                    auto loadSafeTextureHandle = [](const YAML::Node& node, const std::string& key) -> AssetHandle
+                    {
+                        if (!node[key])
+                            return {};
                         std::string path = node[key].as<std::string>();
                         if (PathUtils::IsSafeAssetPath(path))
                             return AssetManager::Load<Texture2D>(path);
@@ -760,9 +745,12 @@ namespace Engine
                         cc.FixedAspectRatio = cameraComponent["FixedAspectRatio"].as<bool>();
                 }
 
-                // 反射组件自动反序列化
+                // 反射组件自动反序列化（跳过 CustomSerial）
                 for (auto& meta : ComponentRegistry::Instance().GetAll())
                 {
+                    if (meta.Flags & ComponentMeta::CustomSerial)
+                        continue;
+
                     auto compNode = entityNode[meta.TypeName];
                     if (compNode)
                     {
@@ -779,18 +767,23 @@ namespace Engine
                 {
                     auto& tc = deserializedEntity.AddComponent<TerrainComponent>();
 
-                    auto loadSafePath = [](const YAML::Node& n, const std::string& k) -> std::string {
-                        if (!n[k]) return "";
+                    auto loadSafePath = [](const YAML::Node& n, const std::string& k) -> std::string
+                    {
+                        if (!n[k])
+                            return "";
                         std::string p = n[k].as<std::string>();
                         return PathUtils::IsSafeAssetPath(p) ? p : "";
                     };
 
                     tc.HeightmapPath = loadSafePath(terrainNode, "HeightmapPath");
-                    if (terrainNode["HeightScale"]) tc.HeightScale = terrainNode["HeightScale"].as<float>();
-                    if (terrainNode["TerrainSize"]) tc.TerrainSize = terrainNode["TerrainSize"].as<float>();
+                    if (terrainNode["HeightScale"])
+                        tc.HeightScale = terrainNode["HeightScale"].as<float>();
+                    if (terrainNode["TerrainSize"])
+                        tc.TerrainSize = terrainNode["TerrainSize"].as<float>();
                     tc.SplatmapPath = loadSafePath(terrainNode, "SplatmapPath");
 
-                    auto loadSafeTexHandle = [&](const YAML::Node& n, const std::string& k) -> AssetHandle {
+                    auto loadSafeTexHandle = [&](const YAML::Node& n, const std::string& k) -> AssetHandle
+                    {
                         std::string p = loadSafePath(n, k);
                         return p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
                     };
@@ -800,21 +793,34 @@ namespace Engine
                         std::string p = "Layer" + std::to_string(i);
                         tc.LayerTextures[i] = loadSafeTexHandle(terrainNode, p + "Texture");
                         tc.LayerNormalMaps[i] = loadSafeTexHandle(terrainNode, p + "NormalMap");
-                        if (terrainNode[p + "Tiling"]) tc.LayerTiling[i] = terrainNode[p + "Tiling"].as<float>();
-                        if (terrainNode[p + "Metallic"]) tc.LayerMetallic[i] = terrainNode[p + "Metallic"].as<float>();
-                        if (terrainNode[p + "Roughness"]) tc.LayerRoughness[i] = terrainNode[p + "Roughness"].as<float>();
+                        if (terrainNode[p + "Tiling"])
+                            tc.LayerTiling[i] = terrainNode[p + "Tiling"].as<float>();
+                        if (terrainNode[p + "Metallic"])
+                            tc.LayerMetallic[i] = terrainNode[p + "Metallic"].as<float>();
+                        if (terrainNode[p + "Roughness"])
+                            tc.LayerRoughness[i] = terrainNode[p + "Roughness"].as<float>();
                     }
 
-                    if (terrainNode["Friction"]) tc.Friction = terrainNode["Friction"].as<float>();
-                    if (terrainNode["Restitution"]) tc.Restitution = terrainNode["Restitution"].as<float>();
-                    if (terrainNode["LODLevels"]) tc.LODLevels = std::clamp(terrainNode["LODLevels"].as<int>(), 1, 3);
-                    if (terrainNode["LODDistance1"]) tc.LODDistance1 = terrainNode["LODDistance1"].as<float>();
-                    if (terrainNode["LODDistance2"]) tc.LODDistance2 = terrainNode["LODDistance2"].as<float>();
-                    if (terrainNode["GrassEnabled"]) tc.GrassEnabled = terrainNode["GrassEnabled"].as<bool>();
-                    if (terrainNode["GrassDensity"]) tc.GrassDensity = terrainNode["GrassDensity"].as<float>();
-                    if (terrainNode["GrassHeight"]) tc.GrassHeight = terrainNode["GrassHeight"].as<float>();
-                    if (terrainNode["GrassWidth"]) tc.GrassWidth = terrainNode["GrassWidth"].as<float>();
-                    if (terrainNode["GrassWindStrength"]) tc.GrassWindStrength = terrainNode["GrassWindStrength"].as<float>();
+                    if (terrainNode["Friction"])
+                        tc.Friction = terrainNode["Friction"].as<float>();
+                    if (terrainNode["Restitution"])
+                        tc.Restitution = terrainNode["Restitution"].as<float>();
+                    if (terrainNode["LODLevels"])
+                        tc.LODLevels = std::clamp(terrainNode["LODLevels"].as<int>(), 1, 3);
+                    if (terrainNode["LODDistance1"])
+                        tc.LODDistance1 = terrainNode["LODDistance1"].as<float>();
+                    if (terrainNode["LODDistance2"])
+                        tc.LODDistance2 = terrainNode["LODDistance2"].as<float>();
+                    if (terrainNode["GrassEnabled"])
+                        tc.GrassEnabled = terrainNode["GrassEnabled"].as<bool>();
+                    if (terrainNode["GrassDensity"])
+                        tc.GrassDensity = terrainNode["GrassDensity"].as<float>();
+                    if (terrainNode["GrassHeight"])
+                        tc.GrassHeight = terrainNode["GrassHeight"].as<float>();
+                    if (terrainNode["GrassWidth"])
+                        tc.GrassWidth = terrainNode["GrassWidth"].as<float>();
+                    if (terrainNode["GrassWindStrength"])
+                        tc.GrassWindStrength = terrainNode["GrassWindStrength"].as<float>();
                     tc.GrassTexture = loadSafeTexHandle(terrainNode, "GrassTexture");
                     tc.MeshDirty = true;
                 }
@@ -866,35 +872,73 @@ namespace Engine
                         if (mode >= 0 && mode <= 1)
                             pe.Blend = static_cast<ParticleEmitterComponent::BlendMode>(mode);
                     }
-                    if (particleEmitterComponent["SPHEnabled"])
-                        pe.SPHEnabled = particleEmitterComponent["SPHEnabled"].as<bool>();
-                    if (particleEmitterComponent["SPH_RestDensity"])
-                        pe.SPH_RestDensity = particleEmitterComponent["SPH_RestDensity"].as<float>();
-                    if (particleEmitterComponent["SPH_GasConstant"])
-                        pe.SPH_GasConstant = particleEmitterComponent["SPH_GasConstant"].as<float>();
-                    if (particleEmitterComponent["SPH_Viscosity"])
-                        pe.SPH_Viscosity = particleEmitterComponent["SPH_Viscosity"].as<float>();
-                    if (particleEmitterComponent["SPH_SmoothingRadius"])
-                        pe.SPH_SmoothingRadius = particleEmitterComponent["SPH_SmoothingRadius"].as<float>();
-                    if (particleEmitterComponent["SPH_ParticleMass"])
-                        pe.SPH_ParticleMass = particleEmitterComponent["SPH_ParticleMass"].as<float>();
-                    if (particleEmitterComponent["SPH_PCISPHEnabled"])
-                        pe.SPH_PCISPHEnabled = particleEmitterComponent["SPH_PCISPHEnabled"].as<bool>();
-                    if (particleEmitterComponent["SPH_PCISPHIterations"])
+                    // SPH 参数：新格式（嵌套 SPH 子节点）+ 旧格式回退
+                    auto sphNode = particleEmitterComponent["SPH"];
+                    if (sphNode && sphNode.IsMap())
                     {
-                        int iters = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
-                        pe.SPH_PCISPHIterations = std::clamp(iters, 1, 8);
+                        if (sphNode["Enabled"])
+                            pe.SPH.Enabled = sphNode["Enabled"].as<bool>();
+                        if (sphNode["RestDensity"])
+                            pe.SPH.RestDensity = sphNode["RestDensity"].as<float>();
+                        if (sphNode["GasConstant"])
+                            pe.SPH.GasConstant = sphNode["GasConstant"].as<float>();
+                        if (sphNode["Viscosity"])
+                            pe.SPH.Viscosity = sphNode["Viscosity"].as<float>();
+                        if (sphNode["SmoothingRadius"])
+                            pe.SPH.SmoothingRadius = sphNode["SmoothingRadius"].as<float>();
+                        if (sphNode["ParticleMass"])
+                            pe.SPH.ParticleMass = sphNode["ParticleMass"].as<float>();
+                        if (sphNode["PCISPHEnabled"])
+                            pe.SPH.PCISPHEnabled = sphNode["PCISPHEnabled"].as<bool>();
+                        if (sphNode["PCISPHIterations"])
+                        {
+                            int iters = sphNode["PCISPHIterations"].as<int>();
+                            pe.SPH.PCISPHIterations = std::clamp(iters, 1, 8);
+                        }
+                        if (sphNode["PCISPHDelta"])
+                            pe.SPH.PCISPHDelta = sphNode["PCISPHDelta"].as<float>();
+                        if (sphNode["SurfaceTension"])
+                            pe.SPH.SurfaceTension = sphNode["SurfaceTension"].as<float>();
+                        if (sphNode["RigidBodyCoupling"])
+                            pe.SPH.RigidBodyCoupling = sphNode["RigidBodyCoupling"].as<bool>();
+                        if (sphNode["BoundaryStiffness"])
+                            pe.SPH.BoundaryStiffness = sphNode["BoundaryStiffness"].as<float>();
+                        if (sphNode["BoundaryDamping"])
+                            pe.SPH.BoundaryDamping = sphNode["BoundaryDamping"].as<float>();
                     }
-                    if (particleEmitterComponent["SPH_PCISPHDelta"])
-                        pe.SPH_PCISPHDelta = particleEmitterComponent["SPH_PCISPHDelta"].as<float>();
-                    if (particleEmitterComponent["SPH_SurfaceTension"])
-                        pe.SPH_SurfaceTension = particleEmitterComponent["SPH_SurfaceTension"].as<float>();
-                    if (particleEmitterComponent["SPH_RigidBodyCoupling"])
-                        pe.SPH_RigidBodyCoupling = particleEmitterComponent["SPH_RigidBodyCoupling"].as<bool>();
-                    if (particleEmitterComponent["SPH_BoundaryStiffness"])
-                        pe.SPH_BoundaryStiffness = particleEmitterComponent["SPH_BoundaryStiffness"].as<float>();
-                    if (particleEmitterComponent["SPH_BoundaryDamping"])
-                        pe.SPH_BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
+                    else
+                    {
+                        // 旧格式回退：平铺键名
+                        if (particleEmitterComponent["SPHEnabled"])
+                            pe.SPH.Enabled = particleEmitterComponent["SPHEnabled"].as<bool>();
+                        if (particleEmitterComponent["SPH_RestDensity"])
+                            pe.SPH.RestDensity = particleEmitterComponent["SPH_RestDensity"].as<float>();
+                        if (particleEmitterComponent["SPH_GasConstant"])
+                            pe.SPH.GasConstant = particleEmitterComponent["SPH_GasConstant"].as<float>();
+                        if (particleEmitterComponent["SPH_Viscosity"])
+                            pe.SPH.Viscosity = particleEmitterComponent["SPH_Viscosity"].as<float>();
+                        if (particleEmitterComponent["SPH_SmoothingRadius"])
+                            pe.SPH.SmoothingRadius = particleEmitterComponent["SPH_SmoothingRadius"].as<float>();
+                        if (particleEmitterComponent["SPH_ParticleMass"])
+                            pe.SPH.ParticleMass = particleEmitterComponent["SPH_ParticleMass"].as<float>();
+                        if (particleEmitterComponent["SPH_PCISPHEnabled"])
+                            pe.SPH.PCISPHEnabled = particleEmitterComponent["SPH_PCISPHEnabled"].as<bool>();
+                        if (particleEmitterComponent["SPH_PCISPHIterations"])
+                        {
+                            int iters = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
+                            pe.SPH.PCISPHIterations = std::clamp(iters, 1, 8);
+                        }
+                        if (particleEmitterComponent["SPH_PCISPHDelta"])
+                            pe.SPH.PCISPHDelta = particleEmitterComponent["SPH_PCISPHDelta"].as<float>();
+                        if (particleEmitterComponent["SPH_SurfaceTension"])
+                            pe.SPH.SurfaceTension = particleEmitterComponent["SPH_SurfaceTension"].as<float>();
+                        if (particleEmitterComponent["SPH_RigidBodyCoupling"])
+                            pe.SPH.RigidBodyCoupling = particleEmitterComponent["SPH_RigidBodyCoupling"].as<bool>();
+                        if (particleEmitterComponent["SPH_BoundaryStiffness"])
+                            pe.SPH.BoundaryStiffness = particleEmitterComponent["SPH_BoundaryStiffness"].as<float>();
+                        if (particleEmitterComponent["SPH_BoundaryDamping"])
+                            pe.SPH.BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
+                    }
                 }
 
                 // NativeScriptComponent
@@ -911,58 +955,9 @@ namespace Engine
                     }
                 }
 
-                // AudioSourceComponent
-                auto audioSourceNode = entityNode["AudioSourceComponent"];
-                if (audioSourceNode)
-                {
-                    auto& asc = deserializedEntity.AddComponent<AudioSourceComponent>();
-                    if (audioSourceNode["AudioPath"])
-                    {
-                        std::string path = audioSourceNode["AudioPath"].as<std::string>();
-                        if (PathUtils::IsSafeAssetPath(path))
-                            asc.AudioPath = path;
-                        else if (!path.empty())
-                            ENGINE_CORE_WARN("拒绝不安全的音频路径: {0}", path);
-                    }
-                    if (audioSourceNode["Volume"])
-                        asc.Volume = audioSourceNode["Volume"].as<float>();
-                    if (audioSourceNode["Pitch"])
-                        asc.Pitch = audioSourceNode["Pitch"].as<float>();
-                    if (audioSourceNode["MinDistance"])
-                        asc.MinDistance = audioSourceNode["MinDistance"].as<float>();
-                    if (audioSourceNode["MaxDistance"])
-                        asc.MaxDistance = audioSourceNode["MaxDistance"].as<float>();
-                    if (audioSourceNode["Loop"])
-                        asc.Loop = audioSourceNode["Loop"].as<bool>();
-                    if (audioSourceNode["PlayOnStart"])
-                        asc.PlayOnStart = audioSourceNode["PlayOnStart"].as<bool>();
-                    if (audioSourceNode["Spatial"])
-                        asc.Spatial = audioSourceNode["Spatial"].as<bool>();
-                }
-
-                // AudioListenerComponent
-                auto audioListenerNode = entityNode["AudioListenerComponent"];
-                if (audioListenerNode)
-                {
-                    auto& alc = deserializedEntity.AddComponent<AudioListenerComponent>();
-                    if (audioListenerNode["Active"])
-                        alc.Active = audioListenerNode["Active"].as<bool>();
-                }
-
-                // VideoPlayerComponent
-                auto videoPlayerNode = entityNode["VideoPlayerComponent"];
-                if (videoPlayerNode)
-                {
-                    auto& vpc = deserializedEntity.AddComponent<VideoPlayerComponent>();
-                    if (videoPlayerNode["StreamURL"])
-                        vpc.StreamURL = videoPlayerNode["StreamURL"].as<std::string>();
-                    if (videoPlayerNode["PlayOnStart"])
-                        vpc.PlayOnStart = videoPlayerNode["PlayOnStart"].as<bool>();
-                    if (videoPlayerNode["Loop"])
-                        vpc.Loop = videoPlayerNode["Loop"].as<bool>();
-                    if (videoPlayerNode["Volume"])
-                        vpc.Volume = videoPlayerNode["Volume"].as<float>();
-                }
+                // AudioSourceComponent — 通过反射 AutoSerializer 自动反序列化
+                // AudioListenerComponent — 通过反射 AutoSerializer 自动反序列化
+                // VideoPlayerComponent — 通过反射 AutoSerializer 自动反序列化
             }
             catch (const YAML::Exception& e)
             {
@@ -1002,5 +997,3 @@ namespace Engine
     }
 
 } // namespace Engine
-
-

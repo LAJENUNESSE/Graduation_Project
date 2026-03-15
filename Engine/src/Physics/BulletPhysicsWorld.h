@@ -1,11 +1,11 @@
 #pragma once
 
-#include <glm/glm.hpp>
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 
-#include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 // Bullet 前向声明
 class btDiscreteDynamicsWorld;
@@ -26,9 +26,9 @@ namespace Engine
     // 碰撞事件类型
     enum class CollisionEventType
     {
-        Enter,  // 新碰撞
-        Stay,   // 持续碰撞
-        Exit    // 碰撞结束
+        Enter, // 新碰撞
+        Stay,  // 持续碰撞
+        Exit   // 碰撞结束
     };
 
     // 碰撞事件信息
@@ -38,9 +38,9 @@ namespace Engine
         entt::entity EntityA;
         entt::entity EntityB;
         glm::vec3 ContactPoint;
-        glm::vec3 ContactNormal;  // A → B 方向
+        glm::vec3 ContactNormal; // A → B 方向
         float Impulse;
-        bool IsTrigger = false;   // 是否为触发器事件
+        bool IsTrigger = false; // 是否为触发器事件
     };
 
     class BulletPhysicsWorld
@@ -77,7 +77,7 @@ namespace Engine
             btRigidBody* body = nullptr;
             btCollisionShape* shape = nullptr;
             btDefaultMotionState* motionState = nullptr;
-            btTriangleMesh* triangleMesh = nullptr;  // MeshCollider 静态网格数据
+            btTriangleMesh* triangleMesh = nullptr; // MeshCollider 静态网格数据
             bool isTrigger = false;
         };
 
@@ -88,8 +88,7 @@ namespace Engine
         {
             size_t operator()(const std::pair<uint32_t, uint32_t>& p) const
             {
-                return std::hash<uint64_t>()(
-                    (static_cast<uint64_t>(p.first) << 32) | p.second);
+                return std::hash<uint64_t>()((static_cast<uint64_t>(p.first) << 32) | p.second);
             }
         };
 

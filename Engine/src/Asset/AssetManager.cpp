@@ -2,9 +2,9 @@
 #include "Asset/AssetManager.h"
 #include "Asset/AsyncLoadQueue.h"
 #include "Asset/FileWatcher.h"
-#include "Renderer/Texture.h"
-#include "Renderer/Mesh.h"
 #include "Core/Log.h"
+#include "Renderer/Mesh.h"
+#include "Renderer/Texture.h"
 
 namespace Engine
 {
@@ -157,8 +157,7 @@ namespace Engine
 
     // ---- Load specializations ----
 
-    template <>
-    AssetHandle AssetManager::Load<Texture2D>(const std::string& path)
+    template <> AssetHandle AssetManager::Load<Texture2D>(const std::string& path)
     {
         if (path.empty())
             return {};
@@ -185,8 +184,7 @@ namespace Engine
         return h;
     }
 
-    template <>
-    AssetHandle AssetManager::Load<Mesh>(const std::string& path)
+    template <> AssetHandle AssetManager::Load<Mesh>(const std::string& path)
     {
         if (path.empty())
             return {};
@@ -223,8 +221,7 @@ namespace Engine
         return h;
     }
 
-    template <>
-    AssetHandle AssetManager::Load<TextureCubemap>(const std::string& path)
+    template <> AssetHandle AssetManager::Load<TextureCubemap>(const std::string& path)
     {
         // Cubemaps use a joined path as key (semicolon-separated)
         if (path.empty())
@@ -291,17 +288,44 @@ namespace Engine
 
     // ---- Get specializations ----
 
-    template <> Texture2D* AssetManager::Get<Texture2D>(AssetHandle h) { return s_Textures.Get(h); }
-    template <> Mesh* AssetManager::Get<Mesh>(AssetHandle h) { return s_Meshes.Get(h); }
-    template <> TextureCubemap* AssetManager::Get<TextureCubemap>(AssetHandle h) { return s_Cubemaps.Get(h); }
+    template <> Texture2D* AssetManager::Get<Texture2D>(AssetHandle h)
+    {
+        return s_Textures.Get(h);
+    }
+    template <> Mesh* AssetManager::Get<Mesh>(AssetHandle h)
+    {
+        return s_Meshes.Get(h);
+    }
+    template <> TextureCubemap* AssetManager::Get<TextureCubemap>(AssetHandle h)
+    {
+        return s_Cubemaps.Get(h);
+    }
 
-    template <> Ref<Texture2D> AssetManager::GetRef<Texture2D>(AssetHandle h) { return s_Textures.GetRef(h); }
-    template <> Ref<Mesh> AssetManager::GetRef<Mesh>(AssetHandle h) { return s_Meshes.GetRef(h); }
-    template <> Ref<TextureCubemap> AssetManager::GetRef<TextureCubemap>(AssetHandle h) { return s_Cubemaps.GetRef(h); }
+    template <> Ref<Texture2D> AssetManager::GetRef<Texture2D>(AssetHandle h)
+    {
+        return s_Textures.GetRef(h);
+    }
+    template <> Ref<Mesh> AssetManager::GetRef<Mesh>(AssetHandle h)
+    {
+        return s_Meshes.GetRef(h);
+    }
+    template <> Ref<TextureCubemap> AssetManager::GetRef<TextureCubemap>(AssetHandle h)
+    {
+        return s_Cubemaps.GetRef(h);
+    }
 
-    template <> bool AssetManager::IsValid<Texture2D>(AssetHandle h) { return s_Textures.Get(h) != nullptr; }
-    template <> bool AssetManager::IsValid<Mesh>(AssetHandle h) { return s_Meshes.Get(h) != nullptr; }
-    template <> bool AssetManager::IsValid<TextureCubemap>(AssetHandle h) { return s_Cubemaps.Get(h) != nullptr; }
+    template <> bool AssetManager::IsValid<Texture2D>(AssetHandle h)
+    {
+        return s_Textures.Get(h) != nullptr;
+    }
+    template <> bool AssetManager::IsValid<Mesh>(AssetHandle h)
+    {
+        return s_Meshes.Get(h) != nullptr;
+    }
+    template <> bool AssetManager::IsValid<TextureCubemap>(AssetHandle h)
+    {
+        return s_Cubemaps.Get(h) != nullptr;
+    }
 
     // ---- GetPath ----
 
@@ -310,15 +334,28 @@ namespace Engine
         static const std::string empty;
         switch (type)
         {
-        case AssetType::Texture2D:      return s_Textures.GetPath(handle);
-        case AssetType::Mesh:           return s_Meshes.GetPath(handle);
-        case AssetType::TextureCubemap: return s_Cubemaps.GetPath(handle);
-        default:                        return empty;
+        case AssetType::Texture2D:
+            return s_Textures.GetPath(handle);
+        case AssetType::Mesh:
+            return s_Meshes.GetPath(handle);
+        case AssetType::TextureCubemap:
+            return s_Cubemaps.GetPath(handle);
+        default:
+            return empty;
         }
     }
 
-    template <> const std::string& AssetManager::GetPath<Texture2D>(AssetHandle h) { return s_Textures.GetPath(h); }
-    template <> const std::string& AssetManager::GetPath<Mesh>(AssetHandle h) { return s_Meshes.GetPath(h); }
-    template <> const std::string& AssetManager::GetPath<TextureCubemap>(AssetHandle h) { return s_Cubemaps.GetPath(h); }
+    template <> const std::string& AssetManager::GetPath<Texture2D>(AssetHandle h)
+    {
+        return s_Textures.GetPath(h);
+    }
+    template <> const std::string& AssetManager::GetPath<Mesh>(AssetHandle h)
+    {
+        return s_Meshes.GetPath(h);
+    }
+    template <> const std::string& AssetManager::GetPath<TextureCubemap>(AssetHandle h)
+    {
+        return s_Cubemaps.GetPath(h);
+    }
 
 } // namespace Engine

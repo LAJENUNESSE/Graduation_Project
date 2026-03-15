@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Scene/Scene.h"
-#include "Scene/Entity.h"
 #include "Core/Base.h"
+#include "Scene/Entity.h"
+#include "Scene/Scene.h"
 
 #include <vector>
 
@@ -44,5 +44,3 @@ namespace Engine
     };
 
 } // namespace Engine
-
-

@@ -1,18 +1,19 @@
 #include "engpch.h"
 #include "Terrain/TerrainMeshGenerator.h"
 #include "Asset/PathUtils.h"
-#include "Renderer/Buffer.h"
 #include "Core/Log.h"
+#include "Renderer/Buffer.h"
 
-#include <stb_image/stb_image.h>
 #include <glm/glm.hpp>
+#include <stb_image/stb_image.h>
 
 #include <algorithm>
 #include <cmath>
 namespace Engine
 {
 
-    TerrainMeshData TerrainMeshGenerator::Generate(const std::string& heightmapPath, float size, float heightScale, int lodLevels)
+    TerrainMeshData TerrainMeshGenerator::Generate(const std::string& heightmapPath, float size, float heightScale,
+                                                   int lodLevels)
     {
         TerrainMeshData data;
 
@@ -99,7 +100,7 @@ namespace Engine
     }
 
     TerrainLODMesh TerrainMeshGenerator::BuildLOD(const std::vector<float>& heightData, int hmWidth, int hmHeight,
-                                                   int gridRes, float size, float heightScale)
+                                                  int gridRes, float size, float heightScale)
     {
         TerrainLODMesh lod;
         lod.GridResolution = gridRes;
@@ -184,11 +185,9 @@ namespace Engine
 
                 // normal = normalize( (hL - hR) * heightScale, dxScale/dzScale_combined, (hD - hU) * heightScale )
                 // 更精确: 用交叉法线方法
-                glm::vec3 normal = glm::normalize(glm::vec3(
-                    (hL - hR) * heightScale,
-                    dxScale, // 近似: 使用水平步长作为 y 分量
-                    (hD - hU) * heightScale
-                ));
+                glm::vec3 normal = glm::normalize(glm::vec3((hL - hR) * heightScale,
+                                                            dxScale, // 近似: 使用水平步长作为 y 分量
+                                                            (hD - hU) * heightScale));
 
                 vertices[offset + 3] = normal.x;
                 vertices[offset + 4] = normal.y;
@@ -201,14 +200,10 @@ namespace Engine
                 vertices[offset + 7] = v;
 
                 // 切线: 沿 X 方向
-                glm::vec3 tangent = glm::normalize(glm::vec3(
-                    dxScale,
-                    (hR - hL) * heightScale,
-                    0.0f
-                ));
+                glm::vec3 tangent = glm::normalize(glm::vec3(dxScale, (hR - hL) * heightScale, 0.0f));
 
-                vertices[offset + 8]  = tangent.x;
-                vertices[offset + 9]  = tangent.y;
+                vertices[offset + 8] = tangent.x;
+                vertices[offset + 9] = tangent.y;
                 vertices[offset + 10] = tangent.z;
             }
         }
@@ -222,9 +217,9 @@ namespace Engine
         {
             for (int i = 0; i < gridRes; ++i)
             {
-                uint32_t topLeft     = static_cast<uint32_t>(j * vertCountX + i);
-                uint32_t topRight    = topLeft + 1;
-                uint32_t bottomLeft  = static_cast<uint32_t>((j + 1) * vertCountX + i);
+                uint32_t topLeft = static_cast<uint32_t>(j * vertCountX + i);
+                uint32_t topRight = topLeft + 1;
+                uint32_t bottomLeft = static_cast<uint32_t>((j + 1) * vertCountX + i);
                 uint32_t bottomRight = bottomLeft + 1;
 
                 // 三角形 1
@@ -245,12 +240,10 @@ namespace Engine
         lod.VAO = VertexArray::Create();
 
         auto vbo = VertexBuffer::Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
-        vbo->SetLayout({
-            { ShaderDataType::Float3, "a_Position" },
-            { ShaderDataType::Float3, "a_Normal" },
-            { ShaderDataType::Float2, "a_TexCoords" },
-            { ShaderDataType::Float3, "a_Tangent" }
-        });
+        vbo->SetLayout({{ShaderDataType::Float3, "a_Position"},
+                        {ShaderDataType::Float3, "a_Normal"},
+                        {ShaderDataType::Float2, "a_TexCoords"},
+                        {ShaderDataType::Float3, "a_Tangent"}});
         lod.VAO->AddVertexBuffer(vbo);
 
         auto ibo = IndexBuffer::Create(indices.data(), static_cast<uint32_t>(indices.size()));

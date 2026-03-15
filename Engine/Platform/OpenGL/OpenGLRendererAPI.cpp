@@ -68,10 +68,18 @@ namespace Engine
         GLenum glFunc = GL_LESS;
         switch (func)
         {
-        case DepthFunc::Less:    glFunc = GL_LESS;    break;
-        case DepthFunc::LEqual:  glFunc = GL_LEQUAL;  break;
-        case DepthFunc::Greater: glFunc = GL_GREATER;  break;
-        case DepthFunc::Always:  glFunc = GL_ALWAYS;   break;
+        case DepthFunc::Less:
+            glFunc = GL_LESS;
+            break;
+        case DepthFunc::LEqual:
+            glFunc = GL_LEQUAL;
+            break;
+        case DepthFunc::Greater:
+            glFunc = GL_GREATER;
+            break;
+        case DepthFunc::Always:
+            glFunc = GL_ALWAYS;
+            break;
         }
         glDepthFunc(glFunc);
     }
@@ -149,12 +157,18 @@ namespace Engine
     {
         switch (f)
         {
-        case BlendFactor::Zero:              return GL_ZERO;
-        case BlendFactor::One:               return GL_ONE;
-        case BlendFactor::SrcAlpha:          return GL_SRC_ALPHA;
-        case BlendFactor::OneMinusSrcAlpha:  return GL_ONE_MINUS_SRC_ALPHA;
-        case BlendFactor::DstAlpha:          return GL_DST_ALPHA;
-        case BlendFactor::OneMinusDstAlpha:  return GL_ONE_MINUS_DST_ALPHA;
+        case BlendFactor::Zero:
+            return GL_ZERO;
+        case BlendFactor::One:
+            return GL_ONE;
+        case BlendFactor::SrcAlpha:
+            return GL_SRC_ALPHA;
+        case BlendFactor::OneMinusSrcAlpha:
+            return GL_ONE_MINUS_SRC_ALPHA;
+        case BlendFactor::DstAlpha:
+            return GL_DST_ALPHA;
+        case BlendFactor::OneMinusDstAlpha:
+            return GL_ONE_MINUS_DST_ALPHA;
         }
         ENGINE_CORE_ASSERT(false, "Unknown BlendFactor");
         return GL_ONE;

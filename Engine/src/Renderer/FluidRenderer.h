@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Renderer/Shader.h"
 #include "Renderer/Framebuffer.h"
-#include "Renderer/VertexArray.h"
+#include "Renderer/Shader.h"
 #include "Renderer/StorageBuffer.h"
+#include "Renderer/VertexArray.h"
 
 #include <glm/glm.hpp>
 
@@ -32,15 +32,9 @@ namespace Engine
         // sceneColorTexID: scene HDR color texture (read-only copy will be made)
         // sceneDepthTexID: scene depth texture
         // emitter: rendering parameters (FluidColor, Fresnel, etc.)
-        void Render(const Ref<ShaderStorageBuffer>& particleBuffer,
-                    const Ref<VertexArray>& emptyVAO,
-                    uint32_t particleCount,
-                    float particleRadius,
-                    const glm::mat4& view,
-                    const glm::mat4& projection,
-                    uint32_t sceneColorTexID,
-                    uint32_t sceneDepthTexID,
-                    const FluidEmitterComponent& emitter);
+        void Render(const Ref<ShaderStorageBuffer>& particleBuffer, const Ref<VertexArray>& emptyVAO,
+                    uint32_t particleCount, float particleRadius, const glm::mat4& view, const glm::mat4& projection,
+                    uint32_t sceneColorTexID, uint32_t sceneDepthTexID, const FluidEmitterComponent& emitter);
 
     private:
         void CreateFullscreenQuad();
@@ -51,9 +45,9 @@ namespace Engine
         bool m_Initialized = false;
 
         // FBOs
-        Ref<Framebuffer> m_DepthFBO;       // R32F + DEPTH24STENCIL8
-        Ref<Framebuffer> m_SmoothFBO[2];   // R32F ping-pong
-        Ref<Framebuffer> m_ThicknessFBO;   // R16F
+        Ref<Framebuffer> m_DepthFBO;     // R32F + DEPTH24STENCIL8
+        Ref<Framebuffer> m_SmoothFBO[2]; // R32F ping-pong
+        Ref<Framebuffer> m_ThicknessFBO; // R16F
 
         // Scene color copy texture (avoids feedback loop)
         uint32_t m_SceneColorCopyTex = 0;

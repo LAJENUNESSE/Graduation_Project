@@ -70,10 +70,9 @@ namespace Engine
 
         Window& window = Application::Get().GetWindow();
         bool altPressed = Input::IsKeyPressed(KeyCode::LeftAlt);
-        bool navigationButtonPressed =
-            Input::IsMouseButtonPressed(MouseCode::ButtonMiddle) ||
-            Input::IsMouseButtonPressed(MouseCode::ButtonLeft) ||
-            Input::IsMouseButtonPressed(MouseCode::ButtonRight);
+        bool navigationButtonPressed = Input::IsMouseButtonPressed(MouseCode::ButtonMiddle) ||
+                                       Input::IsMouseButtonPressed(MouseCode::ButtonLeft) ||
+                                       Input::IsMouseButtonPressed(MouseCode::ButtonRight);
         bool wantsNavigation = allowInput && altPressed && navigationButtonPressed;
 
         if (wantsNavigation)
@@ -198,9 +197,8 @@ namespace Engine
         }
         else
         {
-            m_Pitch = (sinPitch >= 0.0f)
-                ? glm::pi<float>() - std::asin(sinPitch)
-                : -glm::pi<float>() - std::asin(sinPitch);
+            m_Pitch =
+                (sinPitch >= 0.0f) ? glm::pi<float>() - std::asin(sinPitch) : -glm::pi<float>() - std::asin(sinPitch);
         }
 
         m_Yaw = std::atan2(forward.x, -forward.z);

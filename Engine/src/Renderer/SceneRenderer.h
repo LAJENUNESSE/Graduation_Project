@@ -1,39 +1,42 @@
 #pragma once
 
+#include "Asset/AssetHandle.h"
 #include "Core/Base.h"
 #include "Core/Timestep.h"
+#include "Renderer/FluidRenderer.h"
+#include "Renderer/FluidSystemGPU.h"
+#include "Renderer/ParticleSystemGPU.h"
+#include "Renderer/PostProcessing.h"
+#include "Renderer/RenderQueue.h"
+#include "Renderer/SceneRenderInput.h"
 #include "Renderer/Shader.h"
 #include "Renderer/Texture.h"
-#include "Renderer/RenderQueue.h"
-#include "Renderer/PostProcessing.h"
-#include "Renderer/ParticleSystemGPU.h"
-#include "Renderer/FluidSystemGPU.h"
-#include "Renderer/FluidRenderer.h"
-#include "Asset/AssetHandle.h"
+#include "Scene/Systems/AudioSystem.h"
+#include "Scene/Systems/GrassRenderSystem.h"
 #include "Scene/Systems/LightSystem.h"
 #include "Scene/Systems/ShadowSystem.h"
 #include "Scene/Systems/SkyboxSystem.h"
 #include "Scene/Systems/TerrainRenderSystem.h"
-#include "Scene/Systems/GrassRenderSystem.h"
-#include "Scene/Systems/AudioSystem.h"
 #include "Scene/Systems/VideoSystem.h"
 
+#include <functional>
 #include <glm/glm.hpp>
 #include <string>
-#include <vector>
-#include <functional>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace Engine
 {
 
-    class Scene;
     class EditorCamera;
 
     struct RenderContext
     {
         EditorCamera* Camera = nullptr;
-        Scene* ActiveScene = nullptr;
+        entt::registry* Registry = nullptr;
+        const SceneEntityIndex* EntityIndex = nullptr;
+        WorldTransformCache* TransformCache = nullptr;
         float DeltaTime = 0.0f;
 
         // 供 FluidPass 使用
@@ -59,7 +62,7 @@ namespace Engine
         void Init(uint32_t viewportWidth = 1280, uint32_t viewportHeight = 720);
         void Shutdown();
 
-        void BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime);
+        void BeginScene(const EditorCamera& camera, const SceneRenderInput& input);
         void Render();
         void EndScene();
 
@@ -75,6 +78,10 @@ namespace Engine
         AudioSystem& GetAudioSystem() { return m_AudioSystem; }
         VideoSystem& GetVideoSystem() { return m_VideoSystem; }
         FluidRenderer& GetFluidRenderer() { return m_FluidRenderer; }
+
+        // 逐实体释放粒子/流体 GPU 缓存
+        void ReleaseParticleSystem(uint32_t entityID);
+        void ReleaseFluidSystem(uint32_t entityID);
 
         // SSAO 设置
         bool& GetSSAOEnabled() { return m_SSAOEnabled; }
@@ -135,16 +142,19 @@ namespace Engine
         float m_SSAOBias = 0.025f;
         int m_SSAOKernelSize = 32;
         float m_SSAOIntensity = 1.5f;
-        int m_IBLDebugMode = 0;  // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
+        int m_IBLDebugMode = 0; // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
         Ref<VertexArray> m_FullscreenQuadVAO;
+
+        // 追踪当前绑定的 registry，用于检测场景切换（不受 EndScene 清空影响）
+        entt::registry* m_BoundRegistry = nullptr;
 
         // Particle systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<ParticleSystemGPU>> m_ParticleSystems;
 
         // Fluid systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<FluidSystemGPU>> m_FluidSystems;
+        std::unordered_set<uint32_t> m_FluidEmitted; // 替代 FluidEmitterComponent::Emitted
         FluidRenderer m_FluidRenderer;
-        Scene* m_LastScene = nullptr;
         float m_TotalTime = 0.0f;
 
         // 完整渲染管线依赖（由外部注入）

@@ -7,7 +7,11 @@
 namespace Engine
 {
 
-    enum class SceneState { Edit = 0, Play = 1 };
+    enum class SceneState
+    {
+        Edit = 0,
+        Play = 1
+    };
 
     class SceneRenderer;
 
@@ -24,9 +28,8 @@ namespace Engine
         Ref<Scene> GetSceneForSaving(const Ref<Scene>& activeScene) const;
 
         void CreateNewScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight);
-        bool OpenSceneFromPath(Ref<Scene>& activeScene, const std::string& filepath,
-                               uint32_t viewportWidth, uint32_t viewportHeight,
-                               EditorRenderSettings* outRenderSettings = nullptr);
+        bool OpenSceneFromPath(Ref<Scene>& activeScene, const std::string& filepath, uint32_t viewportWidth,
+                               uint32_t viewportHeight, EditorRenderSettings* outRenderSettings = nullptr);
         bool SaveSceneToPath(const Ref<Scene>& sceneToSave, const std::string& filepath,
                              const EditorRenderSettings& renderSettings);
 
@@ -34,6 +37,9 @@ namespace Engine
         void EndPlay(Ref<Scene>& activeScene);
 
     private:
+        // 创建场景 + 注入渲染器 + 视口尺寸 + 更新状态
+        Ref<Scene> PrepareScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight);
+
         SceneRenderer* m_SceneRenderer = nullptr;
         Ref<Scene> m_EditorScene;
         Ref<Scene> m_RuntimeScene;

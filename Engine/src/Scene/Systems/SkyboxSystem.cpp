@@ -1,9 +1,9 @@
 #include "engpch.h"
 #include "Scene/Systems/SkyboxSystem.h"
+#include "Core/Log.h"
 #include "Renderer/Buffer.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererCapabilities.h"
-#include "Core/Log.h"
 
 #include <glad/gl.h>
 
@@ -16,18 +16,14 @@ namespace Engine
 
         // Skybox cube VAO (36 vertices, positions only)
         float skyboxVertices[] = {
-            -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
-             1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
-            -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
-            -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
-             1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
-             1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
-            -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
-             1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
-            -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
-             1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
-            -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
-             1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f,
+            -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,
+            -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f,
+            1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,
+            1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f,
+            1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f,
+            -1.0f, 1.0f,  -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+            -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f,
+            -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,
         };
 
         auto skyboxVB = VertexBuffer::Create(skyboxVertices, sizeof(skyboxVertices));
@@ -44,7 +40,8 @@ namespace Engine
             m_PrefilterShader = Shader::Create("assets/shaders/IBL_Prefilter.glsl");
 
             // ★ 验证 IBL shader 编译是否成功（RelWithDebInfo 下 assert 不终止，需运行时检查）
-            auto validateShader = [](const Ref<Shader>& shader, const char* name) {
+            auto validateShader = [](const Ref<Shader>& shader, const char* name)
+            {
                 if (!shader)
                 {
                     ENGINE_CORE_ERROR("IBL: {} shader is null!", name);
@@ -111,8 +108,8 @@ namespace Engine
         m_SkyboxTexture = TextureCubemap::Create(facePaths);
 
         // 加载天空盒后生成 IBL 资源（需要 shader 有效）
-        if (RendererCapabilities::Get().SupportsComputeShaders &&
-            m_IrradianceShader && m_PrefilterShader && m_BRDFLutShader)
+        if (RendererCapabilities::Get().SupportsComputeShaders && m_IrradianceShader && m_PrefilterShader &&
+            m_BRDFLutShader)
             GenerateIBL();
     }
 
@@ -175,8 +172,7 @@ namespace Engine
         for (int face = 0; face < 6; face++)
         {
             std::vector<uint8_t> facePixels(faceSize * faceSize * 4);
-            glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0,
-                          GL_RGBA, GL_UNSIGNED_BYTE, facePixels.data());
+            glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGBA, GL_UNSIGNED_BYTE, facePixels.data());
 
             for (int y = 0; y < faceSize; y++)
             {
@@ -192,8 +188,7 @@ namespace Engine
         glGenTextures(1, &atlasID);
         glBindTexture(GL_TEXTURE_2D, atlasID);
         glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, faceSize * 6, faceSize);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, faceSize * 6, faceSize,
-                        GL_RGBA, GL_UNSIGNED_BYTE, atlasPixels.data());
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, faceSize * 6, faceSize, GL_RGBA, GL_UNSIGNED_BYTE, atlasPixels.data());
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -236,8 +231,8 @@ namespace Engine
             glBindTexture(GL_TEXTURE_CUBE_MAP, m_IrradianceMapID);
             for (int i = 0; i < 6; i++)
             {
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA16F,
-                             IRRADIANCE_SIZE, IRRADIANCE_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA16F, IRRADIANCE_SIZE, IRRADIANCE_SIZE, 0,
+                             GL_RGBA, GL_FLOAT, nullptr);
             }
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -283,11 +278,9 @@ namespace Engine
                 {
                     int srcRowStart = (y * IRRADIANCE_SIZE * 6 + face * IRRADIANCE_SIZE) * 4;
                     int dstRowStart = y * IRRADIANCE_SIZE * 4;
-                    std::memcpy(&facePixels[dstRowStart], &pixels[srcRowStart],
-                                IRRADIANCE_SIZE * 4 * sizeof(float));
+                    std::memcpy(&facePixels[dstRowStart], &pixels[srcRowStart], IRRADIANCE_SIZE * 4 * sizeof(float));
                 }
-                glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, 0, 0,
-                                IRRADIANCE_SIZE, IRRADIANCE_SIZE,
+                glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, 0, 0, IRRADIANCE_SIZE, IRRADIANCE_SIZE,
                                 GL_RGBA, GL_FLOAT, facePixels.data());
             }
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
@@ -305,8 +298,8 @@ namespace Engine
             glBindTexture(GL_TEXTURE_CUBE_MAP, m_PrefilterMapID);
             for (int i = 0; i < 6; i++)
             {
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA16F,
-                             PREFILTER_SIZE, PREFILTER_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA16F, PREFILTER_SIZE, PREFILTER_SIZE, 0,
+                             GL_RGBA, GL_FLOAT, nullptr);
             }
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -319,7 +312,8 @@ namespace Engine
             for (int mip = 0; mip < PREFILTER_MIP_LEVELS; mip++)
             {
                 int mipSize = PREFILTER_SIZE >> mip;
-                if (mipSize < 1) mipSize = 1;
+                if (mipSize < 1)
+                    mipSize = 1;
 
                 float roughness = static_cast<float>(mip) / static_cast<float>(PREFILTER_MIP_LEVELS - 1);
                 roughness = std::max(roughness, 0.05f);
@@ -369,19 +363,18 @@ namespace Engine
                     {
                         int srcRowStart = (y * mipSize * 6 + face * mipSize) * 4;
                         int dstRowStart = y * mipSize * 4;
-                        std::memcpy(&facePixels[dstRowStart], &pixels[srcRowStart],
-                                    mipSize * 4 * sizeof(float));
+                        std::memcpy(&facePixels[dstRowStart], &pixels[srcRowStart], mipSize * 4 * sizeof(float));
                     }
-                    glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, mip, 0, 0,
-                                    mipSize, mipSize, GL_RGBA, GL_FLOAT, facePixels.data());
+                    glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, mip, 0, 0, mipSize, mipSize, GL_RGBA,
+                                    GL_FLOAT, facePixels.data());
                 }
                 glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
                 glDeleteTextures(1, &prefilterTemp);
             }
 
-            ENGINE_CORE_INFO("IBL: Prefiltered env map generated ({}x{}, {} mips)",
-                             PREFILTER_SIZE, PREFILTER_SIZE, PREFILTER_MIP_LEVELS);
+            ENGINE_CORE_INFO("IBL: Prefiltered env map generated ({}x{}, {} mips)", PREFILTER_SIZE, PREFILTER_SIZE,
+                             PREFILTER_MIP_LEVELS);
         }
 
         // 清理 atlas

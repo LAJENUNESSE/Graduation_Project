@@ -6,19 +6,18 @@
 #include "EditorViewportController.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "Renderer/PostProcessing.h"
+#include "Renderer/SceneRenderInput.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Scene.h"
 
 namespace Engine
 {
 
-    void EditorRenderController::Initialize(SceneRenderer* sceneRenderer,
-                                            PostProcessing* postProcessing,
+    void EditorRenderController::Initialize(SceneRenderer* sceneRenderer, PostProcessing* postProcessing,
                                             PostProcessingSettings* postProcessingSettings,
                                             EditorViewportController* viewportController,
                                             EditorPanelCoordinator* panelCoordinator,
-                                            PhysicsDebugDraw* physicsDebugDraw,
-                                            bool* showPhysicsColliders)
+                                            PhysicsDebugDraw* physicsDebugDraw, bool* showPhysicsColliders)
     {
         m_SceneRenderer = sceneRenderer;
         m_PostProcessing = postProcessing;
@@ -38,15 +37,16 @@ namespace Engine
         m_PostProcessing->Init(width, height);
         m_SceneRenderer->Init(width, height);
         m_SceneRenderer->SetPostProcessing(m_PostProcessing, m_PostProcessingSettings);
-        m_ViewportController->SetResizeCallback([this](uint32_t resizedWidth, uint32_t resizedHeight) {
-            OnViewportResized(resizedWidth, resizedHeight);
-        });
-        m_SceneRenderer->SetDebugDrawCallback([this]() {
-            if (!m_ActiveScene || !m_ShowPhysicsColliders || !*m_ShowPhysicsColliders)
-                return;
+        m_ViewportController->SetResizeCallback([this](uint32_t resizedWidth, uint32_t resizedHeight)
+                                                { OnViewportResized(resizedWidth, resizedHeight); });
+        m_SceneRenderer->SetDebugDrawCallback(
+            [this]()
+            {
+                if (!m_ActiveScene || !m_ShowPhysicsColliders || !*m_ShowPhysicsColliders)
+                    return;
 
-            m_PhysicsDebugDraw->DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController->GetCamera());
-        });
+                m_PhysicsDebugDraw->DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController->GetCamera());
+            });
 
         SyncHDRFramebufferBindings();
     }
@@ -75,7 +75,12 @@ namespace Engine
         float sceneRenderCpuMs = 0.0f;
         {
             PROFILE_SCOPE("SceneRender", &sceneRenderCpuMs);
-            m_SceneRenderer->BeginScene(m_ViewportController->GetCamera(), activeScene.get(), ts);
+            SceneRenderInput input;
+            input.Registry = &activeScene->GetRegistry();
+            input.EntityIndex = &activeScene->GetEntityIndex();
+            input.DeltaTime = ts;
+            input.TransformCache = &activeScene->GetTransformCache();
+            m_SceneRenderer->BeginScene(m_ViewportController->GetCamera(), input);
             m_SceneRenderer->RenderPipeline(m_ViewportController->GetFramebuffer());
             if (sceneState == SceneState::Edit)
                 m_SceneRenderer->RenderEditorPicking(m_ViewportController->GetPickingFramebuffer());
@@ -90,17 +95,34 @@ namespace Engine
         SyncHDRFramebufferBindings();
     }
 
+    void EditorRenderController::SyncSSAOSettings(EditorRenderSettings& settings, bool toRenderer)
+    {
+        if (toRenderer)
+        {
+            m_SceneRenderer->GetSSAOEnabled() = settings.SSAOEnabled;
+            m_SceneRenderer->GetSSAORadius() = settings.SSAORadius;
+            m_SceneRenderer->GetSSAOBias() = settings.SSAOBias;
+            m_SceneRenderer->GetSSAOKernelSize() = settings.SSAOKernelSize;
+            m_SceneRenderer->GetSSAOIntensity() = settings.SSAOIntensity;
+        }
+        else
+        {
+            settings.SSAOEnabled = m_SceneRenderer->GetSSAOEnabled();
+            settings.SSAORadius = m_SceneRenderer->GetSSAORadius();
+            settings.SSAOBias = m_SceneRenderer->GetSSAOBias();
+            settings.SSAOKernelSize = m_SceneRenderer->GetSSAOKernelSize();
+            settings.SSAOIntensity = m_SceneRenderer->GetSSAOIntensity();
+        }
+    }
+
     void EditorRenderController::ApplyRenderSettings(const Ref<Scene>& activeScene,
                                                      const EditorRenderSettings& renderSettings)
     {
         *m_PostProcessingSettings = renderSettings.PostProcessing;
         activeScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
 
-        m_SceneRenderer->GetSSAOEnabled() = renderSettings.SSAOEnabled;
-        m_SceneRenderer->GetSSAORadius() = renderSettings.SSAORadius;
-        m_SceneRenderer->GetSSAOBias() = renderSettings.SSAOBias;
-        m_SceneRenderer->GetSSAOKernelSize() = renderSettings.SSAOKernelSize;
-        m_SceneRenderer->GetSSAOIntensity() = renderSettings.SSAOIntensity;
+        // toRenderer=true 路径只从 settings 读取，不会修改
+        SyncSSAOSettings(const_cast<EditorRenderSettings&>(renderSettings), true);
 
         if (renderSettings.MSAASamples != m_ViewportController->GetHDRFramebuffer()->GetSpecification().Samples)
             ApplyMSAASamples(renderSettings.MSAASamples);
@@ -108,17 +130,13 @@ namespace Engine
             SyncHDRFramebufferBindings();
     }
 
-    EditorRenderSettings EditorRenderController::CollectRenderSettings(const Ref<Scene>& activeScene) const
+    EditorRenderSettings EditorRenderController::CollectRenderSettings(const Ref<Scene>& activeScene)
     {
         EditorRenderSettings renderSettings;
         renderSettings.PostProcessing = *m_PostProcessingSettings;
         renderSettings.MSAASamples = m_ViewportController->GetHDRFramebuffer()->GetSpecification().Samples;
         renderSettings.PhysicsBackend = static_cast<int>(activeScene->GetPhysicsBackend());
-        renderSettings.SSAOEnabled = m_SceneRenderer->GetSSAOEnabled();
-        renderSettings.SSAORadius = m_SceneRenderer->GetSSAORadius();
-        renderSettings.SSAOBias = m_SceneRenderer->GetSSAOBias();
-        renderSettings.SSAOKernelSize = m_SceneRenderer->GetSSAOKernelSize();
-        renderSettings.SSAOIntensity = m_SceneRenderer->GetSSAOIntensity();
+        SyncSSAOSettings(renderSettings, false);
         return renderSettings;
     }
 

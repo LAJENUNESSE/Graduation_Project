@@ -2,9 +2,9 @@
 #include "Reflection/AutoInspector.h"
 #include "Reflection/ComponentMeta.h"
 
-#include <imgui.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <imgui.h>
 
 namespace Engine
 {
@@ -107,8 +107,8 @@ namespace Engine
                 int* val = static_cast<int*>(ptr);
                 if (prop.Hints.EnumNames && prop.Hints.EnumCount > 0)
                 {
-                    const char* currentName = (*val >= 0 && *val < prop.Hints.EnumCount)
-                        ? prop.Hints.EnumNames[*val] : "???";
+                    const char* currentName =
+                        (*val >= 0 && *val < prop.Hints.EnumCount) ? prop.Hints.EnumNames[*val] : "???";
                     if (ImGui::BeginCombo(prop.DisplayName, currentName))
                     {
                         for (int i = 0; i < prop.Hints.EnumCount; i++)

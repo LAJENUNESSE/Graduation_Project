@@ -23,8 +23,7 @@ namespace Engine
     {
         // 按 SortKey 排序，使相同 shader/材质的绘制调用相邻，减少 GPU 状态切换
         std::sort(m_Packets.begin(), m_Packets.end(),
-                  [](const RenderPacket& a, const RenderPacket& b)
-                  { return a.SortKey < b.SortKey; });
+                  [](const RenderPacket& a, const RenderPacket& b) { return a.SortKey < b.SortKey; });
 
         // 跟踪上一个绑定的材质，相同材质跳过重复 Bind
         Material* lastBoundMaterial = nullptr;

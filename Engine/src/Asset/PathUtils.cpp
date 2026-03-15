@@ -55,7 +55,8 @@ namespace Engine::PathUtils
                 return {};
 
             std::string utf8(static_cast<size_t>(utf8Size), '\0');
-            const int converted = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideSize, utf8.data(), utf8Size, nullptr, nullptr);
+            const int converted =
+                WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideSize, utf8.data(), utf8Size, nullptr, nullptr);
             if (converted <= 0)
                 return {};
 
@@ -144,8 +145,7 @@ namespace Engine::PathUtils
         std::filesystem::path dir = NormalizePath(startDirectory);
         for (int i = 0; i < 12; ++i)
         {
-            if (std::filesystem::exists(dir / "assets") &&
-                std::filesystem::exists(dir / "Editor"))
+            if (std::filesystem::exists(dir / "assets") && std::filesystem::exists(dir / "Editor"))
             {
                 SetProjectRoot(dir);
                 return true;

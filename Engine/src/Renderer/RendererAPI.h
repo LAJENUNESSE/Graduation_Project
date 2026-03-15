@@ -8,17 +8,35 @@
 namespace Engine
 {
 
-    enum class DepthFunc { Less, LEqual, Greater, Always };
-    enum class CullFaceMode { Front, Back };
-    enum class BlendFactor { Zero = 0, One, SrcAlpha, OneMinusSrcAlpha, DstAlpha, OneMinusDstAlpha };
+    enum class DepthFunc
+    {
+        Less,
+        LEqual,
+        Greater,
+        Always
+    };
+    enum class CullFaceMode
+    {
+        Front,
+        Back
+    };
+    enum class BlendFactor
+    {
+        Zero = 0,
+        One,
+        SrcAlpha,
+        OneMinusSrcAlpha,
+        DstAlpha,
+        OneMinusDstAlpha
+    };
 
     namespace BarrierBit
     {
-        constexpr uint32_t ShaderStorage = 0x00002000;  // GL_SHADER_STORAGE_BARRIER_BIT
-        constexpr uint32_t Command       = 0x00000040;  // GL_COMMAND_BARRIER_BIT
-        constexpr uint32_t BufferUpdate  = 0x00000200;  // GL_BUFFER_UPDATE_BARRIER_BIT
-        constexpr uint32_t All           = 0xFFFFFFFF;  // GL_ALL_BARRIER_BITS
-    }
+        constexpr uint32_t ShaderStorage = 0x00002000; // GL_SHADER_STORAGE_BARRIER_BIT
+        constexpr uint32_t Command = 0x00000040;       // GL_COMMAND_BARRIER_BIT
+        constexpr uint32_t BufferUpdate = 0x00000200;  // GL_BUFFER_UPDATE_BARRIER_BIT
+        constexpr uint32_t All = 0xFFFFFFFF;           // GL_ALL_BARRIER_BITS
+    } // namespace BarrierBit
 
     class RendererAPI
     {
@@ -63,10 +81,7 @@ namespace Engine
         virtual void SetDepthMask(bool enable) = 0;
         virtual void SetBlendFunc(BlendFactor src, BlendFactor dst) = 0;
 
-        static API GetAPI()
-        {
-            return s_API;
-        }
+        static API GetAPI() { return s_API; }
 
     private:
         static API s_API;

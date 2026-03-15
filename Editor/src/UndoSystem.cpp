@@ -1,13 +1,13 @@
 #include "UndoSystem.h"
 #include "Core/Log.h"
+#include "Reflection/ComponentRegistry.h"
+#include "Scene/Components.h"
 
 namespace Engine
 {
     namespace
     {
-        void ApplyTransform(Entity entity,
-                            const glm::vec3& translation,
-                            const glm::vec3& rotation,
+        void ApplyTransform(Entity entity, const glm::vec3& translation, const glm::vec3& rotation,
                             const glm::vec3& scale)
         {
             if (!entity || !entity.HasComponent<TransformComponent>())
@@ -19,10 +19,8 @@ namespace Engine
             tc.Scale = scale;
         }
 
-        void ApplyTransformByUUID(const UUID& entityID, const Ref<Scene>& scene,
-                                  const glm::vec3& translation,
-                                  const glm::vec3& rotation,
-                                  const glm::vec3& scale)
+        void ApplyTransformByUUID(const UUID& entityID, const Ref<Scene>& scene, const glm::vec3& translation,
+                                  const glm::vec3& rotation, const glm::vec3& scale)
         {
             if (!scene)
                 return;
@@ -106,15 +104,13 @@ namespace Engine
 
     // ==================== TransformChangeCommand ====================
 
-    TransformChangeCommand::TransformChangeCommand(Entity entity,
-                                                   const glm::vec3& oldTranslation, const glm::vec3& oldRotation,
-                                                   const glm::vec3& oldScale,
+    TransformChangeCommand::TransformChangeCommand(Entity entity, const glm::vec3& oldTranslation,
+                                                   const glm::vec3& oldRotation, const glm::vec3& oldScale,
                                                    const glm::vec3& newTranslation, const glm::vec3& newRotation,
                                                    const glm::vec3& newScale)
-        : m_EntityHandle(static_cast<entt::entity>(entity))
-        , m_Scene(entity.GetScene())
-        , m_OldTranslation(oldTranslation), m_OldRotation(oldRotation), m_OldScale(oldScale)
-        , m_NewTranslation(newTranslation), m_NewRotation(newRotation), m_NewScale(newScale)
+        : m_EntityHandle(static_cast<entt::entity>(entity)), m_Scene(entity.GetScene()),
+          m_OldTranslation(oldTranslation), m_OldRotation(oldRotation), m_OldScale(oldScale),
+          m_NewTranslation(newTranslation), m_NewRotation(newRotation), m_NewScale(newScale)
     {
     }
 
@@ -157,8 +153,7 @@ namespace Engine
 
     // ==================== EntityCreateCommand ====================
 
-    EntityCreateCommand::EntityCreateCommand(Ref<Scene> scene, const std::string& name)
-        : m_Scene(scene), m_Name(name)
+    EntityCreateCommand::EntityCreateCommand(Ref<Scene> scene, const std::string& name) : m_Scene(scene), m_Name(name)
     {
     }
 
@@ -203,83 +198,61 @@ namespace Engine
     // ==================== EntityDeleteCommand ====================
 
     EntityDeleteCommand::EntityDeleteCommand(Ref<Scene> scene, Entity entity)
-        : m_Scene(scene)
-        , m_EntityHandle(static_cast<entt::entity>(entity))
+        : m_Scene(scene), m_EntityUUID(entity.GetUUID())
     {
         // 保存快照
         m_EntityName = entity.GetName();
         m_TransformSnapshot = entity.GetComponent<TransformComponent>();
 
-        m_HasMeshRenderer = entity.HasComponent<MeshRendererComponent>();
-        if (m_HasMeshRenderer)
-            m_MeshRendererSnapshot = entity.GetComponent<MeshRendererComponent>();
+        m_HasRelationship = entity.HasComponent<RelationshipComponent>();
+        if (m_HasRelationship)
+            m_RelationshipSnapshot = entity.GetComponent<RelationshipComponent>();
 
-        m_HasLight = entity.HasComponent<LightComponent>();
-        if (m_HasLight)
-            m_LightSnapshot = entity.GetComponent<LightComponent>();
-
-        m_HasCamera = entity.HasComponent<CameraComponent>();
-        if (m_HasCamera)
-            m_CameraSnapshot = entity.GetComponent<CameraComponent>();
-
-        m_HasRigidBody = entity.HasComponent<RigidBodyComponent>();
-        if (m_HasRigidBody)
-            m_RigidBodySnapshot = entity.GetComponent<RigidBodyComponent>();
-
-        m_HasBoxCollider = entity.HasComponent<BoxColliderComponent>();
-        if (m_HasBoxCollider)
-            m_BoxColliderSnapshot = entity.GetComponent<BoxColliderComponent>();
-
-        m_HasSphereCollider = entity.HasComponent<SphereColliderComponent>();
-        if (m_HasSphereCollider)
-            m_SphereColliderSnapshot = entity.GetComponent<SphereColliderComponent>();
-
-        m_HasParticle = entity.HasComponent<ParticleEmitterComponent>();
-        if (m_HasParticle)
-            m_ParticleSnapshot = entity.GetComponent<ParticleEmitterComponent>();
-
-        m_HasAudioSource = entity.HasComponent<AudioSourceComponent>();
-        if (m_HasAudioSource)
-            m_AudioSourceSnapshot = entity.GetComponent<AudioSourceComponent>();
-
-        m_HasAudioListener = entity.HasComponent<AudioListenerComponent>();
-        if (m_HasAudioListener)
-            m_AudioListenerSnapshot = entity.GetComponent<AudioListenerComponent>();
+        // 通过 ComponentRegistry 自动快照所有注册的组件
+        uint32_t eid = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+        for (auto& meta : ComponentRegistry::Instance().GetAll())
+        {
+            if (meta.Has(*m_Scene, eid) && meta.Snapshot)
+                m_ComponentSnapshots.push_back({meta.TypeName, meta.Snapshot(*m_Scene, eid)});
+        }
     }
 
     void EntityDeleteCommand::Execute()
     {
-        Entity entity(m_EntityHandle, m_Scene.get());
+        Entity entity = m_Scene->FindEntityByUUID(m_EntityUUID);
         if (entity)
             m_Scene->DestroyEntity(entity);
     }
 
     void EntityDeleteCommand::Undo()
     {
-        // 重新创建实体并恢复组件
-        Entity entity = m_Scene->CreateEntity(m_EntityName);
-        m_EntityHandle = static_cast<entt::entity>(entity);
+        // 重新创建实体并恢复组件（使用原始 UUID 以保持父子关系引用）
+        Entity entity = m_Scene->CreateEntityWithUUID(m_EntityUUID, m_EntityName);
 
+        // 通过快照恢复所有组件
+        uint32_t eid = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+        for (auto& snap : m_ComponentSnapshots)
+        {
+            auto* meta = ComponentRegistry::Instance().Find(snap.TypeName.c_str());
+            if (meta && meta->Restore)
+                meta->Restore(*m_Scene, eid, snap.Data);
+        }
+
+        if (m_HasRelationship)
+        {
+            auto& relationship = entity.GetComponent<RelationshipComponent>();
+            relationship.Children = m_RelationshipSnapshot.Children;
+
+            if (static_cast<uint64_t>(m_RelationshipSnapshot.ParentID) != 0)
+            {
+                Entity parent = m_Scene->FindEntityByUUID(m_RelationshipSnapshot.ParentID);
+                if (parent)
+                    m_Scene->SetParent(entity, parent);
+            }
+        }
+
+        // SetParent 会重算本地变换，这里最后覆盖回删除前快照。
         entity.GetComponent<TransformComponent>() = m_TransformSnapshot;
-
-        if (m_HasMeshRenderer)
-            entity.AddComponent<MeshRendererComponent>(m_MeshRendererSnapshot);
-        if (m_HasLight)
-            entity.AddComponent<LightComponent>(m_LightSnapshot);
-        if (m_HasCamera)
-            entity.AddComponent<CameraComponent>(m_CameraSnapshot);
-        if (m_HasRigidBody)
-            entity.AddComponent<RigidBodyComponent>(m_RigidBodySnapshot);
-        if (m_HasBoxCollider)
-            entity.AddComponent<BoxColliderComponent>(m_BoxColliderSnapshot);
-        if (m_HasSphereCollider)
-            entity.AddComponent<SphereColliderComponent>(m_SphereColliderSnapshot);
-        if (m_HasParticle)
-            entity.AddComponent<ParticleEmitterComponent>(m_ParticleSnapshot);
-        if (m_HasAudioSource)
-            entity.AddComponent<AudioSourceComponent>(m_AudioSourceSnapshot);
-        if (m_HasAudioListener)
-            entity.AddComponent<AudioListenerComponent>(m_AudioListenerSnapshot);
     }
 
     std::string EntityDeleteCommand::GetDescription() const
@@ -289,13 +262,10 @@ namespace Engine
 
     // ==================== PropertyChangeCommand ====================
 
-    PropertyChangeCommand::PropertyChangeCommand(const std::string& description,
-                                                  std::any oldValue, std::any newValue,
-                                                  ApplyFn applyFn)
-        : m_Description(description)
-        , m_OldValue(std::move(oldValue))
-        , m_NewValue(std::move(newValue))
-        , m_ApplyFn(std::move(applyFn))
+    PropertyChangeCommand::PropertyChangeCommand(const std::string& description, std::any oldValue, std::any newValue,
+                                                 ApplyFn applyFn)
+        : m_Description(description), m_OldValue(std::move(oldValue)), m_NewValue(std::move(newValue)),
+          m_ApplyFn(std::move(applyFn))
     {
     }
 
@@ -319,9 +289,7 @@ namespace Engine
     // ==================== ParentChangeCommand ====================
 
     ParentChangeCommand::ParentChangeCommand(Ref<Scene> scene, Entity child, Entity newParent)
-        : m_Scene(scene)
-        , m_ChildUUID(child.GetUUID())
-        , m_NewParentUUID(newParent ? newParent.GetUUID() : UUID(0))
+        : m_Scene(scene), m_ChildUUID(child.GetUUID()), m_NewParentUUID(newParent ? newParent.GetUUID() : UUID(0))
     {
         // 记录旧父节点 UUID
         if (child.HasComponent<RelationshipComponent>())

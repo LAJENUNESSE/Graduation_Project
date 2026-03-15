@@ -1,0 +1,84 @@
+#pragma once
+
+#include "Core/Base.h"
+#include "Renderer/Shader.h"
+#include "Renderer/StorageBuffer.h"
+
+#include <entt/entt.hpp>
+#include <glm/glm.hpp>
+
+namespace Engine
+{
+
+    // SPH shader 集合：粒子系统和流体系统共享的 7 个 shader
+    struct SPHShaderSet
+    {
+        Ref<Shader> DensityShader;
+        Ref<Shader> ForceShader;
+        Ref<Shader> PCISPHInit;
+        Ref<Shader> PCISPHPredict;
+        Ref<Shader> PCISPHDensity;
+        Ref<Shader> PCISPHForce;
+        Ref<Shader> PCISPHApply;
+
+        static SPHShaderSet Load();
+    };
+
+    // SPH kernel 预计算常量（避免 GPU 每粒子每邻居重复计算）
+    struct SPHKernelParams
+    {
+        float h;          // smoothing radius
+        float h2;         // h^2
+        float h6;         // h^6
+        float h9;         // h^9
+        float poly6Coeff; // 315 / (64 * pi * h^9)
+        float spikyCoeff; // -45 / (pi * h^6)
+
+        static SPHKernelParams Compute(float smoothingRadius);
+    };
+
+    // 统一的 GPU 刚体数据结构：7 x vec4 = 112 bytes
+    // 与 GLSL GPURigidBody 和 CUDA RigidBodyData 布局完全一致
+    struct GPURigidBodyData
+    {
+        glm::vec4 posAndType;   // xyz=center, w=0(box)/1(sphere)
+        glm::vec4 rotCol0;
+        glm::vec4 rotCol1;
+        glm::vec4 rotCol2;
+        glm::vec4 halfExtents;  // box: xyz=半尺寸; sphere: x=radius
+        glm::vec4 linearVel;
+        glm::vec4 angularVel;
+    };
+
+    enum class RigidBodyUploadFilter
+    {
+        AllColliders = 0,
+        RequireRigidBodyComponent
+    };
+
+    // 从 registry 收集带碰撞器的实体，上传到 GPU buffer
+    // 返回实际上传的刚体数量
+    static constexpr uint32_t MAX_RIGID_BODIES = 64;
+
+    uint32_t UploadRigidBodiesToBuffer(entt::registry* registry,
+                                       const Ref<ShaderStorageBuffer>& buffer,
+                                       uint32_t maxRigidBodies,
+                                       RigidBodyUploadFilter filter = RigidBodyUploadFilter::AllColliders);
+
+#ifdef ENGINE_ENABLE_CUDA
+    // CUDA event 计时 ping-pong 双缓冲辅助（避免 GPU 同步阻塞）
+    struct CudaTimingHelper
+    {
+        void* EventStart = nullptr;
+        void* EventStop = nullptr;
+        void* PrevStart = nullptr;
+        void* PrevStop = nullptr;
+        bool HasPrevTiming = false;
+
+        void Init();
+        void SwapEvents();
+        void Destroy();
+    };
+#endif
+
+} // namespace Engine

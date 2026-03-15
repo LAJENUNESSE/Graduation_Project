@@ -19,8 +19,7 @@ namespace Engine
 
 } // namespace Engine
 
-template <>
-struct std::hash<Engine::AssetHandle>
+template <> struct std::hash<Engine::AssetHandle>
 {
     size_t operator()(const Engine::AssetHandle& h) const noexcept
     {

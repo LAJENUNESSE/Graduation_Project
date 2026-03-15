@@ -8,13 +8,18 @@ namespace Engine
 {
 
     // ---- little-endian helpers ----
-    static uint16_t ReadU16(const uint8_t* p) { return uint16_t(p[0]) | (uint16_t(p[1]) << 8); }
-    static uint32_t ReadU32(const uint8_t* p) { return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24); }
+    static uint16_t ReadU16(const uint8_t* p)
+    {
+        return uint16_t(p[0]) | (uint16_t(p[1]) << 8);
+    }
+    static uint32_t ReadU32(const uint8_t* p)
+    {
+        return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24);
+    }
 
     static bool TagEquals(const uint8_t* p, const char* tag)
     {
-        return p[0] == (uint8_t)tag[0] && p[1] == (uint8_t)tag[1] &&
-               p[2] == (uint8_t)tag[2] && p[3] == (uint8_t)tag[3];
+        return p[0] == (uint8_t)tag[0] && p[1] == (uint8_t)tag[1] && p[2] == (uint8_t)tag[2] && p[3] == (uint8_t)tag[3];
     }
 
     AudioClip AudioClip::LoadFromFile(const std::string& path)
@@ -75,9 +80,9 @@ namespace Engine
                 }
 
                 const uint8_t* fmtData = chunkHeader + 8;
-                audioFormat   = ReadU16(fmtData + 0);
-                numChannels   = ReadU16(fmtData + 2);
-                sampleRate    = ReadU32(fmtData + 4);
+                audioFormat = ReadU16(fmtData + 0);
+                numChannels = ReadU16(fmtData + 2);
+                sampleRate = ReadU32(fmtData + 4);
                 // byteRate   = ReadU32(fmtData + 8);  // not needed
                 // blockAlign = ReadU16(fmtData + 12);  // not needed
                 bitsPerSample = ReadU16(fmtData + 14);
@@ -112,7 +117,8 @@ namespace Engine
 
             // Advance to next chunk (chunks are 2-byte aligned)
             offset += 8 + chunkSize;
-            if (chunkSize & 1) offset++; // padding byte
+            if (chunkSize & 1)
+                offset++; // padding byte
         }
 
         // If we found fmt but data came before fmt, do a second scan for the data chunk
@@ -138,7 +144,8 @@ namespace Engine
                 }
 
                 offset += 8 + chunkSize;
-                if (chunkSize & 1) offset++;
+                if (chunkSize & 1)
+                    offset++;
             }
         }
 
@@ -165,8 +172,8 @@ namespace Engine
             clip.ALFormat = AL_FORMAT_STEREO16;
         else
         {
-            ENGINE_CORE_ERROR("AudioClip: 不支持的格式 (channels={}, bitsPerSample={}), 文件 '{}'",
-                              numChannels, bitsPerSample, path);
+            ENGINE_CORE_ERROR("AudioClip: 不支持的格式 (channels={}, bitsPerSample={}), 文件 '{}'", numChannels,
+                              bitsPerSample, path);
             return clip;
         }
 
@@ -174,8 +181,8 @@ namespace Engine
         clip.Channels = numChannels;
         clip.BitsPerSample = bitsPerSample;
 
-        ENGINE_CORE_INFO("AudioClip: 已加载 '{}' ({}Hz, {}ch, {}bit, {} 字节 PCM)",
-                         path, sampleRate, numChannels, bitsPerSample, clip.Data.size());
+        ENGINE_CORE_INFO("AudioClip: 已加载 '{}' ({}Hz, {}ch, {}bit, {} 字节 PCM)", path, sampleRate, numChannels,
+                         bitsPerSample, clip.Data.size());
 
         return clip;
     }
