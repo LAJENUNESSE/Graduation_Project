@@ -123,7 +123,7 @@ jobs:
           key: vcpkg-fedora40-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake
-        run: cmake --preset linux-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache || cmake --preset linux-default
+        run: cmake --preset linux-default
 
       - name: Build Engine
         run: cmake --build build --target Engine
@@ -145,6 +145,7 @@ jobs:
 
     env:
       VCPKG_ROOT: /opt/vcpkg
+      VCPKG_FORCE_SYSTEM_BINARIES: 1
 
     steps:
       - name: Install system dependencies
@@ -175,7 +176,7 @@ jobs:
           key: vcpkg-alpine320-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake
-        run: cmake --preset linux-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache || cmake --preset linux-default
+        run: cmake --preset linux-default
 
       - name: Build Engine
         run: cmake --build build --target Engine
