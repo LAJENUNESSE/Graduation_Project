@@ -80,8 +80,6 @@ namespace Engine
             EndPlay(activeScene);
 
         auto newScene = CreateRef<Scene>();
-        if (m_SceneRenderer)
-            newScene->SetSceneRenderer(m_SceneRenderer);
 
         EditorRenderSettings loadedRenderSettings;
         SceneSerializer serializer(newScene);
@@ -90,6 +88,11 @@ namespace Engine
             ENGINE_WARN("Failed to load scene from '{0}', keeping current scene", filepath);
             return false;
         }
+
+        // SetSceneRenderer 必须在 Deserialize 之后调用，
+        // 才能将已加载的 shadow/skybox 正确推送到 renderer
+        if (m_SceneRenderer)
+            newScene->SetSceneRenderer(m_SceneRenderer);
 
         newScene->OnViewportResize(viewportWidth, viewportHeight);
         m_EditorScene = newScene;
