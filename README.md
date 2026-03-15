@@ -43,7 +43,24 @@
 
 ## Build
 
-### 前置准备
+### Windows 一键构建
+
+```powershell
+# 基本构建（自动处理子模块、vcpkg、CMake 配置与构建）
+./build.ps1
+
+# 启用 CUDA 加速
+./build.ps1 -Cuda
+
+# 指定构建配置
+./build.ps1 -Config Debug
+```
+
+脚本会自动检测 vcpkg 和 CMake，找不到时自动安装 vcpkg。
+
+### 手动构建
+
+#### 前置准备
 
 ```bash
 # 1. 初始化 Git 子模块
@@ -56,7 +73,7 @@ git clone https://github.com/microsoft/vcpkg.git <路径>
 <路径>/vcpkg install ffmpeg openal-soft --triplet x64-windows  # 或 x64-linux
 ```
 
-### Windows（VS 2022 Build Tools + vcpkg）
+#### Windows（VS 2022 Build Tools + vcpkg）
 
 项目提供了 CMake Presets，按需选择：
 
@@ -69,7 +86,7 @@ cmake --preset vs2022-cuda      # 有 CUDA（需安装 NVIDIA CUDA Toolkit）
 cmake --build build --config RelWithDebInfo --target Editor
 ```
 
-### Linux（Ninja + vcpkg）
+#### Linux（Ninja + vcpkg）
 
 ```bash
 # 配置（二选一）
@@ -80,7 +97,7 @@ cmake --preset linux-cuda       # 有 CUDA
 cmake --build build --target Editor
 ```
 
-### Run
+#### Run
 
 ```bash
 # Windows
