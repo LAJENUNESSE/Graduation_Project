@@ -164,8 +164,7 @@ namespace Engine
         newScene->m_ViewportHeight = src->m_ViewportHeight;
         newScene->m_PhysicsBackend = src->m_PhysicsBackend;
 
-        // 拷贝环境数据（Shadow + Skybox）
-        src->SyncEnvironmentFromRenderer();
+        // 拷贝环境数据（Shadow + Skybox）— 直接拷贝 scene 状态，不从 renderer 反向拉取
         newScene->m_EnvironmentState = src->m_EnvironmentState;
 
         // Copy all entities
