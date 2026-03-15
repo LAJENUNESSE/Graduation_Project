@@ -70,6 +70,16 @@ jobs:
       - name: Build Editor
         run: cmake --build build --target Editor
 
+      - name: Verify binary dependencies (otool)
+        run: |
+          echo "=== otool -L Editor ==="
+          otool -L build/Editor/Editor
+          if otool -L build/Editor/Editor | grep -q "not found"; then
+            echo "::error::Missing dylib dependencies detected!"
+            exit 1
+          fi
+          echo "All dylib dependencies resolved."
+
   # ── Fedora 40 (RHEL/CentOS 兼容层代理) ───────────────
   # Fedora 用 vcpkg（glibc 环境，vcpkg 完全兼容）
   build-fedora:
@@ -126,6 +136,17 @@ jobs:
       - name: Build Editor
         run: cmake --build build --target Editor
 
+      - name: Verify binary dependencies (ldd)
+        run: |
+          echo "=== ldd Editor ==="
+          ldd build/Editor/Editor
+          if ldd build/Editor/Editor | grep -q "not found"; then
+            echo "::error::Missing shared libraries detected!"
+            ldd build/Editor/Editor | grep "not found"
+            exit 1
+          fi
+          echo "All shared library dependencies resolved."
+
   # ── Alpine 3.20 (musl libc) ──────────────────────────
   # 用 apk 系统包装 FFmpeg/OpenAL，不走 vcpkg（samurai 不完全兼容 vcpkg 内部调用）
   build-alpine:
@@ -165,3 +186,14 @@ jobs:
 
       - name: Build Editor
         run: cmake --build build --target Editor
+
+      - name: Verify binary dependencies (ldd)
+        run: |
+          echo "=== ldd Editor ==="
+          ldd build/Editor/Editor
+          if ldd build/Editor/Editor | grep -q "not found"; then
+            echo "::error::Missing shared libraries detected!"
+            ldd build/Editor/Editor | grep "not found"
+            exit 1
+          fi
+          echo "All shared library dependencies resolved."

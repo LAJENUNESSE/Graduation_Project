@@ -108,6 +108,17 @@ jobs:
       - name: Build Editor
         run: cmake --build build --target Editor
 
+      - name: Verify binary dependencies (ldd)
+        run: |
+          echo "=== ldd Editor ==="
+          ldd build/Editor/Editor
+          if ldd build/Editor/Editor | grep -q "not found"; then
+            echo "::error::Missing shared libraries detected!"
+            ldd build/Editor/Editor | grep "not found"
+            exit 1
+          fi
+          echo "All shared library dependencies resolved."
+
   build-linux-cuda:
     name: Linux (GCC + CUDA)
     runs-on: ubuntu-latest
@@ -162,3 +173,14 @@ jobs:
 
       - name: Build Editor
         run: cmake --build build --target Editor
+
+      - name: Verify binary dependencies (ldd)
+        run: |
+          echo "=== ldd Editor ==="
+          ldd build/Editor/Editor
+          if ldd build/Editor/Editor | grep -q "not found"; then
+            echo "::error::Missing shared libraries detected!"
+            ldd build/Editor/Editor | grep "not found"
+            exit 1
+          fi
+          echo "All shared library dependencies resolved."
