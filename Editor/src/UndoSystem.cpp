@@ -50,6 +50,9 @@ namespace Engine
 
     void CommandHistory::PushUndoEntry(Ref<ICommand> cmd)
     {
+        if (m_Suspended)
+            return;
+
         m_UndoStack.push_back(std::move(cmd));
 
         // 清空 redo 栈（新操作后旧的 redo 分支作废）
@@ -104,11 +107,11 @@ namespace Engine
 
     // ==================== TransformChangeCommand ====================
 
-    TransformChangeCommand::TransformChangeCommand(Entity entity, const glm::vec3& oldTranslation,
+    TransformChangeCommand::TransformChangeCommand(Ref<Scene> scene, Entity entity, const glm::vec3& oldTranslation,
                                                    const glm::vec3& oldRotation, const glm::vec3& oldScale,
                                                    const glm::vec3& newTranslation, const glm::vec3& newRotation,
                                                    const glm::vec3& newScale)
-        : m_EntityHandle(static_cast<entt::entity>(entity)), m_Scene(entity.GetScene()),
+        : m_EntityUUID(entity.GetUUID()), m_Scene(std::move(scene)),
           m_OldTranslation(oldTranslation), m_OldRotation(oldRotation), m_OldScale(oldScale),
           m_NewTranslation(newTranslation), m_NewRotation(newRotation), m_NewScale(newScale)
     {
@@ -116,12 +119,12 @@ namespace Engine
 
     void TransformChangeCommand::Execute()
     {
-        ApplyTransform(Entity(m_EntityHandle, m_Scene), m_NewTranslation, m_NewRotation, m_NewScale);
+        ApplyTransformByUUID(m_EntityUUID, m_Scene, m_NewTranslation, m_NewRotation, m_NewScale);
     }
 
     void TransformChangeCommand::Undo()
     {
-        ApplyTransform(Entity(m_EntityHandle, m_Scene), m_OldTranslation, m_OldRotation, m_OldScale);
+        ApplyTransformByUUID(m_EntityUUID, m_Scene, m_OldTranslation, m_OldRotation, m_OldScale);
     }
 
     std::string TransformChangeCommand::GetDescription() const

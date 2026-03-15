@@ -370,7 +370,8 @@ namespace Engine
                          !AreVec3Equal(m_TransformEditSession.Scale, component.Scale)))
                     {
                         m_CommandHistory->PushExecutedCommand(CreateRef<TransformChangeCommand>(
-                            Entity(entityHandle, entityScene), m_TransformEditSession.Translation,
+                            m_ActiveScene, Entity(entityHandle, entityScene),
+                            m_TransformEditSession.Translation,
                             m_TransformEditSession.Rotation, m_TransformEditSession.Scale, component.Translation,
                             component.Rotation, component.Scale));
                     }

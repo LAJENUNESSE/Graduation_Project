@@ -46,19 +46,25 @@ namespace Engine
 
         void Clear();
 
+        // Play 模式暂停命令记录
+        void SetSuspended(bool suspended) { m_Suspended = suspended; }
+        bool IsSuspended() const { return m_Suspended; }
+
     private:
         void PushUndoEntry(Ref<ICommand> cmd);
 
         std::vector<Ref<ICommand>> m_UndoStack;
         std::vector<Ref<ICommand>> m_RedoStack;
+        bool m_Suspended = false;
     };
 
     // ========== Transform 修改命令 ==========
     class TransformChangeCommand : public ICommand
     {
     public:
-        TransformChangeCommand(Entity entity, const glm::vec3& oldTranslation, const glm::vec3& oldRotation,
-                               const glm::vec3& oldScale, const glm::vec3& newTranslation, const glm::vec3& newRotation,
+        TransformChangeCommand(Ref<Scene> scene, Entity entity, const glm::vec3& oldTranslation,
+                               const glm::vec3& oldRotation, const glm::vec3& oldScale,
+                               const glm::vec3& newTranslation, const glm::vec3& newRotation,
                                const glm::vec3& newScale);
 
         void Execute() override;
@@ -66,8 +72,8 @@ namespace Engine
         std::string GetDescription() const override;
 
     private:
-        entt::entity m_EntityHandle;
-        Scene* m_Scene;
+        UUID m_EntityUUID;
+        Ref<Scene> m_Scene;
 
         glm::vec3 m_OldTranslation, m_OldRotation, m_OldScale;
         glm::vec3 m_NewTranslation, m_NewRotation, m_NewScale;

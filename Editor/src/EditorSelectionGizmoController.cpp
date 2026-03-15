@@ -217,7 +217,8 @@ namespace Engine
                 else
                 {
                     auto cmd =
-                        CreateRef<TransformChangeCommand>(selectedEntity, m_GizmoStartTranslation, m_GizmoStartRotation,
+                        CreateRef<TransformChangeCommand>(activeScene, selectedEntity, m_GizmoStartTranslation,
+                                                          m_GizmoStartRotation,
                                                           m_GizmoStartScale, tc.Translation, tc.Rotation, tc.Scale);
                     m_CommandHistory->PushExecutedCommand(cmd);
                 }

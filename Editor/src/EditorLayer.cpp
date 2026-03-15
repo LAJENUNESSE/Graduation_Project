@@ -148,6 +148,7 @@ namespace Engine
     void EditorLayer::OnScenePlay()
     {
         m_Boot->SelectionGizmoController().ClearTransientState();
+        m_Boot->GetCommandHistory().SetSuspended(true);
         m_Boot->SceneSession().BeginPlay(m_ActiveScene);
         ApplyActiveSceneContext(false);
     }
@@ -155,6 +156,7 @@ namespace Engine
     void EditorLayer::OnSceneStop()
     {
         m_Boot->SceneSession().EndPlay(m_ActiveScene);
+        m_Boot->GetCommandHistory().SetSuspended(false);
         ApplyActiveSceneContext(false);
     }
 

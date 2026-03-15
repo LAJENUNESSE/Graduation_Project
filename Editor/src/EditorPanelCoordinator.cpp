@@ -38,6 +38,8 @@ namespace Engine
             m_AssetBrowserPanel->SetContext(scene);
         if (m_RenderSettingsPanel)
             m_RenderSettingsPanel->SetScene(scene);
+        if (m_PropertiesPanel)
+            m_PropertiesPanel->SetScene(scene);
 
         ClearSelection();
 
