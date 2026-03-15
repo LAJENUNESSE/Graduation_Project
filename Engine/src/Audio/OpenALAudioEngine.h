@@ -9,7 +9,7 @@ struct ALCcontext;
 namespace Engine
 {
 
-    class AudioClip;
+    struct AudioClip;
 
     class OpenALAudioEngine
     {

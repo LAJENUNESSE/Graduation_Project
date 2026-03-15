@@ -6,7 +6,7 @@
 #include <string>
 
 #ifndef BIT
-    #define BIT(x) (1 << (x))
+#define BIT(x) (1 << (x))
 #endif
 
 namespace Engine
@@ -42,7 +42,7 @@ namespace Engine
         EventCategoryMouseButton = BIT(4)
     };
 
-#define EVENT_CLASS_TYPE(type)                                                                                          \
+#define EVENT_CLASS_TYPE(type)                                                                                         \
     static EventType GetStaticType()                                                                                   \
     {                                                                                                                  \
         return EventType::type;                                                                                        \
@@ -73,27 +73,17 @@ namespace Engine
         virtual const char* GetName() const = 0;
         virtual int GetCategoryFlags() const = 0;
 
-        virtual std::string ToString() const
-        {
-            return GetName();
-        }
+        virtual std::string ToString() const { return GetName(); }
 
-        bool IsInCategory(EventCategory category) const
-        {
-            return GetCategoryFlags() & category;
-        }
+        bool IsInCategory(EventCategory category) const { return GetCategoryFlags() & category; }
     };
 
     class EventDispatcher
     {
     public:
-        EventDispatcher(Event& event)
-            : m_Event(event)
-        {
-        }
+        EventDispatcher(Event& event) : m_Event(event) {}
 
-        template <typename T, typename F>
-        bool Dispatch(const F& func)
+        template <typename T, typename F> bool Dispatch(const F& func)
         {
             if (m_Event.GetEventType() == T::GetStaticType())
             {

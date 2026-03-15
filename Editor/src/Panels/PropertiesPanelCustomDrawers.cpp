@@ -1,22 +1,27 @@
 #include "Panels/PropertiesPanelCustomDrawers.h"
 
 #include "Asset/AssetManager.h"
+#include "Asset/AssetType.h"
 #include "Asset/PathUtils.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
+#include "EditorAssetDescriptor.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Texture.h"
+#include "Scene/Runtime/AudioRuntimeStore.h"
+#include "Scene/Runtime/VideoRuntimeStore.h"
 #include "Script/ScriptRegistry.h"
 
+#include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <glm/gtc/type_ptr.hpp>
 
 namespace Engine
 {
     namespace
     {
-        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel, std::string& outPath)
+        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel,
+                                       std::string& outPath)
         {
             std::string selectedPath = FileDialogs::OpenFile(filter, description);
             if (selectedPath.empty())
@@ -29,8 +34,8 @@ namespace Engine
             return false;
         }
 
-        bool TryNormalizeProjectAssetPath(const std::string& candidatePath, const char* assetLabel, std::string& outPath,
-                                          bool warnOnFailure = true)
+        bool TryNormalizeProjectAssetPath(const std::string& candidatePath, const char* assetLabel,
+                                          std::string& outPath, bool warnOnFailure = true)
         {
             if (candidatePath.empty())
             {
@@ -121,7 +126,8 @@ namespace Engine
                     ImGui::PopFont();
                     ImGui::PopStyleColor(3);
                     ImGui::SameLine();
-                    ImGui::DragFloat((std::string("##") + axisLabel).c_str(), &values[axisIndex], 0.1f, 0.0f, 0.0f, "%.2f");
+                    ImGui::DragFloat((std::string("##") + axisLabel).c_str(), &values[axisIndex], 0.1f, 0.0f, 0.0f,
+                                     "%.2f");
                     ImGui::PopItemWidth();
                 };
 
@@ -168,13 +174,15 @@ namespace Engine
 
             auto acceptModelDrop = [&component]()
             {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL"))
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Mesh).PayloadType))
                 {
                     ApplyModelMeshPath(component, static_cast<const char*>(payload->Data));
                     return true;
                 }
 
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::None).PayloadType))
                 {
                     ApplyModelMeshPath(component, static_cast<const char*>(payload->Data));
                     return true;
@@ -232,7 +240,8 @@ namespace Engine
 
                 if (ImGui::BeginDragDropTarget())
                 {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE"))
+                    if (const ImGuiPayload* payload =
+                            ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Texture2D).PayloadType))
                     {
                         std::string droppedPath(static_cast<const char*>(payload->Data));
                         component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(droppedPath);
@@ -268,7 +277,8 @@ namespace Engine
                 char normalPathBuf[256];
                 memset(normalPathBuf, 0, sizeof(normalPathBuf));
                 std::strncpy(normalPathBuf, normalPath.c_str(), sizeof(normalPathBuf) - 1);
-                if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf),
+                                     ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     std::string newPath(normalPathBuf);
                     if (!newPath.empty())
@@ -279,7 +289,8 @@ namespace Engine
 
                 if (ImGui::BeginDragDropTarget())
                 {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE"))
+                    if (const ImGuiPayload* payload =
+                            ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Texture2D).PayloadType))
                     {
                         std::string droppedPath(static_cast<const char*>(payload->Data));
                         component.NormalMapAsset = AssetManager::Load<Texture2D>(droppedPath);
@@ -515,40 +526,40 @@ namespace Engine
 
             ImGui::Separator();
             ImGui::Text("SPH 流体");
-            ImGui::Checkbox("启用 SPH", &component.SPHEnabled);
-            if (!component.SPHEnabled)
+            ImGui::Checkbox("启用 SPH", &component.SPH.Enabled);
+            if (!component.SPH.Enabled)
                 return;
 
-            ImGui::DragFloat("静止密度", &component.SPH_RestDensity, 10.0f, 100.0f, 10000.0f, "%.0f");
-            ImGui::DragFloat("气体常数", &component.SPH_GasConstant, 10.0f, 100.0f, 50000.0f, "%.0f");
-            ImGui::DragFloat("粘性系数", &component.SPH_Viscosity, 0.001f, 0.0f, 1.0f, "%.4f");
-            ImGui::DragFloat("光滑半径", &component.SPH_SmoothingRadius, 0.01f, 0.01f, 2.0f, "%.3f");
-            ImGui::DragFloat("粒子质量", &component.SPH_ParticleMass, 0.001f, 0.001f, 1.0f, "%.4f");
+            ImGui::DragFloat("静止密度", &component.SPH.RestDensity, 10.0f, 100.0f, 10000.0f, "%.0f");
+            ImGui::DragFloat("气体常数", &component.SPH.GasConstant, 10.0f, 100.0f, 50000.0f, "%.0f");
+            ImGui::DragFloat("粘性系数", &component.SPH.Viscosity, 0.001f, 0.0f, 1.0f, "%.4f");
+            ImGui::DragFloat("光滑半径", &component.SPH.SmoothingRadius, 0.01f, 0.01f, 2.0f, "%.3f");
+            ImGui::DragFloat("粒子质量", &component.SPH.ParticleMass, 0.001f, 0.001f, 1.0f, "%.4f");
 
             ImGui::Separator();
             ImGui::Text("PCISPH");
-            ImGui::Checkbox("启用 PCISPH", &component.SPH_PCISPHEnabled);
-            if (component.SPH_PCISPHEnabled)
+            ImGui::Checkbox("启用 PCISPH", &component.SPH.PCISPHEnabled);
+            if (component.SPH.PCISPHEnabled)
             {
-                ImGui::SliderInt("PCISPH 迭代次数", &component.SPH_PCISPHIterations, 1, 8);
-                ImGui::DragFloat("PCISPH 校正系数", &component.SPH_PCISPHDelta, 0.01f, 0.01f, 1.0f, "%.3f");
+                ImGui::SliderInt("PCISPH 迭代次数", &component.SPH.PCISPHIterations, 1, 8);
+                ImGui::DragFloat("PCISPH 校正系数", &component.SPH.PCISPHDelta, 0.01f, 0.01f, 1.0f, "%.3f");
             }
 
             ImGui::Separator();
             ImGui::Text("表面张力");
-            ImGui::DragFloat("表面张力系数", &component.SPH_SurfaceTension, 0.1f, 0.0f, 20.0f, "%.2f");
+            ImGui::DragFloat("表面张力系数", &component.SPH.SurfaceTension, 0.1f, 0.0f, 20.0f, "%.2f");
 
             ImGui::Separator();
             ImGui::Text("刚体耦合");
-            ImGui::Checkbox("启用刚体耦合", &component.SPH_RigidBodyCoupling);
-            if (component.SPH_RigidBodyCoupling)
+            ImGui::Checkbox("启用刚体耦合", &component.SPH.RigidBodyCoupling);
+            if (component.SPH.RigidBodyCoupling)
             {
-                ImGui::DragFloat("边界刚度", &component.SPH_BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
-                ImGui::DragFloat("边界阻尼", &component.SPH_BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
+                ImGui::DragFloat("边界刚度", &component.SPH.BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
+                ImGui::DragFloat("边界阻尼", &component.SPH.BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
             }
         }
 
-        void DrawAudioSourceInspector(AudioSourceComponent& component)
+        void DrawAudioSourceInspector(AudioSourceComponent& component, const AudioRuntimeState* runtimeState)
         {
             char pathBuf[256];
             memset(pathBuf, 0, sizeof(pathBuf));
@@ -562,10 +573,12 @@ namespace Engine
 
             if (ImGui::BeginDragDropTarget())
             {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_AUDIO"))
+                if (const ImGuiPayload* payload =
+                        ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::Audio).PayloadType))
                 {
                     std::string normalizedPath;
-                    if (TryNormalizeProjectAssetPath(static_cast<const char*>(payload->Data), "音频", normalizedPath, false))
+                    if (TryNormalizeProjectAssetPath(static_cast<const char*>(payload->Data), "音频", normalizedPath,
+                                                     false))
                         component.AudioPath = normalizedPath;
                 }
                 ImGui::EndDragDropTarget();
@@ -595,10 +608,10 @@ namespace Engine
             ImGui::Checkbox("循环", &component.Loop);
             ImGui::Checkbox("启动时播放", &component.PlayOnStart);
 
-            if (component.RuntimeSource != 0)
+            if (runtimeState && runtimeState->Source != 0)
             {
                 ImGui::Separator();
-                ImGui::Text("状态: %s", component.IsPlaying ? "播放中" : "已停止");
+                ImGui::Text("状态: %s", runtimeState->IsPlaying ? "播放中" : "已停止");
             }
         }
 
@@ -608,7 +621,7 @@ namespace Engine
             ImGui::TextWrapped("场景中只有一个监听器应当激活。监听器位置跟随实体变换。");
         }
 
-        void DrawVideoPlayerInspector(VideoPlayerComponent& component)
+        void DrawVideoPlayerInspector(VideoPlayerComponent& component, const VideoRuntimeState* runtimeState)
         {
             char urlBuf[512];
             memset(urlBuf, 0, sizeof(urlBuf));
@@ -621,21 +634,22 @@ namespace Engine
             ImGui::Checkbox("启动时播放##Video", &component.PlayOnStart);
             ImGui::Checkbox("循环##Video", &component.Loop);
 
-            if (component.RuntimeTexture)
+            if (runtimeState && runtimeState->Texture)
             {
                 ImGui::Separator();
                 ImGui::Text("视频预览");
                 float w = ImGui::GetContentRegionAvail().x;
-                float aspect = (float)component.RuntimeTexture->GetWidth() / (float)component.RuntimeTexture->GetHeight();
+                float aspect =
+                    (float)runtimeState->Texture->GetWidth() / (float)runtimeState->Texture->GetHeight();
                 float h = w / aspect;
-                ImGui::Image((ImTextureID)(uintptr_t)component.RuntimeTexture->GetRendererID(),
-                             ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)(uintptr_t)runtimeState->Texture->GetRendererID(), ImVec2(w, h),
+                             ImVec2(0, 1), ImVec2(1, 0));
             }
 
-            if (component.RuntimeDecoder)
+            if (runtimeState && runtimeState->Decoder)
             {
                 ImGui::Separator();
-                ImGui::Text("状态: %s", component.IsPlaying ? "播放中" : "已停止");
+                ImGui::Text("状态: %s", runtimeState->IsPlaying ? "播放中" : "已停止");
             }
         }
 

@@ -7,8 +7,7 @@
 namespace Engine
 {
 
-    OpenGLStorageBuffer::OpenGLStorageBuffer(uint32_t size, uint32_t binding)
-        : m_Size(size)
+    OpenGLStorageBuffer::OpenGLStorageBuffer(uint32_t size, uint32_t binding) : m_Size(size)
     {
         glGenBuffers(1, &m_RendererID);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RendererID);
@@ -17,8 +16,7 @@ namespace Engine
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 
-    OpenGLStorageBuffer::OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding)
-        : m_Size(size)
+    OpenGLStorageBuffer::OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding) : m_Size(size)
     {
         glGenBuffers(1, &m_RendererID);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RendererID);

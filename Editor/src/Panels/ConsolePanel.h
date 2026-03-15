@@ -2,12 +2,12 @@
 
 #include "Core/Base.h"
 
-#include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>
+#include <spdlog/spdlog.h>
 
+#include <mutex>
 #include <string>
 #include <vector>
-#include <mutex>
 
 namespace Engine
 {
@@ -66,4 +66,3 @@ namespace Engine
     };
 
 } // namespace Engine
-

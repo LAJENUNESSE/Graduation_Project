@@ -1,0 +1,62 @@
+GNU LESSER GENERAL PUBLIC LICENSE
+Version 2.1, February 1999
+
+Copyright (C) 2024-2026 Zheyu Liu
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+---
+
+IMPORTANT NOTES ON DEPENDENCIES:
+
+This project includes the following licensed components:
+
+1. **Core Engine (LGPL v2.1+)**
+   - Your own engine code in Engine/ and Editor/
+
+2. **Dynamically Linked FFmpeg (GPL v2 - External DLL)**
+   - FFmpeg is linked as an external dynamic library (.dll on Windows)
+   - Users can replace the FFmpeg DLL with their own build
+   - FFmpeg source available at: https://ffmpeg.org/
+
+3. **MIT Licensed Libraries:**
+   - EnTT, spdlog, Dear ImGui, ImGuizmo, yaml-cpp, stb_image, GLAD, GLM
+
+4. **zlib/BSD Licensed Libraries:**
+   - GLFW, Bullet3, tinyfiledialogs
+
+5. **BSD 3-Clause:**
+   - Assimp
+
+6. **OpenAL (LGPL/MIT):**
+   - OpenAL Soft (dual-licensed)
+
+---
+
+REGARDING COMMERCIAL USE:
+
+Since FFmpeg is linked as a dynamic library (not statically linked),
+you may use this software in proprietary/commercial applications with
+the following requirements:
+
+1. Distribute the LGPL-licensed engine code with source access or
+   dynamic linking capability
+2. Allow users to replace the FFmpeg DLL if needed
+3. Include this LICENSE file and list of dependencies
+4. Attribution to the original authors is appreciated
+
+For questions about licensing compliance, refer to:
+- LGPL v2.1: https://www.gnu.org/licenses/lgpl-2.1.html
+- FFmpeg licensing: https://ffmpeg.org/legal.html

@@ -1,17 +1,17 @@
 #include "engpch.h"
 #include "Renderer/SceneRenderer.h"
-#include "Renderer/Renderer.h"
-#include "Renderer/RenderCommand.h"
-#include "Renderer/RendererAPI.h"
-#include "Renderer/RendererCapabilities.h"
-#include "Renderer/EditorCamera.h"
-#include "Renderer/Buffer.h"
 #include "Asset/AssetManager.h"
-#include "Scene/Scene.h"
-#include "Scene/Components.h"
-#include "Scene/Systems/MeshRenderSystem.h"
+#include "Core/Log.h"
 #include "Debug/PerformanceMonitor.h"
 #include "Debug/ProfileTimer.h"
+#include "Renderer/Buffer.h"
+#include "Renderer/EditorCamera.h"
+#include "Renderer/RenderCommand.h"
+#include "Renderer/Renderer.h"
+#include "Renderer/RendererAPI.h"
+#include "Renderer/RendererCapabilities.h"
+#include "Scene/Components.h"
+#include "Scene/Systems/MeshRenderSystem.h"
 
 #include <glad/gl.h>
 #include <random>
@@ -28,17 +28,15 @@ namespace Engine
         std::vector<glm::vec3> ssaoKernel;
         for (int i = 0; i < kernelSize; ++i)
         {
-            glm::vec3 sample(
-                randomFloats(generator) * 2.0f - 1.0f,
-                randomFloats(generator) * 2.0f - 1.0f,
-                randomFloats(generator)  // 半球：z >= 0
+            glm::vec3 sample(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator) * 2.0f - 1.0f,
+                             randomFloats(generator) // 半球：z >= 0
             );
             sample = glm::normalize(sample);
             sample *= randomFloats(generator);
 
             // 加速插值：让更多采样点靠近原点
             float scale = static_cast<float>(i) / static_cast<float>(kernelSize);
-            scale = 0.1f + scale * scale * 0.9f;  // lerp(0.1, 1.0, scale^2)
+            scale = 0.1f + scale * scale * 0.9f; // lerp(0.1, 1.0, scale^2)
             sample *= scale;
 
             ssaoKernel.push_back(sample);
@@ -89,11 +87,7 @@ namespace Engine
             std::vector<glm::vec3> ssaoNoise;
             for (int i = 0; i < 16; i++)
             {
-                glm::vec3 noise(
-                    randomFloats(generator) * 2.0f - 1.0f,
-                    randomFloats(generator) * 2.0f - 1.0f,
-                    0.0f
-                );
+                glm::vec3 noise(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator) * 2.0f - 1.0f, 0.0f);
                 ssaoNoise.push_back(noise);
             }
 
@@ -109,10 +103,7 @@ namespace Engine
         // 全屏四边形 VAO（供 SSAO pass 使用）
         {
             float quadVertices[] = {
-                -1.0f, -1.0f,   0.0f, 0.0f,
-                 1.0f, -1.0f,   1.0f, 0.0f,
-                 1.0f,  1.0f,   1.0f, 1.0f,
-                -1.0f,  1.0f,   0.0f, 1.0f,
+                -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
             };
             uint32_t quadIndices[] = {0, 1, 2, 2, 3, 0};
 
@@ -127,294 +118,318 @@ namespace Engine
             m_FullscreenQuadVAO->SetIndexBuffer(ib);
         }
 
-        m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx) {
-            m_LightEnv = LightSystem::CollectLights(ctx.ActiveScene->GetRegistry());
-        }});
+        m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx)
+                               { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache); }});
 
-        m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx) {
-            // 使用 CSM 版本
-            m_ShadowData = m_ShadowSystem.ExecuteCSM(
-                ctx.ActiveScene->GetRegistry(), m_LightEnv, *ctx.Camera);
+        m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx)
+                               {
+                                   // 使用 CSM 版本
+                                   m_ShadowData = m_ShadowSystem.ExecuteCSM(*ctx.Registry, m_LightEnv,
+                                                                            *ctx.Camera,
+                                                                            *ctx.EntityIndex,
+                                                                            ctx.TransformCache);
 
-            // 地形阴影深度渲染
-            if (m_ShadowData.HasValidShadowCaster)
-            {
-                if (m_ShadowData.CSMActive)
-                {
-                    // CSM: 对每个级联渲染地形深度
-                    for (int i = 0; i < m_ShadowData.CascadeCount; i++)
-                    {
-                        m_ShadowSystem.GetSettings();  // 确保 FBO 存在
-                        // 绑定对应级联 FBO（重用 Execute 中已绑定的深度）
-                        // 这里我们需要单独访问各级联 FBO，通过 ShadowMapFBO fallback
-                    }
-                }
-                else
-                {
-                    m_ShadowSystem.GetShadowMapFBO()->Bind();
-                    RenderCommand::SetCullFaceMode(CullFaceMode::Front);
-                    auto depthShader = m_ShadowSystem.GetDepthShader();
-                    depthShader->Bind();
-                    depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
-                    m_TerrainSystem.RenderDepth(ctx.ActiveScene->GetRegistry(), depthShader);
-                    RenderCommand::SetCullFaceMode(CullFaceMode::Back);
-                    m_ShadowSystem.GetShadowMapFBO()->Unbind();
-                }
-            }
-        }});
+                                   // 地形阴影深度渲染
+                                   if (m_ShadowData.HasValidShadowCaster)
+                                   {
+                                       if (m_ShadowData.CSMActive)
+                                       {
+                                           // CSM: 对每个级联渲染地形深度
+                                           for (int i = 0; i < m_ShadowData.CascadeCount; i++)
+                                           {
+                                               m_ShadowSystem.GetSettings(); // 确保 FBO 存在
+                                               // 绑定对应级联 FBO（重用 Execute 中已绑定的深度）
+                                               // 这里我们需要单独访问各级联 FBO，通过 ShadowMapFBO fallback
+                                           }
+                                       }
+                                       else
+                                       {
+                                           m_ShadowSystem.GetShadowMapFBO()->Bind();
+                                           RenderCommand::SetCullFaceMode(CullFaceMode::Front);
+                                           auto depthShader = m_ShadowSystem.GetDepthShader();
+                                           depthShader->Bind();
+                                           depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
+                                           m_TerrainSystem.RenderDepth(*ctx.Registry, depthShader,
+                                                                       *ctx.EntityIndex,
+                                                                       ctx.TransformCache);
+                                           RenderCommand::SetCullFaceMode(CullFaceMode::Back);
+                                           m_ShadowSystem.GetShadowMapFBO()->Unbind();
+                                       }
+                                   }
+                               }});
 
-        m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx) {
-            m_TerrainSystem.UpdateTerrainMeshes(ctx.ActiveScene->GetRegistry());
-            m_TerrainSystem.Render(ctx.ActiveScene->GetRegistry(), *ctx.Camera,
-                m_LightEnv, m_ShadowData, m_ShadowSystem.GetSettings());
-        }});
+        m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx)
+                               {
+                                   m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
+                                   m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
+                                                          m_ShadowData, m_ShadowSystem.GetSettings(),
+                                                          *ctx.EntityIndex, ctx.TransformCache);
+                               }});
 
-        m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx) {
-            m_GrassSystem.UpdateGrassData(ctx.ActiveScene->GetRegistry(), m_TotalTime);
-            m_GrassSystem.Render(ctx.ActiveScene->GetRegistry(), *ctx.Camera,
-                m_LightEnv, m_ShadowData, m_ShadowSystem.GetSettings(), m_TotalTime);
-        }});
+        m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx)
+                               {
+                                   m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
+                                   m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
+                                                        m_ShadowData, m_ShadowSystem.GetSettings(), m_TotalTime,
+                                                        *ctx.EntityIndex, ctx.TransformCache);
+                               }});
 
-        m_PassQueue.push_back({"SSAOPass", [this](RenderContext& ctx) {
-            if (!m_SSAOEnabled || ctx.SSAODepthTexID == 0)
-            {
-                m_SSAOBlurredTexID = 0;
-                return;
-            }
+        m_PassQueue.push_back({"SSAOPass", [this](RenderContext& ctx)
+                               {
+                                   if (!m_SSAOEnabled || ctx.SSAODepthTexID == 0)
+                                   {
+                                       m_SSAOBlurredTexID = 0;
+                                       return;
+                                   }
 
-            uint32_t vpW = ctx.ViewportWidth;
-            uint32_t vpH = ctx.ViewportHeight;
-            if (vpW == 0 || vpH == 0) return;
+                                   uint32_t vpW = ctx.ViewportWidth;
+                                   uint32_t vpH = ctx.ViewportHeight;
+                                   if (vpW == 0 || vpH == 0)
+                                       return;
 
-            uint32_t halfW = std::max(vpW / 2, 1u);
-            uint32_t halfH = std::max(vpH / 2, 1u);
+                                   uint32_t halfW = std::max(vpW / 2, 1u);
+                                   uint32_t halfH = std::max(vpH / 2, 1u);
 
-            // 如果分辨率变了，调整 SSAO FBO
-            auto& ssaoSpec = m_SSAOFBO->GetSpecification();
-            if (ssaoSpec.Width != halfW || ssaoSpec.Height != halfH)
-            {
-                m_SSAOFBO->Resize(halfW, halfH);
-                m_SSAOBlurFBO->Resize(halfW, halfH);
-            }
+                                   // 如果分辨率变了，调整 SSAO FBO
+                                   auto& ssaoSpec = m_SSAOFBO->GetSpecification();
+                                   if (ssaoSpec.Width != halfW || ssaoSpec.Height != halfH)
+                                   {
+                                       m_SSAOFBO->Resize(halfW, halfH);
+                                       m_SSAOBlurFBO->Resize(halfW, halfH);
+                                   }
 
-            // 生成采样核
-            static std::vector<glm::vec3> ssaoKernel = GenerateSSAOKernel(64);
+                                   // 生成采样核
+                                   static std::vector<glm::vec3> ssaoKernel = GenerateSSAOKernel(64);
 
-            int callerFBO = RenderCommand::GetBoundFramebufferID();
+                                   int callerFBO = RenderCommand::GetBoundFramebufferID();
 
-            // ---- SSAO 采样 ----
-            m_SSAOFBO->Bind();
-            RenderCommand::SetViewport(0, 0, halfW, halfH);
-            RenderCommand::ClearColorOnly();
+                                   // ---- SSAO 采样 ----
+                                   m_SSAOFBO->Bind();
+                                   RenderCommand::SetViewport(0, 0, halfW, halfH);
+                                   RenderCommand::ClearColorOnly();
 
-            m_SSAOShader->Bind();
+                                   m_SSAOShader->Bind();
 
-            // 绑定深度纹理
-            RenderCommand::BindTextureUnit(0, ctx.SSAODepthTexID);
-            m_SSAOShader->SetInt("u_DepthTexture", 0);
+                                   // 绑定深度纹理
+                                   RenderCommand::BindTextureUnit(0, ctx.SSAODepthTexID);
+                                   m_SSAOShader->SetInt("u_DepthTexture", 0);
 
-            // 绑定噪声纹理
-            RenderCommand::BindTextureUnit(1, m_SSAONoiseTexID);
-            m_SSAOShader->SetInt("u_NoiseTexture", 1);
+                                   // 绑定噪声纹理
+                                   RenderCommand::BindTextureUnit(1, m_SSAONoiseTexID);
+                                   m_SSAOShader->SetInt("u_NoiseTexture", 1);
 
-            m_SSAOShader->SetMat4("u_Projection", ctx.Camera->GetProjection());
-            m_SSAOShader->SetMat4("u_InvProjection", glm::inverse(ctx.Camera->GetProjection()));
-            m_SSAOShader->SetFloat2("u_ScreenSize", glm::vec2(halfW, halfH));
-            m_SSAOShader->SetInt("u_KernelSize", std::min(m_SSAOKernelSize, 64));
-            m_SSAOShader->SetFloat("u_Radius", m_SSAORadius);
-            m_SSAOShader->SetFloat("u_Bias", m_SSAOBias);
-            m_SSAOShader->SetFloat("u_Intensity", m_SSAOIntensity);
+                                   m_SSAOShader->SetMat4("u_Projection", ctx.Camera->GetProjection());
+                                   m_SSAOShader->SetMat4("u_InvProjection", glm::inverse(ctx.Camera->GetProjection()));
+                                   m_SSAOShader->SetFloat2("u_ScreenSize", glm::vec2(halfW, halfH));
+                                   m_SSAOShader->SetInt("u_KernelSize", std::min(m_SSAOKernelSize, 64));
+                                   m_SSAOShader->SetFloat("u_Radius", m_SSAORadius);
+                                   m_SSAOShader->SetFloat("u_Bias", m_SSAOBias);
+                                   m_SSAOShader->SetFloat("u_Intensity", m_SSAOIntensity);
 
-            // 上传采样核
-            int uploadCount = std::min(m_SSAOKernelSize, 64);
-            for (int i = 0; i < uploadCount; ++i)
-            {
-                std::string name = "u_Samples[" + std::to_string(i) + "]";
-                m_SSAOShader->SetFloat3(name, ssaoKernel[i]);
-            }
+                                   // 上传采样核
+                                   int uploadCount = std::min(m_SSAOKernelSize, 64);
+                                   for (int i = 0; i < uploadCount; ++i)
+                                   {
+                                       std::string name = "u_Samples[" + std::to_string(i) + "]";
+                                       m_SSAOShader->SetFloat3(name, ssaoKernel[i]);
+                                   }
 
-            RenderCommand::SetDepthTest(false);
-            m_FullscreenQuadVAO->Bind();
-            RenderCommand::DrawIndexed(m_FullscreenQuadVAO);
-            RenderCommand::SetDepthTest(true);
+                                   RenderCommand::SetDepthTest(false);
+                                   m_FullscreenQuadVAO->Bind();
+                                   RenderCommand::DrawIndexed(m_FullscreenQuadVAO);
+                                   RenderCommand::SetDepthTest(true);
 
-            m_SSAOFBO->Unbind();
+                                   m_SSAOFBO->Unbind();
 
-            // ---- SSAO 模糊 ----
-            m_SSAOBlurFBO->Bind();
-            RenderCommand::SetViewport(0, 0, halfW, halfH);
-            RenderCommand::ClearColorOnly();
+                                   // ---- SSAO 模糊 ----
+                                   m_SSAOBlurFBO->Bind();
+                                   RenderCommand::SetViewport(0, 0, halfW, halfH);
+                                   RenderCommand::ClearColorOnly();
 
-            m_SSAOBlurShader->Bind();
-            RenderCommand::BindTextureUnit(0, m_SSAOFBO->GetColorAttachmentRendererID(0));
-            m_SSAOBlurShader->SetInt("u_SSAOInput", 0);
+                                   m_SSAOBlurShader->Bind();
+                                   RenderCommand::BindTextureUnit(0, m_SSAOFBO->GetColorAttachmentRendererID(0));
+                                   m_SSAOBlurShader->SetInt("u_SSAOInput", 0);
 
-            RenderCommand::SetDepthTest(false);
-            m_FullscreenQuadVAO->Bind();
-            RenderCommand::DrawIndexed(m_FullscreenQuadVAO);
-            RenderCommand::SetDepthTest(true);
+                                   RenderCommand::SetDepthTest(false);
+                                   m_FullscreenQuadVAO->Bind();
+                                   RenderCommand::DrawIndexed(m_FullscreenQuadVAO);
+                                   RenderCommand::SetDepthTest(true);
 
-            m_SSAOBlurFBO->Unbind();
+                                   m_SSAOBlurFBO->Unbind();
 
-            m_SSAOBlurredTexID = m_SSAOBlurFBO->GetColorAttachmentRendererID(0);
+                                   m_SSAOBlurredTexID = m_SSAOBlurFBO->GetColorAttachmentRendererID(0);
 
-            // 恢复调用者 FBO 和视口
-            RenderCommand::BindFramebufferByID(callerFBO);
-            RenderCommand::SetViewport(0, 0, vpW, vpH);
-        }});
+                                   // 恢复调用者 FBO 和视口
+                                   RenderCommand::BindFramebufferByID(callerFBO);
+                                   RenderCommand::SetViewport(0, 0, vpW, vpH);
+                               }});
 
-        m_PassQueue.push_back({"GeometryPass", [this](RenderContext& ctx) {
-            PerformanceMonitor::Get().GetSceneRenderGPUTimer().Begin();
+        m_PassQueue.push_back(
+            {"GeometryPass", [this](RenderContext& ctx)
+             {
+                 PerformanceMonitor::Get().GetSceneRenderGPUTimer().Begin();
 
-            Renderer::BeginScene(ctx.Camera->GetViewProjection());
+                 Renderer::BeginScene(ctx.Camera->GetViewProjection());
 
-            m_PBRShader->Bind();
-            m_PBRShader->SetFloat3("u_ViewPos", ctx.Camera->GetPosition());
-            m_PBRShader->SetMat4("u_ViewMatrix", ctx.Camera->GetViewMatrix());
-            LightSystem::UploadToShader(m_PBRShader, m_LightEnv);
+                 m_PBRShader->Bind();
+                 m_PBRShader->SetFloat3("u_ViewPos", ctx.Camera->GetPosition());
+                 m_PBRShader->SetMat4("u_ViewMatrix", ctx.Camera->GetViewMatrix());
+                 LightSystem::UploadToShader(m_PBRShader, m_LightEnv);
 
-            m_PBRShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
-            bool shadowActive = m_ShadowSystem.GetSettings().Enabled && m_ShadowData.HasValidShadowCaster;
-            m_PBRShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
-            m_PBRShader->SetFloat("u_ShadowBias", m_ShadowSystem.GetSettings().Bias);
-            RenderCommand::BindTextureUnit(1, m_ShadowData.ShadowMapTextureID);
-            m_PBRShader->SetInt("u_ShadowMap", 1);
+                 m_PBRShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
+                 bool shadowActive = m_ShadowSystem.GetSettings().Enabled && m_ShadowData.HasValidShadowCaster;
+                 m_PBRShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
+                 m_PBRShader->SetFloat("u_ShadowBias", m_ShadowSystem.GetSettings().Bias);
+                 RenderCommand::BindTextureUnit(1, m_ShadowData.ShadowMapTextureID);
+                 m_PBRShader->SetInt("u_ShadowMap", 1);
 
-            // CSM 数据上传
-            bool csmActive = shadowActive && m_ShadowData.CSMActive;
-            m_PBRShader->SetInt("u_CSMEnabled", csmActive ? 1 : 0);
-            if (csmActive)
-            {
-                m_PBRShader->SetInt("u_CascadeCount", m_ShadowData.CascadeCount);
-                for (int i = 0; i < m_ShadowData.CascadeCount; i++)
-                {
-                    m_PBRShader->SetMat4("u_CascadeLightSpaceMatrices[" + std::to_string(i) + "]",
-                                          m_ShadowData.CascadeLightSpaceMatrices[i]);
-                    m_PBRShader->SetFloat("u_CascadeSplitDepths[" + std::to_string(i) + "]",
-                                           m_ShadowData.CascadeSplitDepths[i]);
-                    // 级联阴影纹理绑定到 unit 10~13
-                    RenderCommand::BindTextureUnit(10 + i, m_ShadowData.CascadeShadowMapTexIDs[i]);
-                    m_PBRShader->SetInt("u_CascadeShadowMaps[" + std::to_string(i) + "]", 10 + i);
-                }
-            }
+                 // CSM 数据上传
+                 bool csmActive = shadowActive && m_ShadowData.CSMActive;
+                 m_PBRShader->SetInt("u_CSMEnabled", csmActive ? 1 : 0);
+                 if (csmActive)
+                 {
+                     m_PBRShader->SetInt("u_CascadeCount", m_ShadowData.CascadeCount);
+                     for (int i = 0; i < m_ShadowData.CascadeCount; i++)
+                     {
+                         m_PBRShader->SetMat4("u_CascadeLightSpaceMatrices[" + std::to_string(i) + "]",
+                                              m_ShadowData.CascadeLightSpaceMatrices[i]);
+                         m_PBRShader->SetFloat("u_CascadeSplitDepths[" + std::to_string(i) + "]",
+                                               m_ShadowData.CascadeSplitDepths[i]);
+                         // 级联阴影纹理绑定到 unit 10~13
+                         RenderCommand::BindTextureUnit(10 + i, m_ShadowData.CascadeShadowMapTexIDs[i]);
+                         m_PBRShader->SetInt("u_CascadeShadowMaps[" + std::to_string(i) + "]", 10 + i);
+                     }
+                 }
 
-            // IBL 纹理绑定
-            bool iblActive = m_SkyboxSystem.HasIBL();
-            m_PBRShader->SetInt("u_IBLEnabled", iblActive ? 1 : 0);
-            m_PBRShader->SetFloat("u_IBLIntensity", 1.0f);
-            m_PBRShader->SetInt("u_IBLDebugMode", m_IBLDebugMode);
-            if (iblActive)
-            {
-                // Irradiance 和 Prefilter 是 cubemap 纹理，必须用 BindCubemapUnit
-                RenderCommand::BindCubemapUnit(6, m_SkyboxSystem.GetIrradianceMapID());
-                m_PBRShader->SetInt("u_IrradianceMap", 6);
-                RenderCommand::BindCubemapUnit(7, m_SkyboxSystem.GetPrefilterMapID());
-                m_PBRShader->SetInt("u_PrefilterMap", 7);
-                // BRDF LUT 是 2D 纹理，使用 BindTextureUnit
-                RenderCommand::BindTextureUnit(8, m_SkyboxSystem.GetBRDFLutID());
-                m_PBRShader->SetInt("u_BRDF_LUT", 8);
-            }
+                 // IBL 纹理绑定
+                 bool iblActive = m_SkyboxSystem.HasIBL();
+                 m_PBRShader->SetInt("u_IBLEnabled", iblActive ? 1 : 0);
+                 m_PBRShader->SetFloat("u_IBLIntensity", 1.0f);
+                 m_PBRShader->SetInt("u_IBLDebugMode", m_IBLDebugMode);
+                 if (iblActive)
+                 {
+                     // Irradiance 和 Prefilter 是 cubemap 纹理，必须用 BindCubemapUnit
+                     RenderCommand::BindCubemapUnit(6, m_SkyboxSystem.GetIrradianceMapID());
+                     m_PBRShader->SetInt("u_IrradianceMap", 6);
+                     RenderCommand::BindCubemapUnit(7, m_SkyboxSystem.GetPrefilterMapID());
+                     m_PBRShader->SetInt("u_PrefilterMap", 7);
+                     // BRDF LUT 是 2D 纹理，使用 BindTextureUnit
+                     RenderCommand::BindTextureUnit(8, m_SkyboxSystem.GetBRDFLutID());
+                     m_PBRShader->SetInt("u_BRDF_LUT", 8);
+                 }
 
-            // SSAO 纹理绑定
-            bool ssaoActive = m_SSAOEnabled && m_SSAOBlurredTexID != 0;
-            m_PBRShader->SetInt("u_SSAOEnabled", ssaoActive ? 1 : 0);
-            if (ssaoActive)
-            {
-                RenderCommand::BindTextureUnit(9, m_SSAOBlurredTexID);
-                m_PBRShader->SetInt("u_SSAOTexture", 9);
-            }
+                 // SSAO 纹理绑定
+                 bool ssaoActive = m_SSAOEnabled && m_SSAOBlurredTexID != 0;
+                 m_PBRShader->SetInt("u_SSAOEnabled", ssaoActive ? 1 : 0);
+                 if (ssaoActive)
+                 {
+                     RenderCommand::BindTextureUnit(9, m_SSAOBlurredTexID);
+                     m_PBRShader->SetInt("u_SSAOTexture", 9);
+                 }
 
-            m_RenderQueue.Clear();
-            MeshRenderSystem::SubmitRenderPackets(ctx.ActiveScene->GetRegistry(), m_RenderQueue,
-                                                    m_PBRShader, m_WhiteTexture);
+                 m_RenderQueue.Clear();
+                 MeshRenderSystem::SubmitRenderPackets(*ctx.Registry, m_RenderQueue, m_PBRShader,
+                                                       m_WhiteTexture, &m_VideoSystem.GetStore(),
+                                                       ctx.EntityIndex, ctx.TransformCache);
 
-            m_RenderQueue.Flush(ctx.Camera->GetViewProjection());
+                 m_RenderQueue.Flush(ctx.Camera->GetViewProjection());
 
-            Renderer::EndScene();
+                 Renderer::EndScene();
 
-            PerformanceMonitor::Get().GetSceneRenderGPUTimer().End();
-        }});
+                 PerformanceMonitor::Get().GetSceneRenderGPUTimer().End();
+             }});
 
-        m_PassQueue.push_back({"SkyboxPass", [this](RenderContext& ctx) {
-            m_SkyboxSystem.Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
-        }});
+        m_PassQueue.push_back({"SkyboxPass", [this](RenderContext& ctx)
+                               { m_SkyboxSystem.Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection()); }});
 
-        m_PassQueue.push_back({"ParticlePass", [this](RenderContext& ctx) {
-            if (!ctx.ActiveScene) return;
+        m_PassQueue.push_back(
+            {"ParticlePass", [this](RenderContext& ctx)
+             {
+                 if (!ctx.Registry)
+                     return;
 
-            auto view = ctx.ActiveScene->GetRegistry().view<TransformComponent, ParticleEmitterComponent>();
+                 auto view = ctx.Registry->view<TransformComponent, ParticleEmitterComponent>();
 
-            for (auto entity : view)
-            {
-                auto& transform = view.get<TransformComponent>(entity);
-                auto& emitter = view.get<ParticleEmitterComponent>(entity);
+                 for (auto entity : view)
+                 {
+                     auto& transform = view.get<TransformComponent>(entity);
+                     auto& emitter = view.get<ParticleEmitterComponent>(entity);
 
-                uint32_t eid = static_cast<uint32_t>(entity);
-                auto& system = m_ParticleSystems[eid];
+                     uint32_t eid = static_cast<uint32_t>(entity);
+                     auto& system = m_ParticleSystems[eid];
 
-                if (!system || system->GetMaxParticles() != emitter.MaxParticles)
-                {
-                    system = CreateRef<ParticleSystemGPU>(emitter.MaxParticles);
-                    system->Init();
-                }
+                     if (!system || system->GetMaxParticles() != emitter.MaxParticles)
+                     {
+                         system = CreateRef<ParticleSystemGPU>(emitter.MaxParticles);
+                         system->Init();
+                     }
 
-                system->Update(ctx.DeltaTime, transform.Translation, emitter, &ctx.ActiveScene->GetRegistry());
+                     system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
 
-                if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
-                    RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
-                else
-                    RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+                     if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
+                         RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
+                     else
+                         RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
-                system->Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
+                     system->Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
 
-                RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+                     RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
-                // 重置本帧触发的爆发（用户配置的 BurstCount 保持不变）
-                emitter.PendingBurst = 0;
-                emitter.CollisionBurstCount = 0;
-            }
-        }});
+                     // 重置本帧触发的爆发（用户配置的 BurstCount 保持不变）
+                     emitter.PendingBurst = 0;
+                     emitter.CollisionBurstCount = 0;
+                 }
+             }});
 
-        m_PassQueue.push_back({"FluidPass", [this](RenderContext& ctx) {
-            if (!ctx.ActiveScene) return;
+        m_PassQueue.push_back(
+            {"FluidPass", [this](RenderContext& ctx)
+             {
+                 if (!ctx.Registry)
+                     return;
 
-            auto fluidView = ctx.ActiveScene->GetRegistry().view<TransformComponent, FluidEmitterComponent>();
+                 auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
 
-            for (auto entity : fluidView)
-            {
-                auto& transform = fluidView.get<TransformComponent>(entity);
-                auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
+                 // 一次性诊断：报告 FluidEmitter 实体数量
+                 static bool s_FluidPassLogged = false;
+                 if (!s_FluidPassLogged)
+                 {
+                     s_FluidPassLogged = true;
+                     ENGINE_WARN("[FluidPass] First execution: found {} FluidEmitter entities",
+                                 static_cast<int>(fluidView.size_hint()));
+                 }
 
-                uint32_t eid = static_cast<uint32_t>(entity);
-                auto& system = m_FluidSystems[eid];
+                 for (auto entity : fluidView)
+                 {
+                     auto& transform = fluidView.get<TransformComponent>(entity);
+                     auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
 
-                if (!system || system->GetParticleCount() != emitter.ParticleCount)
-                {
-                    system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
-                    system->Init();
-                    emitter.Emitted = false;  // 重建后需要重新发射
-                }
+                     uint32_t eid = static_cast<uint32_t>(entity);
+                     auto& system = m_FluidSystems[eid];
 
-                // 首次发射
-                if (!emitter.Emitted)
-                {
-                    system->Emit(transform.Translation, emitter);
-                    emitter.Emitted = true;
-                }
+                     if (!system || system->GetParticleCount() != emitter.ParticleCount)
+                     {
+                         system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
+                         system->Init();
+                         m_FluidEmitted.erase(eid); // 重建后需要重新发射
+                     }
 
-                // 每帧模拟
-                system->Update(ctx.DeltaTime, transform.Translation, emitter,
-                               &ctx.ActiveScene->GetRegistry());
+                     // 首次发射
+                     if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
+                     {
+                         system->Emit(transform.Translation, emitter);
+                         m_FluidEmitted.insert(eid);
+                     }
 
-                // Screen-Space Fluid 渲染
-                m_FluidRenderer.Render(
-                    system->GetParticleBuffer(), system->GetEmptyVAO(),
-                    emitter.ParticleCount, emitter.ParticleRadius,
-                    ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection(),
-                    ctx.SceneColorTexID, ctx.SceneDepthTexID,
-                    emitter);
-            }
-        }});
+                     // 每帧模拟
+                     system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
+
+                     // Screen-Space Fluid 渲染
+                     m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(), emitter.ParticleCount,
+                                            emitter.ParticleRadius, ctx.Camera->GetViewMatrix(),
+                                            ctx.Camera->GetProjection(), ctx.SceneColorTexID, ctx.SceneDepthTexID,
+                                            emitter);
+                 }
+             }});
 
         m_FluidRenderer.Init(viewportWidth, viewportHeight);
     }
@@ -427,7 +442,9 @@ namespace Engine
         m_GrassSystem.Shutdown();
         m_ParticleSystems.clear();
         m_FluidSystems.clear();
+        m_FluidEmitted.clear();
         m_FluidRenderer.Shutdown();
+        m_BoundRegistry = nullptr;
 
         // 清理 SSAO 噪声纹理
         if (m_SSAONoiseTexID)
@@ -437,20 +454,23 @@ namespace Engine
         }
     }
 
-    void SceneRenderer::BeginScene(const EditorCamera& camera, Scene* scene, float deltaTime)
+    void SceneRenderer::BeginScene(const EditorCamera& camera, const SceneRenderInput& input)
     {
-        if (m_LastScene != scene)
+        if (m_BoundRegistry != input.Registry)
         {
             m_ParticleSystems.clear();
             m_FluidSystems.clear();
+            m_FluidEmitted.clear();
             m_GrassSystem.Shutdown();
-            m_LastScene = scene;
+            m_BoundRegistry = input.Registry;
         }
 
         m_Context.Camera = const_cast<EditorCamera*>(&camera);
-        m_Context.ActiveScene = scene;
-        m_Context.DeltaTime = deltaTime;
-        m_TotalTime += deltaTime;
+        m_Context.Registry = input.Registry;
+        m_Context.EntityIndex = input.EntityIndex;
+        m_Context.TransformCache = input.TransformCache;
+        m_Context.DeltaTime = input.DeltaTime;
+        m_TotalTime += input.DeltaTime;
     }
 
     void SceneRenderer::Render()
@@ -465,7 +485,9 @@ namespace Engine
     void SceneRenderer::EndScene()
     {
         m_Context.Camera = nullptr;
-        m_Context.ActiveScene = nullptr;
+        m_Context.Registry = nullptr;
+        m_Context.EntityIndex = nullptr;
+        m_Context.TransformCache = nullptr;
         m_Context.DeltaTime = 0.0f;
     }
 
@@ -473,7 +495,8 @@ namespace Engine
     {
         for (auto& pass : m_PassQueue)
         {
-            if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" || pass.Name == "TerrainPass" || pass.Name == "GrassPass"))
+            if (pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" ||
+                                 pass.Name == "TerrainPass" || pass.Name == "GrassPass"))
                 pass.ExecuteFn(m_Context);
         }
     }
@@ -560,10 +583,9 @@ namespace Engine
         // 非 MSAA 时也执行 ParticlePass
         for (auto& pass : m_PassQueue)
         {
-            bool runPass = pass.Enabled &&
-                (pass.Name == "SSAOPass" || pass.Name == "GeometryPass" ||
-                 pass.Name == "SkyboxPass" || pass.Name == "TerrainPass" ||
-                 pass.Name == "GrassPass");
+            bool runPass =
+                pass.Enabled && (pass.Name == "SSAOPass" || pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" ||
+                                 pass.Name == "TerrainPass" || pass.Name == "GrassPass");
             if (!msaaEnabled && pass.Enabled && pass.Name == "ParticlePass")
                 runPass = true;
 
@@ -594,10 +616,8 @@ namespace Engine
         {
             m_HDRFramebuffer->Bind();
 
-            m_Context.SceneColorTexID =
-                m_HDRFramebuffer->GetColorAttachmentRendererID(0);
-            m_Context.SceneDepthTexID =
-                m_HDRFramebuffer->GetDepthAttachmentRendererID();
+            m_Context.SceneColorTexID = m_HDRFramebuffer->GetColorAttachmentRendererID(0);
+            m_Context.SceneDepthTexID = m_HDRFramebuffer->GetDepthAttachmentRendererID();
 
             RenderFluidPass();
 
@@ -618,14 +638,13 @@ namespace Engine
         RenderCommand::Clear();
         targetFBO->ClearAttachment(1, -1);
 
-        m_PostProcessing->Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0),
-                                  *m_PostProcessingSettings);
+        m_PostProcessing->Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0), *m_PostProcessingSettings);
 
         targetFBO->Unbind();
     }
     void SceneRenderer::RenderEditorPicking(const Ref<Framebuffer>& pickingFBO)
     {
-        if (!pickingFBO || !m_Context.Camera || !m_Context.ActiveScene)
+        if (!pickingFBO || !m_Context.Camera || !m_Context.Registry)
             return;
 
         pickingFBO->Bind();
@@ -637,4 +656,16 @@ namespace Engine
 
         pickingFBO->Unbind();
     }
+
+    void SceneRenderer::ReleaseParticleSystem(uint32_t entityID)
+    {
+        m_ParticleSystems.erase(entityID);
+    }
+
+    void SceneRenderer::ReleaseFluidSystem(uint32_t entityID)
+    {
+        m_FluidSystems.erase(entityID);
+        m_FluidEmitted.erase(entityID);
+    }
+
 } // namespace Engine

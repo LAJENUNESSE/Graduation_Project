@@ -8,24 +8,9 @@
 namespace Engine
 {
     class Scene;
-    class SceneRenderer;
-    class PhysicsDebugDraw;
-    class SceneHierarchyPanel;
-    class PropertiesPanel;
-    class ConsolePanel;
-    class AssetBrowserPanel;
-    class RenderSettingsPanel;
-    class CommandHistory;
-    class EditorSceneSession;
-    class EditorPanelCoordinator;
-    class EditorSelectionGizmoController;
-    class EditorShell;
+    class EditorBootstrapper;
     struct EditorShellActions;
     struct EditorShellState;
-    class EditorViewportController;
-    class EditorRenderController;
-    class PostProcessing;
-    struct PostProcessingSettings;
     class KeyPressedEvent;
     class MouseButtonPressedEvent;
 
@@ -56,32 +41,11 @@ namespace Engine
         EditorShellState BuildShellState() const;
 
         void BootstrapDefaultScene();
-        void ConfigureEditorPanels();
         void ApplyActiveSceneContext(bool clearCommandHistory);
 
     private:
+        Scope<EditorBootstrapper> m_Boot;
         Ref<Scene> m_ActiveScene;
-        Scope<EditorSceneSession> m_SceneSession;
-        Scope<EditorPanelCoordinator> m_PanelCoordinator;
-        Scope<EditorSelectionGizmoController> m_SelectionGizmoController;
-        Scope<EditorShell> m_EditorShell;
-        Scope<EditorViewportController> m_ViewportController;
-        Scope<EditorRenderController> m_RenderController;
-
-        Scope<SceneRenderer> m_SceneRenderer;
-        Scope<PostProcessing> m_PostProcessing;
-        Scope<PostProcessingSettings> m_PostProcessingSettings;
-
-        Scope<SceneHierarchyPanel> m_HierarchyPanel;
-        Scope<PropertiesPanel> m_PropertiesPanel;
-        Scope<ConsolePanel> m_ConsolePanel;
-        Scope<AssetBrowserPanel> m_AssetBrowserPanel;
-        Scope<RenderSettingsPanel> m_RenderSettingsPanel;
-
-        Scope<CommandHistory> m_CommandHistory;
-
-        bool m_ShowPhysicsColliders = false;
-        Scope<PhysicsDebugDraw> m_PhysicsDebugDraw;
     };
 
 } // namespace Engine

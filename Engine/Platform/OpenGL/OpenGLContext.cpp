@@ -1,8 +1,10 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLContext.h"
 
+// clang-format off
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
+// clang-format on
 
 #include "Core/Assert.h"
 #include "Core/Log.h"

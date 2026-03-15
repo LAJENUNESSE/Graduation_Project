@@ -1,14 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
-project(GameEngine LANGUAGES CXX CUDA)
+project(GameEngine LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# CUDA Configuration
-set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_86")  # RTX 3050
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -21,6 +15,16 @@ option(ENGINE_ENABLE_STRICT_WARNINGS "Enable stricter warnings for project targe
 option(ENGINE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
+option(ENGINE_ENABLE_CUDA "Enable CUDA compute sidecar for particle system" OFF)
+
+# CUDA Configuration (optional)
+if(ENGINE_ENABLE_CUDA)
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_86")  # RTX 3050
+endif()
 
 add_subdirectory(vendor)
 add_subdirectory(Engine)

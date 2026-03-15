@@ -34,8 +34,7 @@ namespace Engine
     void FileWatcher::Unwatch(AssetHandle handle)
     {
         m_Entries.erase(
-            std::remove_if(m_Entries.begin(), m_Entries.end(),
-                [&](const Entry& e) { return e.Handle == handle; }),
+            std::remove_if(m_Entries.begin(), m_Entries.end(), [&](const Entry& e) { return e.Handle == handle; }),
             m_Entries.end());
     }
 

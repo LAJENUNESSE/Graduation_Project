@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Script/ScriptableEntity.h"
-#include <string>
-#include <memory>
 #include <functional>
+#include <memory>
+#include <string>
 
 namespace Engine
 {

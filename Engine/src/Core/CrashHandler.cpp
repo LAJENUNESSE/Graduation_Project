@@ -1,7 +1,7 @@
 #include "engpch.h"
 #include "Core/CrashHandler.h"
-#include "Core/Log.h"
 #include "Asset/PathUtils.h"
+#include "Core/Log.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -10,8 +10,10 @@
 #include <system_error>
 
 #ifdef _WIN32
+// clang-format off
 #include <Windows.h>
 #include <DbgHelp.h>
+// clang-format on
 #pragma comment(lib, "Dbghelp.lib")
 #endif
 
@@ -40,15 +42,12 @@ namespace Engine
                 GetLocalTime(&now);
 
                 char dumpFileName[128];
-                std::snprintf(dumpFileName, sizeof(dumpFileName),
-                    "crash-%04u%02u%02u-%02u%02u%02u-%lu.dmp",
-                    now.wYear, now.wMonth, now.wDay,
-                    now.wHour, now.wMinute, now.wSecond,
-                    GetCurrentProcessId());
+                std::snprintf(dumpFileName, sizeof(dumpFileName), "crash-%04u%02u%02u-%02u%02u%02u-%lu.dmp", now.wYear,
+                              now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
 
                 const auto dumpPath = dumpDirectory / dumpFileName;
-                HANDLE dumpFile = CreateFileA(dumpPath.string().c_str(), GENERIC_WRITE, 0, nullptr,
-                                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                HANDLE dumpFile = CreateFileA(dumpPath.string().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                              FILE_ATTRIBUTE_NORMAL, nullptr);
                 if (dumpFile == INVALID_HANDLE_VALUE)
                     return EXCEPTION_EXECUTE_HANDLER;
 
@@ -57,12 +56,10 @@ namespace Engine
                 dumpInfo.ExceptionPointers = exceptionPointers;
                 dumpInfo.ClientPointers = FALSE;
 
-                const BOOL dumpResult = MiniDumpWriteDump(
-                    GetCurrentProcess(), GetCurrentProcessId(), dumpFile,
-                    static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithHandleData),
-                    exceptionPointers ? &dumpInfo : nullptr,
-                    nullptr,
-                    nullptr);
+                const BOOL dumpResult =
+                    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dumpFile,
+                                      static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithHandleData),
+                                      exceptionPointers ? &dumpInfo : nullptr, nullptr, nullptr);
 
                 CloseHandle(dumpFile);
 

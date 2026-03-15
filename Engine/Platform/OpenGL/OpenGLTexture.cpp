@@ -4,9 +4,9 @@
 #include <glad/gl.h>
 #include <stb_image/stb_image.h>
 
+#include "Asset/PathUtils.h"
 #include "Core/Assert.h"
 #include "Core/Log.h"
-#include "Asset/PathUtils.h"
 namespace Engine
 {
 
@@ -123,7 +123,8 @@ namespace Engine
             glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
             uint32_t magenta = 0xFFFF00FF;
             for (int i = 0; i < 6; i++)
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &magenta);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                             &magenta);
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -144,8 +145,8 @@ namespace Engine
             stbi_uc* data = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
             if (data)
             {
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8,
-                             width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, width, height, 0, GL_RGBA,
+                             GL_UNSIGNED_BYTE, data);
                 if (i == 0)
                 {
                     m_Width = width;
@@ -158,8 +159,8 @@ namespace Engine
                 ENGINE_CORE_ERROR("Cubemap face failed to load: {}", resolvedPath);
                 // 1x1 magenta fallback for this face
                 uint32_t magenta = 0xFFFF00FF;
-                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8,
-                             1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &magenta);
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                             &magenta);
             }
         }
 

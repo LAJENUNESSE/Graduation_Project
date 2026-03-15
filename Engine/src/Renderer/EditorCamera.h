@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Renderer/Camera.h"
 #include "Core/Timestep.h"
 #include "Events/Event.h"
 #include "Events/MouseEvent.h"
+#include "Renderer/Camera.h"
 
 #include <glm/glm.hpp>
 
@@ -19,48 +19,27 @@ namespace Engine
         void OnUpdate(Timestep ts, bool allowInput = true);
         void OnEvent(Event& e);
 
-        float GetDistance() const
-        {
-            return m_Distance;
-        }
+        float GetDistance() const { return m_Distance; }
 
-        void SetDistance(float distance)
-        {
-            m_Distance = distance;
-        }
+        void SetDistance(float distance) { m_Distance = distance; }
 
         void SetViewportSize(float width, float height);
 
-        const glm::mat4& GetViewMatrix() const
-        {
-            return m_ViewMatrix;
-        }
+        const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
 
-        glm::mat4 GetViewProjection() const
-        {
-            return m_Projection * m_ViewMatrix;
-        }
+        glm::mat4 GetViewProjection() const { return m_Projection * m_ViewMatrix; }
 
         glm::vec3 GetUpDirection() const;
         glm::vec3 GetRightDirection() const;
         glm::vec3 GetForwardDirection() const;
 
-        const glm::vec3& GetPosition() const
-        {
-            return m_Position;
-        }
+        const glm::vec3& GetPosition() const { return m_Position; }
 
         glm::quat GetOrientation() const;
 
-        float GetPitch() const
-        {
-            return m_Pitch;
-        }
+        float GetPitch() const { return m_Pitch; }
 
-        float GetYaw() const
-        {
-            return m_Yaw;
-        }
+        float GetYaw() const { return m_Yaw; }
 
         void SetViewMatrix(const glm::mat4& viewMatrix);
 

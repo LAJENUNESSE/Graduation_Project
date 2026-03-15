@@ -1,42 +1,21 @@
 #include "engpch.h"
 #include "Scene/Systems/MeshRenderSystem.h"
-#include "Scene/Components.h"
+#include "Asset/AssetManager.h"
 #include "Renderer/Material.h"
 #include "Renderer/Mesh.h"
-#include "Asset/AssetManager.h"
+#include "Scene/Components.h"
+#include "Scene/Runtime/VideoRuntimeStore.h"
+#include "Scene/WorldTransformService.h"
+#include "Scene/SceneEntityIndex.h"
 
 namespace Engine
 {
 
-    // 递归计算世界变换矩阵
-    static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity)
-    {
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 localMatrix = transform.GetTransform();
-
-        if (reg.all_of<RelationshipComponent>(entity))
-        {
-            auto& rel = reg.get<RelationshipComponent>(entity);
-            if (static_cast<uint64_t>(rel.ParentID) != 0)
-            {
-                // 查找父实体
-                auto view = reg.view<IDComponent>();
-                for (auto e : view)
-                {
-                    if (view.get<IDComponent>(e).ID == rel.ParentID)
-                        return ComputeWorldTransform(reg, e) * localMatrix;
-                }
-            }
-        }
-
-        return localMatrix;
-    }
-
-    void MeshRenderSystem::SubmitRenderPackets(
-        entt::registry& reg,
-        RenderQueue& queue,
-        const Ref<Shader>& pbrShader,
-        const Ref<Texture2D>& whiteTexture)
+    void MeshRenderSystem::SubmitRenderPackets(entt::registry& reg, RenderQueue& queue, const Ref<Shader>& pbrShader,
+                                               const Ref<Texture2D>& whiteTexture,
+                                               const VideoRuntimeStore* videoStore,
+                                               const SceneEntityIndex* index,
+                                               WorldTransformCache* cache)
     {
         auto meshView = reg.view<TransformComponent, MeshRendererComponent>();
         for (auto entity : meshView)
@@ -58,13 +37,14 @@ namespace Engine
                     m = CreateRef<Material>(pbrShader);
             }
 
-            // 在 submesh 循环之前检查 VideoPlayerComponent，避免每个 submesh 重复查询
+            // 在 submesh 循环之前检查 VideoPlayerComponent，从 VideoRuntimeStore 获取纹理
             Ref<Texture2D> videoTex;
-            if (reg.any_of<VideoPlayerComponent>(entity))
+            if (videoStore && reg.any_of<VideoPlayerComponent>(entity))
             {
-                auto& vc = reg.get<VideoPlayerComponent>(entity);
-                if (vc.RuntimeTexture && vc.IsPlaying)
-                    videoTex = vc.RuntimeTexture;
+                uint32_t eid = static_cast<uint32_t>(entity);
+                auto* videoState = videoStore->Get(eid);
+                if (videoState && videoState->Texture && videoState->IsPlaying)
+                    videoTex = videoState->Texture;
             }
 
             for (size_t i = 0; i < subMeshes.size(); ++i)
@@ -154,7 +134,8 @@ namespace Engine
                 RenderPacket packet;
                 packet.VAO = subMesh.VAO;
                 packet.Mat = mat;
-                packet.Transform = ComputeWorldTransform(reg, entity);
+                packet.Transform = index ? WorldTransformService::ComputeWorldTransform(reg, entity, *index, cache)
+                                        : transform.GetTransform();
                 packet.EntityID = static_cast<int>(entity);
 
                 queue.Submit(packet);

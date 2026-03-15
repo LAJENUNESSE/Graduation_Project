@@ -15,10 +15,7 @@ namespace Engine
         glm::vec2 GetFramebufferScale()
         {
             ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
-            return {
-                scale.x > 0.0f ? scale.x : 1.0f,
-                scale.y > 0.0f ? scale.y : 1.0f
-            };
+            return {scale.x > 0.0f ? scale.x : 1.0f, scale.y > 0.0f ? scale.y : 1.0f};
         }
     } // namespace
 
@@ -89,26 +86,18 @@ namespace Engine
         m_Context.Focused = ImGui::IsWindowFocused();
 
         ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-        m_Context.Size = {
-            std::max(viewportPanelSize.x, 32.0f),
-            std::max(viewportPanelSize.y, 32.0f)
-        };
+        m_Context.Size = {std::max(viewportPanelSize.x, 32.0f), std::max(viewportPanelSize.y, 32.0f)};
 
         glm::vec2 framebufferScale = GetFramebufferScale();
-        m_TargetSize = {
-            std::max(m_Context.Size.x * framebufferScale.x, 32.0f),
-            std::max(m_Context.Size.y * framebufferScale.y, 32.0f)
-        };
+        m_TargetSize = {std::max(m_Context.Size.x * framebufferScale.x, 32.0f),
+                        std::max(m_Context.Size.y * framebufferScale.y, 32.0f)};
 
         const auto& spec = m_Framebuffer->GetSpecification();
         float sourceWidth = static_cast<float>(std::max(spec.Width, 1u));
         float sourceHeight = static_cast<float>(std::max(spec.Height, 1u));
         m_Context.RenderSize = {sourceWidth, sourceHeight};
 
-        glm::vec2 sourceDisplaySize = {
-            sourceWidth / framebufferScale.x,
-            sourceHeight / framebufferScale.y
-        };
+        glm::vec2 sourceDisplaySize = {sourceWidth / framebufferScale.x, sourceHeight / framebufferScale.y};
         float scale = std::min(m_Context.Size.x / sourceDisplaySize.x, m_Context.Size.y / sourceDisplaySize.y);
         scale = std::max(scale, 0.0f);
 
@@ -122,14 +111,14 @@ namespace Engine
         m_Context.Bounds[1] = {imageScreenPos.x + imageSize.x, imageScreenPos.y + imageSize.y};
 
         ImVec2 mousePos = ImGui::GetMousePos();
-        m_Context.Hovered = ImGui::IsWindowHovered() &&
-            mousePos.x >= m_Context.Bounds[0].x && mousePos.x <= m_Context.Bounds[1].x &&
-            mousePos.y >= m_Context.Bounds[0].y && mousePos.y <= m_Context.Bounds[1].y;
+        m_Context.Hovered = ImGui::IsWindowHovered() && mousePos.x >= m_Context.Bounds[0].x &&
+                            mousePos.x <= m_Context.Bounds[1].x && mousePos.y >= m_Context.Bounds[0].y &&
+                            mousePos.y <= m_Context.Bounds[1].y;
         Application::Get().GetImGuiLayer()->SetBlockEvents(!m_Context.Hovered);
 
         uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID(0);
-        ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)),
-                     ImVec2(imageSize.x, imageSize.y), ImVec2(0, 1), ImVec2(1, 0));
+        ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)), ImVec2(imageSize.x, imageSize.y),
+                     ImVec2(0, 1), ImVec2(1, 0));
 
         return m_Context;
     }

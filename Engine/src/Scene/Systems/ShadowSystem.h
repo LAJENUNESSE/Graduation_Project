@@ -1,18 +1,20 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Renderer/Shader.h"
 #include "Renderer/Framebuffer.h"
+#include "Renderer/Shader.h"
 #include "Scene/Systems/LightSystem.h"
 
-#include <glm/glm.hpp>
-#include <entt/entt.hpp>
 #include <array>
+#include <entt/entt.hpp>
+#include <glm/glm.hpp>
 
 namespace Engine
 {
 
     class EditorCamera;
+    class SceneEntityIndex;
+    class WorldTransformCache;
 
     static constexpr int CSM_MAX_CASCADES = 4;
 
@@ -27,8 +29,8 @@ namespace Engine
 
         // CSM 参数
         bool CSMEnabled = true;
-        int CascadeCount = 3;                           // 1~4
-        float CascadeSplitLambda = 0.75f;               // 对数/均匀分割混合因子
+        int CascadeCount = 3;             // 1~4
+        float CascadeSplitLambda = 0.75f; // 对数/均匀分割混合因子
     };
 
     struct ShadowData
@@ -42,7 +44,7 @@ namespace Engine
         bool CSMActive = false;
         int CascadeCount = 0;
         std::array<glm::mat4, CSM_MAX_CASCADES> CascadeLightSpaceMatrices;
-        std::array<float, CSM_MAX_CASCADES> CascadeSplitDepths;  // view-space far Z
+        std::array<float, CSM_MAX_CASCADES> CascadeSplitDepths; // view-space far Z
         uint32_t CascadeShadowMapTexIDs[CSM_MAX_CASCADES] = {};
     };
 
@@ -50,9 +52,10 @@ namespace Engine
     {
     public:
         void Init(const ShadowSettings& settings = {});
-        ShadowData Execute(entt::registry& reg, const LightEnvironment& lights);
-        ShadowData ExecuteCSM(entt::registry& reg, const LightEnvironment& lights,
-                              const EditorCamera& camera);
+        ShadowData Execute(entt::registry& reg, const LightEnvironment& lights, const SceneEntityIndex& index,
+                           WorldTransformCache* cache = nullptr);
+        ShadowData ExecuteCSM(entt::registry& reg, const LightEnvironment& lights, const EditorCamera& camera,
+                              const SceneEntityIndex& index, WorldTransformCache* cache = nullptr);
         void ResizeShadowMap(int resolution);
         ShadowSettings& GetSettings() { return m_Settings; }
         Ref<Shader> GetDepthShader() { return m_DepthShader; }
@@ -61,10 +64,8 @@ namespace Engine
     private:
         void InitCSMFBOs();
         std::array<float, CSM_MAX_CASCADES + 1> ComputeCascadeSplits(float nearClip, float farClip) const;
-        glm::mat4 ComputeCascadeLightSpaceMatrix(
-            const glm::vec3& lightDir,
-            const glm::mat4& invViewProj,
-            float nearSplit, float farSplit) const;
+        glm::mat4 ComputeCascadeLightSpaceMatrix(const glm::vec3& lightDir, const glm::mat4& invViewProj,
+                                                 float nearSplit, float farSplit) const;
 
         ShadowSettings m_Settings;
         Ref<Shader> m_DepthShader;

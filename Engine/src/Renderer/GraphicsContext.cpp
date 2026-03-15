@@ -2,8 +2,8 @@
 #include "Renderer/GraphicsContext.h"
 
 #include "Core/Assert.h"
-#include "Renderer/RendererAPI.h"
 #include "Platform/OpenGL/OpenGLContext.h"
+#include "Renderer/RendererAPI.h"
 
 namespace Engine
 {

@@ -1,0 +1,142 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.claude/**'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.claude/**'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+
+    env:
+      VCPKG_ROOT: C:/vcpkg
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset default
+
+      - name: Build Engine
+        run: cmake --build build --config RelWithDebInfo --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --config RelWithDebInfo --target Editor
+
+  build-linux:
+    name: Linux (GCC)
+    runs-on: ubuntu-latest
+
+    env:
+      VCPKG_ROOT: /usr/local/share/vcpkg
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build \
+            libgl-dev libglu1-mesa-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev \
+            nasm autoconf automake libtool pkg-config
+
+      - name: Bootstrap vcpkg
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics || true
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset linux-default
+
+      - name: Build Engine
+        run: cmake --build build --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --target Editor
+
+  build-linux-cuda:
+    name: Linux (GCC + CUDA)
+    runs-on: ubuntu-latest
+
+    env:
+      VCPKG_ROOT: /usr/local/share/vcpkg
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.29
+        with:
+          cuda: '12.8.1'
+          method: network
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build \
+            libgl-dev libglu1-mesa-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev \
+            nasm autoconf automake libtool pkg-config
+
+      - name: Bootstrap vcpkg
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics || true
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-linux-cuda-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset linux-cuda
+
+      - name: Build Engine
+        run: cmake --build build --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --target Editor

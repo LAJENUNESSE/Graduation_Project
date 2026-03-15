@@ -15,12 +15,9 @@
 namespace Engine
 {
 
-    void EditorPanelCoordinator::Initialize(SceneHierarchyPanel* hierarchyPanel,
-                                            PropertiesPanel* propertiesPanel,
-                                            ConsolePanel* consolePanel,
-                                            AssetBrowserPanel* assetBrowserPanel,
-                                            RenderSettingsPanel* renderSettingsPanel,
-                                            CommandHistory* commandHistory)
+    void EditorPanelCoordinator::Initialize(SceneHierarchyPanel* hierarchyPanel, PropertiesPanel* propertiesPanel,
+                                            ConsolePanel* consolePanel, AssetBrowserPanel* assetBrowserPanel,
+                                            RenderSettingsPanel* renderSettingsPanel, CommandHistory* commandHistory)
     {
         m_HierarchyPanel = hierarchyPanel;
         m_PropertiesPanel = propertiesPanel;
@@ -117,6 +114,11 @@ namespace Engine
         ImGui::Text("GPU 耗时 (上一帧):");
         ImGui::Text("  阴影Pass:  %.3f ms", pm.GetShadowPassGpuMs());
         ImGui::Text("  场景渲染:  %.3f ms", pm.GetSceneRenderGpuMs());
+        ImGui::Text("  粒子Compute: %.3f ms [%s]", pm.GetParticleComputeGpuMs(),
+                    pm.IsParticleUsingCuda() ? "CUDA" : "GL");
+        if (pm.IsFluidActive())
+            ImGui::Text("  流体Compute: %.3f ms [%s]", pm.GetFluidComputeGpuMs(),
+                        pm.IsFluidUsingCuda() ? "CUDA" : "GL");
 
         ImGui::Separator();
         const auto& stats = pm.GetStats();
@@ -127,15 +129,10 @@ namespace Engine
 
         ImGui::Separator();
         ImGui::Text("帧时间历史:");
-        ImGui::PlotLines("##FrameTime", pm.GetFrameTimeHistory(),
-                         PerformanceMonitor::FrameHistorySize,
-                         pm.GetFrameTimeHistoryOffset(),
-                         nullptr, 0.0f, 33.3f, ImVec2(0, 80));
+        ImGui::PlotLines("##FrameTime", pm.GetFrameTimeHistory(), PerformanceMonitor::FrameHistorySize,
+                         pm.GetFrameTimeHistoryOffset(), nullptr, 0.0f, 33.3f, ImVec2(0, 80));
 
         ImGui::End();
     }
 
 } // namespace Engine
-
-
-

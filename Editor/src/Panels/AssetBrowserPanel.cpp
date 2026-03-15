@@ -1,12 +1,14 @@
 #include "Panels/AssetBrowserPanel.h"
-#include "Core/Log.h"
-#include "Renderer/Texture.h"
+#include "Asset/AssetType.h"
 #include "Asset/PathUtils.h"
+#include "Core/Log.h"
+#include "EditorAssetDescriptor.h"
+#include "Renderer/Texture.h"
 #include "Scene/SceneSerializer.h"
 
-#include <imgui.h>
 #include <algorithm>
 #include <cstdio>
+#include <imgui.h>
 #include <system_error>
 
 #ifdef _WIN32
@@ -35,42 +37,11 @@ namespace Engine
             }
             else
             {
-                std::snprintf(buffer, sizeof(buffer), "%.1f GB", static_cast<double>(fileSize) / (1024.0 * 1024.0 * 1024.0));
+                std::snprintf(buffer, sizeof(buffer), "%.1f GB",
+                              static_cast<double>(fileSize) / (1024.0 * 1024.0 * 1024.0));
             }
 
             return buffer;
-        }
-
-        bool IsImageFile(const std::filesystem::path& path)
-        {
-            std::string ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
-                   ext == ".bmp" || ext == ".tga" || ext == ".hdr";
-        }
-
-        bool IsSceneFile(const std::filesystem::path& path)
-        {
-            return path.extension() == ".scene";
-        }
-
-        bool IsShaderFile(const std::filesystem::path& path)
-        {
-            return path.extension() == ".glsl";
-        }
-
-        bool IsModelFile(const std::filesystem::path& path)
-        {
-            std::string ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            return ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb";
-        }
-
-        bool IsAudioFile(const std::filesystem::path& path)
-        {
-            std::string ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-            return ext == ".wav" || ext == ".mp3" || ext == ".ogg";
         }
 
         bool IsDirectoryPath(const std::filesystem::path& path)
@@ -124,7 +95,8 @@ namespace Engine
         }
 
         ec.clear();
-        if (std::filesystem::exists(m_RootDirectory, ec) && !ec && std::filesystem::is_directory(m_RootDirectory, ec) && !ec)
+        if (std::filesystem::exists(m_RootDirectory, ec) && !ec && std::filesystem::is_directory(m_RootDirectory, ec) &&
+            !ec)
         {
             m_CurrentDirectory = m_RootDirectory;
             return true;
@@ -160,7 +132,8 @@ namespace Engine
             return false;
         }
 
-        std::filesystem::directory_iterator it(directory, std::filesystem::directory_options::skip_permission_denied, ec);
+        std::filesystem::directory_iterator it(directory, std::filesystem::directory_options::skip_permission_denied,
+                                               ec);
         if (ec)
         {
             SetFilesystemError(BuildFilesystemError("打开目录失败", directory, ec));
@@ -182,8 +155,7 @@ namespace Engine
         return true;
     }
 
-    bool AssetBrowserPanel::TryBuildRelativePath(const std::filesystem::path& path,
-                                                 const std::filesystem::path& base,
+    bool AssetBrowserPanel::TryBuildRelativePath(const std::filesystem::path& path, const std::filesystem::path& base,
                                                  std::filesystem::path& outRelative)
     {
         std::error_code ec;
@@ -217,16 +189,9 @@ namespace Engine
     {
         if (IsDirectoryPath(path))
             return "[D]";
-        if (IsImageFile(path))
-            return "[I]";
-        if (IsSceneFile(path))
-            return "[S]";
-        if (IsShaderFile(path))
-            return "[G]";
-        if (IsModelFile(path))
-            return "[M]";
-        if (IsAudioFile(path))
-            return "[A]";
+        AssetType type = AssetTypeFromPath(path);
+        if (type != AssetType::None)
+            return GetEditorAssetDescriptor(type).Icon;
         return "[F]";
     }
 
@@ -400,7 +365,8 @@ namespace Engine
         if (!EnsureCurrentDirectoryValid())
             return;
 
-        if (ImGui::BeginPopupContextWindow("AssetBrowserContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+        if (ImGui::BeginPopupContextWindow("AssetBrowserContextMenu",
+                                           ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
         {
             ImGui::MenuItem("刷新");
 #ifdef _WIN32
@@ -416,15 +382,17 @@ namespace Engine
         if (!TryEnumerateDirectory(m_CurrentDirectory, entries))
             return;
 
-        std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-            std::error_code aEc;
-            std::error_code bEc;
-            bool aIsDirectory = a.is_directory(aEc) && !aEc;
-            bool bIsDirectory = b.is_directory(bEc) && !bEc;
-            if (aIsDirectory != bIsDirectory)
-                return aIsDirectory;
-            return a.path().filename() < b.path().filename();
-        });
+        std::sort(entries.begin(), entries.end(),
+                  [](const auto& a, const auto& b)
+                  {
+                      std::error_code aEc;
+                      std::error_code bEc;
+                      bool aIsDirectory = a.is_directory(aEc) && !aEc;
+                      bool bIsDirectory = b.is_directory(bEc) && !bEc;
+                      if (aIsDirectory != bIsDirectory)
+                          return aIsDirectory;
+                      return a.path().filename() < b.path().filename();
+                  });
 
         float cellSize = 80.0f;
         float padding = 8.0f;
@@ -460,15 +428,8 @@ namespace Engine
             {
                 std::string relStr = PathUtils::ToProjectRelativeOrAbsolute(path);
 
-                const char* payloadType = "ASSET_PATH";
-                if (IsImageFile(path))
-                    payloadType = "ASSET_TEXTURE";
-                else if (IsModelFile(path))
-                    payloadType = "ASSET_MODEL";
-                else if (IsSceneFile(path))
-                    payloadType = "ASSET_SCENE";
-                else if (IsAudioFile(path))
-                    payloadType = "ASSET_AUDIO";
+                AssetType assetType = AssetTypeFromPath(path);
+                const char* payloadType = GetEditorAssetDescriptor(assetType).PayloadType;
 
                 ImGui::SetDragDropPayload(payloadType, relStr.c_str(), relStr.size() + 1);
                 ImGui::Text("%s %s", icon, filename.c_str());
@@ -517,15 +478,17 @@ namespace Engine
 
     void AssetBrowserPanel::OnFileDoubleClicked(const std::filesystem::path& path)
     {
-        if (IsSceneFile(path))
+        AssetType type = AssetTypeFromPath(path);
+        switch (type)
         {
+        case AssetType::Scene:
             if (m_OnSceneOpen)
                 m_OnSceneOpen(PathUtils::ToProjectRelativeOrAbsolute(path));
             else
                 ENGINE_INFO("双击场景文件: {0}", path.string());
-        }
-        else if (IsImageFile(path))
-        {
+            break;
+
+        case AssetType::Texture2D:
             m_ShowImagePreview = true;
             ClearImagePreview();
             m_PreviewImagePath = PathUtils::ToProjectRelativeOrAbsolute(path);
@@ -540,6 +503,10 @@ namespace Engine
             {
                 ENGINE_WARN("Failed to load preview texture: {0}", path.string());
             }
+            break;
+
+        default:
+            break;
         }
     }
 

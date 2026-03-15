@@ -54,12 +54,18 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SceneRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Shader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SpatialHashGrid.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SPHCommon.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/StorageBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Texture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/UniformBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/VertexArray.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Entity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Scene.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneEntityIndex.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/WorldTransformService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneHierarchyService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Runtime/ResourceLifecycleCoordinator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Runtime/SceneRuntimeCoordinator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneCamera.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/SceneSerializer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Systems/AudioSystem.cpp
@@ -80,7 +86,7 @@ target_compile_features(Engine PUBLIC cxx_std_17)
 
 # MSVC: treat source and execution charset as UTF-8 so Chinese literals work correctly
 if(MSVC)
-    target_compile_options(Engine PRIVATE /utf-8)
+    target_compile_options(Engine PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
 endif()
 
 find_package(Threads REQUIRED)
@@ -133,4 +139,27 @@ target_precompile_headers(Engine PRIVATE
 
 engine_apply_warnings(Engine)
 engine_apply_sanitizers(Engine)
+
+if(ENGINE_ENABLE_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    target_sources(Engine PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaGLInteropContext.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
+    )
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+    )
+    target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_CUDA=1)
+    target_include_directories(Engine PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+    target_link_libraries(Engine PUBLIC CUDA::cudart)
+    set_property(TARGET Engine PROPERTY CUDA_STANDARD 17)
+    set_property(TARGET Engine PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+    if(MSVC)
+        target_compile_options(Engine PRIVATE
+            $<$<COMPILE_LANGUAGE:CUDA>:--compiler-options=/utf-8>)
+    endif()
+endif()
 

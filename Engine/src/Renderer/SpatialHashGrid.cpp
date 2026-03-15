@@ -3,15 +3,16 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
 
-#include <glad/gl.h>
 #include <cmath>
+#include <glad/gl.h>
 
 namespace Engine
 {
 
     void SpatialHashGrid::Init(uint32_t maxParticles, uint32_t gridSize, float cellSize)
     {
-        if (m_Initialized) return;
+        if (m_Initialized)
+            return;
 
         m_MaxParticles = maxParticles;
         m_GridSize = gridSize;
@@ -21,25 +22,26 @@ namespace Engine
         uint32_t numBlocks = (totalCells + 511) / 512;
 
         // Load shaders
-        m_HashShader      = Shader::Create("assets/shaders/grid_hash.glsl");
+        m_HashShader = Shader::Create("assets/shaders/grid_hash.glsl");
         m_PrefixSumShader = Shader::Create("assets/shaders/grid_prefix_sum.glsl");
-        m_ScatterShader   = Shader::Create("assets/shaders/grid_scatter.glsl");
+        m_ScatterShader = Shader::Create("assets/shaders/grid_scatter.glsl");
 
         // Allocate SSBOs (GPU-only immutable: only compute shaders read/write after init)
         // Binding 1 & 4 are shared with DeadList & IndirectArgs respectively.
         // Grid passes temporarily reuse these slots; caller rebinds originals afterward.
-        m_CellHash       = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 1);
-        m_CellCount      = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 6);
-        m_CellStart      = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 5);
-        m_SortedIndices  = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 7);
-        m_BlockSums      = ShaderStorageBuffer::CreateGPUOnly(numBlocks * sizeof(uint32_t), 4);
+        m_CellHash = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 1);
+        m_CellCount = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 6);
+        m_CellStart = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 5);
+        m_SortedIndices = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 7);
+        m_BlockSums = ShaderStorageBuffer::CreateGPUOnly(numBlocks * sizeof(uint32_t), 4);
 
         m_Initialized = true;
     }
 
     void SpatialHashGrid::Build(uint32_t aliveCount)
     {
-        if (!m_Initialized || aliveCount == 0) return;
+        if (!m_Initialized || aliveCount == 0)
+            return;
 
         uint32_t totalCells = GetTotalCells();
 
@@ -52,8 +54,7 @@ namespace Engine
 
         // Clear CellCount to zero (GPU-side, no CPU allocation or upload)
         GLuint zero = 0;
-        glClearNamedBufferData(m_CellCount->GetRendererID(),
-                               GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+        glClearNamedBufferData(m_CellCount->GetRendererID(), GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
 
         // ---- Pass A: Hash + Atomic Scatter Count ----
         m_HashShader->Bind();
@@ -66,7 +67,7 @@ namespace Engine
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
         // ---- Pass B: Prefix Sum (multi-block Blelloch) ----
-        uint32_t blockSize = 512;  // 2 * local_size_x (256)
+        uint32_t blockSize = 512; // 2 * local_size_x (256)
         uint32_t numBlocks = (totalCells + blockSize - 1) / blockSize;
 
         m_PrefixSumShader->Bind();

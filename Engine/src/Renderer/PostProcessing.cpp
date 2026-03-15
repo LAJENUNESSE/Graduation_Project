@@ -6,9 +6,7 @@
 namespace Engine
 {
 
-    PostProcessing::PostProcessing()
-    {
-    }
+    PostProcessing::PostProcessing() {}
 
     void PostProcessing::CreateFullscreenQuad()
     {

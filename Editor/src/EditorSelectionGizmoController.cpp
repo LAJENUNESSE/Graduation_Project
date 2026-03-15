@@ -9,8 +9,10 @@
 #include "Scene/Scene.h"
 #include "UndoSystem.h"
 
+// clang-format off
 #include <imgui.h>
 #include <ImGuizmo.h>
+// clang-format on
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Engine
@@ -60,8 +62,8 @@ namespace Engine
         if (e.GetMouseButton() != static_cast<int>(MouseCode::ButtonLeft))
             return;
 
-        if (viewport.Hovered && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing() &&
-            !Input::IsKeyPressed(KeyCode::LeftAlt) && m_PanelCoordinator)
+        if (viewport.Hovered && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing() && !Input::IsKeyPressed(KeyCode::LeftAlt) &&
+            m_PanelCoordinator)
         {
             m_PanelCoordinator->SetPrimarySelection(m_HoveredEntity);
         }
@@ -86,17 +88,15 @@ namespace Engine
         float scaleY = static_cast<float>(pickingSpec.Height) / displaySize.y;
         int mouseX = static_cast<int>(mx * scaleX);
         int mouseY = static_cast<int>((displaySize.y - my) * scaleY);
-        if (mouseX < 0 || mouseY < 0 ||
-            mouseX >= static_cast<int>(pickingSpec.Width) || mouseY >= static_cast<int>(pickingSpec.Height))
+        if (mouseX < 0 || mouseY < 0 || mouseX >= static_cast<int>(pickingSpec.Width) ||
+            mouseY >= static_cast<int>(pickingSpec.Height))
             return;
 
         int pixelData = pickingFramebuffer->ReadPixel(1, mouseX, mouseY);
-        m_HoveredEntity =
-            pixelData == -1 ? Entity() : Entity(static_cast<entt::entity>(pixelData), activeScene.get());
+        m_HoveredEntity = pixelData == -1 ? Entity() : Entity(static_cast<entt::entity>(pixelData), activeScene.get());
     }
 
-    void EditorSelectionGizmoController::RenderGizmos(const EditorViewportContext& viewport,
-                                                      EditorCamera& camera,
+    void EditorSelectionGizmoController::RenderGizmos(const EditorViewportContext& viewport, EditorCamera& camera,
                                                       const Ref<Scene>& activeScene)
     {
         if (!m_PanelCoordinator || !activeScene)
@@ -104,8 +104,7 @@ namespace Engine
 
         ImGuizmo::SetOrthographic(false);
         ImGuizmo::SetDrawlist();
-        ImGuizmo::SetRect(viewport.Bounds[0].x, viewport.Bounds[0].y,
-                          viewport.Bounds[1].x - viewport.Bounds[0].x,
+        ImGuizmo::SetRect(viewport.Bounds[0].x, viewport.Bounds[0].y, viewport.Bounds[1].x - viewport.Bounds[0].x,
                           viewport.Bounds[1].y - viewport.Bounds[0].y);
 
         Entity selectedEntity = m_PanelCoordinator->GetPrimarySelection();
@@ -207,15 +206,8 @@ namespace Engine
                             continue;
 
                         const auto& current = entity.GetComponent<TransformComponent>();
-                        entries.push_back({
-                            snapshot.EntityID,
-                            snapshot.Translation,
-                            snapshot.Rotation,
-                            snapshot.Scale,
-                            current.Translation,
-                            current.Rotation,
-                            current.Scale
-                        });
+                        entries.push_back({snapshot.EntityID, snapshot.Translation, snapshot.Rotation, snapshot.Scale,
+                                           current.Translation, current.Rotation, current.Scale});
                     }
 
                     if (!entries.empty())
@@ -224,10 +216,9 @@ namespace Engine
                 }
                 else
                 {
-                    auto cmd = CreateRef<TransformChangeCommand>(
-                        selectedEntity,
-                        m_GizmoStartTranslation, m_GizmoStartRotation, m_GizmoStartScale,
-                        tc.Translation, tc.Rotation, tc.Scale);
+                    auto cmd =
+                        CreateRef<TransformChangeCommand>(selectedEntity, m_GizmoStartTranslation, m_GizmoStartRotation,
+                                                          m_GizmoStartScale, tc.Translation, tc.Rotation, tc.Scale);
                     m_CommandHistory->PushExecutedCommand(cmd);
                 }
 
@@ -239,8 +230,7 @@ namespace Engine
         float viewManipulateRight = viewport.Bounds[1].x;
         float viewManipulateTop = viewport.Bounds[0].y;
         ImGuizmo::ViewManipulate(glm::value_ptr(viewMatrix), camera.GetDistance(),
-                                 ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128),
-                                 0x10101010);
+                                 ImVec2(viewManipulateRight - 128, viewManipulateTop), ImVec2(128, 128), 0x10101010);
         if (viewMatrix != camera.GetViewMatrix())
             camera.SetViewMatrix(viewMatrix);
     }
@@ -252,8 +242,8 @@ namespace Engine
         m_GizmoSelectionStartStates.clear();
     }
 
-    void EditorSelectionGizmoController::CaptureGizmoSelectionStartStates(
-        const Ref<Scene>& activeScene, const std::vector<Entity>& selectedEntities)
+    void EditorSelectionGizmoController::CaptureGizmoSelectionStartStates(const Ref<Scene>& activeScene,
+                                                                          const std::vector<Entity>& selectedEntities)
     {
         m_GizmoSelectionStartStates.clear();
         if (!activeScene)
@@ -266,12 +256,7 @@ namespace Engine
                 continue;
 
             const auto& tc = entity.GetComponent<TransformComponent>();
-            m_GizmoSelectionStartStates.push_back({
-                entity.GetUUID(),
-                tc.Translation,
-                tc.Rotation,
-                tc.Scale
-            });
+            m_GizmoSelectionStartStates.push_back({entity.GetUUID(), tc.Translation, tc.Rotation, tc.Scale});
         }
     }
 
