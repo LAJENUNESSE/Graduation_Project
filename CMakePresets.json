@@ -23,6 +23,29 @@
       }
     },
     {
+      "name": "linux-default",
+      "displayName": "Linux (Ninja + vcpkg)",
+      "description": "Linux CI preset: Ninja generator with vcpkg",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "linux-cuda",
+      "displayName": "Linux (Ninja + vcpkg + CUDA)",
+      "description": "Linux CI preset with CUDA compile verification",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "ENGINE_ENABLE_CUDA": "ON"
+      }
+    },
+    {
       "name": "clion",
       "displayName": "CLion (Ninja + vcpkg)",
       "description": "CLion 专用预设：Ninja 生成器 + vcpkg 工具链",
