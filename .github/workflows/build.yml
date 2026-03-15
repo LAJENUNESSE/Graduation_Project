@@ -36,6 +36,12 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: windows-msvc
+          variant: sccache
+
       - name: Cache vcpkg packages
         uses: actions/cache@v4
         with:
@@ -43,7 +49,7 @@ jobs:
           key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake
-        run: cmake --preset default
+        run: cmake --preset default -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build Engine
         run: cmake --build build --config RelWithDebInfo --target Engine
@@ -63,6 +69,11 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: linux-gcc
 
       - name: Install system dependencies
         run: |
@@ -85,7 +96,7 @@ jobs:
           key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake
-        run: cmake --preset linux-default
+        run: cmake --preset linux-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build Engine
         run: cmake --build build --target Engine
@@ -105,6 +116,11 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: linux-gcc-cuda
 
       - name: Install CUDA Toolkit
         uses: Jimver/cuda-toolkit@v0.2.29
@@ -133,7 +149,7 @@ jobs:
           key: vcpkg-linux-cuda-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake
-        run: cmake --preset linux-cuda
+        run: cmake --preset linux-cuda -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build Engine
         run: cmake --build build --target Engine
