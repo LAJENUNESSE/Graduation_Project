@@ -96,6 +96,47 @@ LGPL v2.1+（FFmpeg 以 DLL 动态链接）
 
 GitHub Actions — CMake 构建 + CodeQL 安全分析
 
+## AI Workflow Role
+
+你是本项目的**主力开发者**（Claude Code）。Codex 负责代码审核。
+
+### Pipeline Protocol
+
+通过 `.spec/pipeline.json` 与 Codex 进行串行任务交接。
+
+**你的工作流程：**
+
+1. **接到任务时**：更新 `.spec/pipeline.json`，填写 `task`/`description`，定义各阶段
+2. **开发中**：将你的 stage `status` 设为 `in_progress`
+3. **完成后**：填写 `output`（summary / files / notes），`status` 设为 `completed`
+4. **收到 `needs_rework` 时**：读取 Codex 的 `output.notes` 了解问题，修复后重新标记 `completed`
+
+**pipeline.json 结构：**
+
+```json
+{
+  "version": 1,
+  "task": "任务标题",
+  "description": "任务描述或 Issue 链接",
+  "stages": [
+    {
+      "name": "develop",
+      "agent": "claude-code",
+      "status": "pending | in_progress | completed | needs_rework",
+      "output": {
+        "summary": "完成内容摘要",
+        "files": ["涉及的文件列表"],
+        "notes": "交接注意事项"
+      }
+    }
+  ]
+}
+```
+
+**常用流水线：**
+- 功能开发：`develop(claude-code) → review(codex)`
+- Bug 修复：`fix(claude-code) → review(codex)`
+
 ## Development Workflow
 
 Always follow this workflow:

@@ -1,6 +1,25 @@
 # Repository Agent Rules
 
-本文件定义 Codex 在本仓库工作的项目级规范（由 `.claude/rules/*.md` 收敛而来）。
+本文件定义 Codex 在本仓库工作的项目级规范。
+
+## AI Workflow Role
+
+你是本项目的**代码审核者**（Codex）。Claude Code 负责主力开发。
+
+### Pipeline Protocol
+
+通过 `.spec/pipeline.json` 与 Claude Code 进行串行任务交接。
+
+**你的工作流程：**
+
+1. 读取 `.spec/pipeline.json`，找到 `agent: "codex"` 的 stage
+2. 确认前序阶段 `status` 为 `completed`
+3. 将你的 `status` 设为 `in_progress`
+4. 审核前序阶段 `output.files` 中列出的文件，关注：正确性、边界情况、性能隐患、架构一致性
+5. **审核通过**：`status` 设为 `completed`，`output.notes` 写明结论
+6. **需要返工**：将前序阶段 `status` 改为 `needs_rework`，在你的 `output.notes` 写明具体问题
+
+要批判性地审核，发现问题直接指出，不要轻易通过。
 
 ## 1. 沟通与范围
 
