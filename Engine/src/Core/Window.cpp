@@ -136,7 +136,13 @@ namespace Engine
                                     nullptr, nullptr);
         if (!m_Window)
         {
+#ifdef __APPLE__
             ENGINE_CORE_ERROR("Failed to create GLFW window!");
+            ENGINE_CORE_ERROR("This engine requires OpenGL 4.3, but macOS only supports up to 4.1.");
+            ENGINE_CORE_ERROR("Consider using CrossOver or Parallels Desktop to run the Windows build.");
+#else
+            ENGINE_CORE_ERROR("Failed to create GLFW window!");
+#endif
             return;
         }
         ++s_GLFWWindowCount;

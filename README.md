@@ -214,7 +214,23 @@ docs/                       技术调研报告
 GitHub Actions 自动化流程：
 
 - **构建验证**：Windows (MSVC) + Linux (GCC) + Linux + CUDA，ccache 加速增量构建
+- **跨平台验证**（每周 + 手动触发）：macOS (AppleClang ARM64) + Fedora 40 (GCC) + Alpine 3.20 (musl + GCC)
 - **安全分析**：CodeQL 每周定时扫描（不阻塞 push/PR）
+
+## Platform Support
+
+| 平台 | 状态 | 说明 |
+|------|------|------|
+| **Windows 10/11** (MSVC) | 主开发平台 | 完整功能，含可选 CUDA 加速 |
+| **Ubuntu LTS** (GCC) | CI 验证 | 完整功能 |
+| **Fedora 最新版** (GCC) | CI 验证 | RHEL/CentOS 兼容层 |
+| **Alpine** (musl + GCC) | CI 验证 | musl libc 编译验证 |
+| **macOS** (AppleClang ARM64) | 仅编译验证 | macOS 仅支持 OpenGL 4.1，本引擎需要 4.3，**无法运行** |
+
+> **Linux 支持策略**：优先保证 Ubuntu LTS 和 Fedora 最新版，其他发行版欢迎提 PR。
+>
+> **macOS 用户**：由于 Apple 已弃用 OpenGL 且最高仅支持 4.1，本引擎无法在 macOS 上运行。
+> 如需体验，推荐使用 [CrossOver](https://www.codeweavers.com/crossover) 或 [Parallels Desktop](https://www.parallels.com/) 运行 Windows 版本。
 
 ## License
 
