@@ -574,17 +574,15 @@ namespace Engine
         RenderCommand::Clear();
         m_HDRFramebuffer->ClearAttachment(1, -1);
 
-        // 设置 SSAO 深度纹理（使用上一帧 HDR FBO 的深度）
-        m_Context.SSAODepthTexID = m_HDRFramebuffer->GetDepthAttachmentRendererID();
-
         const bool msaaEnabled = m_HDRFramebuffer->IsMSAAEnabled();
 
-        // 执行 SSAOPass + GeometryPass + SkyboxPass + TerrainPass + GrassPass
+        // 执行 GeometryPass + SkyboxPass + TerrainPass + GrassPass
         // 非 MSAA 时也执行 ParticlePass
+        // 注意：SSAOPass 在此循环之后单独执行，因为它需要当前帧的几何深度
         for (auto& pass : m_PassQueue)
         {
             bool runPass =
-                pass.Enabled && (pass.Name == "SSAOPass" || pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" ||
+                pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" ||
                                  pass.Name == "TerrainPass" || pass.Name == "GrassPass");
             if (!msaaEnabled && pass.Enabled && pass.Name == "ParticlePass")
                 runPass = true;
@@ -594,6 +592,15 @@ namespace Engine
         }
 
         m_HDRFramebuffer->Unbind();
+
+        // SSAO：在几何渲染完成后执行，使用当前帧的深度
+        // GeometryPass 消费上一帧的 m_SSAOBlurredTexID（首帧为 0，自动跳过）
+        m_Context.SSAODepthTexID = m_HDRFramebuffer->GetDepthAttachmentRendererID();
+        for (auto& pass : m_PassQueue)
+        {
+            if (pass.Enabled && pass.Name == "SSAOPass")
+                pass.ExecuteFn(m_Context);
+        }
 
         // MSAA: re-render geometry+skybox to MSAA FBO, then blit
         if (msaaEnabled)
