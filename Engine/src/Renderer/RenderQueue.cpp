@@ -43,6 +43,7 @@ namespace Engine
                 const auto& shader = packet.Mat->GetShader();
                 shader->SetMat4("u_ViewProjection", viewProjection);
                 shader->SetMat4("u_Transform", packet.Transform);
+                shader->SetMat3("u_NormalMatrix", glm::transpose(glm::inverse(glm::mat3(packet.Transform))));
             }
 
             packet.VAO->Bind();

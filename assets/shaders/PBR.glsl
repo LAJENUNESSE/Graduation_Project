@@ -7,6 +7,7 @@ layout(location = 3) in vec3 a_Tangent;
 
 uniform mat4 u_ViewProjection;
 uniform mat4 u_Transform;
+uniform mat3 u_NormalMatrix;
 uniform mat4 u_LightSpaceMatrix;
 uniform mat4 u_ViewMatrix;  // CSM: 用于计算 view-space Z
 
@@ -18,7 +19,7 @@ out mat3 v_TBN;
 out float v_ViewZ;  // CSM: view-space Z
 
 void main() {
-    mat3 normalMatrix = mat3(transpose(inverse(u_Transform)));
+    mat3 normalMatrix = u_NormalMatrix;
     v_Normal = normalMatrix * a_Normal;
     v_FragPos = vec3(u_Transform * vec4(a_Position, 1.0));
     v_TexCoord = a_TexCoords;

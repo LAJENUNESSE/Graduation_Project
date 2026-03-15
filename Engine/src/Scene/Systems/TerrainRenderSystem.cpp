@@ -100,7 +100,9 @@ namespace Engine
                 lod = 1;
 
             // 设置变换
-            m_TerrainShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
+            glm::mat4 worldTransform = WorldTransformService::ComputeWorldTransform(reg, entity, index, cache);
+            m_TerrainShader->SetMat4("u_Transform", worldTransform);
+            m_TerrainShader->SetMat3("u_NormalMatrix", glm::transpose(glm::inverse(glm::mat3(worldTransform))));
             m_TerrainShader->SetMat4("u_ViewProjection", camera.GetViewProjection());
             m_TerrainShader->SetInt("u_EntityID", static_cast<int>(eid));
 
