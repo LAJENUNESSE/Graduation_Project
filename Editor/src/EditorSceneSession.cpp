@@ -156,8 +156,9 @@ namespace Engine
 
         if (activeScene)
         {
-            m_SceneRenderer->GetShadowSystem().GetSettings() = activeScene->GetShadowSettings();
-
+            auto& shadowSystem = m_SceneRenderer->GetShadowSystem();
+            shadowSystem.GetSettings() = activeScene->GetShadowSettings();
+            shadowSystem.ResizeShadowMap(activeScene->GetShadowSettings().MapResolution);
             // 恢复 skybox（与 Scene::SetSceneRenderer 逻辑一致）
             const auto& skyboxPaths = activeScene->GetSkyboxFacePaths();
             if (skyboxPaths.empty())

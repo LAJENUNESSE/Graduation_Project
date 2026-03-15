@@ -144,7 +144,7 @@ Write-Host "  可执行文件: $exePath" -ForegroundColor Green
 if ($Cuda) {
     Write-Host "  CUDA 加速: 已启用" -ForegroundColor Green
 }
-Write-Host "========================================" -ForegroundColor Green·
+Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "运行编辑器:" -ForegroundColor Cyan
 Write-Host "  ./$exePath" -ForegroundColor White

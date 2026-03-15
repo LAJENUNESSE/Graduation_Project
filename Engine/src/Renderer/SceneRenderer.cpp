@@ -576,16 +576,12 @@ namespace Engine
 
         const bool msaaEnabled = m_HDRFramebuffer->IsMSAAEnabled();
 
-        // 执行 GeometryPass + SkyboxPass + TerrainPass + GrassPass
-        // 非 MSAA 时也执行 ParticlePass
-        // 注意：SSAOPass 在此循环之后单独执行，因为它需要当前帧的几何深度
+        // 先写入当前帧几何深度，供后续 SSAO 采样
         for (auto& pass : m_PassQueue)
         {
             bool runPass =
                 pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" ||
                                  pass.Name == "TerrainPass" || pass.Name == "GrassPass");
-            if (!msaaEnabled && pass.Enabled && pass.Name == "ParticlePass")
-                runPass = true;
 
             if (runPass)
                 pass.ExecuteFn(m_Context);
@@ -615,6 +611,18 @@ namespace Engine
 
             // Resolve 后单独绘制粒子，避免被 MSAA blit 覆盖掉
             m_HDRFramebuffer->Bind();
+            RenderParticlePass();
+            m_HDRFramebuffer->Unbind();
+        }
+        else
+        {
+            // 非 MSAA 路径需要在 SSAO 生成后重绘场景，确保消费当前帧 AO
+            m_HDRFramebuffer->Bind();
+            RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
+            RenderCommand::Clear();
+            m_HDRFramebuffer->ClearAttachment(1, -1);
+
+            RenderGeometryAndSkybox();
             RenderParticlePass();
             m_HDRFramebuffer->Unbind();
         }

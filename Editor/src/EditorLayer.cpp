@@ -109,6 +109,7 @@ namespace Engine
         m_Boot->SceneSession().CreateNewScene(m_ActiveScene, static_cast<uint32_t>(renderSize.x),
                                               static_cast<uint32_t>(renderSize.y));
 
+        SyncCommandHistorySuspension();
         ApplyActiveSceneContext(true);
     }
 
@@ -124,8 +125,11 @@ namespace Engine
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
 
         EditorRenderSettings renderSettings;
-        if (!m_Boot->SceneSession().OpenSceneFromPath(m_ActiveScene, filepath, static_cast<uint32_t>(renderSize.x),
-                                                      static_cast<uint32_t>(renderSize.y), &renderSettings))
+        const bool opened =
+            m_Boot->SceneSession().OpenSceneFromPath(m_ActiveScene, filepath, static_cast<uint32_t>(renderSize.x),
+                                                     static_cast<uint32_t>(renderSize.y), &renderSettings);
+        SyncCommandHistorySuspension();
+        if (!opened)
         {
             return;
         }
@@ -148,15 +152,15 @@ namespace Engine
     void EditorLayer::OnScenePlay()
     {
         m_Boot->SelectionGizmoController().ClearTransientState();
-        m_Boot->GetCommandHistory().SetSuspended(true);
         m_Boot->SceneSession().BeginPlay(m_ActiveScene);
+        SyncCommandHistorySuspension();
         ApplyActiveSceneContext(false);
     }
 
     void EditorLayer::OnSceneStop()
     {
         m_Boot->SceneSession().EndPlay(m_ActiveScene);
-        m_Boot->GetCommandHistory().SetSuspended(false);
+        SyncCommandHistorySuspension();
 
         // Play 期间 viewport resize 只作用于 runtime scene，需同步回 editor scene
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
@@ -228,6 +232,11 @@ namespace Engine
     {
         m_Boot->PanelCoordinator().ApplyScene(m_ActiveScene, clearCommandHistory);
         m_Boot->SelectionGizmoController().ClearTransientState();
+    }
+
+    void EditorLayer::SyncCommandHistorySuspension()
+    {
+        m_Boot->GetCommandHistory().SetSuspended(m_Boot->SceneSession().GetState() == SceneState::Play);
     }
 
 } // namespace Engine

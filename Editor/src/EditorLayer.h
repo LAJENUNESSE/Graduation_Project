@@ -42,6 +42,7 @@ namespace Engine
 
         void BootstrapDefaultScene();
         void ApplyActiveSceneContext(bool clearCommandHistory);
+        void SyncCommandHistorySuspension();
 
     private:
         Scope<EditorBootstrapper> m_Boot;
