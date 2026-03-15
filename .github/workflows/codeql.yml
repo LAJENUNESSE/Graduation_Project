@@ -1,22 +1,6 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.claude/**'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.claude/**'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
   schedule:
     - cron: '23 6 * * 1'
 
