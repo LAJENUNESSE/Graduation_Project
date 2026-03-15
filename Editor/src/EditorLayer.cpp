@@ -157,6 +157,13 @@ namespace Engine
     {
         m_Boot->SceneSession().EndPlay(m_ActiveScene);
         m_Boot->GetCommandHistory().SetSuspended(false);
+
+        // Play 期间 viewport resize 只作用于 runtime scene，需同步回 editor scene
+        glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
+        if (m_ActiveScene && renderSize.x > 0 && renderSize.y > 0)
+            m_ActiveScene->OnViewportResize(static_cast<uint32_t>(renderSize.x),
+                                            static_cast<uint32_t>(renderSize.y));
+
         ApplyActiveSceneContext(false);
     }
 
