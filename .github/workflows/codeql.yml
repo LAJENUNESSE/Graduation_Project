@@ -29,6 +29,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: cpp
+          config-file: .github/codeql-config.yml
 
       - name: Cache vcpkg packages
         uses: actions/cache@v4
