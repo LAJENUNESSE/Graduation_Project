@@ -187,6 +187,7 @@ namespace Engine
         EditorShellState state;
         const bool allowHistoryActions = m_Boot->SceneSession().GetState() == SceneState::Edit;
         state.CurrentSceneState = m_Boot->SceneSession().GetState();
+        state.CanSave = allowHistoryActions;
         state.CanUndo = allowHistoryActions && m_Boot->GetCommandHistory().CanUndo();
         state.CanRedo = allowHistoryActions && m_Boot->GetCommandHistory().CanRedo();
         state.UndoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetUndoDescription() : "";

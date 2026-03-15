@@ -14,6 +14,7 @@ namespace Engine
     struct EditorShellState
     {
         SceneState CurrentSceneState = SceneState::Edit;
+        bool CanSave = true;
         bool CanUndo = false;
         bool CanRedo = false;
         std::string UndoDescription;

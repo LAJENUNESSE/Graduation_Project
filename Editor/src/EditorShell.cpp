@@ -39,7 +39,7 @@ namespace Engine
                     actions.RequestNewScene = true;
                 if (ImGui::MenuItem("打开场景...", "Ctrl+O"))
                     actions.RequestOpenScene = true;
-                if (ImGui::MenuItem("保存场景...", "Ctrl+Shift+S"))
+                if (ImGui::MenuItem("保存场景...", "Ctrl+Shift+S", false, state.CanSave))
                     actions.RequestSaveScene = true;
                 ImGui::Separator();
                 if (ImGui::MenuItem("退出"))
@@ -133,7 +133,7 @@ namespace Engine
                 actions.RequestOpenScene = true;
             break;
         case KeyCode::S:
-            if (control && shift)
+            if (control && shift && state.CanSave)
                 actions.RequestSaveScene = true;
             break;
         case KeyCode::Z:
