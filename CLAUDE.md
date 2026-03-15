@@ -96,6 +96,56 @@ LGPL v2.1+（FFmpeg 以 DLL 动态链接）
 
 GitHub Actions — CMake 构建 + CodeQL 安全分析
 
+## AI Workflow Role
+
+你是本项目的**主力开发者**（Claude Code）。
+
+### 协作上下文
+
+| 工具 | 角色 | 指令文件 |
+|------|------|---------|
+| **Claude Code** | 主力开发 | `CLAUDE.md`（本文件） |
+| **Codex** | 代码审核 | `AGENTS.md` |
+| **Jules** | 异步任务（测试/文档） | `AGENTS.md` |
+
+### Pipeline Protocol
+
+多 Agent **串行流水线**通过 `.ai/pipeline.json` 进行任务交接。
+
+**你的工作流程：**
+
+1. **接到任务时**：更新 `.ai/pipeline.json`，填写 `task`/`description`，定义各阶段
+2. **开发中**：将你的 stage `status` 设为 `in_progress`
+3. **完成后**：填写 `output`（summary / files / notes），`status` 设为 `completed`
+4. **收到 `needs_rework` 时**：读取审核者的 `output.notes` 了解问题，修复后重新标记 `completed`
+
+**pipeline.json 结构：**
+
+```json
+{
+  "version": 1,
+  "task": "任务标题",
+  "description": "任务描述或 Issue 链接",
+  "stages": [
+    {
+      "name": "develop",
+      "agent": "claude-code",
+      "status": "pending | in_progress | completed | needs_rework",
+      "output": {
+        "summary": "完成内容摘要",
+        "files": ["涉及的文件列表"],
+        "notes": "交接注意事项"
+      }
+    }
+  ]
+}
+```
+
+**常用流水线模板：**
+- 功能开发：`develop(claude-code) → review(codex) → test(jules)`
+- Bug 修复：`fix(claude-code) → review(codex)`
+- 纯文档：`document(jules)`
+
 ## Development Workflow
 
 Always follow this workflow:

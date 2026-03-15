@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "task": "建立 AI 多 Agent 协作流水线",
+  "description": "为本项目建立 Claude Code / Codex / Jules 三工具串行协作机制，通过 .ai/pipeline.json 进行任务交接。",
+  "stages": [
+    {
+      "name": "develop",
+      "agent": "claude-code",
+      "status": "completed",
+      "output": {
+        "summary": "完成了多 Agent 流水线协作机制的搭建：创建 .ai/pipeline.json 作为任务交接文件，更新 CLAUDE.md 和 AGENTS.md 添加各 Agent 的角色定义与 Pipeline Protocol 工作流程。",
+        "files": [
+          ".ai/pipeline.json",
+          "CLAUDE.md",
+          "AGENTS.md"
+        ],
+        "notes": "pipeline.json 结构为 version + task + description + stages 数组。每个 stage 有 name/agent/status/output 四个字段。status 取值：pending / in_progress / completed / needs_rework。"
+      }
+    },
+    {
+      "name": "document",
+      "agent": "jules",
+      "status": "pending",
+      "instructions": "为 .ai/ 目录创建 README.md，说明本项目的多 Agent 流水线协作机制。内容包括：1) pipeline.json 的结构与字段说明；2) 三个 Agent（Claude Code / Codex / Jules）的角色与职责；3) 一次完整流水线的操作流程示例（从开发到审核到测试）；4) needs_rework 回退机制的说明。文档使用简体中文，保持简洁。完成后更新本文件中你的 stage：status 设为 completed，填写 output。",
+      "output": null
+    }
+  ]
+}

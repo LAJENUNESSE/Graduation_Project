@@ -1,6 +1,68 @@
 # Repository Agent Rules
 
-本文件定义 Codex 在本仓库工作的项目级规范（由 `.claude/rules/*.md` 收敛而来）。
+本文件供 **Codex** 和 **Jules** 共同读取，定义项目级规范与各自职责。
+
+## AI Workflow Roles
+
+本仓库使用多 AI 工具协作开发，通过 Git（PR / Issue / Commit）进行交流。
+
+| 工具 | 角色 | 指令文件 |
+|------|------|---------|
+| Claude Code | 主力开发 | `CLAUDE.md` |
+| Codex | PR 代码审核 | `AGENTS.md`（本文件） |
+| Jules | 异步任务（测试/文档） | `AGENTS.md`（本文件） |
+
+### Pipeline Protocol
+
+多 Agent **串行流水线**通过 `.ai/pipeline.json` 进行任务交接。每个 Agent 从前序阶段接手，完成后标记状态，推进流水线。
+
+**pipeline.json 结构：**
+
+```json
+{
+  "version": 1,
+  "task": "任务标题",
+  "description": "任务描述或 Issue 链接",
+  "stages": [
+    {
+      "name": "阶段名",
+      "agent": "claude-code | codex | jules",
+      "status": "pending | in_progress | completed | needs_rework",
+      "output": {
+        "summary": "完成内容摘要",
+        "files": ["涉及的文件列表"],
+        "notes": "交接注意事项或审核反馈"
+      }
+    }
+  ]
+}
+```
+
+### Codex 专项指引
+
+你的主要职责是**代码审核**。
+
+1. 读取 `.ai/pipeline.json`，找到 `agent: "codex"` 的 stage
+2. 确认前序阶段 `status` 为 `completed`
+3. 将你的 `status` 设为 `in_progress`
+4. 审核前序阶段 `output.files` 中列出的文件，关注：正确性、边界情况、性能隐患、架构一致性
+5. **审核通过**：`status` 设为 `completed`，`output.notes` 写明结论
+6. **需要返工**：将**前序阶段** `status` 改为 `needs_rework`，在你的 `output.notes` 写明具体问题
+
+要批判性地审核，发现问题直接指出，不要轻易通过。
+
+### Jules 专项指引
+
+你的主要职责是**异步补充测试和文档**。
+
+1. 读取 `.ai/pipeline.json`，找到 `agent: "jules"` 的 stage
+2. 确认前序阶段 `status` 为 `completed`
+3. 将你的 `status` 设为 `in_progress`
+4. 根据前序阶段 `output`（改动摘要 + 文件列表）完成测试/文档编写
+5. 完成后 `status` 设为 `completed`，填写 `output`
+
+- 文档使用简体中文
+- 提交前确保构建通过
 
 ## 1. 沟通与范围
 
