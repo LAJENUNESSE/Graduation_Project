@@ -55,6 +55,8 @@
 
 配置完成后重启终端，然后运行下方构建命令。
 
+> **首次构建提示**：项目依赖 10 个 Git 子模块 + 2 个 vcpkg 包（FFmpeg、OpenAL Soft），首次构建需下载约 1\~2 GB 依赖源码并编译，建议使用高速网络或代理。后续增量构建不再重复下载。
+
 ### Windows 一键构建
 
 ```powershell
@@ -75,7 +77,10 @@
 #### 前置准备
 
 ```bash
-# 1. 初始化 Git 子模块
+# 1. 克隆项目（推荐浅克隆子模块，节省时间和带宽）
+git clone --recursive --shallow-submodules https://github.com/your/repo.git
+
+# 已克隆的项目初始化子模块
 git submodule update --init --recursive
 
 # 2. 安装 vcpkg（首次）
@@ -84,6 +89,9 @@ git clone https://github.com/microsoft/vcpkg.git <路径>
 <路径>/bootstrap-vcpkg.sh                               # Linux
 <路径>/vcpkg install ffmpeg openal-soft --triplet x64-windows  # 或 x64-linux
 ```
+
+> **需要完整子模块历史？** 如需调试某个 vendor 库的历史版本，运行：
+> `git submodule foreach --recursive git fetch --unshallow`
 
 #### Windows（VS 2022 Build Tools + vcpkg）
 

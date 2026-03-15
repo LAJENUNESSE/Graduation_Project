@@ -43,8 +43,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 1
+
+      - name: Initialize submodules (shallow)
+        run: git submodule update --init --recursive --depth 1
 
       - name: Install system dependencies
         run: |
@@ -99,8 +101,10 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 1
+
+      - name: Initialize submodules (shallow)
+        run: git submodule update --init --recursive --depth 1
 
       - name: Bootstrap vcpkg
         run: |
@@ -148,8 +152,10 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 1
+
+      - name: Initialize submodules (shallow)
+        run: git submodule update --init --recursive --depth 1
 
       - name: Configure CMake
         run: cmake --preset linux-system
