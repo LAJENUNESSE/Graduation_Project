@@ -71,7 +71,12 @@ jobs:
             libgl-dev libglu1-mesa-dev \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
             libwayland-dev libxkbcommon-dev \
-            nasm autoconf automake libtool
+            nasm autoconf automake libtool pkg-config
+
+      - name: Bootstrap vcpkg
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics || true
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
 
       - name: Cache vcpkg packages
         uses: actions/cache@v4
@@ -102,11 +107,10 @@ jobs:
           fetch-depth: 1
 
       - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.23
+        uses: Jimver/cuda-toolkit@v0.2.29
         with:
-          cuda: '12.6.3'
+          cuda: '12.8.1'
           method: network
-          non-cuda-sub-packages: '["libcusparse-dev"]'
 
       - name: Install system dependencies
         run: |
@@ -115,7 +119,12 @@ jobs:
             libgl-dev libglu1-mesa-dev \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
             libwayland-dev libxkbcommon-dev \
-            nasm autoconf automake libtool
+            nasm autoconf automake libtool pkg-config
+
+      - name: Bootstrap vcpkg
+        run: |
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics || true
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
 
       - name: Cache vcpkg packages
         uses: actions/cache@v4
