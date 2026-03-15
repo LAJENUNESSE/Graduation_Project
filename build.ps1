@@ -61,8 +61,9 @@ if ($env:VCPKG_ROOT -and (Test-Path "$env:VCPKG_ROOT/vcpkg.exe")) {
 
 # 2b. 检查常见路径
 if (-not $vcpkgRoot) {
-    $commonPaths = @("C:/vcpkg", "$HOME/vcpkg", "$PSScriptRoot/../vcpkg")
+    $commonPaths = @("$env:LOCALAPPDATA/vcpkg", "C:/vcpkg", "$HOME/vcpkg")
     foreach ($p in $commonPaths) {
+        if (-not $p) { continue }
         $resolved = [System.IO.Path]::GetFullPath($p)
         if (Test-Path "$resolved/vcpkg.exe") {
             $vcpkgRoot = $resolved
@@ -74,7 +75,7 @@ if (-not $vcpkgRoot) {
 
 # 2c. 自动克隆
 if (-not $vcpkgRoot) {
-    $vcpkgRoot = [System.IO.Path]::GetFullPath("$PSScriptRoot/../vcpkg")
+    $vcpkgRoot = Join-Path $env:LOCALAPPDATA "vcpkg"
     Write-Warn "未找到 vcpkg，将自动克隆到 $vcpkgRoot ..."
     git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
     if ($LASTEXITCODE -ne 0) {

@@ -43,6 +43,18 @@
 
 ## Build
 
+### 首次配置（新机器）
+
+```powershell
+# 自动安装 Git、VS Build Tools、vcpkg 及项目依赖（需管理员权限，脚本会自动提权）
+./setup.ps1
+
+# 已有完整 VS 2022 的用户可跳过 Build Tools 安装
+./setup.ps1 -SkipVS
+```
+
+配置完成后重启终端，然后运行下方构建命令。
+
 ### Windows 一键构建
 
 ```powershell
