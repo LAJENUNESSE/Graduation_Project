@@ -437,33 +437,36 @@ namespace Engine
         return true;
     }
 
-    static AssetHandle CreateMeshHandleFromType(const std::string& meshType, const std::string& modelPath = "")
+    static AssetHandle CreateMeshHandleFromType(MeshType& outType, const std::string& meshType,
+                                                   const std::string& modelPath = "")
     {
         if (meshType == "Cube")
+        {
+            outType = MeshType::Cube;
             return AssetManager::Load<Mesh>("builtin:Cube");
+        }
         if (meshType == "Plane")
+        {
+            outType = MeshType::Plane;
             return AssetManager::Load<Mesh>("builtin:Plane");
+        }
         if (meshType == "Sphere")
+        {
+            outType = MeshType::Sphere;
             return AssetManager::Load<Mesh>("builtin:Sphere");
+        }
         if (meshType == "Model" && !modelPath.empty())
         {
             auto h = AssetManager::Load<Mesh>(modelPath);
             if (h.IsValid())
+            {
+                outType = MeshType::Model;
                 return h;
+            }
             ENGINE_CORE_WARN("Failed to load model '{0}', falling back to Cube", modelPath);
         }
+        outType = MeshType::Cube;
         return AssetManager::Load<Mesh>("builtin:Cube");
-    }
-
-    static MeshType MeshTypeFromString(const std::string& str)
-    {
-        if (str == "Plane")
-            return MeshType::Plane;
-        if (str == "Sphere")
-            return MeshType::Sphere;
-        if (str == "Model")
-            return MeshType::Model;
-        return MeshType::Cube;
     }
 
     bool SceneSerializer::Deserialize(const std::string& filepath, EditorRenderSettings* outRenderSettings)
@@ -663,8 +666,7 @@ namespace Engine
                         }
                     }
 
-                    mrc.Type = MeshTypeFromString(meshType);
-                    mrc.MeshAsset = CreateMeshHandleFromType(meshType, modelPath);
+                    mrc.MeshAsset = CreateMeshHandleFromType(mrc.Type, meshType, modelPath);
                     if (meshRendererComponent["Color"])
                         mrc.Color = meshRendererComponent["Color"].as<glm::vec4>();
 
