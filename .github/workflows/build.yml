@@ -60,8 +60,25 @@ jobs:
         run: cmake --build build --config RelWithDebInfo --target Editor
 
   build-linux:
-    name: Linux (GCC)
+    name: Linux (${{ matrix.name }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GCC
+            cuda: false
+            ccache-key: linux-gcc
+            vcpkg-cache-key: vcpkg-linux
+            cmake-preset: linux-default
+            extra-cmake-flags: ''
+          - name: "GCC + CUDA"
+            cuda: true
+            ccache-key: linux-gcc-cuda
+            vcpkg-cache-key: vcpkg-linux-cuda
+            cmake-preset: linux-cuda
+            extra-cmake-flags: '-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache'
 
     env:
       VCPKG_ROOT: /usr/local/share/vcpkg
@@ -77,69 +94,10 @@ jobs:
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1
         with:
-          key: linux-gcc
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build \
-            libgl-dev libglu1-mesa-dev \
-            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
-            libwayland-dev libxkbcommon-dev \
-            nasm autoconf automake libtool pkg-config
-
-      - name: Bootstrap vcpkg
-        run: |
-          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics || true
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
-
-      - name: Cache vcpkg packages
-        uses: actions/cache@v4
-        with:
-          path: build/vcpkg_installed
-          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
-
-      - name: Configure CMake
-        run: cmake --preset linux-default -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build Engine
-        run: cmake --build build --target Engine
-
-      - name: Build Editor
-        run: cmake --build build --target Editor
-
-      - name: Verify binary dependencies (ldd)
-        run: |
-          echo "=== ldd Editor ==="
-          ldd build/Editor/Editor
-          if ldd build/Editor/Editor | grep -q "not found"; then
-            echo "::error::Missing shared libraries detected!"
-            ldd build/Editor/Editor | grep "not found"
-            exit 1
-          fi
-          echo "All shared library dependencies resolved."
-
-  build-linux-cuda:
-    name: Linux (GCC + CUDA)
-    runs-on: ubuntu-latest
-
-    env:
-      VCPKG_ROOT: /usr/local/share/vcpkg
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Initialize submodules (shallow)
-        run: git submodule update --init --recursive --depth 1
-
-      - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1
-        with:
-          key: linux-gcc-cuda
+          key: ${{ matrix.ccache-key }}
 
       - name: Install CUDA Toolkit
+        if: matrix.cuda
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: '12.8.1'
@@ -163,10 +121,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/vcpkg_installed
-          key: vcpkg-linux-cuda-${{ hashFiles('vcpkg.json') }}
+          key: ${{ matrix.vcpkg-cache-key }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake
-        run: cmake --preset linux-cuda -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        run: cmake --preset ${{ matrix.cmake-preset }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ${{ matrix.extra-cmake-flags }}
 
       - name: Build Engine
         run: cmake --build build --target Engine
