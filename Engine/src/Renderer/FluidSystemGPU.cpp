@@ -126,7 +126,8 @@ namespace Engine
             }
             else
             {
-                ENGINE_WARN("[Fluid] CUDA ProbeDeviceMatch failed or CUDA poisoned, staying on GL path.");
+                ENGINE_WARN("[Fluid] CUDA ProbeDeviceMatch failed or CUDA poisoned ({}), staying on GL path.",
+                           CudaInterop::GetCudaPoisonReason());
             }
         }
 #endif
@@ -325,7 +326,8 @@ namespace Engine
 
                 if (CudaInterop::IsCudaPoisoned())
                 {
-                    ENGINE_WARN("[Fluid] CUDA poisoned during compute; falling back to GL.");
+                    ENGINE_WARN("[Fluid] CUDA poisoned during compute ({}); falling back to GL.",
+                               CudaInterop::GetCudaPoisonReason());
                     m_UseCudaPath = false;
                 }
                 else
@@ -344,7 +346,8 @@ namespace Engine
             }
             else
             {
-                ENGINE_WARN("[Fluid] CUDA MapAll failed; falling back to GL.");
+                ENGINE_WARN("[Fluid] CUDA MapAll failed ({}); falling back to GL.",
+                           CudaInterop::GetCudaPoisonReason());
                 m_UseCudaPath = false;
             }
         }

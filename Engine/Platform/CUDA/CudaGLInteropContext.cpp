@@ -12,6 +12,15 @@
 namespace Engine
 {
 
+    // ------------------------------------------------------------------ 中毒通知回调注册
+
+    static bool s_PoisonCallbackRegistered = []() {
+        CudaInterop::SetCudaPoisonNotify([](const char* reason) {
+            ENGINE_CORE_ERROR("[CUDA] GPU 计算上下文已中毒，后续 CUDA 调用将跳过并回退到 OpenGL Compute。原因: {}", reason);
+        });
+        return true;
+    }();
+
     // ------------------------------------------------------------------ 辅助函数
 
     static const char* CudaErrStr(cudaError_t err)

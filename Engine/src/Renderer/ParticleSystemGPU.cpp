@@ -352,7 +352,8 @@ namespace Engine
 
                 if (CudaInterop::IsCudaPoisoned())
                 {
-                    ENGINE_WARN("[Particle] CUDA poisoned during compute; permanently falling back to GL compute.");
+                    ENGINE_WARN("[Particle] CUDA poisoned during compute ({}); permanently falling back to GL compute.",
+                               CudaInterop::GetCudaPoisonReason());
                     m_UseCudaPath = false;
                 }
                 else
@@ -371,7 +372,8 @@ namespace Engine
             }
             else
             {
-                ENGINE_WARN("[Particle] CUDA MapAll failed; permanently falling back to GL compute.");
+                ENGINE_WARN("[Particle] CUDA MapAll failed ({}); permanently falling back to GL compute.",
+                           CudaInterop::GetCudaPoisonReason());
                 m_UseCudaPath = false;
             }
         }
