@@ -14,10 +14,10 @@ namespace Engine
 {
 
     EditorRenderController::EditorRenderController(const Dependencies& dependencies)
-        : m_SceneRenderer(dependencies.SceneRenderer), m_PostProcessing(dependencies.PostProcessing),
-          m_PostProcessingSettings(dependencies.PostProcessingSettings),
+        : m_SceneRenderer(dependencies.SceneRendererRef), m_PostProcessing(dependencies.PostProcessingRef),
+          m_PostProcessingSettings(dependencies.PostProcessingSettingsRef),
           m_ViewportController(dependencies.ViewportController), m_PanelCoordinator(dependencies.PanelCoordinator),
-          m_PhysicsDebugDraw(dependencies.PhysicsDebugDraw),
+          m_PhysicsDebugDraw(dependencies.PhysicsDebugDrawRef),
           m_ShowPhysicsColliders(dependencies.ShowPhysicsColliders)
     {}
 

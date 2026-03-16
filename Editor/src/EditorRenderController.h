@@ -20,12 +20,12 @@ namespace Engine
     public:
         struct Dependencies
         {
-            SceneRenderer& SceneRenderer;
-            PostProcessing& PostProcessing;
-            PostProcessingSettings& PostProcessingSettings;
+            SceneRenderer& SceneRendererRef;
+            PostProcessing& PostProcessingRef;
+            PostProcessingSettings& PostProcessingSettingsRef;
             EditorViewportController& ViewportController;
             EditorPanelCoordinator& PanelCoordinator;
-            PhysicsDebugDraw& PhysicsDebugDraw;
+            PhysicsDebugDraw& PhysicsDebugDrawRef;
             bool& ShowPhysicsColliders;
         };
 
