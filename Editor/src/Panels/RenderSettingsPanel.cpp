@@ -5,13 +5,26 @@
 #include "Core/Log.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Scene.h"
+#include "Scene/SceneSerializer.h"
 
 #include <filesystem>
 #include <imgui.h>
 
 namespace Engine
 {
-
+    namespace
+    {
+        template <typename T, size_t N>
+        int FindSelectedIndex(const std::array<T, N>& values, const T& currentValue)
+        {
+            for (size_t i = 0; i < values.size(); ++i)
+            {
+                if (values[i] == currentValue)
+                    return static_cast<int>(i);
+            }
+            return 0;
+        }
+    } // namespace
     void RenderSettingsPanel::SetContext(SceneRenderer* sceneRenderer, PostProcessingSettings* postProcessingSettings,
                                          Ref<Framebuffer> hdrFramebuffer, Ref<Scene> scene, bool* showPhysicsColliders)
     {
@@ -24,25 +37,29 @@ namespace Engine
 
     void RenderSettingsPanel::OnImGuiRender()
     {
+        ImGui::Begin("渲染设置");
+
+        if (!m_Scene || !m_SceneRenderer || !m_PostProcessingSettings || !m_HDRFramebuffer || !m_ShowPhysicsColliders)
+        {
+            ImGui::TextDisabled("渲染设置上下文未就绪");
+            ImGui::End();
+            return;
+        }
+
         auto& shadow = m_Scene->GetShadowSettings();
         bool shadowDirty = false;
-        ImGui::Begin("渲染设置");
+
+        if (m_ReadOnly)
+            ImGui::BeginDisabled();
 
         shadowDirty |= ImGui::Checkbox("阴影", &shadow.Enabled);
 
-        const char* resolutionItems[] = {"512", "1024", "2048"};
-        int resolutionValues[] = {512, 1024, 2048};
-        int currentIdx = 1;
-        for (int i = 0; i < 3; i++)
+        int currentIdx = FindSelectedIndex(EditorRenderSettingDomains::ShadowMapResolutions, shadow.MapResolution);
+        if (ImGui::Combo("阴影分辨率", &currentIdx, EditorRenderSettingDomains::ShadowMapResolutionLabels.data(),
+                         static_cast<int>(EditorRenderSettingDomains::ShadowMapResolutionLabels.size())))
         {
-            if (shadow.MapResolution == resolutionValues[i])
-            {
-                currentIdx = i;
-                break;
-            }
+            m_Scene->ResizeShadowMap(EditorRenderSettingDomains::ShadowMapResolutions[static_cast<size_t>(currentIdx)]);
         }
-        if (ImGui::Combo("阴影分辨率", &currentIdx, resolutionItems, 3))
-            m_Scene->ResizeShadowMap(resolutionValues[currentIdx]);
 
         shadowDirty |= ImGui::DragFloat("阴影偏移", &shadow.Bias, 0.001f, 0.0f, 0.05f, "%.4f");
         shadowDirty |= ImGui::DragFloat("阴影范围", &shadow.OrthoSize, 0.5f, 5.0f, 100.0f, "%.1f");
@@ -91,28 +108,25 @@ namespace Engine
             ImGui::DragInt("泛光迭代", &m_PostProcessingSettings->BloomIterations, 1, 1, 10);
         }
 
-        const char* toneMappingItems[] = {"Reinhard", "ACES"};
-        ImGui::Combo("色调映射", &m_PostProcessingSettings->ToneMappingMode, toneMappingItems, 2);
+        int toneMappingMode = EditorRenderSettingDomains::NormalizeToneMappingMode(m_PostProcessingSettings->ToneMappingMode);
+        int currentToneMappingIdx = FindSelectedIndex(EditorRenderSettingDomains::ToneMappingModes, toneMappingMode);
+        if (ImGui::Combo("色调映射", &currentToneMappingIdx, EditorRenderSettingDomains::ToneMappingModeLabels.data(),
+                         static_cast<int>(EditorRenderSettingDomains::ToneMappingModeLabels.size())))
+        {
+            m_PostProcessingSettings->ToneMappingMode =
+                EditorRenderSettingDomains::ToneMappingModes[static_cast<size_t>(currentToneMappingIdx)];
+        }
 
         ImGui::Separator();
         ImGui::Text("MSAA 抗锯齿");
         {
-            const char* msaaItems[] = {"关闭", "2x", "4x"};
-            int msaaValues[] = {1, 2, 4};
-            int currentMsaaIdx = 0;
             uint32_t currentSamples = m_HDRFramebuffer->GetSpecification().Samples;
-            for (int i = 0; i < 3; i++)
-            {
-                if (currentSamples == static_cast<uint32_t>(msaaValues[i]))
-                {
-                    currentMsaaIdx = i;
-                    break;
-                }
-            }
-            if (ImGui::Combo("MSAA", &currentMsaaIdx, msaaItems, 3))
+            int currentMsaaIdx = FindSelectedIndex(EditorRenderSettingDomains::MSAASamples, currentSamples);
+            if (ImGui::Combo("MSAA", &currentMsaaIdx, EditorRenderSettingDomains::MSAASampleLabels.data(),
+                             static_cast<int>(EditorRenderSettingDomains::MSAASampleLabels.size())))
             {
                 if (m_OnMSAAChanged)
-                    m_OnMSAAChanged(static_cast<uint32_t>(msaaValues[currentMsaaIdx]));
+                    m_OnMSAAChanged(EditorRenderSettingDomains::MSAASamples[static_cast<size_t>(currentMsaaIdx)]);
             }
         }
 
@@ -206,8 +220,10 @@ namespace Engine
         }
         ImGui::Checkbox("显示碰撞体", m_ShowPhysicsColliders);
 
+        if (m_ReadOnly)
+            ImGui::EndDisabled();
+
         ImGui::End();
     }
-
 } // namespace Engine
 

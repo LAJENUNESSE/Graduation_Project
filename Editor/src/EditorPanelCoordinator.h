@@ -27,6 +27,7 @@ namespace Engine
         void ApplyScene(const Ref<Scene>& scene, bool clearCommandHistory);
         void RenderPanels();
         void SetHDRFramebuffer(const Ref<Framebuffer>& framebuffer);
+        void SetPanelsReadOnly(bool readOnly);
 
         Entity GetPrimarySelection() const;
         const std::vector<Entity>& GetSelectedEntities() const;

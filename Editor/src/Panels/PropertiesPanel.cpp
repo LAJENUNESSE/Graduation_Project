@@ -48,6 +48,12 @@ namespace Engine
         }
     } // namespace
 
+    void PropertiesPanel::SetReadOnly(bool readOnly)
+    {
+        m_ReadOnly = readOnly;
+        if (readOnly)
+            m_TransformEditSession = {};
+    }
     template <typename T, typename UIFunction>
     void PropertiesPanel::DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction, bool removable)
     {
@@ -248,7 +254,11 @@ namespace Engine
                 m_TransformEditSession = {};
             }
 
+            if (m_ReadOnly)
+                ImGui::BeginDisabled();
             DrawComponents(selectedEntity);
+            if (m_ReadOnly)
+                ImGui::EndDisabled();
         }
         else
         {

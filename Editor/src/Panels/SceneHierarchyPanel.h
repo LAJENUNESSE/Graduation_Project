@@ -19,6 +19,7 @@ namespace Engine
 
         void SetContext(const Ref<Scene>& scene);
         void SetCommandHistory(CommandHistory* history) { m_CommandHistory = history; }
+        void SetReadOnly(bool readOnly) { m_ReadOnly = readOnly; }
 
         void OnImGuiRender();
 
@@ -41,6 +42,7 @@ namespace Engine
         Ref<Scene> m_Context;
         std::vector<Entity> m_SelectedEntities;
         CommandHistory* m_CommandHistory = nullptr;
+        bool m_ReadOnly = false;
     };
 
 } // namespace Engine

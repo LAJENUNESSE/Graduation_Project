@@ -19,6 +19,14 @@
 
 namespace Engine
 {
+    void EditorLayer::RestoreEditorRenderSettingsSnapshot()
+    {
+        if (!m_PrePlayRenderSettings || !m_ActiveScene)
+            return;
+
+        m_Boot->RenderController().ApplyRenderSettings(m_ActiveScene, *m_PrePlayRenderSettings);
+        m_PrePlayRenderSettings.reset();
+    }
 
     EditorLayer::EditorLayer() : Layer("EditorLayer") {}
 
@@ -105,6 +113,8 @@ namespace Engine
 
     void EditorLayer::NewScene()
     {
+        if (m_Boot->SceneSession().IsPlaying())
+            OnSceneStop();
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
         m_Boot->SceneSession().CreateNewScene(m_ActiveScene, static_cast<uint32_t>(renderSize.x),
                                               static_cast<uint32_t>(renderSize.y));
@@ -122,6 +132,8 @@ namespace Engine
 
     void EditorLayer::OpenScene(const std::string& filepath)
     {
+        if (m_Boot->SceneSession().IsPlaying())
+            OnSceneStop();
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
 
         EditorRenderSettings renderSettings;
@@ -140,6 +152,12 @@ namespace Engine
 
     void EditorLayer::SaveScene()
     {
+        if (m_Boot->SceneSession().GetState() != SceneState::Edit)
+        {
+            ENGINE_WARN("SaveScene ignored while in Play mode");
+            return;
+        }
+
         std::string filepath = FileDialogs::SaveFile("*.scene", "场景文件");
         if (filepath.empty())
             return;
@@ -148,9 +166,12 @@ namespace Engine
         m_Boot->SceneSession().SaveSceneToPath(
             sceneToSave, filepath, m_Boot->RenderController().CollectRenderSettings(sceneToSave));
     }
-
     void EditorLayer::OnScenePlay()
     {
+        if (m_Boot->SceneSession().GetState() != SceneState::Edit || !m_ActiveScene)
+            return;
+
+        m_PrePlayRenderSettings = m_Boot->RenderController().CollectRenderSettings(m_ActiveScene);
         m_Boot->SelectionGizmoController().ClearTransientState();
         m_Boot->SceneSession().BeginPlay(m_ActiveScene);
         SyncCommandHistorySuspension();
@@ -159,8 +180,12 @@ namespace Engine
 
     void EditorLayer::OnSceneStop()
     {
+        if (!m_Boot->SceneSession().IsPlaying())
+            return;
+
         m_Boot->SceneSession().EndPlay(m_ActiveScene);
         SyncCommandHistorySuspension();
+        RestoreEditorRenderSettingsSnapshot();
 
         // Play 期间 viewport resize 只作用于 runtime scene，需同步回 editor scene
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
@@ -231,6 +256,7 @@ namespace Engine
     void EditorLayer::ApplyActiveSceneContext(bool clearCommandHistory)
     {
         m_Boot->PanelCoordinator().ApplyScene(m_ActiveScene, clearCommandHistory);
+        m_Boot->PanelCoordinator().SetPanelsReadOnly(m_Boot->SceneSession().GetState() == SceneState::Play);
         m_Boot->SelectionGizmoController().ClearTransientState();
     }
 

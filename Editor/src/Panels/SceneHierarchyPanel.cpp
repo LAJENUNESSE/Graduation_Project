@@ -92,7 +92,7 @@ namespace Engine
             }
 
             // 延迟删除实体（安全：在迭代外执行）
-            if (entityToDelete)
+            if (!m_ReadOnly && entityToDelete)
             {
                 // 从选中列表中移除被删除的实体
                 m_SelectedEntities.erase(std::remove_if(m_SelectedEntities.begin(), m_SelectedEntities.end(),
@@ -120,7 +120,7 @@ namespace Engine
                     availSize.y = 20.0f;
                 ImGui::InvisibleButton("##drop_target_blank", availSize);
 
-                if (ImGui::BeginDragDropTarget())
+                if (!m_ReadOnly && ImGui::BeginDragDropTarget())
                 {
                     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE"))
                     {
@@ -145,7 +145,8 @@ namespace Engine
                 // 空白区域右键菜单（挂在 InvisibleButton 上）
                 if (ImGui::BeginPopupContextItem("##blank_context_menu", ImGuiPopupFlags_MouseButtonRight))
                 {
-                    if (ImGui::MenuItem("\xe5\x88\x9b\xe5\xbb\xba\xe7\xa9\xba\xe5\xae\x9e\xe4\xbd\x93"))
+                    if (ImGui::MenuItem("\xe5\x88\x9b\xe5\xbb\xba\xe7\xa9\xba\xe5\xae\x9e\xe4\xbd\x93", nullptr,
+                                        false, !m_ReadOnly))
                     {
                         if (m_CommandHistory)
                         {
@@ -167,7 +168,7 @@ namespace Engine
             }
 
             // Delete 键批量删除
-            if (ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete) && !m_SelectedEntities.empty())
+            if (!m_ReadOnly && ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete) && !m_SelectedEntities.empty())
             {
                 auto toDelete = m_SelectedEntities;
                 m_SelectedEntities.clear();
@@ -224,7 +225,7 @@ namespace Engine
         }
 
         // 拖拽源：开始拖拽实体
-        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+        if (!m_ReadOnly && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
         {
             uint64_t entityUUID = static_cast<uint64_t>(entity.GetUUID());
             ImGui::SetDragDropPayload("ENTITY_NODE", &entityUUID, sizeof(uint64_t));
@@ -233,7 +234,7 @@ namespace Engine
         }
 
         // 拖拽目标：将拖入的实体设为当前实体的子节点
-        if (ImGui::BeginDragDropTarget())
+        if (!m_ReadOnly && ImGui::BeginDragDropTarget())
         {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE"))
             {
@@ -259,9 +260,10 @@ namespace Engine
         bool entityDeleted = false;
         if (ImGui::BeginPopupContextItem())
         {
-            if (ImGui::MenuItem("\xe5\x88\xa0\xe9\x99\xa4\xe5\xae\x9e\xe4\xbd\x93"))
+            if (ImGui::MenuItem("\xe5\x88\xa0\xe9\x99\xa4\xe5\xae\x9e\xe4\xbd\x93", nullptr, false, !m_ReadOnly))
                 entityDeleted = true;
-            if (ImGui::MenuItem("\xe8\xa7\xa3\xe9\x99\xa4\xe7\x88\xb6\xe8\x8a\x82\xe7\x82\xb9"))
+            if (ImGui::MenuItem("\xe8\xa7\xa3\xe9\x99\xa4\xe7\x88\xb6\xe8\x8a\x82\xe7\x82\xb9", nullptr,
+                                false, !m_ReadOnly))
             {
                 if (m_CommandHistory)
                 {

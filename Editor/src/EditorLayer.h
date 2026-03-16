@@ -2,7 +2,9 @@
 
 #include "Core/Base.h"
 #include "Core/Layer.h"
+#include "Scene/SceneSerializer.h"
 
+#include <optional>
 #include <string>
 
 namespace Engine
@@ -43,10 +45,12 @@ namespace Engine
         void BootstrapDefaultScene();
         void ApplyActiveSceneContext(bool clearCommandHistory);
         void SyncCommandHistorySuspension();
+        void RestoreEditorRenderSettingsSnapshot();
 
     private:
         Scope<EditorBootstrapper> m_Boot;
         Ref<Scene> m_ActiveScene;
+        std::optional<EditorRenderSettings> m_PrePlayRenderSettings;
     };
 
 } // namespace Engine

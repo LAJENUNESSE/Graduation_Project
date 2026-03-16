@@ -7,6 +7,7 @@
 #include "Scene/SceneSerializer.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <imgui.h>
 #include <system_error>
@@ -53,8 +54,31 @@ namespace Engine
         std::string BuildFilesystemError(const char* action, const std::filesystem::path& path,
                                          const std::error_code& ec)
         {
-            return std::string(action) + ": " + path.string() + " (" + ec.message() + ")";
+            return std::string(action) + ": " + PathUtils::PathToUtf8String(path) + " (" + ec.message() + ")";
         }
+
+#ifdef _WIN32
+        bool ExecuteExplorerCommand(const wchar_t* file, const wchar_t* parameters)
+        {
+            HINSTANCE result = ShellExecuteW(nullptr, L"open", file, parameters, nullptr, SW_SHOWNORMAL);
+            return reinterpret_cast<intptr_t>(result) > 32;
+        }
+
+        void OpenPathInExplorer(const std::filesystem::path& path)
+        {
+            const std::filesystem::path resolved = PathUtils::ResolvePath(path);
+            ExecuteExplorerCommand(resolved.c_str(), nullptr);
+        }
+
+        void RevealPathInExplorer(const std::filesystem::path& path)
+        {
+            const std::filesystem::path resolved = PathUtils::ResolvePath(path);
+            std::wstring parameters = L"/select,\"";
+            parameters += resolved.wstring();
+            parameters += L"\"";
+            ExecuteExplorerCommand(L"explorer.exe", parameters.c_str());
+        }
+#endif
     } // namespace
 
     AssetBrowserPanel::AssetBrowserPanel()
@@ -372,7 +396,7 @@ namespace Engine
 #ifdef _WIN32
             if (ImGui::MenuItem("在文件管理器中打开"))
             {
-                ShellExecuteA(nullptr, "explore", m_CurrentDirectory.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                OpenPathInExplorer(m_CurrentDirectory);
             }
 #endif
             ImGui::EndPopup();
@@ -449,8 +473,7 @@ namespace Engine
 #ifdef _WIN32
                 if (ImGui::MenuItem("在文件管理器中显示"))
                 {
-                    std::string cmd = "/select," + path.string();
-                    ShellExecuteA(nullptr, "open", "explorer.exe", cmd.c_str(), nullptr, SW_SHOWNORMAL);
+                    RevealPathInExplorer(path);
                 }
 #endif
                 ImGui::EndPopup();

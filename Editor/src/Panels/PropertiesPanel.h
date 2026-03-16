@@ -24,6 +24,7 @@ namespace Engine
         void OnImGuiRender(Entity selectedEntity);
         void SetCommandHistory(CommandHistory* commandHistory) { m_CommandHistory = commandHistory; }
         void SetScene(const Ref<Scene>& scene) { m_ActiveScene = scene; }
+        void SetReadOnly(bool readOnly);
 
         // 公开给 AutoInspector 适配器使用
         Vec3ControlEditState DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f,
@@ -53,6 +54,7 @@ namespace Engine
         CommandHistory* m_CommandHistory = nullptr;
         Ref<Scene> m_ActiveScene;
         TransformEditSession m_TransformEditSession;
+        bool m_ReadOnly = false;
     };
 
 } // namespace Engine

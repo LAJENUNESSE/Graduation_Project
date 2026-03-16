@@ -433,6 +433,7 @@ namespace Engine
             ENGINE_CORE_ERROR("Failed to write scene file '{0}'", filepath);
             return false;
         }
+
         return true;
     }
 
@@ -506,12 +507,10 @@ namespace Engine
                 shadow.Enabled = shadowNode["Enabled"].as<bool>();
             if (shadowNode["MapResolution"])
             {
-                int res = shadowNode["MapResolution"].as<int>();
-                // 范围校验：256 ~ 8192
-                if (res < 256)
-                    res = 256;
-                if (res > 8192)
-                    res = 8192;
+                int rawRes = shadowNode["MapResolution"].as<int>();
+                int res = EditorRenderSettingDomains::NormalizeShadowMapResolution(rawRes);
+                if (res != rawRes)
+                    ENGINE_CORE_WARN("Unsupported Shadow MapResolution {0}, normalized to {1}", rawRes, res);
                 m_Scene->ResizeShadowMap(res);
             }
             if (shadowNode["Bias"])
@@ -552,25 +551,20 @@ namespace Engine
             if (renderNode["ToneMappingMode"])
             {
                 int mode = renderNode["ToneMappingMode"].as<int>();
-                if (mode < 0 || mode > 3)
-                {
-                    ENGINE_CORE_WARN("Invalid ToneMappingMode {0}, falling back to 0", mode);
-                    mode = 0;
-                }
-                outRenderSettings->PostProcessing.ToneMappingMode = mode;
+                int normalizedMode = EditorRenderSettingDomains::NormalizeToneMappingMode(mode);
+                if (normalizedMode != mode)
+                    ENGINE_CORE_WARN("Invalid ToneMappingMode {0}, falling back to {1}", mode, normalizedMode);
+                outRenderSettings->PostProcessing.ToneMappingMode = normalizedMode;
             }
             if (renderNode["GammaCorrection"])
                 outRenderSettings->PostProcessing.GammaCorrection = renderNode["GammaCorrection"].as<bool>();
             if (renderNode["MSAASamples"])
             {
                 uint32_t samples = renderNode["MSAASamples"].as<uint32_t>();
-                // 白名单校验：仅允许 1, 2, 4, 8
-                if (samples != 1 && samples != 2 && samples != 4 && samples != 8)
-                {
-                    ENGINE_CORE_WARN("Invalid MSAASamples {0}, falling back to 1", samples);
-                    samples = 1;
-                }
-                outRenderSettings->MSAASamples = samples;
+                uint32_t normalizedSamples = EditorRenderSettingDomains::NormalizeMSAASamples(samples);
+                if (normalizedSamples != samples)
+                    ENGINE_CORE_WARN("Invalid MSAASamples {0}, falling back to {1}", samples, normalizedSamples);
+                outRenderSettings->MSAASamples = normalizedSamples;
             }
             if (renderNode["PhysicsBackend"])
             {
@@ -612,6 +606,7 @@ namespace Engine
         if (!entities)
             return true;
 
+        bool hadEntityErrors = false;
         for (auto entityNode : entities)
         {
             Entity deserializedEntity;
@@ -965,6 +960,7 @@ namespace Engine
                 // Rollback: destroy partially-created entity to avoid corrupt scene state
                 if (deserializedEntity)
                     m_Scene->DestroyEntity(deserializedEntity);
+                hadEntityErrors = true;
                 continue;
             }
         }
@@ -991,6 +987,13 @@ namespace Engine
                     }
                 }
             }
+        }
+
+
+        if (hadEntityErrors)
+        {
+            ENGINE_CORE_ERROR("Scene load aborted because one or more entities failed to deserialize");
+            return false;
         }
 
         return true;

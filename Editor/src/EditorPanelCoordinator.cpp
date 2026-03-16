@@ -69,6 +69,15 @@ namespace Engine
             m_RenderSettingsPanel->SetHDRFramebuffer(framebuffer);
     }
 
+    void EditorPanelCoordinator::SetPanelsReadOnly(bool readOnly)
+    {
+        if (m_HierarchyPanel)
+            m_HierarchyPanel->SetReadOnly(readOnly);
+        if (m_PropertiesPanel)
+            m_PropertiesPanel->SetReadOnly(readOnly);
+        if (m_RenderSettingsPanel)
+            m_RenderSettingsPanel->SetReadOnly(readOnly);
+    }
     Entity EditorPanelCoordinator::GetPrimarySelection() const
     {
         return m_HierarchyPanel ? m_HierarchyPanel->GetSelectedEntity() : Entity{};
