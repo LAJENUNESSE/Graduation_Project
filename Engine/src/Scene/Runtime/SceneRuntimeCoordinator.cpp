@@ -192,112 +192,10 @@ namespace Engine
         {
             m_BulletPhysicsWorld->Step(ts, m_Registry);
 
-            // 碰撞触发粒子爆发 + 碰撞回调分发
+            const auto& events = m_BulletPhysicsWorld->GetCollisionEvents();
             std::set<std::pair<uint32_t, uint32_t>> processedParticlePairs;
-            for (const auto& event : m_BulletPhysicsWorld->GetCollisionEvents())
-            {
-                // 1) 碰撞粒子触发（仅 Enter 事件）
-                if (event.Type == CollisionEventType::Enter)
-                {
-                    auto tryTriggerBurst =
-                        [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal)
-                    {
-                        if (!m_Registry.valid(triggerEntity))
-                            return;
-                        if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(
-                                triggerEntity))
-                            return;
-
-                        // entity pair 去重
-                        uint32_t a = static_cast<uint32_t>(triggerEntity);
-                        uint32_t b = static_cast<uint32_t>(otherEntity);
-                        auto key = std::make_pair(std::min(a, b), std::max(a, b));
-                        if (processedParticlePairs.count(key))
-                            return;
-                        processedParticlePairs.insert(key);
-
-                        auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(triggerEntity);
-                        auto& emitter = m_Registry.get<ParticleEmitterComponent>(triggerEntity);
-
-                        if (!trigger.Enabled)
-                            return;
-                        if (event.Impulse < trigger.MinImpulse)
-                            return;
-
-                        // 按冲量比例缩放爆发数（MinImpulse 最小 0.001 防除零）
-                        float safeMinImpulse = std::max(trigger.MinImpulse, 0.001f);
-                        float scale = std::min(event.Impulse / safeMinImpulse, 5.0f);
-                        int burst = static_cast<int>(trigger.BurstOnCollision * scale);
-                        emitter.CollisionBurstCount += burst;
-
-                        // 限制每帧碰撞爆发数
-                        emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount, trigger.MaxBurstPerFrame);
-                        // 限制总碰撞爆发不超过粒子池容量
-                        emitter.CollisionBurstCount =
-                            std::min(emitter.CollisionBurstCount, static_cast<int>(emitter.MaxParticles));
-
-                        if (trigger.UseCollisionNormal)
-                            emitter.EmitDirection = normal;
-                    };
-
-                    tryTriggerBurst(event.EntityA, event.EntityB, event.ContactNormal);
-                    tryTriggerBurst(event.EntityB, event.EntityA, -event.ContactNormal);
-                }
-
-                // 2) 碰撞回调分发到 NativeScript
-                auto dispatchCallback =
-                    [&](entt::entity selfEntity, entt::entity otherEntity, const glm::vec3& contactNormal)
-                {
-                    if (!m_Registry.valid(selfEntity))
-                        return;
-                    if (!m_Registry.all_of<NativeScriptComponent>(selfEntity))
-                        return;
-
-                    auto& nsc = m_Registry.get<NativeScriptComponent>(selfEntity);
-                    if (!nsc.Instance)
-                        return;
-
-                    Entity otherWrapped = {otherEntity, m_Scene};
-
-                    if (event.IsTrigger)
-                    {
-                        // 触发器回调
-                        if (event.Type == CollisionEventType::Enter)
-                            nsc.Instance->OnTriggerEnter(otherWrapped);
-                        else if (event.Type == CollisionEventType::Exit)
-                            nsc.Instance->OnTriggerExit(otherWrapped);
-                    }
-                    else
-                    {
-                        // 物理碰撞回调
-                        if (event.Type == CollisionEventType::Enter)
-                        {
-                            CollisionCallbackInfo info;
-                            info.OtherEntity = otherWrapped;
-                            info.ContactPoint = event.ContactPoint;
-                            info.ContactNormal = contactNormal;
-                            info.Impulse = event.Impulse;
-                            nsc.Instance->OnCollisionEnter(info);
-                        }
-                        else if (event.Type == CollisionEventType::Stay)
-                        {
-                            CollisionCallbackInfo info;
-                            info.OtherEntity = otherWrapped;
-                            info.ContactPoint = event.ContactPoint;
-                            info.ContactNormal = contactNormal;
-                            info.Impulse = event.Impulse;
-                            nsc.Instance->OnCollisionStay(info);
-                        }
-                        else if (event.Type == CollisionEventType::Exit)
-                        {
-                            nsc.Instance->OnCollisionExit(otherWrapped);
-                        }
-                    }
-                };
-
-                dispatchCallback(event.EntityA, event.EntityB, event.ContactNormal);
-                dispatchCallback(event.EntityB, event.EntityA, -event.ContactNormal);
-            }
+            ProcessCollisionParticleBursts(events, processedParticlePairs);
+            DispatchCollisionCallbacks(events);
         }
 
         // Audio + Video 系统更新（物理之后）
@@ -305,6 +203,119 @@ namespace Engine
         {
             renderer->GetAudioSystem().OnUpdate(m_Registry, ts);
             renderer->GetVideoSystem().OnUpdate(m_Registry, ts);
+        }
+    }
+
+    void SceneRuntimeCoordinator::ProcessCollisionParticleBursts(
+        const std::vector<CollisionEvent>& events,
+        std::set<std::pair<uint32_t, uint32_t>>& processedPairs)
+    {
+        for (const auto& event : events)
+        {
+            if (event.Type != CollisionEventType::Enter)
+                continue;
+
+            auto tryTriggerBurst =
+                [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal)
+            {
+                if (!m_Registry.valid(triggerEntity))
+                    return;
+                if (!m_Registry.all_of<CollisionParticleTriggerComponent, ParticleEmitterComponent>(triggerEntity))
+                    return;
+
+                // entity pair 去重
+                uint32_t a = static_cast<uint32_t>(triggerEntity);
+                uint32_t b = static_cast<uint32_t>(otherEntity);
+                auto key = std::make_pair(std::min(a, b), std::max(a, b));
+                if (processedPairs.count(key))
+                    return;
+                processedPairs.insert(key);
+
+                auto& trigger = m_Registry.get<CollisionParticleTriggerComponent>(triggerEntity);
+                auto& emitter = m_Registry.get<ParticleEmitterComponent>(triggerEntity);
+
+                if (!trigger.Enabled)
+                    return;
+                if (event.Impulse < trigger.MinImpulse)
+                    return;
+
+                // 按冲量比例缩放爆发数（MinImpulse 最小 0.001 防除零）
+                float safeMinImpulse = std::max(trigger.MinImpulse, 0.001f);
+                float scale = std::min(event.Impulse / safeMinImpulse, 5.0f);
+                int burst = static_cast<int>(trigger.BurstOnCollision * scale);
+                emitter.CollisionBurstCount += burst;
+
+                // 限制每帧碰撞爆发数
+                emitter.CollisionBurstCount = std::min(emitter.CollisionBurstCount, trigger.MaxBurstPerFrame);
+                // 限制总碰撞爆发不超过粒子池容量
+                emitter.CollisionBurstCount =
+                    std::min(emitter.CollisionBurstCount, static_cast<int>(emitter.MaxParticles));
+
+                if (trigger.UseCollisionNormal)
+                    emitter.EmitDirection = normal;
+            };
+
+            tryTriggerBurst(event.EntityA, event.EntityB, event.ContactNormal);
+            tryTriggerBurst(event.EntityB, event.EntityA, -event.ContactNormal);
+        }
+    }
+
+    void SceneRuntimeCoordinator::DispatchCollisionCallbacks(const std::vector<CollisionEvent>& events)
+    {
+        for (const auto& event : events)
+        {
+            auto dispatchCallback =
+                [&](entt::entity selfEntity, entt::entity otherEntity, const glm::vec3& contactNormal)
+            {
+                if (!m_Registry.valid(selfEntity))
+                    return;
+                if (!m_Registry.all_of<NativeScriptComponent>(selfEntity))
+                    return;
+
+                auto& nsc = m_Registry.get<NativeScriptComponent>(selfEntity);
+                if (!nsc.Instance)
+                    return;
+
+                Entity otherWrapped = {otherEntity, m_Scene};
+
+                if (event.IsTrigger)
+                {
+                    // 触发器回调
+                    if (event.Type == CollisionEventType::Enter)
+                        nsc.Instance->OnTriggerEnter(otherWrapped);
+                    else if (event.Type == CollisionEventType::Exit)
+                        nsc.Instance->OnTriggerExit(otherWrapped);
+                }
+                else
+                {
+                    // 物理碰撞回调
+                    if (event.Type == CollisionEventType::Enter)
+                    {
+                        CollisionCallbackInfo info;
+                        info.OtherEntity = otherWrapped;
+                        info.ContactPoint = event.ContactPoint;
+                        info.ContactNormal = contactNormal;
+                        info.Impulse = event.Impulse;
+                        nsc.Instance->OnCollisionEnter(info);
+                    }
+                    else if (event.Type == CollisionEventType::Stay)
+                    {
+                        CollisionCallbackInfo info;
+                        info.OtherEntity = otherWrapped;
+                        info.ContactPoint = event.ContactPoint;
+                        info.ContactNormal = contactNormal;
+                        info.Impulse = event.Impulse;
+                        nsc.Instance->OnCollisionStay(info);
+                    }
+                    else if (event.Type == CollisionEventType::Exit)
+                    {
+                        nsc.Instance->OnCollisionExit(otherWrapped);
+                    }
+                }
+            };
+
+            dispatchCallback(event.EntityA, event.EntityB, event.ContactNormal);
+            dispatchCallback(event.EntityB, event.EntityA, -event.ContactNormal);
         }
     }
 

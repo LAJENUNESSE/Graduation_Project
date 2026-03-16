@@ -4,6 +4,8 @@
 
 #include <entt/entt.hpp>
 #include <memory>
+#include <set>
+#include <vector>
 
 namespace Engine
 {
@@ -14,6 +16,7 @@ namespace Engine
     class SceneRenderer;
     class PhysicsWorld;
     class BulletPhysicsWorld;
+    struct CollisionEvent;
 
     enum class PhysicsBackend;
 
@@ -45,6 +48,10 @@ namespace Engine
 
         std::unique_ptr<PhysicsWorld> m_PhysicsWorld;
         std::unique_ptr<BulletPhysicsWorld> m_BulletPhysicsWorld;
+
+        void ProcessCollisionParticleBursts(const std::vector<CollisionEvent>& events,
+                                            std::set<std::pair<uint32_t, uint32_t>>& processedPairs);
+        void DispatchCollisionCallbacks(const std::vector<CollisionEvent>& events);
     };
 
 } // namespace Engine
