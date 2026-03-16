@@ -48,6 +48,12 @@ jobs:
       - name: Initialize submodules (shallow)
         run: git submodule update --init --recursive --depth 1
 
+      - name: Checkout compatible spdlog version
+        run: |
+          cd vendor/spdlog
+          git fetch --tags
+          git checkout v1.15.3
+
       - name: Install system dependencies
         run: |
           brew install ninja ccache pkg-config ffmpeg openal-soft
@@ -113,8 +119,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Add Git safe directory for container
+        run: git config --global --add safe.directory '*'
+
       - name: Initialize submodules (shallow)
         run: git submodule update --init --recursive --depth 1
+
+      - name: Checkout compatible spdlog version
+        run: |
+          cd vendor/spdlog
+          git fetch --tags
+          git checkout v1.15.3
 
       - name: Bootstrap vcpkg
         run: |
@@ -175,8 +190,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Add Git safe directory for container
+        run: git config --global --add safe.directory '*'
+
       - name: Initialize submodules (shallow)
         run: git submodule update --init --recursive --depth 1
+
+      - name: Checkout compatible spdlog version
+        run: |
+          cd vendor/spdlog
+          git fetch --tags
+          git checkout v1.15.3
 
       - name: Configure CMake
         run: cmake --preset linux-system

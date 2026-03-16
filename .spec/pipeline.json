@@ -1,43 +1,19 @@
 {
   "version": 1,
-  "task": "编辑器关闭提示 + 自动保存/崩溃恢复",
-  "description": "解决编辑器两个数据安全问题：1) 关闭时不提示保存；2) 闪退后无恢复机制。",
+  "task": "修复跨平台 CI 构建失败",
+  "description": "CI 工作流 cross-platform.yml 在三个平台上均失败：1) macOS (AppleClang) spdlog 编译错误；2) Alpine/Fedora Git 安全目录错误导致子模块更新失败。",
   "stages": [
     {
       "name": "develop",
       "agent": "claude-code",
-      "status": "completed",
-      "output": {
-        "summary": "修复 Codex 审查发现的 3 个关键问题：1) 崩溃回调线程安全（CrashHandler 仅主线程执行紧急保存）；2) 生命周期悬挂回调（EditorLayer::OnDetach 清空回调）；3) 脏标记覆盖不完整（PropertiesPanel 全路径修改追踪 + 帧级脏标记聚合）。",
-        "files": [
-          "Engine/src/Core/CrashHandler.h",
-          "Engine/src/Core/CrashHandler.cpp",
-          "Editor/src/EditorLayer.cpp",
-          "Editor/src/Panels/PropertiesPanelCustomDrawers.h",
-          "Editor/src/Panels/PropertiesPanelCustomDrawers.cpp",
-          "Editor/src/Panels/PropertiesPanel.h",
-          "Editor/src/Panels/PropertiesPanel.cpp",
-          "Editor/src/EditorPanelCoordinator.h",
-          "Editor/src/EditorPanelCoordinator.cpp",
-          "Editor/src/EditorBootstrapper.cpp"
-        ],
-        "notes": "1) CrashHandler 添加 s_MainThreadId 检测，仅当崩溃发生在主线程时才调用 s_EmergencySave；2) EditorLayer::OnDetach 显式清空 Application::SetCloseInterceptor 和 CrashHandler::SetEmergencySaveCallback 防止悬挂指针；3) 脏标记覆盖：PropertiesPanel 添加 m_FrameModified 标志 + m_SceneModifiedCallback，自定义绘制函数全部改为返回 bool 并追踪修改，所有 Add/Remove 组件、Tag 输入、Camera 参数、反射属性编辑均触发脏标记。构建验证通过。"
-      }
+      "status": "in_progress",
+      "output": {}
     },
     {
       "name": "review",
       "agent": "codex",
       "status": "pending",
-      "input": {
-        "instructions": "请审查本轮 develop 阶段修复的 3 个关键问题（共 10 个文件），重点关注以下方面：",
-        "checklist": [
-          "1. **线程安全修复**：CrashHandler::HandleUnhandledException 现在检查 `std::this_thread::get_id() == s_MainThreadId` 后才调用 s_EmergencySave。确认该方案是否能有效防止非主线程崩溃时的并发访问问题，是否存在竞态条件（s_MainThreadId 写入与读取）？",
-          "2. **生命周期修复**：EditorLayer::OnDetach 添加了 `Application::Get().SetCloseInterceptor(nullptr)` 和 `CrashHandler::SetEmergencySaveCallback(nullptr)`。确认是否完全消除了悬挂指针风险，析构顺序是否仍有可能在 OnDetach 前触发回调？",
-          "3. **脏标记完整性修复**：PropertiesPanel 添加了 m_FrameModified 标志和 m_SceneModifiedCallback，所有自定义绘制函数改为返回 bool 并追踪修改。确认是否覆盖了所有绕过 UndoSystem 的修改路径：Tag 输入、Add/Remove 组件、Camera 参数、反射属性编辑、7 个自定义组件检查器。是否有遗漏的修改路径？",
-          "4. **回调链正确性**：EditorBootstrapper::SetModifiedCallback 现在同时转发给 CommandHistory 和 PanelCoordinator，确保两种脏标记源都能触发场景脏标记。确认是否存在重复触发或遗漏情况。",
-          "5. **构建验证**：所有修改已通过编译测试，确认无编译错误和运行时回归。"
-        ]
-      },
+      "input": {},
       "output": {}
     }
   ]
