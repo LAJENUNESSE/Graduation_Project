@@ -82,7 +82,7 @@ set(ENGINE_SOURCES
 
 add_library(Engine STATIC ${ENGINE_SOURCES})
 
-target_compile_features(Engine PUBLIC cxx_std_17)
+target_compile_features(Engine PUBLIC cxx_std_20)
 
 # MSVC: treat source and execution charset as UTF-8 so Chinese literals work correctly
 if(MSVC)

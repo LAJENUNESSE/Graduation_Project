@@ -22,7 +22,7 @@ add_executable(EngineTests
     src/TestSlotMap.cpp
 )
 
-target_compile_features(EngineTests PUBLIC cxx_std_17)
+target_compile_features(EngineTests PUBLIC cxx_std_20)
 
 # MSVC specific encoding
 if(MSVC)

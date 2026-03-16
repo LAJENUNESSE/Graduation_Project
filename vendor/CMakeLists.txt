@@ -7,14 +7,24 @@ add_subdirectory(glfw)
 
 # ── spdlog ────────────────────────────────────────────────────────────────────
 add_subdirectory(spdlog)
+# MSVC + C++20: bundled fmt v12 的 consteval 格式字符串校验有 bug，
+# 关闭 consteval 规避 C7595 错误
+if(MSVC)
+    target_compile_definitions(spdlog PUBLIC FMT_USE_CONSTEVAL=0)
+endif()
 
 # ── GLM ───────────────────────────────────────────────────────────────────────
 add_subdirectory(glm)
 
 # ── yaml-cpp ──────────────────────────────────────────────────────────────────
+# yaml-cpp 0.9.0 的 dragonbox.h 在 MSVC + C++20 下有 static_assert 失败，
+# 强制以 C++17 编译规避此问题（yaml-cpp 不需要 C++20 特性）
+set(_SAVED_CXX_STANDARD ${CMAKE_CXX_STANDARD})
+set(CMAKE_CXX_STANDARD 17)
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 add_subdirectory(yaml-cpp)
+set(CMAKE_CXX_STANDARD ${_SAVED_CXX_STANDARD})
 
 # ── GLAD (glad2 generated files) ─────────────────────────────────────────────
 add_library(glad STATIC
