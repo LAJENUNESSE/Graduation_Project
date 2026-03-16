@@ -31,7 +31,7 @@
 - **场景序列化**：YAML 格式保存/加载，反射驱动自动序列化
 - **音频系统**：OpenAL 3D 空间化音频，支持 WAV 播放
 - **视频流播放**：FFmpeg 解码 + RTSP/RTMP 网络流接入，后台异步连接，三重缓冲帧传递
-- **脚本系统**：NativeScript 原生 C++ 脚本绑定
+- **脚本系统**：NativeScript 原生 C++ 脚本绑定（编写参考 `Editor/src/Scripts/` 下的示例）
 
 ### 编辑器
 
