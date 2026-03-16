@@ -1,6 +1,6 @@
 # Graduation Project — 3D Game Engine & Editor
 
-湖北第二师范学院毕业设计：基于 C++17 / OpenGL 4.3 的 3D 游戏引擎与可视化编辑器。
+湖北第二师范学院毕业设计：基于 C++20 / OpenGL 4.3 的 3D 游戏引擎与可视化编辑器。
 
 ## Features
 
@@ -39,6 +39,7 @@
 - **面板系统**：场景层级 / 属性检查器 / 控制台 / 资源浏览器 / 渲染设置
 - **撤销/重做**：双栈 UndoSystem，支持 Transform / Entity / Property / Parent 等 6 种命令
 - **性能监测**：GPU Timer Query + 帧时间分析
+- **自动保存与恢复**：定时自动保存 + 崩溃/异常退出后自动恢复，关闭前未保存变更提示
 - **崩溃处理**：自动崩溃捕获与报告
 
 ## Build
@@ -78,7 +79,7 @@
 
 ```bash
 # 1. 克隆项目（推荐浅克隆子模块，节省时间和带宽）
-git clone --recursive --shallow-submodules https://github.com/your/repo.git
+git clone --recursive --shallow-submodules https://github.com/LAJENUNESSE/Graduation_Project.git
 
 # 已克隆的项目初始化子模块
 git submodule update --init --recursive

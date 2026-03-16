@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-3D game engine and visual editor built with C++17 / OpenGL 4.3, created as a graduation project. The codebase is in English but comments are often in Chinese.
+3D game engine and visual editor built with C++20 / OpenGL 4.3, created as a graduation project. The codebase is in English but comments are often in Chinese.
 
 ## Build Commands
 
@@ -77,7 +77,7 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 
 ## Key Conventions
 
-- **C++17** standard, MSVC on Windows with `/utf-8` flag for Chinese string literals
+- **C++20** standard, MSVC on Windows with `/utf-8` flag for Chinese string literals
 - All asset paths are relative to the project root (e.g., `assets/shaders/PBR.glsl`)
 - Scene files are YAML with `.scene` extension in `assets/scenes/`
 - Shaders are raw GLSL files in `assets/shaders/` — vertex and fragment combined in one file, separated by `#type vertex` / `#type fragment` / `#type compute` pragmas
