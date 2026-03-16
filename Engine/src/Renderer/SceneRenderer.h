@@ -33,7 +33,7 @@ namespace Engine
 
     struct RenderContext
     {
-        EditorCamera* Camera = nullptr;
+        const EditorCamera* Camera = nullptr;
         entt::registry* Registry = nullptr;
         const SceneEntityIndex* EntityIndex = nullptr;
         WorldTransformCache* TransformCache = nullptr;

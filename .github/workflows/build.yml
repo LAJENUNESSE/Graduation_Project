@@ -69,16 +69,25 @@ jobs:
         include:
           - name: GCC
             cuda: false
+            sanitize: false
             ccache-key: linux-gcc
             vcpkg-cache-key: vcpkg-linux
             cmake-preset: linux-default
             extra-cmake-flags: ''
-          - name: "GCC + CUDA"
+          - name: GCC + CUDA
             cuda: true
+            sanitize: false
             ccache-key: linux-gcc-cuda
             vcpkg-cache-key: vcpkg-linux-cuda
             cmake-preset: linux-cuda
             extra-cmake-flags: '-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache'
+          - name: GCC + ASAN/UBSAN
+            cuda: false
+            sanitize: true
+            ccache-key: linux-gcc-sanitize
+            vcpkg-cache-key: vcpkg-linux-sanitize
+            cmake-preset: linux-sanitize
+            extra-cmake-flags: ''
 
     env:
       VCPKG_ROOT: /usr/local/share/vcpkg
@@ -131,6 +140,14 @@ jobs:
 
       - name: Build Editor
         run: cmake --build build --target Editor
+
+      - name: Build EngineTests
+        if: matrix.sanitize
+        run: cmake --build build --target EngineTests
+
+      - name: Run CTest
+        if: matrix.sanitize
+        run: ctest --test-dir build --output-on-failure
 
       - name: Verify binary dependencies (ldd)
         run: |

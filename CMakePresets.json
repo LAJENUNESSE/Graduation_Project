@@ -2,134 +2,127 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "default",
-      "displayName": "Default (vcpkg)",
-      "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build",
+      "name": "quality-defaults",
+      "hidden": true,
+      "cacheVariables": {
+        "ENGINE_ENABLE_STRICT_WARNINGS": "ON",
+        "ENGINE_WARNINGS_AS_ERRORS": "OFF"
+      }
+    },
+    {
+      "name": "quality-sanitizers",
+      "hidden": true,
+      "cacheVariables": {
+        "ENGINE_ENABLE_ASAN": "ON",
+        "ENGINE_ENABLE_UBSAN": "ON"
+      }
+    },
+    {
+      "name": "vcpkg-base",
+      "hidden": true,
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {
-      "name": "vs2022-cuda",
-      "displayName": "VS 2022 + CUDA sidecar (vcpkg)",
-      "description": "Enables CUDA compute sidecar; requires NVIDIA CUDA Toolkit",
-      "generator": "Visual Studio 17 2022",
+      "name": "system-deps-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_MODULE_PATH": "${sourceDir}/cmake"
+      }
+    },
+    {
+      "name": "ninja-relwithdebinfo",
+      "hidden": true,
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "windows-vs2022",
+      "hidden": true,
+      "inherits": ["quality-defaults", "vcpkg-base"],
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "default",
+      "displayName": "Windows (VS 2022 + vcpkg)",
+      "description": "默认 Windows 开发/CI 预设：启用严格 warning 与 warnings-as-errors。",
+      "inherits": "windows-vs2022"
+    },
+    {
+      "name": "vs2022-cuda",
+      "displayName": "Windows (VS 2022 + CUDA sidecar)",
+      "description": "Windows CUDA 编译验证预设：在默认质量门槛上启用 CUDA sidecar。",
+      "inherits": "windows-vs2022",
+      "cacheVariables": {
         "ENGINE_ENABLE_CUDA": "ON"
       }
     },
     {
       "name": "linux-default",
       "displayName": "Linux (Ninja + vcpkg)",
-      "description": "Linux CI preset: Ninja generator with vcpkg",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-      }
+      "description": "Linux CI 预设：vcpkg + RelWithDebInfo + 严格 warning。",
+      "inherits": ["quality-defaults", "vcpkg-base", "ninja-relwithdebinfo"]
     },
     {
       "name": "linux-cuda",
       "displayName": "Linux (Ninja + vcpkg + CUDA)",
-      "description": "Linux CI preset with CUDA compile verification",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "description": "Linux CUDA 编译验证预设：在默认质量门槛上启用 CUDA sidecar。",
+      "inherits": ["quality-defaults", "vcpkg-base", "ninja-relwithdebinfo"],
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "ENGINE_ENABLE_CUDA": "ON"
       }
     },
     {
+      "name": "linux-sanitize",
+      "displayName": "Linux (Ninja + vcpkg + ASAN/UBSAN)",
+      "description": "Linux 质量门槛预设：AddressSanitizer + UndefinedBehaviorSanitizer。",
+      "inherits": ["quality-defaults", "quality-sanitizers", "vcpkg-base", "ninja-relwithdebinfo"]
+    },
+    {
       "name": "linux-system",
       "displayName": "Linux (Ninja, system deps)",
-      "description": "Linux CI preset using system-installed FFmpeg/OpenAL (no vcpkg)",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_MODULE_PATH": "${sourceDir}/cmake"
-      }
+      "description": "Linux 编译验证预设：使用系统 FFmpeg/OpenAL，启用严格 warning。",
+      "inherits": ["quality-defaults", "system-deps-base", "ninja-relwithdebinfo"]
     },
     {
       "name": "macos-default",
       "displayName": "macOS (Ninja, system deps)",
-      "description": "macOS CI preset: Homebrew deps, no vcpkg (compile-only, no GL 4.3 runtime)",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_MODULE_PATH": "${sourceDir}/cmake"
-      }
-    },
-    {
-      "name": "clion",
-      "displayName": "CLion (Ninja + vcpkg)",
-      "description": "CLion 专用预设：Ninja 生成器 + vcpkg 工具链",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/cmake-build-${presetName}",
-      "warnings": {
-        "dev": false
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-      }
-    },
-    {
-      "name": "使用工具链文件配置预设",
-      "displayName": "使用工具链文件配置预设",
-      "description": "设置 Ninja 生成器、版本和安装目录",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/out/build/${presetName}",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_TOOLCHAIN_FILE": "",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
-      }
-    },
-    {
-      "name": "自定义配置预设",
-      "displayName": "自定义配置预设",
-      "description": "设置 Ninja 生成器、版本和安装目录",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/out/build/${presetName}",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
-      }
-    },
-    {
-      "name": "clion-release",
-      "displayName": "CLion (Ninja + vcpkg + RelWithDebInfo)",
-      "description": "性能分析与发布预设：开启优化，带符号表",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/cmake-build-release",
-      "warnings": {
-        "dev": false
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-      }
+      "description": "macOS CI 预设：仅做编译验证；运行时仍受 OpenGL 4.1 上限约束。",
+      "inherits": ["quality-defaults", "system-deps-base", "ninja-relwithdebinfo"]
     },
     {
       "name": "clion-debug",
       "displayName": "CLion (Ninja + vcpkg + Debug)",
-      "description": "步进调试专用预设：零优化，防变量被优化掉",
+      "description": "CLion 调试预设：Debug + 严格 warning。",
+      "inherits": ["quality-defaults", "vcpkg-base"],
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/cmake-build-debug",
       "warnings": {
         "dev": false
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "clion-release",
+      "displayName": "CLion (Ninja + vcpkg + RelWithDebInfo)",
+      "description": "CLion 发布预设：RelWithDebInfo + 严格 warning。",
+      "inherits": ["quality-defaults", "vcpkg-base"],
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-release",
+      "warnings": {
+        "dev": false
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
     }
   ]
 }
+

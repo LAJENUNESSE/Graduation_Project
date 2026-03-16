@@ -11,7 +11,7 @@ include(CTest)
 include(ProjectWarnings)
 include(ProjectSanitizers)
 
-option(ENGINE_ENABLE_STRICT_WARNINGS "Enable stricter warnings for project targets" OFF)
+option(ENGINE_ENABLE_STRICT_WARNINGS "Enable stricter warnings for project targets" ON)
 option(ENGINE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
@@ -36,3 +36,4 @@ add_subdirectory(Editor)
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+

@@ -159,7 +159,9 @@ if(ENGINE_ENABLE_CUDA)
     set_property(TARGET Engine PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
     if(MSVC)
         target_compile_options(Engine PRIVATE
-            $<$<COMPILE_LANGUAGE:CUDA>:--compiler-options=/utf-8>)
+            $<$<COMPILE_LANGUAGE:CUDA>:--compiler-options=/utf-8,/Zc:preprocessor,/wd4505>)
     endif()
 endif()
+
+
 

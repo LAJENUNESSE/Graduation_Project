@@ -1,6 +1,48 @@
 {
   "version": 1,
-  "task": null,
-  "description": null,
-  "stages": []
+  "task": "收敛编辑器与渲染架构债，补齐工程质量门槛",
+  "description": "基于当前项目审查结果，安排一次面向毕业项目收口的重构与治理工作。目标包括：1. 冻结无关新功能，优先收敛编辑器、后处理、草、粒子、流体、音视频、跨平台、CUDA sidecar 等过度扩张范围，聚焦可演示、可维护主链路；2. 重构 EditorBootstrapper、EditorRenderController 等模块的装配与依赖注入方式，减少依赖顺序耦合、裸指针传递与手工生命周期管理；3. 拆解 SceneRenderer 的 God Object 倾向，明确渲染系统边界，降低阴影、天空盒、地形、草、音视频、流体、后处理、debug draw、picking、HDR resize 等职责耦合；4. 提高默认工程质量门槛，在 CMake 默认配置与 CI 中系统性启用更严格的 warnings、warnings-as-errors、ASAN、UBSAN 或等价质量检查；5. 清理已有代码味道，重点处理 const_cast、通过非常量指针透传只读对象、接口 const 语义不清等高风险设计；6. 清理 CMakePresets.json 中无效、冗余或 IDE 模板残留预设，统一预设命名、用途和维护策略；7. 重新审视跨平台声明与实际能力边界，区分 compile-only、运行可用、驱动兼容 fallback、VMware 特殊路径和 CUDA/OpenGL 双路径维护成本，并将风险透明化。",
+  "stages": [
+    {
+      "name": "develop",
+      "agent": "claude-code",
+      "status": "completed",
+      "output": {
+        "summary": "完成首轮收敛：将 EditorRenderController 与 EditorSceneSession 改为构造期注入，减少初始化顺序耦合；移除 Editor/SceneRenderer 两处 const_cast；重构 CMakePresets 并补 Linux sanitizer CI；修正 MSVC/CUDA warning 规则，避免 nvcc 直接收到裸 /W4 /WX。",
+        "files": [
+          "Editor/src/EditorBootstrapper.cpp",
+          "Editor/src/EditorRenderController.h",
+          "Editor/src/EditorRenderController.cpp",
+          "Editor/src/EditorSceneSession.h",
+          "Editor/src/EditorSceneSession.cpp",
+          "Engine/src/Renderer/SceneRenderer.h",
+          "Engine/src/Renderer/SceneRenderer.cpp",
+          "CMakeLists.txt",
+          "CMakePresets.json",
+          "cmake/ProjectWarnings.cmake",
+          "Engine/CMakeLists.txt",
+          ".github/workflows/build.yml"
+        ],
+        "notes": "验证：1) VS Build Tools 环境下 `cmake --build build --target Editor --config RelWithDebInfo` 可通过（非 CUDA）；2) Debug + CUDA 路径已修复 nvcc 参数兼容问题，但若 VS Code override/现有缓存继续强制 `ENGINE_WARNINGS_AS_ERRORS=ON`，当前主干遗留 warning 债仍会阻断构建。取舍：默认保留 strict warnings=ON，但将 warnings-as-errors 回收到 OFF，待后续专项清理全仓 warning 后再重新收紧。"
+      }
+    },
+    {
+      "name": "review",
+      "agent": "codex",
+      "status": "completed",
+      "output": {
+        "summary": "评审结论：本轮改动有效降低了 Editor 装配耦合并把 CUDA/MSVC 构建规则收口到更清晰的边界，但全仓现存 warning 仍较多，当前不适合把 /WX 作为共享默认值。",
+        "files": [
+          "Editor/src/EditorRenderController.h",
+          "Editor/src/EditorRenderController.cpp",
+          "Editor/src/EditorSceneSession.h",
+          "Editor/src/EditorSceneSession.cpp",
+          "CMakePresets.json",
+          "cmake/ProjectWarnings.cmake",
+          "Engine/CMakeLists.txt"
+        ],
+        "notes": "主要发现：1) VS Code 会覆盖 preset 并把 `ENGINE_WARNINGS_AS_ERRORS=ON` 重新注入 configure，导致现存 warning 被升级成构建失败；2) CUDA sidecar 需要独立于普通 C/C++ 目标处理 warning 和 host compiler 兼容选项；3) SceneRenderer 本轮只完成 const 语义收紧，尚未继续做更大粒度的 pass 拆分。"
+      }
+    }
+  ]
 }

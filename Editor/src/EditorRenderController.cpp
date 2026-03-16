@@ -13,39 +13,32 @@
 namespace Engine
 {
 
-    void EditorRenderController::Initialize(SceneRenderer* sceneRenderer, PostProcessing* postProcessing,
-                                            PostProcessingSettings* postProcessingSettings,
-                                            EditorViewportController* viewportController,
-                                            EditorPanelCoordinator* panelCoordinator,
-                                            PhysicsDebugDraw* physicsDebugDraw, bool* showPhysicsColliders)
-    {
-        m_SceneRenderer = sceneRenderer;
-        m_PostProcessing = postProcessing;
-        m_PostProcessingSettings = postProcessingSettings;
-        m_ViewportController = viewportController;
-        m_PanelCoordinator = panelCoordinator;
-        m_PhysicsDebugDraw = physicsDebugDraw;
-        m_ShowPhysicsColliders = showPhysicsColliders;
-    }
+    EditorRenderController::EditorRenderController(const Dependencies& dependencies)
+        : m_SceneRenderer(dependencies.SceneRenderer), m_PostProcessing(dependencies.PostProcessing),
+          m_PostProcessingSettings(dependencies.PostProcessingSettings),
+          m_ViewportController(dependencies.ViewportController), m_PanelCoordinator(dependencies.PanelCoordinator),
+          m_PhysicsDebugDraw(dependencies.PhysicsDebugDraw),
+          m_ShowPhysicsColliders(dependencies.ShowPhysicsColliders)
+    {}
 
     void EditorRenderController::Attach()
     {
-        const auto& viewportContext = m_ViewportController->GetContext();
+        const auto& viewportContext = m_ViewportController.GetContext();
         const uint32_t width = static_cast<uint32_t>(viewportContext.RenderSize.x);
         const uint32_t height = static_cast<uint32_t>(viewportContext.RenderSize.y);
 
-        m_PostProcessing->Init(width, height);
-        m_SceneRenderer->Init(width, height);
-        m_SceneRenderer->SetPostProcessing(m_PostProcessing, m_PostProcessingSettings);
-        m_ViewportController->SetResizeCallback([this](uint32_t resizedWidth, uint32_t resizedHeight)
-                                                { OnViewportResized(resizedWidth, resizedHeight); });
-        m_SceneRenderer->SetDebugDrawCallback(
+        m_PostProcessing.Init(width, height);
+        m_SceneRenderer.Init(width, height);
+        m_SceneRenderer.SetPostProcessing(&m_PostProcessing, &m_PostProcessingSettings);
+        m_ViewportController.SetResizeCallback(
+            [this](uint32_t resizedWidth, uint32_t resizedHeight) { OnViewportResized(resizedWidth, resizedHeight); });
+        m_SceneRenderer.SetDebugDrawCallback(
             [this]()
             {
-                if (!m_ActiveScene || !m_ShowPhysicsColliders || !*m_ShowPhysicsColliders)
+                if (!m_ActiveScene || !m_ShowPhysicsColliders)
                     return;
 
-                m_PhysicsDebugDraw->DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController->GetCamera());
+                m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController.GetCamera());
             });
 
         SyncHDRFramebufferBindings();
@@ -53,22 +46,25 @@ namespace Engine
 
     void EditorRenderController::Detach()
     {
-        m_ViewportController->SetResizeCallback({});
+        m_ViewportController.SetResizeCallback({});
         m_ActiveScene = nullptr;
-        m_SceneRenderer->Shutdown();
+        m_SceneRenderer.Shutdown();
     }
 
     void EditorRenderController::OnUpdate(Timestep ts, const Ref<Scene>& activeScene, SceneState sceneState)
     {
+        if (!activeScene)
+            return;
+
         m_ActiveScene = activeScene.get();
 
         switch (sceneState)
         {
         case SceneState::Edit:
-            activeScene->OnUpdateEditor(ts, m_ViewportController->GetCamera());
+            activeScene->OnUpdateEditor(ts, m_ViewportController.GetCamera());
             break;
         case SceneState::Play:
-            activeScene->OnUpdateRuntime(ts, m_ViewportController->GetCamera());
+            activeScene->OnUpdateRuntime(ts, m_ViewportController.GetCamera());
             break;
         }
 
@@ -80,82 +76,81 @@ namespace Engine
             input.EntityIndex = &activeScene->GetEntityIndex();
             input.DeltaTime = ts;
             input.TransformCache = &activeScene->GetTransformCache();
-            m_SceneRenderer->BeginScene(m_ViewportController->GetCamera(), input);
-            m_SceneRenderer->RenderPipeline(m_ViewportController->GetFramebuffer());
+            m_SceneRenderer.BeginScene(m_ViewportController.GetCamera(), input);
+            m_SceneRenderer.RenderPipeline(m_ViewportController.GetFramebuffer());
             if (sceneState == SceneState::Edit)
-                m_SceneRenderer->RenderEditorPicking(m_ViewportController->GetPickingFramebuffer());
-            m_SceneRenderer->EndScene();
+                m_SceneRenderer.RenderEditorPicking(m_ViewportController.GetPickingFramebuffer());
+            m_SceneRenderer.EndScene();
         }
         PerformanceMonitor::Get().SetSceneRenderCPU(sceneRenderCpuMs);
     }
 
     void EditorRenderController::ApplyMSAASamples(uint32_t samples)
     {
-        m_ViewportController->ApplyMSAASamples(samples);
+        m_ViewportController.ApplyMSAASamples(samples);
         SyncHDRFramebufferBindings();
     }
 
-    void EditorRenderController::SyncSSAOSettings(EditorRenderSettings& settings, bool toRenderer)
+    void EditorRenderController::PushSSAOSettingsToRenderer(const EditorRenderSettings& settings) const
     {
-        if (toRenderer)
-        {
-            m_SceneRenderer->GetSSAOEnabled() = settings.SSAOEnabled;
-            m_SceneRenderer->GetSSAORadius() = settings.SSAORadius;
-            m_SceneRenderer->GetSSAOBias() = settings.SSAOBias;
-            m_SceneRenderer->GetSSAOKernelSize() = settings.SSAOKernelSize;
-            m_SceneRenderer->GetSSAOIntensity() = settings.SSAOIntensity;
-        }
-        else
-        {
-            settings.SSAOEnabled = m_SceneRenderer->GetSSAOEnabled();
-            settings.SSAORadius = m_SceneRenderer->GetSSAORadius();
-            settings.SSAOBias = m_SceneRenderer->GetSSAOBias();
-            settings.SSAOKernelSize = m_SceneRenderer->GetSSAOKernelSize();
-            settings.SSAOIntensity = m_SceneRenderer->GetSSAOIntensity();
-        }
+        m_SceneRenderer.GetSSAOEnabled() = settings.SSAOEnabled;
+        m_SceneRenderer.GetSSAORadius() = settings.SSAORadius;
+        m_SceneRenderer.GetSSAOBias() = settings.SSAOBias;
+        m_SceneRenderer.GetSSAOKernelSize() = settings.SSAOKernelSize;
+        m_SceneRenderer.GetSSAOIntensity() = settings.SSAOIntensity;
+    }
+
+    void EditorRenderController::PullSSAOSettingsFromRenderer(EditorRenderSettings& settings) const
+    {
+        settings.SSAOEnabled = m_SceneRenderer.GetSSAOEnabled();
+        settings.SSAORadius = m_SceneRenderer.GetSSAORadius();
+        settings.SSAOBias = m_SceneRenderer.GetSSAOBias();
+        settings.SSAOKernelSize = m_SceneRenderer.GetSSAOKernelSize();
+        settings.SSAOIntensity = m_SceneRenderer.GetSSAOIntensity();
     }
 
     void EditorRenderController::ApplyRenderSettings(const Ref<Scene>& activeScene,
                                                      const EditorRenderSettings& renderSettings)
     {
-        *m_PostProcessingSettings = renderSettings.PostProcessing;
+        if (!activeScene)
+            return;
+
+        m_PostProcessingSettings = renderSettings.PostProcessing;
         activeScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
+        PushSSAOSettingsToRenderer(renderSettings);
 
-        // toRenderer=true 路径只从 settings 读取，不会修改
-        SyncSSAOSettings(const_cast<EditorRenderSettings&>(renderSettings), true);
-
-        if (renderSettings.MSAASamples != m_ViewportController->GetHDRFramebuffer()->GetSpecification().Samples)
+        if (renderSettings.MSAASamples != m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples)
             ApplyMSAASamples(renderSettings.MSAASamples);
         else
             SyncHDRFramebufferBindings();
     }
 
-    EditorRenderSettings EditorRenderController::CollectRenderSettings(const Ref<Scene>& activeScene)
+    EditorRenderSettings EditorRenderController::CollectRenderSettings(const Ref<Scene>& activeScene) const
     {
         EditorRenderSettings renderSettings;
-        renderSettings.PostProcessing = *m_PostProcessingSettings;
-        renderSettings.MSAASamples = m_ViewportController->GetHDRFramebuffer()->GetSpecification().Samples;
-        renderSettings.PhysicsBackend = static_cast<int>(activeScene->GetPhysicsBackend());
-        SyncSSAOSettings(renderSettings, false);
+        renderSettings.PostProcessing = m_PostProcessingSettings;
+        renderSettings.MSAASamples = m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples;
+        renderSettings.PhysicsBackend = activeScene ? static_cast<int>(activeScene->GetPhysicsBackend()) : 0;
+        PullSSAOSettingsFromRenderer(renderSettings);
         return renderSettings;
     }
 
     SceneRenderer& EditorRenderController::GetSceneRenderer() const
     {
-        return *m_SceneRenderer;
+        return m_SceneRenderer;
     }
 
     void EditorRenderController::OnViewportResized(uint32_t width, uint32_t height)
     {
-        m_SceneRenderer->ResizeHDR(width, height);
+        m_SceneRenderer.ResizeHDR(width, height);
         SyncHDRFramebufferBindings();
     }
 
     void EditorRenderController::SyncHDRFramebufferBindings()
     {
-        const auto& hdrFramebuffer = m_ViewportController->GetHDRFramebuffer();
-        m_SceneRenderer->SetHDRFramebuffer(hdrFramebuffer);
-        m_PanelCoordinator->SetHDRFramebuffer(hdrFramebuffer);
+        const auto& hdrFramebuffer = m_ViewportController.GetHDRFramebuffer();
+        m_SceneRenderer.SetHDRFramebuffer(hdrFramebuffer);
+        m_PanelCoordinator.SetHDRFramebuffer(hdrFramebuffer);
     }
 
 } // namespace Engine

@@ -23,13 +23,7 @@ namespace Engine
         }
     } // namespace
 
-    void EditorSceneSession::Initialize(SceneRenderer* sceneRenderer)
-    {
-        m_SceneRenderer = sceneRenderer;
-        m_EditorScene = nullptr;
-        m_RuntimeScene = nullptr;
-        m_State = SceneState::Edit;
-    }
+    EditorSceneSession::EditorSceneSession(SceneRenderer& sceneRenderer) : m_SceneRenderer(sceneRenderer) {}
 
     void EditorSceneSession::SetEditorScene(const Ref<Scene>& editorScene)
     {
@@ -52,8 +46,7 @@ namespace Engine
             EndPlay(activeScene);
 
         auto newScene = CreateRef<Scene>();
-        if (m_SceneRenderer)
-            newScene->SetSceneRenderer(m_SceneRenderer);
+        newScene->SetSceneRenderer(&m_SceneRenderer);
         newScene->OnViewportResize(viewportWidth, viewportHeight);
 
         m_EditorScene = newScene;
@@ -91,8 +84,7 @@ namespace Engine
 
         // SetSceneRenderer 必须在 Deserialize 之后调用，
         // 才能将已加载的 shadow/skybox 正确推送到 renderer
-        if (m_SceneRenderer)
-            newScene->SetSceneRenderer(m_SceneRenderer);
+        newScene->SetSceneRenderer(&m_SceneRenderer);
 
         newScene->OnViewportResize(viewportWidth, viewportHeight);
         m_EditorScene = newScene;
@@ -125,14 +117,14 @@ namespace Engine
 
     void EditorSceneSession::BeginPlay(Ref<Scene>& activeScene)
     {
-        if (m_State == SceneState::Play || !activeScene || !m_SceneRenderer)
+        if (m_State == SceneState::Play || !activeScene)
             return;
 
         m_EditorScene = activeScene;
         ENGINE_INFO("[EditorEvent] ScenePlay requested, entities={0}", CountSceneEntities(m_EditorScene));
 
         m_RuntimeScene = Scene::Copy(m_EditorScene);
-        m_RuntimeScene->SetSceneRenderer(m_SceneRenderer);
+        m_RuntimeScene->SetSceneRenderer(&m_SceneRenderer);
 
         activeScene = m_RuntimeScene;
         activeScene->OnRuntimeStart();
@@ -143,7 +135,7 @@ namespace Engine
 
     void EditorSceneSession::EndPlay(Ref<Scene>& activeScene)
     {
-        if (m_State != SceneState::Play || !m_SceneRenderer)
+        if (m_State != SceneState::Play)
             return;
 
         ENGINE_INFO("[EditorEvent] SceneStop requested");
@@ -156,15 +148,15 @@ namespace Engine
 
         if (activeScene)
         {
-            auto& shadowSystem = m_SceneRenderer->GetShadowSystem();
+            auto& shadowSystem = m_SceneRenderer.GetShadowSystem();
             shadowSystem.GetSettings() = activeScene->GetShadowSettings();
             shadowSystem.ResizeShadowMap(activeScene->GetShadowSettings().MapResolution);
             // 恢复 skybox（与 Scene::SetSceneRenderer 逻辑一致）
             const auto& skyboxPaths = activeScene->GetSkyboxFacePaths();
             if (skyboxPaths.empty())
-                m_SceneRenderer->GetSkyboxSystem().ClearSkybox();
+                m_SceneRenderer.GetSkyboxSystem().ClearSkybox();
             else
-                m_SceneRenderer->GetSkyboxSystem().LoadSkybox(skyboxPaths);
+                m_SceneRenderer.GetSkyboxSystem().LoadSkybox(skyboxPaths);
         }
 
         m_State = SceneState::Edit;

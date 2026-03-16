@@ -40,20 +40,24 @@ namespace Engine
         m_RenderSettingsPanel = CreateScope<RenderSettingsPanel>();
 
         // 控制器
-        m_SceneSession = CreateScope<EditorSceneSession>();
+        m_SceneSession = CreateScope<EditorSceneSession>(*m_SceneRenderer);
         m_PanelCoordinator = CreateScope<EditorPanelCoordinator>();
         m_SelectionGizmoController = CreateScope<EditorSelectionGizmoController>();
         m_EditorShell = CreateScope<EditorShell>();
         m_ViewportController = CreateScope<EditorViewportController>();
-        m_RenderController = CreateScope<EditorRenderController>();
+        m_RenderController = CreateScope<EditorRenderController>(EditorRenderController::Dependencies{
+            *m_SceneRenderer,
+            *m_PostProcessing,
+            *m_PostProcessingSettings,
+            *m_ViewportController,
+            *m_PanelCoordinator,
+            *m_PhysicsDebugDraw,
+            m_ShowPhysicsColliders,
+        });
 
         // 初始化
         m_ViewportController->Initialize();
-        m_RenderController->Initialize(m_SceneRenderer.get(), m_PostProcessing.get(), m_PostProcessingSettings.get(),
-                                       m_ViewportController.get(), m_PanelCoordinator.get(), m_PhysicsDebugDraw.get(),
-                                       &m_ShowPhysicsColliders);
         m_RenderController->Attach();
-        m_SceneSession->Initialize(&m_RenderController->GetSceneRenderer());
 
         // 面板配置
         m_HierarchyPanel->SetCommandHistory(m_CommandHistory.get());

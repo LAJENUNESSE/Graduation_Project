@@ -18,7 +18,7 @@ namespace Engine
     class EditorSceneSession
     {
     public:
-        void Initialize(SceneRenderer* sceneRenderer);
+        explicit EditorSceneSession(SceneRenderer& sceneRenderer);
         void SetEditorScene(const Ref<Scene>& editorScene);
 
         SceneState GetState() const { return m_State; }
@@ -40,7 +40,7 @@ namespace Engine
         // 创建场景 + 注入渲染器 + 视口尺寸 + 更新状态
         Ref<Scene> PrepareScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight);
 
-        SceneRenderer* m_SceneRenderer = nullptr;
+        SceneRenderer& m_SceneRenderer;
         Ref<Scene> m_EditorScene;
         Ref<Scene> m_RuntimeScene;
         SceneState m_State = SceneState::Edit;

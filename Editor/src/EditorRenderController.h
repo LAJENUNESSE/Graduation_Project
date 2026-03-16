@@ -18,10 +18,18 @@ namespace Engine
     class EditorRenderController
     {
     public:
-        void Initialize(SceneRenderer* sceneRenderer, PostProcessing* postProcessing,
-                        PostProcessingSettings* postProcessingSettings, EditorViewportController* viewportController,
-                        EditorPanelCoordinator* panelCoordinator, PhysicsDebugDraw* physicsDebugDraw,
-                        bool* showPhysicsColliders);
+        struct Dependencies
+        {
+            SceneRenderer& SceneRenderer;
+            PostProcessing& PostProcessing;
+            PostProcessingSettings& PostProcessingSettings;
+            EditorViewportController& ViewportController;
+            EditorPanelCoordinator& PanelCoordinator;
+            PhysicsDebugDraw& PhysicsDebugDraw;
+            bool& ShowPhysicsColliders;
+        };
+
+        explicit EditorRenderController(const Dependencies& dependencies);
 
         void Attach();
         void Detach();
@@ -29,25 +37,25 @@ namespace Engine
 
         void ApplyMSAASamples(uint32_t samples);
         void ApplyRenderSettings(const Ref<Scene>& activeScene, const EditorRenderSettings& renderSettings);
-        EditorRenderSettings CollectRenderSettings(const Ref<Scene>& activeScene);
+        EditorRenderSettings CollectRenderSettings(const Ref<Scene>& activeScene) const;
 
         SceneRenderer& GetSceneRenderer() const;
-        PostProcessingSettings* GetPostProcessingSettings() const { return m_PostProcessingSettings; }
+        PostProcessingSettings* GetPostProcessingSettings() const { return &m_PostProcessingSettings; }
 
     private:
-        // direction: true = settings→renderer, false = renderer→settings
-        void SyncSSAOSettings(EditorRenderSettings& settings, bool toRenderer);
+        void PushSSAOSettingsToRenderer(const EditorRenderSettings& settings) const;
+        void PullSSAOSettingsFromRenderer(EditorRenderSettings& settings) const;
         void OnViewportResized(uint32_t width, uint32_t height);
         void SyncHDRFramebufferBindings();
 
     private:
-        SceneRenderer* m_SceneRenderer = nullptr;
-        PostProcessing* m_PostProcessing = nullptr;
-        PostProcessingSettings* m_PostProcessingSettings = nullptr;
-        EditorViewportController* m_ViewportController = nullptr;
-        EditorPanelCoordinator* m_PanelCoordinator = nullptr;
-        PhysicsDebugDraw* m_PhysicsDebugDraw = nullptr;
-        bool* m_ShowPhysicsColliders = nullptr;
+        SceneRenderer& m_SceneRenderer;
+        PostProcessing& m_PostProcessing;
+        PostProcessingSettings& m_PostProcessingSettings;
+        EditorViewportController& m_ViewportController;
+        EditorPanelCoordinator& m_PanelCoordinator;
+        PhysicsDebugDraw& m_PhysicsDebugDraw;
+        bool& m_ShowPhysicsColliders;
         Scene* m_ActiveScene = nullptr;
     };
 

@@ -465,7 +465,7 @@ namespace Engine
             m_BoundRegistry = input.Registry;
         }
 
-        m_Context.Camera = const_cast<EditorCamera*>(&camera);
+        m_Context.Camera = &camera;
         m_Context.Registry = input.Registry;
         m_Context.EntityIndex = input.EntityIndex;
         m_Context.TransformCache = input.TransformCache;
@@ -684,3 +684,5 @@ namespace Engine
     }
 
 } // namespace Engine
+
+
