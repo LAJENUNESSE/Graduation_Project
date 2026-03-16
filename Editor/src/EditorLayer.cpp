@@ -437,14 +437,17 @@ namespace Engine
                 m_Boot->SceneSession().SetCurrentScenePath("");
                 ApplyActiveSceneContext(true);
                 ENGINE_INFO("[Autosave] Restored from autosave");
+                CleanupAutosave();
             }
             else
             {
-                ENGINE_WARN("[Autosave] Failed to restore, loading default scene");
+                ENGINE_WARN("[Autosave] Failed to restore (file kept for manual recovery), loading default scene");
             }
         }
-
-        CleanupAutosave();
+        else
+        {
+            CleanupAutosave();
+        }
     }
 
 } // namespace Engine
