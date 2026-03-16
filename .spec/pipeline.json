@@ -1,47 +1,59 @@
 {
   "version": 1,
-  "task": "收敛编辑器与渲染架构债，补齐工程质量门槛",
-  "description": "基于当前项目审查结果，安排一次面向毕业项目收口的重构与治理工作。目标包括：1. 冻结无关新功能，优先收敛编辑器、后处理、草、粒子、流体、音视频、跨平台、CUDA sidecar 等过度扩张范围，聚焦可演示、可维护主链路；2. 重构 EditorBootstrapper、EditorRenderController 等模块的装配与依赖注入方式，减少依赖顺序耦合、裸指针传递与手工生命周期管理；3. 拆解 SceneRenderer 的 God Object 倾向，明确渲染系统边界，降低阴影、天空盒、地形、草、音视频、流体、后处理、debug draw、picking、HDR resize 等职责耦合；4. 提高默认工程质量门槛，在 CMake 默认配置与 CI 中系统性启用更严格的 warnings、warnings-as-errors、ASAN、UBSAN 或等价质量检查；5. 清理已有代码味道，重点处理 const_cast、通过非常量指针透传只读对象、接口 const 语义不清等高风险设计；6. 清理 CMakePresets.json 中无效、冗余或 IDE 模板残留预设，统一预设命名、用途和维护策略；7. 重新审视跨平台声明与实际能力边界，区分 compile-only、运行可用、驱动兼容 fallback、VMware 特殊路径和 CUDA/OpenGL 双路径维护成本，并将风险透明化。",
+  "task": "编辑器关闭提示 + 自动保存/崩溃恢复",
+  "description": "解决编辑器两个数据安全问题：1) 关闭时不提示保存；2) 闪退后无恢复机制。",
   "stages": [
     {
       "name": "develop",
       "agent": "claude-code",
-      "status": "completed",
+      "status": "needs_rework",
       "output": {
-        "summary": "完成首轮收敛：将 EditorRenderController 与 EditorSceneSession 改为构造期注入，减少初始化顺序耦合；移除 Editor/SceneRenderer 两处 const_cast；重构 CMakePresets 并补 Linux sanitizer CI；修正 MSVC/CUDA warning 规则，避免 nvcc 直接收到裸 /W4 /WX。",
+        "summary": "实现完整的脏标记追踪、关闭/切换场景确认对话框、Ctrl+S 快速保存、标题栏脏标记、定时自动保存(5min)、崩溃恢复、CrashHandler 紧急保存。",
         "files": [
-          "Editor/src/EditorBootstrapper.cpp",
-          "Editor/src/EditorRenderController.h",
-          "Editor/src/EditorRenderController.cpp",
+          "Engine/src/Core/Window.h",
+          "Engine/src/Core/Window.cpp",
+          "Engine/src/Core/Application.h",
+          "Engine/src/Core/Application.cpp",
+          "Engine/src/Core/FileDialogs.h",
+          "Engine/src/Core/FileDialogs.cpp",
+          "Engine/src/Core/CrashHandler.h",
+          "Engine/src/Core/CrashHandler.cpp",
           "Editor/src/EditorSceneSession.h",
           "Editor/src/EditorSceneSession.cpp",
-          "Engine/src/Renderer/SceneRenderer.h",
-          "Engine/src/Renderer/SceneRenderer.cpp",
-          "CMakeLists.txt",
-          "CMakePresets.json",
-          "cmake/ProjectWarnings.cmake",
-          "Engine/CMakeLists.txt",
-          ".github/workflows/build.yml"
+          "Editor/src/UndoSystem.h",
+          "Editor/src/UndoSystem.cpp",
+          "Editor/src/EditorBootstrapper.h",
+          "Editor/src/EditorBootstrapper.cpp",
+          "Editor/src/EditorShell.h",
+          "Editor/src/EditorShell.cpp",
+          "Editor/src/EditorLayer.h",
+          "Editor/src/EditorLayer.cpp",
+          ".gitignore"
         ],
-        "notes": "验证：1) VS Build Tools 环境下 `cmake --build build --target Editor --config RelWithDebInfo` 可通过（非 CUDA）；2) Debug + CUDA 路径已修复 nvcc 参数兼容问题，但若 VS Code override/现有缓存继续强制 `ENGINE_WARNINGS_AS_ERRORS=ON`，当前主干遗留 warning 债仍会阻断构建。取舍：默认保留 strict warnings=ON，但将 warnings-as-errors 回收到 OFF，待后续专项清理全仓 warning 后再重新收紧。"
+        "notes": "Engine 层新增 3 个接口（Window::SetTitle、Application::SetCloseInterceptor、FileDialogs::ShowYesNoCancelBox）；脏标记通过 CommandHistory 回调松耦合桥接到 EditorSceneSession；自动保存目录 .autosave/ 已加入 .gitignore。"
       }
     },
     {
       "name": "review",
       "agent": "codex",
       "status": "completed",
+      "input": {
+        "instructions": "请审查本轮 develop 阶段的所有改动（共 19 个文件），重点关注以下方面：",
+        "checklist": [
+          "1. **线程安全**：CrashHandler::HandleUnhandledException 中调用 s_EmergencySave() 是否存在线程安全隐患？崩溃可能发生在非主线程，此时访问 EditorLayer 和 Scene 对象是否安全？",
+          "2. **生命周期**：Application::SetCloseInterceptor 和 CrashHandler::SetEmergencySaveCallback 捕获了 EditorLayer 的 this 指针。确认 EditorLayer 析构顺序是否保证这些回调不会在对象销毁后被调用。",
+          "3. **GLFW 回调语义**：在 Application::OnWindowClose 中调用 glfwSetWindowShouldClose(window, GLFW_FALSE) 是否符合 GLFW 文档中 window close callback 的使用规范？是否有平台差异风险？",
+          "4. **tinyfiledialogs 兼容性**：ShowYesNoCancelBox 使用 tinyfd_messageBox 的 'yesnocancel' 类型，确认返回值语义（0=取消, 1=是, 2=否）在 Windows/Linux 下一致。",
+          "5. **脏标记完整性**：当前脏标记仅通过 CommandHistory 回调触发。是否存在绕过 UndoSystem 的场景修改路径（如直接修改组件、拖拽资源到场景等）导致脏标记遗漏？",
+          "6. **自动保存路径**：PerformAutosave 使用 PathUtils::GetProjectRoot() / '.autosave'，确认该路径在不同启动目录下是否稳定。",
+          "7. **PromptSaveIfDirty 重入**：关闭窗口时 Application::OnWindowClose → CloseInterceptor → PromptSaveIfDirty → SaveSceneQuick → 可能弹出 SaveFile 对话框。嵌套模态对话框是否有问题？",
+          "8. **EditorSceneSession 状态一致性**：OpenSceneFromPath 末尾设置 m_CurrentScenePath 和 ClearDirty()，而 SaveSceneToPath 保持纯净由调用方管理。这种不对称设计是否合理？是否有遗漏调用方？",
+          "9. **UTF-8 字面量**：PromptSaveIfDirty 和 CheckAndPromptRestore 中使用 \\x 转义序列编码中文字符串，确认 MSVC /utf-8 编译环境下是否正确显示。"
+        ]
+      },
       "output": {
-        "summary": "评审结论：本轮改动有效降低了 Editor 装配耦合并把 CUDA/MSVC 构建规则收口到更清晰的边界，但全仓现存 warning 仍较多，当前不适合把 /WX 作为共享默认值。",
-        "files": [
-          "Editor/src/EditorRenderController.h",
-          "Editor/src/EditorRenderController.cpp",
-          "Editor/src/EditorSceneSession.h",
-          "Editor/src/EditorSceneSession.cpp",
-          "CMakePresets.json",
-          "cmake/ProjectWarnings.cmake",
-          "Engine/CMakeLists.txt"
-        ],
-        "notes": "主要发现：1) VS Code 会覆盖 preset 并把 `ENGINE_WARNINGS_AS_ERRORS=ON` 重新注入 configure，导致现存 warning 被升级成构建失败；2) CUDA sidecar 需要独立于普通 C/C++ 目标处理 warning 和 host compiler 兼容选项；3) SceneRenderer 本轮只完成 const 语义收紧，尚未继续做更大粒度的 pass 拆分。"
+        "summary": "审查未通过，需要返工。",
+        "notes": "发现 3 个关键问题：1) 崩溃回调线程/上下文不安全：Engine/src/Core/CrashHandler.cpp 在 HandleUnhandledException 中直接调用 s_EmergencySave，而该回调绑定到 Editor/src/EditorLayer.cpp::PerformAutosave；崩溃可能发生在非主线程，且回调里访问 Scene/Renderer、序列化、filesystem、日志等非崩溃安全逻辑，存在二次崩溃或死锁风险。2) 生命周期悬挂回调：Editor/src/EditorLayer.cpp::OnAttach 通过 SetCloseInterceptor 与 SetEmergencySaveCallback 捕获 this，但 OnDetach 未清空这两个回调；EditorLayer 析构后若再次触发对应回调会解引用悬空指针（尤其是崩溃回调为全局静态）。3) 脏标记覆盖不完整：当前只靠 CommandHistory 的 modified 回调标脏，但 Editor/src/Panels/PropertiesPanel.cpp 中存在大量绕过 UndoSystem 的直接修改路径（Tag 输入、Add/Remove 组件、Camera 参数修改、反射属性编辑等），会导致场景已修改却不标脏，进而漏掉关闭提示与自动保存。其余检查结论：GLFW 关闭回调取消逻辑用法可接受；tinyfiledialogs 的 yesnocancel 返回值映射与 vendor 头文件注释一致；PathUtils::GetProjectRoot 下的 .autosave 路径稳定；Open/Save 状态管理调用方当前完整；\\x UTF-8 字面量在 tinyfd_winUtf8=1 下可行。已执行 Editor 构建验证通过。"
       }
     }
   ]

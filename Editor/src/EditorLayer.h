@@ -35,7 +35,16 @@ namespace Engine
         void NewScene();
         void OpenScene();
         void OpenScene(const std::string& filepath);
-        void SaveScene();
+        bool SaveSceneQuick();
+        void SaveSceneAs();
+
+        bool PromptSaveIfDirty();
+        void UpdateWindowTitle();
+
+        // 自动保存
+        void PerformAutosave();
+        void CleanupAutosave();
+        void CheckAndPromptRestore();
 
         void OnScenePlay();
         void OnSceneStop();
@@ -51,6 +60,8 @@ namespace Engine
         Scope<EditorBootstrapper> m_Boot;
         Ref<Scene> m_ActiveScene;
         std::optional<EditorRenderSettings> m_PrePlayRenderSettings;
+        float m_AutosaveTimer = 0.0f;
+        static constexpr float AutosaveInterval = 300.0f; // 5 分钟
     };
 
 } // namespace Engine

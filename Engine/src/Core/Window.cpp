@@ -54,6 +54,7 @@ namespace Engine
         unsigned int GetHeight() const override { return m_Data.Height; }
 
         void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
+        void SetTitle(const std::string& title) override;
         void SetVSync(bool enabled) override;
         bool IsVSync() const override;
         void SetCursorMode(CursorMode mode) override;
@@ -306,6 +307,13 @@ namespace Engine
 
         pm.SetPollEventsCPU(std::chrono::duration<float, std::milli>(t1 - t0).count());
         pm.SetSwapBuffersCPU(std::chrono::duration<float, std::milli>(t2 - t1).count());
+    }
+
+    void GLFWWindowImpl::SetTitle(const std::string& title)
+    {
+        m_Data.Title = title;
+        if (m_Window)
+            glfwSetWindowTitle(m_Window, title.c_str());
     }
 
     void GLFWWindowImpl::SetVSync(bool enabled)

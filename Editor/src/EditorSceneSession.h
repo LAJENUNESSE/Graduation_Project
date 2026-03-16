@@ -27,6 +27,16 @@ namespace Engine
         const Ref<Scene>& GetRuntimeScene() const { return m_RuntimeScene; }
         Ref<Scene> GetSceneForSaving(const Ref<Scene>& activeScene) const;
 
+        // 脏标记
+        bool IsDirty() const { return m_Dirty; }
+        void MarkDirty();
+        void ClearDirty();
+
+        // 场景路径追踪
+        const std::string& GetCurrentScenePath() const { return m_CurrentScenePath; }
+        void SetCurrentScenePath(const std::string& path) { m_CurrentScenePath = path; }
+        bool HasScenePath() const { return !m_CurrentScenePath.empty(); }
+
         void CreateNewScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight);
         bool OpenSceneFromPath(Ref<Scene>& activeScene, const std::string& filepath, uint32_t viewportWidth,
                                uint32_t viewportHeight, EditorRenderSettings* outRenderSettings = nullptr);
@@ -44,6 +54,8 @@ namespace Engine
         Ref<Scene> m_EditorScene;
         Ref<Scene> m_RuntimeScene;
         SceneState m_State = SceneState::Edit;
+        bool m_Dirty = false;
+        std::string m_CurrentScenePath;
     };
 
 } // namespace Engine

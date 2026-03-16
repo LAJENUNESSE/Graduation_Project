@@ -20,6 +20,7 @@ namespace Engine
         std::string UndoDescription;
         std::string RedoDescription;
         bool ShowStatsPanel = true;
+        bool IsDirty = false;
     };
 
     struct EditorShellActions
@@ -27,6 +28,7 @@ namespace Engine
         bool RequestNewScene = false;
         bool RequestOpenScene = false;
         bool RequestSaveScene = false;
+        bool RequestSaveSceneQuick = false;
         bool RequestPlay = false;
         bool RequestStop = false;
         bool RequestUndo = false;

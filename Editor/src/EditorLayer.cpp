@@ -1,7 +1,9 @@
 #include "EditorLayer.h"
 
 #include "Asset/AssetManager.h"
+#include "Asset/PathUtils.h"
 #include "Core/Application.h"
+#include "Core/CrashHandler.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
 #include "EditorBootstrapper.h"
@@ -16,6 +18,8 @@
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Components.h"
 #include "UndoSystem.h"
+
+#include <filesystem>
 
 namespace Engine
 {
@@ -53,11 +57,27 @@ namespace Engine
             &m_Boot->ShowPhysicsColliders());
 
         ApplyActiveSceneContext(false);
+
+        // 关闭拦截器
+        Application::Get().SetCloseInterceptor([this]() { return PromptSaveIfDirty(); });
+
+        // CommandHistory → MarkDirty 桥接
+        m_Boot->SetModifiedCallback([this]() {
+            m_Boot->SceneSession().MarkDirty();
+            UpdateWindowTitle();
+        });
+
+        // 崩溃紧急保存
+        CrashHandler::SetEmergencySaveCallback([this]() { PerformAutosave(); });
+
+        // 启动时检查崩溃恢复
+        CheckAndPromptRestore();
     }
 
     void EditorLayer::OnDetach()
     {
         ENGINE_INFO("[EditorEvent] Detaching editor layer");
+        CleanupAutosave();
         if (m_Boot->SceneSession().IsPlaying())
             OnSceneStop();
         m_Boot->Teardown();
@@ -65,6 +85,17 @@ namespace Engine
 
     void EditorLayer::OnUpdate(Timestep ts)
     {
+        // 自动保存计时
+        if (m_Boot->SceneSession().IsDirty())
+        {
+            m_AutosaveTimer += ts;
+            if (m_AutosaveTimer >= AutosaveInterval)
+            {
+                PerformAutosave();
+                m_AutosaveTimer = 0.0f;
+            }
+        }
+
         m_Boot->ViewportController().OnUpdate(ts, *m_ActiveScene);
         AssetManager::Update(ts);
         m_Boot->RenderController().OnUpdate(ts, m_ActiveScene, m_Boot->SceneSession().GetState());
@@ -113,6 +144,9 @@ namespace Engine
 
     void EditorLayer::NewScene()
     {
+        if (!PromptSaveIfDirty())
+            return;
+
         if (m_Boot->SceneSession().IsPlaying())
             OnSceneStop();
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
@@ -121,6 +155,7 @@ namespace Engine
 
         SyncCommandHistorySuspension();
         ApplyActiveSceneContext(true);
+        UpdateWindowTitle();
     }
 
     void EditorLayer::OpenScene()
@@ -132,6 +167,9 @@ namespace Engine
 
     void EditorLayer::OpenScene(const std::string& filepath)
     {
+        if (!PromptSaveIfDirty())
+            return;
+
         if (m_Boot->SceneSession().IsPlaying())
             OnSceneStop();
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
@@ -148,9 +186,36 @@ namespace Engine
 
         m_Boot->RenderController().ApplyRenderSettings(m_ActiveScene, renderSettings);
         ApplyActiveSceneContext(true);
+        UpdateWindowTitle();
     }
 
-    void EditorLayer::SaveScene()
+    bool EditorLayer::SaveSceneQuick()
+    {
+        if (m_Boot->SceneSession().GetState() != SceneState::Edit)
+            return false;
+        if (!m_Boot->SceneSession().IsDirty())
+            return true;
+
+        auto& session = m_Boot->SceneSession();
+        if (!session.HasScenePath())
+        {
+            SaveSceneAs();
+            return !session.IsDirty();
+        }
+
+        Ref<Scene> sceneToSave = session.GetSceneForSaving(m_ActiveScene);
+        bool ok = session.SaveSceneToPath(sceneToSave, session.GetCurrentScenePath(),
+                                          m_Boot->RenderController().CollectRenderSettings(sceneToSave));
+        if (ok)
+        {
+            session.ClearDirty();
+            CleanupAutosave();
+            UpdateWindowTitle();
+        }
+        return ok;
+    }
+
+    void EditorLayer::SaveSceneAs()
     {
         if (m_Boot->SceneSession().GetState() != SceneState::Edit)
         {
@@ -158,13 +223,20 @@ namespace Engine
             return;
         }
 
-        std::string filepath = FileDialogs::SaveFile("*.scene", "场景文件");
+        std::string filepath = FileDialogs::SaveFile("*.scene", "\xe5\x9c\xba\xe6\x99\xaf\xe6\x96\x87\xe4\xbb\xb6");
         if (filepath.empty())
             return;
 
         Ref<Scene> sceneToSave = m_Boot->SceneSession().GetSceneForSaving(m_ActiveScene);
-        m_Boot->SceneSession().SaveSceneToPath(
+        bool ok = m_Boot->SceneSession().SaveSceneToPath(
             sceneToSave, filepath, m_Boot->RenderController().CollectRenderSettings(sceneToSave));
+        if (ok)
+        {
+            m_Boot->SceneSession().SetCurrentScenePath(filepath);
+            m_Boot->SceneSession().ClearDirty();
+            CleanupAutosave();
+            UpdateWindowTitle();
+        }
     }
     void EditorLayer::OnScenePlay()
     {
@@ -202,8 +274,10 @@ namespace Engine
             NewScene();
         if (actions.RequestOpenScene)
             OpenScene();
+        if (actions.RequestSaveSceneQuick)
+            SaveSceneQuick();
         if (actions.RequestSaveScene)
-            SaveScene();
+            SaveSceneAs();
         if (actions.RequestPlay)
             OnScenePlay();
         if (actions.RequestStop)
@@ -215,7 +289,10 @@ namespace Engine
         if (actions.ToggleStatsPanel)
             m_Boot->PanelCoordinator().ToggleStatsPanelVisible();
         if (actions.RequestCloseApplication)
-            Application::Get().Close();
+        {
+            if (PromptSaveIfDirty())
+                Application::Get().Close();
+        }
     }
 
     EditorShellState EditorLayer::BuildShellState() const
@@ -229,6 +306,7 @@ namespace Engine
         state.UndoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetUndoDescription() : "";
         state.RedoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetRedoDescription() : "";
         state.ShowStatsPanel = m_Boot->PanelCoordinator().IsStatsPanelVisible();
+        state.IsDirty = m_Boot->SceneSession().IsDirty();
         return state;
     }
 
@@ -263,6 +341,108 @@ namespace Engine
     void EditorLayer::SyncCommandHistorySuspension()
     {
         m_Boot->GetCommandHistory().SetSuspended(m_Boot->SceneSession().GetState() == SceneState::Play);
+    }
+
+    bool EditorLayer::PromptSaveIfDirty()
+    {
+        if (!m_Boot->SceneSession().IsDirty())
+            return true;
+
+        auto result = FileDialogs::ShowYesNoCancelBox(
+            "\xe4\xbf\x9d\xe5\xad\x98\xe6\x8f\x90\xe7\xa4\xba",
+            "\xe5\xbd\x93\xe5\x89\x8d\xe5\x9c\xba\xe6\x99\xaf\xe5\xb7\xb2\xe4\xbf\xae\xe6\x94\xb9\xe4\xbd\x86\xe5\xb0\x9a\xe6\x9c\xaa\xe4\xbf\x9d\xe5\xad\x98\xe3\x80\x82\n\xe6\x98\xaf\xe5\x90\xa6\xe4\xbf\x9d\xe5\xad\x98\xe6\x9b\xb4\xe6\x94\xb9\xef\xbc\x9f");
+        // "保存提示" / "当前场景已修改但尚未保存。\n是否保存更改？"
+
+        switch (result)
+        {
+        case FileDialogs::MessageBoxResult::Yes:    return SaveSceneQuick();
+        case FileDialogs::MessageBoxResult::No:     return true;
+        case FileDialogs::MessageBoxResult::Cancel:
+        default:                                    return false;
+        }
+    }
+
+    void EditorLayer::UpdateWindowTitle()
+    {
+        auto& session = m_Boot->SceneSession();
+        std::string title = "Game Engine";
+
+        if (session.HasScenePath())
+        {
+            std::filesystem::path p(session.GetCurrentScenePath());
+            title += " - " + p.filename().string();
+        }
+        else
+        {
+            title += " - Untitled";
+        }
+
+        if (session.IsDirty())
+            title += " *";
+
+        Application::Get().GetWindow().SetTitle(title);
+    }
+
+    void EditorLayer::PerformAutosave()
+    {
+        if (m_Boot->SceneSession().GetState() != SceneState::Edit)
+            return;
+
+        std::error_code ec;
+        auto dir = PathUtils::GetProjectRoot() / ".autosave";
+        std::filesystem::create_directories(dir, ec);
+        if (ec)
+        {
+            ENGINE_WARN("[Autosave] Failed to create directory: {0}", ec.message());
+            return;
+        }
+
+        auto path = (dir / "autosave.scene").string();
+        Ref<Scene> scene = m_Boot->SceneSession().GetSceneForSaving(m_ActiveScene);
+        SceneSerializer serializer(scene);
+        if (serializer.Serialize(path, m_Boot->RenderController().CollectRenderSettings(scene)))
+            ENGINE_INFO("[Autosave] Saved to {0}", path);
+        else
+            ENGINE_WARN("[Autosave] Failed to save");
+    }
+
+    void EditorLayer::CleanupAutosave()
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(PathUtils::GetProjectRoot() / ".autosave", ec);
+    }
+
+    void EditorLayer::CheckAndPromptRestore()
+    {
+        auto path = (PathUtils::GetProjectRoot() / ".autosave" / "autosave.scene").string();
+        if (!std::filesystem::exists(path))
+            return;
+
+        auto result = FileDialogs::ShowYesNoCancelBox(
+            "\xe5\xb4\xa9\xe6\xba\x83\xe6\x81\xa2\xe5\xa4\x8d",
+            "\xe6\xa3\x80\xe6\xb5\x8b\xe5\x88\xb0\xe4\xb8\x8a\xe6\xac\xa1\xe7\xbc\x96\xe8\xbe\x91\xe5\x99\xa8\xe5\xbc\x82\xe5\xb8\xb8\xe9\x80\x80\xe5\x87\xba\xe6\x97\xb6\xe7\x9a\x84\xe8\x87\xaa\xe5\x8a\xa8\xe4\xbf\x9d\xe5\xad\x98\xe6\x96\x87\xe4\xbb\xb6\xe3\x80\x82\n\xe6\x98\xaf\xe5\x90\xa6\xe6\x81\xa2\xe5\xa4\x8d\xef\xbc\x9f");
+        // "崩溃恢复" / "检测到上次编辑器异常退出时的自动保存文件。\n是否恢复？"
+
+        if (result == FileDialogs::MessageBoxResult::Yes)
+        {
+            glm::vec2 sz = m_Boot->ViewportController().GetRenderSize();
+            EditorRenderSettings rs;
+            if (m_Boot->SceneSession().OpenSceneFromPath(m_ActiveScene, path, static_cast<uint32_t>(sz.x),
+                                                         static_cast<uint32_t>(sz.y), &rs))
+            {
+                m_Boot->RenderController().ApplyRenderSettings(m_ActiveScene, rs);
+                m_Boot->SceneSession().MarkDirty();
+                m_Boot->SceneSession().SetCurrentScenePath("");
+                ApplyActiveSceneContext(true);
+                ENGINE_INFO("[Autosave] Restored from autosave");
+            }
+            else
+            {
+                ENGINE_WARN("[Autosave] Failed to restore, loading default scene");
+            }
+        }
+
+        CleanupAutosave();
     }
 
 } // namespace Engine

@@ -87,4 +87,9 @@ namespace Engine
         m_RenderSettingsPanel->SetMSAAChangedCallback(std::move(callback));
     }
 
+    void EditorBootstrapper::SetModifiedCallback(std::function<void()> callback)
+    {
+        m_CommandHistory->SetModifiedCallback(std::move(callback));
+    }
+
 } // namespace Engine

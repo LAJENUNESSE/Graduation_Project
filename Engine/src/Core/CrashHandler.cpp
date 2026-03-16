@@ -21,6 +21,11 @@ namespace Engine
 {
     namespace CrashHandler
     {
+        namespace
+        {
+            EmergencySaveFn s_EmergencySave;
+        } // namespace
+
 #ifdef _WIN32
         namespace
         {
@@ -34,6 +39,12 @@ namespace Engine
 
             LONG WINAPI HandleUnhandledException(EXCEPTION_POINTERS* exceptionPointers)
             {
+                // 紧急保存（best-effort，在 dump 之前执行）
+                if (s_EmergencySave)
+                {
+                    try { s_EmergencySave(); } catch (...) {}
+                }
+
                 std::error_code ec;
                 const auto dumpDirectory = PathUtils::GetLogsRoot() / "crash";
                 std::filesystem::create_directories(dumpDirectory, ec);
@@ -88,6 +99,11 @@ namespace Engine
 #else
             ENGINE_CORE_INFO("[CrashDump] Minidump support is only available on Windows");
 #endif
+        }
+
+        void SetEmergencySaveCallback(EmergencySaveFn fn)
+        {
+            s_EmergencySave = std::move(fn);
         }
     } // namespace CrashHandler
 } // namespace Engine

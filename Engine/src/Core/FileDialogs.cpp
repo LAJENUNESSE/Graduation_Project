@@ -67,4 +67,19 @@ namespace Engine
         return result ? std::string(result) : std::string();
     }
 
+    FileDialogs::MessageBoxResult FileDialogs::ShowYesNoCancelBox(const char* title, const char* message)
+    {
+#ifdef _WIN32
+        tinyfd_winUtf8 = 1;
+#endif
+        // tinyfd_messageBox 返回值: 0=取消, 1=是, 2=否
+        int result = tinyfd_messageBox(title, message, "yesnocancel", "warning", 1);
+        switch (result)
+        {
+        case 1:  return MessageBoxResult::Yes;
+        case 2:  return MessageBoxResult::No;
+        default: return MessageBoxResult::Cancel;
+        }
+    }
+
 } // namespace Engine

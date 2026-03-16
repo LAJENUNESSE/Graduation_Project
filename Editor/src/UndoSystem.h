@@ -50,12 +50,17 @@ namespace Engine
         void SetSuspended(bool suspended) { m_Suspended = suspended; }
         bool IsSuspended() const { return m_Suspended; }
 
+        // 场景修改通知回调（用于桥接脏标记）
+        using ModifiedCallback = std::function<void()>;
+        void SetModifiedCallback(ModifiedCallback cb) { m_ModifiedCallback = std::move(cb); }
+
     private:
         void PushUndoEntry(Ref<ICommand> cmd);
 
         std::vector<Ref<ICommand>> m_UndoStack;
         std::vector<Ref<ICommand>> m_RedoStack;
         bool m_Suspended = false;
+        ModifiedCallback m_ModifiedCallback;
     };
 
     // ========== Transform 修改命令 ==========

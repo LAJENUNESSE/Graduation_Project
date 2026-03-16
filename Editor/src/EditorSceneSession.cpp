@@ -25,6 +25,16 @@ namespace Engine
 
     EditorSceneSession::EditorSceneSession(SceneRenderer& sceneRenderer) : m_SceneRenderer(sceneRenderer) {}
 
+    void EditorSceneSession::MarkDirty()
+    {
+        m_Dirty = true;
+    }
+
+    void EditorSceneSession::ClearDirty()
+    {
+        m_Dirty = false;
+    }
+
     void EditorSceneSession::SetEditorScene(const Ref<Scene>& editorScene)
     {
         m_EditorScene = editorScene;
@@ -59,6 +69,8 @@ namespace Engine
     void EditorSceneSession::CreateNewScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight)
     {
         PrepareScene(activeScene, viewportWidth, viewportHeight);
+        m_CurrentScenePath.clear();
+        ClearDirty();
         ENGINE_INFO("[EditorEvent] NewScene ready, entities={0}", CountSceneEntities(activeScene));
     }
 
@@ -95,6 +107,8 @@ namespace Engine
             *outRenderSettings = loadedRenderSettings;
 
         ENGINE_INFO("[EditorEvent] OpenScene loaded '{0}', entities={1}", filepath, CountSceneEntities(activeScene));
+        m_CurrentScenePath = filepath;
+        ClearDirty();
         return true;
     }
 

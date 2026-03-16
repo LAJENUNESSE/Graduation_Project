@@ -104,6 +104,11 @@ namespace Engine
 
     bool Application::OnWindowClose(WindowCloseEvent& e)
     {
+        if (m_CloseInterceptor && !m_CloseInterceptor())
+        {
+            glfwSetWindowShouldClose(static_cast<GLFWwindow*>(m_Window->GetNativeWindow()), GLFW_FALSE);
+            return true;
+        }
         m_Running = false;
         return true;
     }

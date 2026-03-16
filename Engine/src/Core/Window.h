@@ -42,6 +42,7 @@ namespace Engine
         virtual void SetEventCallback(const EventCallbackFn& callback) = 0;
         virtual void SetVSync(bool enabled) = 0;
         virtual bool IsVSync() const = 0;
+        virtual void SetTitle(const std::string& title) = 0;
         virtual void SetCursorMode(CursorMode mode) = 0;
         virtual CursorMode GetCursorMode() const = 0;
         virtual bool SupportsRawMouseInput() const = 0;

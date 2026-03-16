@@ -61,6 +61,9 @@ namespace Engine
         // 限制历史条数
         if (m_UndoStack.size() > MaxHistory)
             m_UndoStack.erase(m_UndoStack.begin());
+
+        if (m_ModifiedCallback)
+            m_ModifiedCallback();
     }
 
     void CommandHistory::UndoCommand()
@@ -72,6 +75,9 @@ namespace Engine
         m_UndoStack.pop_back();
         cmd->Undo();
         m_RedoStack.push_back(std::move(cmd));
+
+        if (m_ModifiedCallback)
+            m_ModifiedCallback();
     }
 
     void CommandHistory::RedoCommand()
@@ -83,6 +89,9 @@ namespace Engine
         m_RedoStack.pop_back();
         cmd->Execute();
         m_UndoStack.push_back(std::move(cmd));
+
+        if (m_ModifiedCallback)
+            m_ModifiedCallback();
     }
 
     std::string CommandHistory::GetUndoDescription() const
