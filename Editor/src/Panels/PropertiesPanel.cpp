@@ -98,7 +98,10 @@ namespace Engine
         }
 
         if (removeComponent)
+        {
             entity.RemoveComponent<T>();
+            m_FrameModified = true;
+        }
 
         ImGui::PopID();
     }
@@ -144,7 +147,10 @@ namespace Engine
         }
 
         if (removeComponent)
+        {
             meta.Remove(*scene, entityId);
+            m_FrameModified = true;
+        }
 
         ImGui::PopID();
     }
@@ -240,6 +246,7 @@ namespace Engine
     void PropertiesPanel::OnImGuiRender(Entity selectedEntity)
     {
         ImGui::Begin("属性");
+        m_FrameModified = false;
 
         const bool hasValidSelection =
             selectedEntity && selectedEntity.GetScene() &&
@@ -265,6 +272,9 @@ namespace Engine
             m_TransformEditSession = {};
         }
 
+        if (m_FrameModified && m_SceneModifiedCallback)
+            m_SceneModifiedCallback();
+
         ImGui::End();
     }
 
@@ -281,6 +291,7 @@ namespace Engine
             if (ImGui::InputText("##Tag", buffer, sizeof(buffer)))
             {
                 tag = std::string(buffer);
+                m_FrameModified = true;
             }
         }
         ImGui::SameLine();
@@ -297,6 +308,7 @@ namespace Engine
                 if (ImGui::MenuItem("相机"))
                 {
                     entity.AddComponent<CameraComponent>();
+                    m_FrameModified = true;
                     ImGui::CloseCurrentPopup();
                 }
             }
@@ -307,6 +319,7 @@ namespace Engine
                 if (ImGui::MenuItem("脚本"))
                 {
                     entity.AddComponent<NativeScriptComponent>();
+                    m_FrameModified = true;
                     ImGui::CloseCurrentPopup();
                 }
             }
@@ -327,6 +340,7 @@ namespace Engine
                         if (ImGui::MenuItem(meta.DisplayName))
                         {
                             meta.Add(*scene, entityId);
+                            m_FrameModified = true;
                             ImGui::CloseCurrentPopup();
                         }
                     }
@@ -394,11 +408,11 @@ namespace Engine
         // Camera
         DrawComponent<CameraComponent>(
             "相机", entity,
-            [](auto& component)
+            [this](auto& component)
             {
                 auto& camera = component.Camera;
 
-                ImGui::Checkbox("主相机", &component.Primary);
+                m_FrameModified |= ImGui::Checkbox("主相机", &component.Primary);
 
                 const char* projectionTypeStrings[] = {"透视", "正交"};
                 const char* currentProjectionTypeString =
@@ -413,6 +427,7 @@ namespace Engine
                         {
                             currentProjectionTypeString = projectionTypeStrings[i];
                             camera.SetProjectionType(static_cast<SceneCamera::ProjectionType>(i));
+                            m_FrameModified = true;
                         }
                         if (isSelected)
                             ImGui::SetItemDefaultFocus();
@@ -424,13 +439,17 @@ namespace Engine
                 {
                     float perspectiveFOV = glm::degrees(camera.GetPerspectiveVerticalFOV());
                     if (ImGui::DragFloat("垂直FOV", &perspectiveFOV, 1.0f, 1.0f, 179.0f))
+                    {
                         camera.SetPerspectiveVerticalFOV(glm::radians(std::clamp(perspectiveFOV, 1.0f, 179.0f)));
+                        m_FrameModified = true;
+                    }
 
                     float perspectiveNear = camera.GetPerspectiveNearClip();
                     if (ImGui::DragFloat("近平面", &perspectiveNear, 0.01f, 0.001f, 0.0f))
                     {
                         perspectiveNear = std::max(perspectiveNear, 0.001f);
                         camera.SetPerspectiveNearClip(perspectiveNear);
+                        m_FrameModified = true;
                     }
 
                     float perspectiveFar = camera.GetPerspectiveFarClip();
@@ -438,6 +457,7 @@ namespace Engine
                     {
                         perspectiveFar = std::max(perspectiveFar, camera.GetPerspectiveNearClip() + 0.1f);
                         camera.SetPerspectiveFarClip(perspectiveFar);
+                        m_FrameModified = true;
                     }
                 }
 
@@ -448,20 +468,25 @@ namespace Engine
                     {
                         orthoSize = std::max(orthoSize, 0.01f);
                         camera.SetOrthographicSize(orthoSize);
+                        m_FrameModified = true;
                     }
 
                     float orthoNear = camera.GetOrthographicNearClip();
                     if (ImGui::DragFloat("近平面", &orthoNear, 0.1f))
+                    {
                         camera.SetOrthographicNearClip(orthoNear);
+                        m_FrameModified = true;
+                    }
 
                     float orthoFar = camera.GetOrthographicFarClip();
                     if (ImGui::DragFloat("远平面", &orthoFar, 0.1f))
                     {
                         orthoFar = std::max(orthoFar, camera.GetOrthographicNearClip() + 0.1f);
                         camera.SetOrthographicFarClip(orthoFar);
+                        m_FrameModified = true;
                     }
 
-                    ImGui::Checkbox("固定宽高比", &component.FixedAspectRatio);
+                    m_FrameModified |= ImGui::Checkbox("固定宽高比", &component.FixedAspectRatio);
                 }
             });
 
@@ -472,8 +497,8 @@ namespace Engine
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // Mesh Renderer
-        DrawComponent<MeshRendererComponent>("\u7f51\u683c\u6e32\u67d3\u5668", entity, [](auto& component)
-                                             { PropertiesPanelCustomDrawers::DrawMeshRendererInspector(component); });
+        DrawComponent<MeshRendererComponent>("\u7f51\u683c\u6e32\u67d3\u5668", entity, [this](auto& component)
+                                             { m_FrameModified |= PropertiesPanelCustomDrawers::DrawMeshRendererInspector(component); });
         // RigidBody — 通过反射自动绘制（见下方统一循环）
 
         // BoxCollider — 通过反射自动绘制
@@ -482,35 +507,35 @@ namespace Engine
 
         // Terrain
         DrawComponent<TerrainComponent>("\u5730\u5f62", entity, [this](auto& component)
-                                        { PropertiesPanelCustomDrawers::DrawTerrainInspector(component); });
+                                        { m_FrameModified |= PropertiesPanelCustomDrawers::DrawTerrainInspector(component); });
         // ParticleEmitter
         DrawComponent<ParticleEmitterComponent>(
             "粒子发射器", entity,
-            [](auto& component) { PropertiesPanelCustomDrawers::DrawParticleEmitterInspector(component); });
+            [this](auto& component) { m_FrameModified |= PropertiesPanelCustomDrawers::DrawParticleEmitterInspector(component); });
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // AudioSource
-        DrawComponent<AudioSourceComponent>("\u97f3\u9891\u6e90", entity, [entity](auto& component)
+        DrawComponent<AudioSourceComponent>("\u97f3\u9891\u6e90", entity, [this, entity](auto& component)
         {
             const AudioRuntimeState* audioState = nullptr;
             auto* scene = entity.GetScene();
             if (scene && scene->GetSceneRenderer())
                 audioState = scene->GetSceneRenderer()->GetAudioSystem().GetStore().Get(
                     static_cast<uint32_t>((entt::entity)entity));
-            PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component, audioState);
+            m_FrameModified |= PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component, audioState);
         });
         // AudioListener
-        DrawComponent<AudioListenerComponent>("\u97f3\u9891\u76d1\u542c\u5668", entity, [](auto& component)
-                                              { PropertiesPanelCustomDrawers::DrawAudioListenerInspector(component); });
+        DrawComponent<AudioListenerComponent>("\u97f3\u9891\u76d1\u542c\u5668", entity, [this](auto& component)
+                                              { m_FrameModified |= PropertiesPanelCustomDrawers::DrawAudioListenerInspector(component); });
         // VideoPlayer
-        DrawComponent<VideoPlayerComponent>("\u89c6\u9891\u64ad\u653e\u5668", entity, [entity](auto& component)
+        DrawComponent<VideoPlayerComponent>("\u89c6\u9891\u64ad\u653e\u5668", entity, [this, entity](auto& component)
         {
             const VideoRuntimeState* videoState = nullptr;
             auto* scene = entity.GetScene();
             if (scene && scene->GetSceneRenderer())
                 videoState = scene->GetSceneRenderer()->GetVideoSystem().GetStore().Get(
                     static_cast<uint32_t>((entt::entity)entity));
-            PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component, videoState);
+            m_FrameModified |= PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component, videoState);
         });
         // ---- 反射组件统一绘制 ----
         {
@@ -518,7 +543,11 @@ namespace Engine
             static PropertiesPanel* s_Panel = nullptr;
             s_Panel = this;
             auto drawVec3Wrapper = [](const char* label, float* values, float resetValue)
-            { s_Panel->DrawVec3Control(label, *reinterpret_cast<glm::vec3*>(values), resetValue); };
+            {
+                auto state = s_Panel->DrawVec3Control(label, *reinterpret_cast<glm::vec3*>(values), resetValue);
+                if (state.ValueChanged)
+                    s_Panel->m_FrameModified = true;
+            };
 
             auto* scene = entity.GetScene();
             uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
@@ -534,8 +563,8 @@ namespace Engine
         }
 
         // ---- NativeScript 组件 ----
-        DrawComponent<NativeScriptComponent>("\u811a\u672c", entity, [](auto& component)
-                                             { PropertiesPanelCustomDrawers::DrawNativeScriptInspector(component); });
+        DrawComponent<NativeScriptComponent>("\u811a\u672c", entity, [this](auto& component)
+                                             { m_FrameModified |= PropertiesPanelCustomDrawers::DrawNativeScriptInspector(component); });
     }
 
 } // namespace Engine

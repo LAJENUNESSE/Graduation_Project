@@ -5,6 +5,8 @@
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 
+#include <functional>
+
 namespace Engine
 {
     class CommandHistory;
@@ -25,6 +27,7 @@ namespace Engine
         void SetCommandHistory(CommandHistory* commandHistory) { m_CommandHistory = commandHistory; }
         void SetScene(const Ref<Scene>& scene) { m_ActiveScene = scene; }
         void SetReadOnly(bool readOnly);
+        void SetSceneModifiedCallback(std::function<void()> cb) { m_SceneModifiedCallback = std::move(cb); }
 
         // 公开给 AutoInspector 适配器使用
         Vec3ControlEditState DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f,
@@ -55,6 +58,8 @@ namespace Engine
         Ref<Scene> m_ActiveScene;
         TransformEditSession m_TransformEditSession;
         bool m_ReadOnly = false;
+        std::function<void()> m_SceneModifiedCallback;
+        bool m_FrameModified = false;
     };
 
 } // namespace Engine

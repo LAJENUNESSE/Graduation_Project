@@ -10,12 +10,12 @@ namespace Engine
 
     namespace PropertiesPanelCustomDrawers
     {
-        void DrawMeshRendererInspector(MeshRendererComponent& component);
-        void DrawTerrainInspector(TerrainComponent& component);
-        void DrawParticleEmitterInspector(ParticleEmitterComponent& component);
-        void DrawAudioSourceInspector(AudioSourceComponent& component, const AudioRuntimeState* runtimeState = nullptr);
-        void DrawAudioListenerInspector(AudioListenerComponent& component);
-        void DrawVideoPlayerInspector(VideoPlayerComponent& component, const VideoRuntimeState* runtimeState = nullptr);
-        void DrawNativeScriptInspector(NativeScriptComponent& component);
+        bool DrawMeshRendererInspector(MeshRendererComponent& component);
+        bool DrawTerrainInspector(TerrainComponent& component);
+        bool DrawParticleEmitterInspector(ParticleEmitterComponent& component);
+        bool DrawAudioSourceInspector(AudioSourceComponent& component, const AudioRuntimeState* runtimeState = nullptr);
+        bool DrawAudioListenerInspector(AudioListenerComponent& component);
+        bool DrawVideoPlayerInspector(VideoPlayerComponent& component, const VideoRuntimeState* runtimeState = nullptr);
+        bool DrawNativeScriptInspector(NativeScriptComponent& component);
     } // namespace PropertiesPanelCustomDrawers
 } // namespace Engine

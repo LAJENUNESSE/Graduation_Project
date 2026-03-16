@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Scene/Scene.h"
 
+#include <functional>
 #include <vector>
 
 namespace Engine
@@ -28,6 +29,7 @@ namespace Engine
         void RenderPanels();
         void SetHDRFramebuffer(const Ref<Framebuffer>& framebuffer);
         void SetPanelsReadOnly(bool readOnly);
+        void SetSceneModifiedCallback(std::function<void()> cb);
 
         Entity GetPrimarySelection() const;
         const std::vector<Entity>& GetSelectedEntities() const;

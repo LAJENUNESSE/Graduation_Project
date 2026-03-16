@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <thread>
 #include <filesystem>
 #include <system_error>
 
@@ -24,6 +25,7 @@ namespace Engine
         namespace
         {
             EmergencySaveFn s_EmergencySave;
+            std::thread::id s_MainThreadId;
         } // namespace
 
 #ifdef _WIN32
@@ -39,8 +41,8 @@ namespace Engine
 
             LONG WINAPI HandleUnhandledException(EXCEPTION_POINTERS* exceptionPointers)
             {
-                // 紧急保存（best-effort，在 dump 之前执行）
-                if (s_EmergencySave)
+                // 紧急保存（best-effort，仅主线程执行以避免并发访问非线程安全对象）
+                if (s_EmergencySave && std::this_thread::get_id() == s_MainThreadId)
                 {
                     try { s_EmergencySave(); } catch (...) {}
                 }
@@ -93,6 +95,7 @@ namespace Engine
         void Install()
         {
 #ifdef _WIN32
+            s_MainThreadId = std::this_thread::get_id();
             SetUnhandledExceptionFilter(HandleUnhandledException);
             std::set_terminate(TerminateWithDump);
             ENGINE_CORE_INFO("[CrashDump] Unhandled exception filter installed");

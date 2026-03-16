@@ -72,11 +72,14 @@ namespace Engine
 
         // 启动时检查崩溃恢复
         CheckAndPromptRestore();
+        UpdateWindowTitle();
     }
 
     void EditorLayer::OnDetach()
     {
         ENGINE_INFO("[EditorEvent] Detaching editor layer");
+        Application::Get().SetCloseInterceptor(nullptr);
+        CrashHandler::SetEmergencySaveCallback(nullptr);
         CleanupAutosave();
         if (m_Boot->SceneSession().IsPlaying())
             OnSceneStop();
@@ -94,6 +97,11 @@ namespace Engine
                 PerformAutosave();
                 m_AutosaveTimer = 0.0f;
             }
+        }
+        else
+        {
+            // 仅在连续脏状态下累计，避免“清空后再次修改立即触发自动保存”
+            m_AutosaveTimer = 0.0f;
         }
 
         m_Boot->ViewportController().OnUpdate(ts, *m_ActiveScene);
@@ -191,8 +199,6 @@ namespace Engine
 
     bool EditorLayer::SaveSceneQuick()
     {
-        if (m_Boot->SceneSession().GetState() != SceneState::Edit)
-            return false;
         if (!m_Boot->SceneSession().IsDirty())
             return true;
 
@@ -209,6 +215,7 @@ namespace Engine
         if (ok)
         {
             session.ClearDirty();
+            m_AutosaveTimer = 0.0f;
             CleanupAutosave();
             UpdateWindowTitle();
         }
@@ -217,12 +224,6 @@ namespace Engine
 
     void EditorLayer::SaveSceneAs()
     {
-        if (m_Boot->SceneSession().GetState() != SceneState::Edit)
-        {
-            ENGINE_WARN("SaveScene ignored while in Play mode");
-            return;
-        }
-
         std::string filepath = FileDialogs::SaveFile("*.scene", "\xe5\x9c\xba\xe6\x99\xaf\xe6\x96\x87\xe4\xbb\xb6");
         if (filepath.empty())
             return;
@@ -234,6 +235,7 @@ namespace Engine
         {
             m_Boot->SceneSession().SetCurrentScenePath(filepath);
             m_Boot->SceneSession().ClearDirty();
+            m_AutosaveTimer = 0.0f;
             CleanupAutosave();
             UpdateWindowTitle();
         }
@@ -446,3 +448,4 @@ namespace Engine
     }
 
 } // namespace Engine
+

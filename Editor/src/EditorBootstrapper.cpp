@@ -89,7 +89,8 @@ namespace Engine
 
     void EditorBootstrapper::SetModifiedCallback(std::function<void()> callback)
     {
-        m_CommandHistory->SetModifiedCallback(std::move(callback));
+        m_CommandHistory->SetModifiedCallback(callback);
+        m_PanelCoordinator->SetSceneModifiedCallback(callback);
     }
 
 } // namespace Engine

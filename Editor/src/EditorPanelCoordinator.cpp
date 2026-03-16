@@ -78,6 +78,12 @@ namespace Engine
         if (m_RenderSettingsPanel)
             m_RenderSettingsPanel->SetReadOnly(readOnly);
     }
+
+    void EditorPanelCoordinator::SetSceneModifiedCallback(std::function<void()> cb)
+    {
+        if (m_PropertiesPanel)
+            m_PropertiesPanel->SetSceneModifiedCallback(std::move(cb));
+    }
     Entity EditorPanelCoordinator::GetPrimarySelection() const
     {
         return m_HierarchyPanel ? m_HierarchyPanel->GetSelectedEntity() : Entity{};
