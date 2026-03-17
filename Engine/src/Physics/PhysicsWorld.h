@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Physics/CollisionMath.h"
 #include "Scene/Entity.h"
 
 #include <entt/entt.hpp>
@@ -10,15 +11,6 @@
 
 namespace Engine
 {
-
-    struct CollisionInfo
-    {
-        entt::entity entityA          = entt::null;
-        entt::entity entityB          = entt::null;
-        glm::vec3    contactPoint     = {0, 0, 0};
-        glm::vec3    contactNormal    = {0, 0, 0}; // A→B 方向
-        float        penetrationDepth = 0.0f;
-    };
 
     class PhysicsWorld
     {

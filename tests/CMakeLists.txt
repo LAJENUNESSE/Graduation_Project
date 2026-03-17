@@ -25,6 +25,12 @@ set(ENGINE_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Engine/src)
 
 add_library(EngineTestCore STATIC
     ${ENGINE_SRC_DIR}/Core/UUID.cpp
+    ${ENGINE_SRC_DIR}/Core/Log.cpp
+    ${ENGINE_SRC_DIR}/Scene/SceneEntityIndex.cpp
+    ${ENGINE_SRC_DIR}/Scene/SceneHierarchyService.cpp
+    ${ENGINE_SRC_DIR}/Scene/WorldTransformService.cpp
+    ${ENGINE_SRC_DIR}/Scene/SceneCamera.cpp
+    ${ENGINE_SRC_DIR}/Physics/CollisionMath.cpp
 )
 
 target_compile_features(EngineTestCore PUBLIC cxx_std_20)
@@ -35,11 +41,14 @@ endif()
 
 target_include_directories(EngineTestCore PUBLIC
     ${ENGINE_SRC_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/single_include
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/spdlog/include
 )
 
 target_precompile_headers(EngineTestCore PRIVATE ${ENGINE_SRC_DIR}/engpch.h)
+
+target_link_libraries(EngineTestCore PUBLIC spdlog)
 
 # ---------------------------------------------------------------------------
 # EngineTests — 主测试可执行文件
@@ -51,6 +60,10 @@ add_executable(EngineTests
     src/TestUUID.cpp
     src/TestEvents.cpp
     src/TestCudaParticleTypes.cpp
+    src/TestSceneEntityIndex.cpp
+    src/TestSceneHierarchy.cpp
+    src/TestWorldTransform.cpp
+    src/TestCollisionMath.cpp
 )
 
 target_compile_features(EngineTests PUBLIC cxx_std_20)
@@ -62,14 +75,16 @@ endif()
 
 target_include_directories(EngineTests PRIVATE
     ${ENGINE_SRC_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/single_include
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/spdlog/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../Engine/Platform
 )
 
 target_link_libraries(EngineTests PRIVATE
     gtest_main
     EngineTestCore
+    spdlog
 )
 
 # Enable CTest integration for this executable
