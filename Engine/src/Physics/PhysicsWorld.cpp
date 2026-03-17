@@ -100,7 +100,13 @@ namespace Engine
                 // 简化惯性张量为标量（球近似）：I = 2/5 * m * r^2，此处简化为 mass
                 float invI = (rb.Mass > 0.0f) ? 1.0f / rb.Mass : 0.0f;
                 rb.AngularVelocity += rb.Torque * invI * dt;
-                transform.Rotation += rb.AngularVelocity * dt;
+
+                // 四元数积分避免万向节锁
+                glm::quat q = glm::quat(transform.Rotation);
+                glm::quat w(0.0f, rb.AngularVelocity.x, rb.AngularVelocity.y, rb.AngularVelocity.z);
+                q += 0.5f * dt * w * q;
+                q = glm::normalize(q);
+                transform.Rotation = glm::eulerAngles(q);
             }
 
             // 清除本帧外力
