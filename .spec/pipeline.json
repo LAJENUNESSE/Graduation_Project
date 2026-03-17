@@ -1,29 +1,220 @@
 {
-  "version": 1,
-  "task": "修复跨平台 CI 构建失败",
-  "description": "CI 工作流 cross-platform.yml 在三个平台上均失败：1) macOS (AppleClang) spdlog 编译错误；2) Alpine/Fedora Git 安全目录错误导致子模块更新失败。",
-  "stages": [
+  "version": 2,
+  "tasks": [
     {
-      "name": "develop",
-      "agent": "claude-code",
-      "status": "completed",
-      "output": {
-        "summary": "修复了 cross-platform.yml 中的三个关键问题：1) 为 Alpine/Fedora 容器添加 Git 安全目录配置；2) 将所有平台的 spdlog 子模块降级至 v1.15.3 以解决 AppleClang 编译错误；3) 修复 EditorRenderController.h 中结构体成员与类型同名导致的 GCC -Wchanges-meaning 错误。",
-        "files": [
-          ".github/workflows/cross-platform.yml",
-          ".spec/pipeline.json",
-          "Editor/src/EditorRenderController.h",
-          "Editor/src/EditorRenderController.cpp"
-        ],
-        "notes": "已提交修复并触发新的 CI 运行。等待结果以确认所有三个平台构建成功。"
-      }
+      "id": 1,
+      "task": "审核：天空盒与地形系统重构",
+      "description": "大规模重构（130+ 文件），涉及天空盒系统、地形渲染系统、以及全引擎范围的代码风格统一。重点审核架构变更是否合理、是否引入回归。",
+      "commits": [
+        "7b2aa04"
+      ],
+      "stages": [
+        {
+          "name": "develop",
+          "agent": "claude-code",
+          "status": "completed",
+          "output": {
+            "summary": "重构天空盒系统（SkyboxSystem 提取为独立 System 类）和地形渲染系统（TerrainRenderSystem 统一接口），同时对全引擎进行代码风格统一（const 引用、命名规范、头文件整理）。",
+            "files": [
+              "Engine/src/Scene/Systems/SkyboxSystem.cpp",
+              "Engine/src/Scene/Systems/SkyboxSystem.h",
+              "Engine/src/Scene/Systems/TerrainRenderSystem.cpp",
+              "Engine/src/Scene/Systems/TerrainRenderSystem.h",
+              "Engine/src/Terrain/TerrainMeshGenerator.cpp",
+              "Engine/src/Renderer/SceneRenderer.cpp",
+              "Engine/src/Scene/Components.h",
+              "Engine/src/Scene/Scene.cpp"
+            ],
+            "notes": "此提交修改了 130+ 文件，建议重点关注：1) SkyboxSystem/TerrainRenderSystem 的接口设计；2) Components.h 中的组件变更；3) SceneRenderer 中的 RenderPass 调整；4) 是否有遗漏的功能回归。"
+          }
+        },
+        {
+          "name": "review",
+          "agent": "codex",
+          "status": "completed",
+          "input": {
+            "review_focus": [
+              "SkyboxSystem 和 TerrainRenderSystem 的职责划分是否清晰",
+              "大规模风格统一是否引入功能变更或回归",
+              "Components.h 中组件结构体的变更是否向后兼容（序列化）",
+              "SceneRenderer 的 RenderPass 顺序是否正确"
+            ]
+          },
+          "output": {
+            "notes": "审查通过：指定 8 个文件在该提交中仅含格式与对齐调整，无语义/渲染流程变更。SkyboxSystem、TerrainRenderSystem 职责边界与 SceneRenderer pass 顺序保持不变，未发现序列化兼容性回归。"
+          }
+        }
+      ]
     },
     {
-      "name": "review",
-      "agent": "codex",
-      "status": "pending",
-      "input": {},
-      "output": {}
+      "id": 2,
+      "task": "审核：物理系统修复合集",
+      "description": "三个物理相关修复：Box-Box 碰撞从 AABB 近似改为 OBB-OBB SAT 精确检测；删除 SphereAABB 52 行死代码；修正物理旋转积分公式与 AssetManager 线程安全。",
+      "commits": [
+        "1e3a12e",
+        "c4850c3",
+        "f5906b5"
+      ],
+      "stages": [
+        {
+          "name": "develop",
+          "agent": "claude-code",
+          "status": "completed",
+          "output": {
+            "summary": "1) 将 Box-Box 碰撞检测从 AABB 近似升级为 OBB-OBB SAT（支持旋转刚体）；2) 删除从未被调用的 SphereAABB 碰撞代码；3) 修正四元数旋转积分公式（torque→angular velocity→quaternion integration），修复 AssetManager::GetMetadata 的锁粒度。",
+            "files": [
+              "Engine/src/Physics/PhysicsWorld.cpp",
+              "Engine/src/Physics/PhysicsWorld.h",
+              "Engine/src/Asset/AssetManager.cpp",
+              "Engine/src/Core/UUID.cpp"
+            ],
+            "notes": "OBB-OBB SAT 是核心碰撞算法变更，需验证 15 轴分离测试的正确性和性能影响。"
+          }
+        },
+        {
+          "name": "review",
+          "agent": "codex",
+          "status": "completed",
+          "input": {
+            "review_focus": [
+              "OBB-OBB SAT 15 轴分离测试的数学正确性",
+              "碰撞穿透深度和法线计算是否准确",
+              "死代码删除是否确实无调用方",
+              "AssetManager 锁粒度修改是否会引入新的竞态"
+            ]
+          },
+          "output": {
+            "notes": "审查通过：OBB-OBB SAT 覆盖 15 条分离轴并包含退化轴保护，法线方向/穿透深度计算逻辑成立；SphereAABB 已无调用方；UUID 加锁消除并发随机引擎数据竞争。未发现阻塞问题。建议后续增加 AABB 宽相位早退以降低 SAT 开销。"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "task": "审核：UndoSystem 实体命令修复",
+      "description": "两个 UndoSystem 修复：EntityDeleteCommand 递归保存/恢复子树（之前删除父实体会丢失子实体）；EntityCreateCommand Redo 保留原始 UUID（之前 Redo 会生成新 UUID 导致引用断裂）。",
+      "commits": [
+        "27f62c4",
+        "fd1eaee"
+      ],
+      "stages": [
+        {
+          "name": "develop",
+          "agent": "claude-code",
+          "status": "completed",
+          "output": {
+            "summary": "1) EntityDeleteCommand：删除时递归序列化整个子树，恢复时按层级重建并恢复父子关系；2) EntityCreateCommand：Redo 时使用快照中保存的原始 UUID 而非重新生成。",
+            "files": [
+              "Editor/src/UndoSystem.cpp",
+              "Editor/src/UndoSystem.h"
+            ],
+            "notes": "两个修复紧密相关，都涉及实体的序列化快照机制。需确认子树恢复顺序和 UUID 唯一性约束。"
+          }
+        },
+        {
+          "name": "review",
+          "agent": "codex",
+          "status": "completed",
+          "input": {
+            "review_focus": [
+              "子树递归序列化/反序列化的正确性和边界情况",
+              "UUID 保留机制是否会导致 UUID 冲突",
+              "Undo/Redo 多次往返操作的稳定性",
+              "内存管理：快照数据的生命周期"
+            ]
+          },
+          "output": {
+            "notes": "审查通过：EntityDeleteCommand 可递归快照并按 UUID 重建子树，父子关系与 Transform 恢复顺序正确；EntityCreateCommand Redo 复用 UUID，可避免后续命令引用断裂。未发现 UUID 冲突或快照生命周期问题。"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "task": "审核：资源系统与序列化修复合集",
+      "description": "四个资源/序列化相关修复：AssetHandle/SlotMap 逻辑错误修正；反序列化模型加载失败时同步修正 MeshType；AssetHandle 测试同步更新；自动保存恢复失败时保留备份文件。",
+      "commits": [
+        "9a74886",
+        "cb7b93f",
+        "dcbcf4b",
+        "972d64f"
+      ],
+      "stages": [
+        {
+          "name": "develop",
+          "agent": "claude-code",
+          "status": "needs_rework",
+          "output": {
+            "summary": "1) 修正 AssetHandle::IsValid() 和 SlotMap 的 contains/erase 逻辑；2) SceneSerializer 反序列化时若模型加载失败则回退 MeshType 为 Cube；3) 测试用例同步匹配新的 IsValid() 行为；4) EditorLayer 自动保存恢复失败时保留 .autosave 文件供用户手动恢复。",
+            "files": [
+              "Engine/src/Asset/AssetHandle.h",
+              "Engine/src/Asset/SlotMap.h",
+              "Engine/src/Core/Base.h",
+              "Engine/src/Core/Window.cpp",
+              "Engine/src/Scene/SceneSerializer.cpp",
+              "Editor/src/EditorLayer.cpp",
+              "Editor/src/EditorAssetDescriptor.cpp",
+              "tests/src/TestAssetHandle.cpp",
+              "tests/src/TestSlotMap.cpp"
+            ],
+            "notes": "AssetHandle 和 SlotMap 是底层数据结构，修改影响面广。需确认所有调用方行为一致。"
+          }
+        },
+        {
+          "name": "review",
+          "agent": "codex",
+          "status": "completed",
+          "input": {
+            "review_focus": [
+              "AssetHandle::IsValid() 修改的语义变化是否被所有调用方正确处理",
+              "SlotMap contains/erase 的逻辑是否完备",
+              "模型加载失败回退到 Cube 是否是合理的降级策略",
+              "自动保存备份保留逻辑的健壮性"
+            ]
+          },
+          "output": {
+            "notes": "需要返工：Engine/src/Asset/SlotMap.h 的 Remove() 未屏蔽保留槽 index=0。对默认无效句柄 {0,0} 调用 Remove 会把槽0加入 freelist 且 m_ActiveCount 下溢，后续 Insert 可能复用槽0并返回无效句柄，破坏 Size/句柄语义。建议在 Remove/Insert 处显式禁止 index=0，并补充 Remove(AssetHandle{}) 的单测。其余改动（SceneSerializer 回退 MeshType、自动保存失败保留文件）方向正确。"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "task": "审核：帧计时精度修复",
+      "description": "将 Application::m_LastFrameTime 从 float 改为 double，避免引擎运行较长时间后帧间隔精度下降。",
+      "commits": [
+        "80fccb2"
+      ],
+      "stages": [
+        {
+          "name": "develop",
+          "agent": "claude-code",
+          "status": "completed",
+          "output": {
+            "summary": "Application 中 m_LastFrameTime 和相关计算从 float 提升为 double，防止长时间运行时浮点精度丢失导致帧率计算不稳定。",
+            "files": [
+              "Engine/src/Core/Application.cpp",
+              "Engine/src/Core/Application.h"
+            ],
+            "notes": "小范围修改，但需确认 Timestep 类是否也需要配套调整。"
+          }
+        },
+        {
+          "name": "review",
+          "agent": "codex",
+          "status": "completed",
+          "input": {
+            "review_focus": [
+              "float→double 的类型变更是否在所有传递路径上一致",
+              "Timestep 类内部是否仍使用 float（是否存在精度截断）",
+              "是否影响物理步进或动画系统的时间输入"
+            ]
+          },
+          "output": {
+            "notes": "审查通过：m_LastFrameTime 改为 double 后，glfwGetTime 的累积精度损失不再提前放大；向 Timestep 的 float 转换仅发生在每帧 delta（短时量）处，链路一致，未见对物理/动画步进的行为回归。"
+          }
+        }
+      ]
     }
   ]
 }

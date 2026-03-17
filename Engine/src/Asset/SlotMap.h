@@ -3,6 +3,7 @@
 #include "Asset/AssetHandle.h"
 #include "Core/Base.h"
 
+#include <cassert>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@ namespace Engine
             if (!m_FreeList.empty())
             {
                 index = m_FreeList.back();
+                assert(index != 0 && "SlotMap: reserved slot 0 must never enter freelist");
                 m_FreeList.pop_back();
                 m_Slots[index].Resource = std::move(resource);
                 m_Slots[index].Path     = path;
@@ -70,7 +72,7 @@ namespace Engine
 
         void Remove(AssetHandle h)
         {
-            if (h.Index >= m_Slots.size())
+            if (h.Index == 0 || h.Index >= m_Slots.size())
                 return;
             auto& slot = m_Slots[h.Index];
             if (slot.Generation != h.Generation)

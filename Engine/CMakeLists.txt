@@ -31,6 +31,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImGui/ImGuiLayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Media/FFmpegDecoder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/BulletPhysicsWorld.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/CollisionMath.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/PhysicsDebugDraw.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/PhysicsWorld.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Reflection/AutoInspector.cpp

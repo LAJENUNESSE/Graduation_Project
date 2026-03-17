@@ -21,8 +21,8 @@ TEST(SlotMap, Initialization)
 TEST(SlotMap, InsertAndGet)
 {
     SlotMap<DummyResource> map;
-    auto res = std::make_shared<DummyResource>(42);
-    AssetHandle handle = map.Insert(res, "path/to/res");
+    auto                   res    = std::make_shared<DummyResource>(42);
+    AssetHandle            handle = map.Insert(res, "path/to/res");
 
     EXPECT_TRUE(handle.IsValid());
     EXPECT_EQ(map.Size(), 1);
@@ -41,7 +41,7 @@ TEST(SlotMap, InsertAndGet)
 TEST(SlotMap, Replace)
 {
     SlotMap<DummyResource> map;
-    AssetHandle handle = map.Insert(std::make_shared<DummyResource>(10), "path");
+    AssetHandle            handle = map.Insert(std::make_shared<DummyResource>(10), "path");
 
     map.Replace(handle, std::make_shared<DummyResource>(20));
 
@@ -53,7 +53,7 @@ TEST(SlotMap, Replace)
 TEST(SlotMap, RemoveAndGenerationInvalidation)
 {
     SlotMap<DummyResource> map;
-    AssetHandle handle = map.Insert(std::make_shared<DummyResource>(100), "path1");
+    AssetHandle            handle = map.Insert(std::make_shared<DummyResource>(100), "path1");
 
     EXPECT_EQ(map.Size(), 1);
 
@@ -88,7 +88,7 @@ TEST(SlotMap, RemoveAndGenerationInvalidation)
 TEST(SlotMap, GetInvalidHandle)
 {
     SlotMap<DummyResource> map;
-    AssetHandle handle{999, 1}; // Out of bounds
+    AssetHandle            handle{999, 1}; // Out of bounds
 
     EXPECT_EQ(map.Get(handle), nullptr);
     EXPECT_EQ(map.GetRef(handle), nullptr);
@@ -98,8 +98,8 @@ TEST(SlotMap, GetInvalidHandle)
 TEST(SlotMap, Clear)
 {
     SlotMap<DummyResource> map;
-    AssetHandle h1 = map.Insert(std::make_shared<DummyResource>(1), "p1");
-    AssetHandle h2 = map.Insert(std::make_shared<DummyResource>(2), "p2");
+    AssetHandle            h1 = map.Insert(std::make_shared<DummyResource>(1), "p1");
+    AssetHandle            h2 = map.Insert(std::make_shared<DummyResource>(2), "p2");
 
     EXPECT_EQ(map.Size(), 2);
 
@@ -111,5 +111,47 @@ TEST(SlotMap, Clear)
 
     AssetHandle h3 = map.Insert(std::make_shared<DummyResource>(3), "p3");
     EXPECT_TRUE(h3.IsValid());
+    EXPECT_EQ(map.Size(), 1);
+}
+
+TEST(SlotMap, RemoveDefaultInvalidHandle)
+{
+    SlotMap<DummyResource> map;
+    AssetHandle            h1 = map.Insert(std::make_shared<DummyResource>(1), "p1");
+
+    EXPECT_EQ(map.Size(), 1);
+
+    // Remove with default invalid handle {0,0} should be a no-op
+    AssetHandle invalid{};
+    map.Remove(invalid);
+
+    // Size must not underflow or change
+    EXPECT_EQ(map.Size(), 1);
+    // Valid handle still works
+    ASSERT_NE(map.Get(h1), nullptr);
+    EXPECT_EQ(map.Get(h1)->value, 1);
+
+    // Insert should still work correctly (slot 0 not in freelist)
+    AssetHandle h2 = map.Insert(std::make_shared<DummyResource>(2), "p2");
+    EXPECT_TRUE(h2.IsValid());
+    EXPECT_NE(h2.Index, 0u);
+    EXPECT_EQ(map.Size(), 2);
+}
+
+TEST(SlotMap, RemoveDefaultOnEmptyMap)
+{
+    SlotMap<DummyResource> map;
+
+    EXPECT_EQ(map.Size(), 0);
+
+    // Should not crash or underflow
+    map.Remove(AssetHandle{});
+
+    EXPECT_EQ(map.Size(), 0);
+
+    // Map still functional after no-op Remove
+    AssetHandle h = map.Insert(std::make_shared<DummyResource>(42), "path");
+    EXPECT_TRUE(h.IsValid());
+    EXPECT_NE(h.Index, 0u);
     EXPECT_EQ(map.Size(), 1);
 }
