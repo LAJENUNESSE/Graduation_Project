@@ -216,7 +216,7 @@ namespace Engine
                 }
                 else if (a.type == ColliderInfo::Box && b.type == ColliderInfo::Box)
                 {
-                    collided = AABBAABB(a.worldPos, a.worldAABBHalfExtents, b.worldPos, b.worldAABBHalfExtents, info);
+                    collided = OBBOBB(a.worldPos, a.halfExtents, a.rotation, b.worldPos, b.halfExtents, b.rotation, info);
                 }
                 else if (a.type == ColliderInfo::Sphere && b.type == ColliderInfo::Box)
                 {
@@ -293,6 +293,83 @@ namespace Engine
             info.penetrationDepth = overlapZ;
         }
 
+        info.contactPoint = (posA + posB) * 0.5f;
+        return true;
+    }
+
+    bool PhysicsWorld::OBBOBB(const glm::vec3& posA, const glm::vec3& halfA, const glm::quat& rotA,
+                              const glm::vec3& posB, const glm::vec3& halfB, const glm::quat& rotB,
+                              CollisionInfo& info)
+    {
+        const glm::mat3 mA = glm::mat3_cast(rotA);
+        const glm::mat3 mB = glm::mat3_cast(rotB);
+
+        // OBB A 的 3 个局部坐标轴
+        const glm::vec3 axesA[3] = {mA[0], mA[1], mA[2]};
+        // OBB B 的 3 个局部坐标轴
+        const glm::vec3 axesB[3] = {mB[0], mB[1], mB[2]};
+
+        const glm::vec3 d = posB - posA; // A 中心到 B 中心
+
+        float minOverlap = std::numeric_limits<float>::max();
+        glm::vec3 bestAxis(0.0f);
+
+        // 测试单条分离轴的 lambda
+        auto testAxis = [&](const glm::vec3& axis) -> bool
+        {
+            float len = glm::length(axis);
+            if (len < 1e-6f)
+                return true; // 退化轴，跳过
+
+            glm::vec3 n = axis / len;
+
+            // A 在轴上的投影半径
+            float rA = halfA.x * std::abs(glm::dot(axesA[0], n)) +
+                        halfA.y * std::abs(glm::dot(axesA[1], n)) +
+                        halfA.z * std::abs(glm::dot(axesA[2], n));
+
+            // B 在轴上的投影半径
+            float rB = halfB.x * std::abs(glm::dot(axesB[0], n)) +
+                        halfB.y * std::abs(glm::dot(axesB[1], n)) +
+                        halfB.z * std::abs(glm::dot(axesB[2], n));
+
+            float dist = std::abs(glm::dot(d, n));
+            float overlap = rA + rB - dist;
+
+            if (overlap <= 0.0f)
+                return false; // 找到分离轴 → 不碰撞
+
+            if (overlap < minOverlap)
+            {
+                minOverlap = overlap;
+                bestAxis = n;
+            }
+            return true;
+        };
+
+        // 测试 A 的 3 个面法线
+        for (int i = 0; i < 3; ++i)
+            if (!testAxis(axesA[i]))
+                return false;
+
+        // 测试 B 的 3 个面法线
+        for (int i = 0; i < 3; ++i)
+            if (!testAxis(axesB[i]))
+                return false;
+
+        // 测试 9 条边叉积轴
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                if (!testAxis(glm::cross(axesA[i], axesB[j])))
+                    return false;
+
+        // 所有 15 条轴都未分离 → 碰撞
+        // 保证法线方向 A→B
+        if (glm::dot(bestAxis, d) < 0.0f)
+            bestAxis = -bestAxis;
+
+        info.contactNormal = bestAxis;
+        info.penetrationDepth = minOverlap;
         info.contactPoint = (posA + posB) * 0.5f;
         return true;
     }
