@@ -10,5 +10,5 @@ BreakBeforeBraces: Allman
 NamespaceIndentation: All
 PointerAlignment: Left
 AccessModifierOffset: -4
-SortIncludes: true
+SortIncludes: false
 IncludeBlocks: Preserve
