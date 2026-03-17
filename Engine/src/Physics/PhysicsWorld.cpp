@@ -297,59 +297,6 @@ namespace Engine
         return true;
     }
 
-    bool PhysicsWorld::SphereAABB(const glm::vec3& spherePos, float sphereRadius, const glm::vec3& boxPos,
-                                  const glm::vec3& boxHalf, CollisionInfo& info)
-    {
-        // 找 AABB 上距离球心最近的点
-        glm::vec3 localSphere = spherePos - boxPos;
-        glm::vec3 closest;
-        closest.x = std::clamp(localSphere.x, -boxHalf.x, boxHalf.x);
-        closest.y = std::clamp(localSphere.y, -boxHalf.y, boxHalf.y);
-        closest.z = std::clamp(localSphere.z, -boxHalf.z, boxHalf.z);
-
-        glm::vec3 diff = localSphere - closest;
-        float dist = glm::length(diff);
-
-        if (dist >= sphereRadius || dist < 1e-6f)
-        {
-            // 球心在盒内的情况
-            if (dist < 1e-6f)
-            {
-                // 球心在 AABB 内部，找最近的面
-                float dx = boxHalf.x - std::abs(localSphere.x);
-                float dy = boxHalf.y - std::abs(localSphere.y);
-                float dz = boxHalf.z - std::abs(localSphere.z);
-
-                if (dx <= 0 || dy <= 0 || dz <= 0)
-                    return false;
-
-                if (dx <= dy && dx <= dz)
-                {
-                    info.contactNormal = (localSphere.x > 0) ? glm::vec3(1, 0, 0) : glm::vec3(-1, 0, 0);
-                    info.penetrationDepth = dx + sphereRadius;
-                }
-                else if (dy <= dx && dy <= dz)
-                {
-                    info.contactNormal = (localSphere.y > 0) ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
-                    info.penetrationDepth = dy + sphereRadius;
-                }
-                else
-                {
-                    info.contactNormal = (localSphere.z > 0) ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
-                    info.penetrationDepth = dz + sphereRadius;
-                }
-                info.contactPoint = boxPos + closest;
-                return true;
-            }
-            return false;
-        }
-
-        info.contactNormal = diff / dist; // 从盒子指向球
-        info.penetrationDepth = sphereRadius - dist;
-        info.contactPoint = boxPos + closest;
-        return true;
-    }
-
     bool PhysicsWorld::SphereOBB(const glm::vec3& spherePos, float sphereRadius, const glm::vec3& boxPos,
                                  const glm::vec3& boxHalf, const glm::quat& boxRotation, CollisionInfo& info)
     {
