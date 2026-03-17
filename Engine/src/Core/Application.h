@@ -49,7 +49,7 @@ namespace Engine
         bool m_Running = true;
         bool m_Minimized = false;
         bool m_Initialized = false;
-        float m_LastFrameTime = 0.0f;
+        double m_LastFrameTime = 0.0;
         float m_TargetFrameRate = 144.0f;
         bool m_FrameRateLimitEnabled = true;
         CloseInterceptFn m_CloseInterceptor;

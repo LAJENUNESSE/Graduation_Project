@@ -130,11 +130,11 @@ namespace Engine
     {
         while (m_Running)
         {
-            float time = static_cast<float>(glfwGetTime());
-            Timestep timestep = time - m_LastFrameTime;
+            double time = glfwGetTime();
+            Timestep timestep = static_cast<float>(time - m_LastFrameTime);
             m_LastFrameTime = time;
 
-            PerformanceMonitor::Get().BeginFrame(time);
+            PerformanceMonitor::Get().BeginFrame(static_cast<float>(time));
 
             if (!m_Minimized)
             {
