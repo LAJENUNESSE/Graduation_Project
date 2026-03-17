@@ -26,7 +26,7 @@ namespace Engine
                 index = m_FreeList.back();
                 m_FreeList.pop_back();
                 m_Slots[index].Resource = std::move(resource);
-                m_Slots[index].Path = path;
+                m_Slots[index].Path     = path;
                 // Generation was already incremented on Remove
             }
             else
@@ -108,14 +108,14 @@ namespace Engine
     private:
         struct Slot
         {
-            Ref<T> Resource;
+            Ref<T>      Resource;
             std::string Path;
-            uint32_t Generation = 1;
+            uint32_t    Generation = 1;
         };
 
-        std::vector<Slot> m_Slots;
+        std::vector<Slot>     m_Slots;
         std::vector<uint32_t> m_FreeList;
-        size_t m_ActiveCount = 0;
+        size_t                m_ActiveCount = 0;
     };
 
 } // namespace Engine

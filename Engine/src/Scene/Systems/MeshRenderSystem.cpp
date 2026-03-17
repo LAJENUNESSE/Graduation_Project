@@ -11,11 +11,13 @@
 namespace Engine
 {
 
-    void MeshRenderSystem::SubmitRenderPackets(entt::registry& reg, RenderQueue& queue, const Ref<Shader>& pbrShader,
-                                               const Ref<Texture2D>& whiteTexture,
+    void MeshRenderSystem::SubmitRenderPackets(entt::registry&          reg,
+                                               RenderQueue&             queue,
+                                               const Ref<Shader>&       pbrShader,
+                                               const Ref<Texture2D>&    whiteTexture,
                                                const VideoRuntimeStore* videoStore,
-                                               const SceneEntityIndex* index,
-                                               WorldTransformCache* cache)
+                                               const SceneEntityIndex*  index,
+                                               WorldTransformCache*     cache)
     {
         auto meshView = reg.view<TransformComponent, MeshRendererComponent>();
         for (auto entity : meshView)
@@ -26,8 +28,8 @@ namespace Engine
             if (!mesh)
                 continue;
 
-            const auto& subMeshes = mesh->GetSubMeshes();
-            auto& cachedMats = meshRenderer.CachedMaterials;
+            const auto& subMeshes  = mesh->GetSubMeshes();
+            auto&       cachedMats = meshRenderer.CachedMaterials;
 
             // 首次或 SubMesh 数量变化时重建缓存
             if (cachedMats.size() != subMeshes.size())
@@ -41,15 +43,15 @@ namespace Engine
             Ref<Texture2D> videoTex;
             if (videoStore && reg.any_of<VideoPlayerComponent>(entity))
             {
-                uint32_t eid = static_cast<uint32_t>(entity);
-                auto* videoState = videoStore->Get(eid);
+                uint32_t eid        = static_cast<uint32_t>(entity);
+                auto*    videoState = videoStore->Get(eid);
                 if (videoState && videoState->Texture && videoState->IsPlaying)
                     videoTex = videoState->Texture;
             }
 
             for (size_t i = 0; i < subMeshes.size(); ++i)
             {
-                auto& mat = cachedMats[i];
+                auto&       mat     = cachedMats[i];
                 const auto& subMesh = subMeshes[i];
 
                 mat->Set("u_Color", meshRenderer.Color);
@@ -132,11 +134,11 @@ namespace Engine
                 mat->Set("u_AOMap", 5);
 
                 RenderPacket packet;
-                packet.VAO = subMesh.VAO;
-                packet.Mat = mat;
+                packet.VAO       = subMesh.VAO;
+                packet.Mat       = mat;
                 packet.Transform = index ? WorldTransformService::ComputeWorldTransform(reg, entity, *index, cache)
-                                        : transform.GetTransform();
-                packet.EntityID = static_cast<int>(entity);
+                                         : transform.GetTransform();
+                packet.EntityID  = static_cast<int>(entity);
 
                 queue.Submit(packet);
             }

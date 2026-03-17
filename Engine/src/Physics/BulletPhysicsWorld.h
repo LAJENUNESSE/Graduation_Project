@@ -35,12 +35,12 @@ namespace Engine
     struct CollisionEvent
     {
         CollisionEventType Type = CollisionEventType::Enter;
-        entt::entity EntityA;
-        entt::entity EntityB;
-        glm::vec3 ContactPoint;
-        glm::vec3 ContactNormal; // A → B 方向
-        float Impulse;
-        bool IsTrigger = false; // 是否为触发器事件
+        entt::entity       EntityA;
+        entt::entity       EntityB;
+        glm::vec3          ContactPoint;
+        glm::vec3          ContactNormal; // A → B 方向
+        float              Impulse;
+        bool               IsTrigger = false; // 是否为触发器事件
     };
 
     class BulletPhysicsWorld
@@ -66,19 +66,19 @@ namespace Engine
         const std::vector<CollisionEvent>& GetCollisionEvents() const { return m_CollisionEvents; }
 
     private:
-        btDiscreteDynamicsWorld* m_DynamicsWorld = nullptr;
-        btBroadphaseInterface* m_Broadphase = nullptr;
-        btCollisionDispatcher* m_Dispatcher = nullptr;
-        btDefaultCollisionConfiguration* m_CollisionConfig = nullptr;
-        btSequentialImpulseConstraintSolver* m_Solver = nullptr;
+        btDiscreteDynamicsWorld*             m_DynamicsWorld   = nullptr;
+        btBroadphaseInterface*               m_Broadphase      = nullptr;
+        btCollisionDispatcher*               m_Dispatcher      = nullptr;
+        btDefaultCollisionConfiguration*     m_CollisionConfig = nullptr;
+        btSequentialImpulseConstraintSolver* m_Solver          = nullptr;
 
         struct BodyInfo
         {
-            btRigidBody* body = nullptr;
-            btCollisionShape* shape = nullptr;
-            btDefaultMotionState* motionState = nullptr;
-            btTriangleMesh* triangleMesh = nullptr; // MeshCollider 静态网格数据
-            bool isTrigger = false;
+            btRigidBody*          body         = nullptr;
+            btCollisionShape*     shape        = nullptr;
+            btDefaultMotionState* motionState  = nullptr;
+            btTriangleMesh*       triangleMesh = nullptr; // MeshCollider 静态网格数据
+            bool                  isTrigger    = false;
         };
 
         std::unordered_map<uint32_t, BodyInfo> m_Bodies; // entt::entity -> BodyInfo
@@ -95,10 +95,10 @@ namespace Engine
         // 碰撞对中存储的信息
         struct ContactPairInfo
         {
-            glm::vec3 ContactPoint = {0, 0, 0};
+            glm::vec3 ContactPoint  = {0, 0, 0};
             glm::vec3 ContactNormal = {0, 0, 0};
-            float Impulse = 0.0f;
-            bool IsTrigger = false;
+            float     Impulse       = 0.0f;
+            bool      IsTrigger     = false;
         };
 
         using ContactPairSet = std::unordered_map<std::pair<uint32_t, uint32_t>, ContactPairInfo, ContactPairHash>;

@@ -67,20 +67,20 @@ namespace Engine
             }
 
             // CPU-side image decoding (no GL calls here)
-            int width, height, channels;
+            int               width, height, channels;
             const std::string resolvedPath = PathUtils::ResolvePathString(request.first);
             stbi_set_flip_vertically_on_load(1);
             stbi_uc* data = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
 
             TextureCPUData result;
-            result.Path = request.first;
+            result.Path         = request.first;
             result.TargetHandle = request.second;
 
             if (data)
             {
-                result.Width = width;
+                result.Width  = width;
                 result.Height = height;
-                size_t size = static_cast<size_t>(width) * height * 4;
+                size_t size   = static_cast<size_t>(width) * height * 4;
                 result.Pixels.assign(data, data + size);
                 stbi_image_free(data);
             }
@@ -88,7 +88,7 @@ namespace Engine
             {
                 ENGINE_CORE_ERROR("AsyncLoadQueue: Failed to load '{0}'", resolvedPath);
                 // 1x1 magenta fallback
-                result.Width = 1;
+                result.Width  = 1;
                 result.Height = 1;
                 result.Pixels = {0xFF, 0x00, 0xFF, 0xFF};
             }

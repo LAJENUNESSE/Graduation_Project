@@ -138,29 +138,29 @@ namespace Engine
         if (stacks < 2)
             stacks = 2;
 
-        std::vector<float> vertices;
+        std::vector<float>    vertices;
         std::vector<uint32_t> indices;
 
-        float pi = glm::pi<float>();
+        float pi    = glm::pi<float>();
         float twoPi = 2.0f * pi;
 
         float sectorStep = twoPi / static_cast<float>(sectors);
-        float stackStep = pi / static_cast<float>(stacks);
+        float stackStep  = pi / static_cast<float>(stacks);
 
         // Generate vertices
         for (int i = 0; i <= stacks; ++i)
         {
             float stackAngle = pi / 2.0f - static_cast<float>(i) * stackStep; // from pi/2 to -pi/2
-            float xy = std::cos(stackAngle);
-            float z = std::sin(stackAngle);
+            float xy         = std::cos(stackAngle);
+            float z          = std::sin(stackAngle);
 
             for (int j = 0; j <= sectors; ++j)
             {
                 float sectorAngle = static_cast<float>(j) * sectorStep; // from 0 to 2pi
 
                 // Position (unit sphere, radius = 0.5)
-                float x = xy * std::cos(sectorAngle);
-                float y = z;
+                float x  = xy * std::cos(sectorAngle);
+                float y  = z;
                 float xz = xy * std::sin(sectorAngle);
 
                 // For a unit sphere, normal = position normalized (already unit length)
@@ -236,7 +236,7 @@ namespace Engine
 
     Ref<Mesh> Mesh::CreateFromFile(const std::string& filepath)
     {
-        Assimp::Importer importer;
+        Assimp::Importer  importer;
         const std::string resolvedFilepath = PathUtils::ResolvePathString(filepath);
 
         unsigned int flags = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
@@ -258,7 +258,7 @@ namespace Engine
         {
             aiMesh* aiM = scene->mMeshes[m];
 
-            std::vector<float> vertices;
+            std::vector<float>    vertices;
             std::vector<uint32_t> indices;
 
             vertices.reserve(aiM->mNumVertices * 11);
@@ -334,7 +334,7 @@ namespace Engine
             vertexArray->SetIndexBuffer(indexBuffer);
 
             SubMesh sub;
-            sub.VAO = vertexArray;
+            sub.VAO        = vertexArray;
             sub.IndexCount = static_cast<uint32_t>(indices.size());
 
             // Extract diffuse texture from material
@@ -354,7 +354,7 @@ namespace Engine
 
                         if (std::filesystem::exists(fullTexPath))
                         {
-                            sub.DiffuseTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                            sub.DiffuseTexturePath  = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
                             sub.DiffuseTextureAsset = AssetManager::Load<Texture2D>(sub.DiffuseTexturePath);
                         }
                     }
@@ -363,7 +363,7 @@ namespace Engine
                 // Extract normal map texture from material
                 if (mat->GetTextureCount(aiTextureType_NORMALS) > 0 || mat->GetTextureCount(aiTextureType_HEIGHT) > 0)
                 {
-                    aiString texPath;
+                    aiString      texPath;
                     aiTextureType normalType = (mat->GetTextureCount(aiTextureType_NORMALS) > 0) ? aiTextureType_NORMALS
                                                                                                  : aiTextureType_HEIGHT;
                     mat->GetTexture(normalType, 0, &texPath);
@@ -374,7 +374,7 @@ namespace Engine
                         std::filesystem::path fullTexPath = modelDir / texStr;
                         if (std::filesystem::exists(fullTexPath))
                         {
-                            sub.NormalTexturePath = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                            sub.NormalTexturePath  = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
                             sub.NormalTextureAsset = AssetManager::Load<Texture2D>(sub.NormalTexturePath);
                         }
                     }

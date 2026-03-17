@@ -12,8 +12,8 @@ namespace Engine
     class ResourceLifecycleCoordinator
     {
     public:
-        using EntityCleanupFn = std::function<void(entt::registry&, entt::entity)>;
-        using RuntimeStopCleanupFn = std::function<void(entt::registry&)>;
+        using EntityCleanupFn       = std::function<void(entt::registry&, entt::entity)>;
+        using RuntimeStopCleanupFn  = std::function<void(entt::registry&)>;
         using SceneDestroyCleanupFn = std::function<void()>;
 
         // 注册清理回调
@@ -30,8 +30,8 @@ namespace Engine
         void ClearAll();
 
     private:
-        std::vector<EntityCleanupFn> m_EntityCleanups;
-        std::vector<RuntimeStopCleanupFn> m_RuntimeStopCleanups;
+        std::vector<EntityCleanupFn>       m_EntityCleanups;
+        std::vector<RuntimeStopCleanupFn>  m_RuntimeStopCleanups;
         std::vector<SceneDestroyCleanupFn> m_SceneDestroyCleanups;
     };
 

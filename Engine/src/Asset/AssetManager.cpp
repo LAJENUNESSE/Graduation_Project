@@ -10,18 +10,18 @@
 namespace Engine
 {
 
-    SlotMap<Texture2D> AssetManager::s_Textures;
-    SlotMap<Mesh> AssetManager::s_Meshes;
+    SlotMap<Texture2D>      AssetManager::s_Textures;
+    SlotMap<Mesh>           AssetManager::s_Meshes;
     SlotMap<TextureCubemap> AssetManager::s_Cubemaps;
 
     std::unordered_map<std::string, AssetHandle> AssetManager::s_TexturePathIndex;
     std::unordered_map<std::string, AssetHandle> AssetManager::s_MeshPathIndex;
     std::unordered_map<std::string, AssetHandle> AssetManager::s_CubemapPathIndex;
-    std::unordered_map<AssetHandle, AssetType> AssetManager::s_HandleTypes;
+    std::unordered_map<AssetHandle, AssetType>   AssetManager::s_HandleTypes;
 
     Scope<AsyncLoadQueue> AssetManager::s_AsyncQueue;
-    Scope<FileWatcher> AssetManager::s_FileWatcher;
-    bool AssetManager::s_Initialized = false;
+    Scope<FileWatcher>    AssetManager::s_FileWatcher;
+    bool                  AssetManager::s_Initialized = false;
 
     void AssetManager::Init()
     {
@@ -29,7 +29,7 @@ namespace Engine
             return;
 
         s_Initialized = true;
-        s_AsyncQueue = CreateScope<AsyncLoadQueue>();
+        s_AsyncQueue  = CreateScope<AsyncLoadQueue>();
         s_FileWatcher = CreateScope<FileWatcher>();
 
         RegisterBuiltins();
@@ -63,32 +63,32 @@ namespace Engine
     {
         // Builtin white texture (1x1 white)
         {
-            auto tex = Texture2D::Create(1, 1);
+            auto     tex   = Texture2D::Create(1, 1);
             uint32_t white = 0xFFFFFFFF;
             tex->SetData(&white, sizeof(uint32_t));
-            AssetHandle h = s_Textures.Insert(tex, "builtin:white");
+            AssetHandle h                       = s_Textures.Insert(tex, "builtin:white");
             s_TexturePathIndex["builtin:white"] = h;
-            s_HandleTypes[h] = AssetType::Texture2D;
+            s_HandleTypes[h]                    = AssetType::Texture2D;
         }
 
         // Builtin meshes
         {
-            auto cube = Mesh::CreateCube();
-            AssetHandle h = s_Meshes.Insert(cube, "builtin:Cube");
+            auto        cube                = Mesh::CreateCube();
+            AssetHandle h                   = s_Meshes.Insert(cube, "builtin:Cube");
             s_MeshPathIndex["builtin:Cube"] = h;
-            s_HandleTypes[h] = AssetType::Mesh;
+            s_HandleTypes[h]                = AssetType::Mesh;
         }
         {
-            auto plane = Mesh::CreatePlane();
-            AssetHandle h = s_Meshes.Insert(plane, "builtin:Plane");
+            auto        plane                = Mesh::CreatePlane();
+            AssetHandle h                    = s_Meshes.Insert(plane, "builtin:Plane");
             s_MeshPathIndex["builtin:Plane"] = h;
-            s_HandleTypes[h] = AssetType::Mesh;
+            s_HandleTypes[h]                 = AssetType::Mesh;
         }
         {
-            auto sphere = Mesh::CreateSphere();
-            AssetHandle h = s_Meshes.Insert(sphere, "builtin:Sphere");
+            auto        sphere                = Mesh::CreateSphere();
+            AssetHandle h                     = s_Meshes.Insert(sphere, "builtin:Sphere");
             s_MeshPathIndex["builtin:Sphere"] = h;
-            s_HandleTypes[h] = AssetType::Mesh;
+            s_HandleTypes[h]                  = AssetType::Mesh;
         }
     }
 
@@ -172,10 +172,10 @@ namespace Engine
             s_TexturePathIndex.erase(it);
         }
 
-        auto tex = Texture2D::Create(path);
-        AssetHandle h = s_Textures.Insert(tex, path);
+        auto        tex          = Texture2D::Create(path);
+        AssetHandle h            = s_Textures.Insert(tex, path);
         s_TexturePathIndex[path] = h;
-        s_HandleTypes[h] = AssetType::Texture2D;
+        s_HandleTypes[h]         = AssetType::Texture2D;
 
         // Watch for hot-reload
         if (s_FileWatcher && path.find("builtin:") == std::string::npos)
@@ -211,9 +211,9 @@ namespace Engine
         if (!mesh)
             return {};
 
-        AssetHandle h = s_Meshes.Insert(mesh, path);
+        AssetHandle h         = s_Meshes.Insert(mesh, path);
         s_MeshPathIndex[path] = h;
-        s_HandleTypes[h] = AssetType::Mesh;
+        s_HandleTypes[h]      = AssetType::Mesh;
 
         if (s_FileWatcher && path.find("builtin:") == std::string::npos)
             s_FileWatcher->Watch(path, h);
@@ -238,15 +238,15 @@ namespace Engine
 
         // Split path by semicolons
         std::vector<std::string> faces;
-        std::istringstream iss(path);
-        std::string face;
+        std::istringstream       iss(path);
+        std::string              face;
         while (std::getline(iss, face, ';'))
             faces.push_back(face);
 
-        auto cubemap = TextureCubemap::Create(faces);
-        AssetHandle h = s_Cubemaps.Insert(cubemap, path);
+        auto        cubemap      = TextureCubemap::Create(faces);
+        AssetHandle h            = s_Cubemaps.Insert(cubemap, path);
         s_CubemapPathIndex[path] = h;
-        s_HandleTypes[h] = AssetType::TextureCubemap;
+        s_HandleTypes[h]         = AssetType::TextureCubemap;
 
         return h;
     }
@@ -268,13 +268,13 @@ namespace Engine
         }
 
         // Create 1x1 gray placeholder
-        auto placeholder = Texture2D::Create(1, 1);
-        uint32_t gray = 0xFF808080;
+        auto     placeholder = Texture2D::Create(1, 1);
+        uint32_t gray        = 0xFF808080;
         placeholder->SetData(&gray, sizeof(uint32_t));
 
-        AssetHandle h = s_Textures.Insert(placeholder, path);
+        AssetHandle h            = s_Textures.Insert(placeholder, path);
         s_TexturePathIndex[path] = h;
-        s_HandleTypes[h] = AssetType::Texture2D;
+        s_HandleTypes[h]         = AssetType::Texture2D;
 
         // Submit to async queue
         if (s_AsyncQueue)

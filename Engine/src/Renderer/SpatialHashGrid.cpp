@@ -15,25 +15,25 @@ namespace Engine
             return;
 
         m_MaxParticles = maxParticles;
-        m_GridSize = gridSize;
-        m_CellSize = cellSize;
+        m_GridSize     = gridSize;
+        m_CellSize     = cellSize;
 
         uint32_t totalCells = gridSize * gridSize * gridSize;
-        uint32_t numBlocks = (totalCells + 511) / 512;
+        uint32_t numBlocks  = (totalCells + 511) / 512;
 
         // Load shaders
-        m_HashShader = Shader::Create("assets/shaders/grid_hash.glsl");
+        m_HashShader      = Shader::Create("assets/shaders/grid_hash.glsl");
         m_PrefixSumShader = Shader::Create("assets/shaders/grid_prefix_sum.glsl");
-        m_ScatterShader = Shader::Create("assets/shaders/grid_scatter.glsl");
+        m_ScatterShader   = Shader::Create("assets/shaders/grid_scatter.glsl");
 
         // Allocate SSBOs (GPU-only immutable: only compute shaders read/write after init)
         // Binding 1 & 4 are shared with DeadList & IndirectArgs respectively.
         // Grid passes temporarily reuse these slots; caller rebinds originals afterward.
-        m_CellHash = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 1);
-        m_CellCount = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 6);
-        m_CellStart = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 5);
+        m_CellHash      = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 1);
+        m_CellCount     = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 6);
+        m_CellStart     = ShaderStorageBuffer::CreateGPUOnly(totalCells * sizeof(uint32_t), 5);
         m_SortedIndices = ShaderStorageBuffer::CreateGPUOnly(maxParticles * sizeof(uint32_t), 7);
-        m_BlockSums = ShaderStorageBuffer::CreateGPUOnly(numBlocks * sizeof(uint32_t), 4);
+        m_BlockSums     = ShaderStorageBuffer::CreateGPUOnly(numBlocks * sizeof(uint32_t), 4);
 
         m_Initialized = true;
     }

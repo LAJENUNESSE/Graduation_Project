@@ -22,7 +22,7 @@ namespace Engine
         void SetLayout(const BufferLayout& layout) override { m_Layout = layout; }
 
     private:
-        uint32_t m_RendererID = 0;
+        uint32_t     m_RendererID = 0;
         BufferLayout m_Layout;
     };
 
@@ -39,7 +39,7 @@ namespace Engine
 
     private:
         uint32_t m_RendererID = 0;
-        uint32_t m_Count = 0;
+        uint32_t m_Count      = 0;
     };
 
 } // namespace Engine

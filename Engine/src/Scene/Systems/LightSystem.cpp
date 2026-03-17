@@ -9,8 +9,8 @@
 namespace Engine
 {
 
-    LightEnvironment LightSystem::CollectLights(entt::registry& reg, const SceneEntityIndex& index,
-                                                WorldTransformCache* cache)
+    LightEnvironment
+    LightSystem::CollectLights(entt::registry& reg, const SceneEntityIndex& index, WorldTransformCache* cache)
     {
         LightEnvironment env;
 
@@ -22,7 +22,7 @@ namespace Engine
             // 使用世界变换计算光源位置和方向
             glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(reg, entity, index, cache);
             glm::vec3 worldPos = glm::vec3(worldMat[3]);
-            glm::vec3 forward = glm::normalize(glm::mat3(worldMat) * glm::vec3(0.0f, 0.0f, -1.0f));
+            glm::vec3 forward  = glm::normalize(glm::mat3(worldMat) * glm::vec3(0.0f, 0.0f, -1.0f));
 
             switch (light.Type)
             {
@@ -64,7 +64,7 @@ namespace Engine
 
         // DirLights (max 2)
         static const char* s_DirLightDirection[] = {"u_DirLights[0].direction", "u_DirLights[1].direction"};
-        static const char* s_DirLightColor[] = {"u_DirLights[0].color", "u_DirLights[1].color"};
+        static const char* s_DirLightColor[]     = {"u_DirLights[0].color", "u_DirLights[1].color"};
         static const char* s_DirLightIntensity[] = {"u_DirLights[0].intensity", "u_DirLights[1].intensity"};
 
         // PointLights (max 8)
@@ -72,18 +72,18 @@ namespace Engine
                                                      "u_PointLights[2].position", "u_PointLights[3].position",
                                                      "u_PointLights[4].position", "u_PointLights[5].position",
                                                      "u_PointLights[6].position", "u_PointLights[7].position"};
-        static const char* s_PointLightColor[] = {
+        static const char* s_PointLightColor[]    = {
             "u_PointLights[0].color", "u_PointLights[1].color", "u_PointLights[2].color", "u_PointLights[3].color",
             "u_PointLights[4].color", "u_PointLights[5].color", "u_PointLights[6].color", "u_PointLights[7].color"};
         static const char* s_PointLightIntensity[] = {"u_PointLights[0].intensity", "u_PointLights[1].intensity",
                                                       "u_PointLights[2].intensity", "u_PointLights[3].intensity",
                                                       "u_PointLights[4].intensity", "u_PointLights[5].intensity",
                                                       "u_PointLights[6].intensity", "u_PointLights[7].intensity"};
-        static const char* s_PointLightConstant[] = {"u_PointLights[0].constant", "u_PointLights[1].constant",
-                                                     "u_PointLights[2].constant", "u_PointLights[3].constant",
-                                                     "u_PointLights[4].constant", "u_PointLights[5].constant",
-                                                     "u_PointLights[6].constant", "u_PointLights[7].constant"};
-        static const char* s_PointLightLinear[] = {
+        static const char* s_PointLightConstant[]  = {"u_PointLights[0].constant", "u_PointLights[1].constant",
+                                                      "u_PointLights[2].constant", "u_PointLights[3].constant",
+                                                      "u_PointLights[4].constant", "u_PointLights[5].constant",
+                                                      "u_PointLights[6].constant", "u_PointLights[7].constant"};
+        static const char* s_PointLightLinear[]    = {
             "u_PointLights[0].linear", "u_PointLights[1].linear", "u_PointLights[2].linear", "u_PointLights[3].linear",
             "u_PointLights[4].linear", "u_PointLights[5].linear", "u_PointLights[6].linear", "u_PointLights[7].linear"};
         static const char* s_PointLightQuadratic[] = {"u_PointLights[0].quadratic", "u_PointLights[1].quadratic",
@@ -92,20 +92,20 @@ namespace Engine
                                                       "u_PointLights[6].quadratic", "u_PointLights[7].quadratic"};
 
         // SpotLights (max 4)
-        static const char* s_SpotLightPosition[] = {"u_SpotLights[0].position", "u_SpotLights[1].position",
-                                                    "u_SpotLights[2].position", "u_SpotLights[3].position"};
-        static const char* s_SpotLightDirection[] = {"u_SpotLights[0].direction", "u_SpotLights[1].direction",
-                                                     "u_SpotLights[2].direction", "u_SpotLights[3].direction"};
-        static const char* s_SpotLightColor[] = {"u_SpotLights[0].color", "u_SpotLights[1].color",
-                                                 "u_SpotLights[2].color", "u_SpotLights[3].color"};
-        static const char* s_SpotLightIntensity[] = {"u_SpotLights[0].intensity", "u_SpotLights[1].intensity",
-                                                     "u_SpotLights[2].intensity", "u_SpotLights[3].intensity"};
-        static const char* s_SpotLightConstant[] = {"u_SpotLights[0].constant", "u_SpotLights[1].constant",
-                                                    "u_SpotLights[2].constant", "u_SpotLights[3].constant"};
-        static const char* s_SpotLightLinear[] = {"u_SpotLights[0].linear", "u_SpotLights[1].linear",
-                                                  "u_SpotLights[2].linear", "u_SpotLights[3].linear"};
-        static const char* s_SpotLightQuadratic[] = {"u_SpotLights[0].quadratic", "u_SpotLights[1].quadratic",
-                                                     "u_SpotLights[2].quadratic", "u_SpotLights[3].quadratic"};
+        static const char* s_SpotLightPosition[]    = {"u_SpotLights[0].position", "u_SpotLights[1].position",
+                                                       "u_SpotLights[2].position", "u_SpotLights[3].position"};
+        static const char* s_SpotLightDirection[]   = {"u_SpotLights[0].direction", "u_SpotLights[1].direction",
+                                                       "u_SpotLights[2].direction", "u_SpotLights[3].direction"};
+        static const char* s_SpotLightColor[]       = {"u_SpotLights[0].color", "u_SpotLights[1].color",
+                                                       "u_SpotLights[2].color", "u_SpotLights[3].color"};
+        static const char* s_SpotLightIntensity[]   = {"u_SpotLights[0].intensity", "u_SpotLights[1].intensity",
+                                                       "u_SpotLights[2].intensity", "u_SpotLights[3].intensity"};
+        static const char* s_SpotLightConstant[]    = {"u_SpotLights[0].constant", "u_SpotLights[1].constant",
+                                                       "u_SpotLights[2].constant", "u_SpotLights[3].constant"};
+        static const char* s_SpotLightLinear[]      = {"u_SpotLights[0].linear", "u_SpotLights[1].linear",
+                                                       "u_SpotLights[2].linear", "u_SpotLights[3].linear"};
+        static const char* s_SpotLightQuadratic[]   = {"u_SpotLights[0].quadratic", "u_SpotLights[1].quadratic",
+                                                       "u_SpotLights[2].quadratic", "u_SpotLights[3].quadratic"};
         static const char* s_SpotLightInnerCutoff[] = {"u_SpotLights[0].innerCutoff", "u_SpotLights[1].innerCutoff",
                                                        "u_SpotLights[2].innerCutoff", "u_SpotLights[3].innerCutoff"};
         static const char* s_SpotLightOuterCutoff[] = {"u_SpotLights[0].outerCutoff", "u_SpotLights[1].outerCutoff",

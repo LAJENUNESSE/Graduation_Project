@@ -8,23 +8,17 @@ namespace Engine
 
     struct AudioRuntimeState
     {
-        uint32_t Source = 0;
-        uint32_t Buffer = 0;
-        bool IsPlaying = false;
+        uint32_t Source    = 0;
+        uint32_t Buffer    = 0;
+        bool     IsPlaying = false;
     };
 
     class AudioRuntimeStore
     {
     public:
-        void Insert(uint32_t entityID, AudioRuntimeState state)
-        {
-            m_States[entityID] = state;
-        }
+        void Insert(uint32_t entityID, AudioRuntimeState state) { m_States[entityID] = state; }
 
-        void Remove(uint32_t entityID)
-        {
-            m_States.erase(entityID);
-        }
+        void Remove(uint32_t entityID) { m_States.erase(entityID); }
 
         AudioRuntimeState* Get(uint32_t entityID)
         {

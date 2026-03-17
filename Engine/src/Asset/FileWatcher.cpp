@@ -12,8 +12,8 @@ namespace Engine
             return;
 
         const std::string resolvedPath = PathUtils::ResolvePathString(path);
-        std::error_code ec;
-        auto lastWrite = std::filesystem::last_write_time(resolvedPath, ec);
+        std::error_code   ec;
+        auto              lastWrite = std::filesystem::last_write_time(resolvedPath, ec);
         if (ec)
             return;
 
@@ -22,7 +22,7 @@ namespace Engine
         {
             if (entry.Handle == handle)
             {
-                entry.Path = resolvedPath;
+                entry.Path      = resolvedPath;
                 entry.LastWrite = lastWrite;
                 return;
             }
@@ -50,7 +50,7 @@ namespace Engine
         for (auto& entry : m_Entries)
         {
             std::error_code ec;
-            auto currentWrite = std::filesystem::last_write_time(entry.Path, ec);
+            auto            currentWrite = std::filesystem::last_write_time(entry.Path, ec);
             if (ec)
                 continue;
 

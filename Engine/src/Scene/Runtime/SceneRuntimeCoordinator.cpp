@@ -19,8 +19,10 @@
 namespace Engine
 {
 
-    SceneRuntimeCoordinator::SceneRuntimeCoordinator(entt::registry& reg, SceneEntityIndex& index,
-                                                     ResourceLifecycleCoordinator& lifecycle, Scene* scene)
+    SceneRuntimeCoordinator::SceneRuntimeCoordinator(entt::registry&               reg,
+                                                     SceneEntityIndex&             index,
+                                                     ResourceLifecycleCoordinator& lifecycle,
+                                                     Scene*                        scene)
         : m_Registry(reg), m_EntityIndex(index), m_Lifecycle(lifecycle), m_Scene(scene)
     {
     }
@@ -36,7 +38,7 @@ namespace Engine
     void SceneRuntimeCoordinator::OnRuntimeStart(PhysicsBackend backend, SceneRenderer* renderer)
     {
         const char* backendName = backend == PhysicsBackend::Custom ? "Custom" : "Bullet";
-        size_t entityCount = 0;
+        size_t      entityCount = 0;
         for (auto entity : m_Registry.view<IDComponent>())
         {
             (void)entity;
@@ -59,16 +61,16 @@ namespace Engine
                 auto terrainView = m_Registry.view<TransformComponent, TerrainComponent>();
                 for (auto entity : terrainView)
                 {
-                    auto& tc = m_Registry.get<TerrainComponent>(entity);
-                    bool hasRuntimeMesh = m_Registry.all_of<TerrainRuntimeComponent>(entity) &&
+                    auto& tc             = m_Registry.get<TerrainComponent>(entity);
+                    bool  hasRuntimeMesh = m_Registry.all_of<TerrainRuntimeComponent>(entity) &&
                                           m_Registry.get<TerrainRuntimeComponent>(entity).MeshData;
                     if (!hasRuntimeMesh && !tc.HeightmapPath.empty())
                     {
                         auto meshData = TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale,
                                                                        tc.LODLevels);
-                        auto& rtc = m_Registry.get_or_emplace<TerrainRuntimeComponent>(entity);
-                        rtc.MeshData = std::make_unique<TerrainMeshData>(std::move(meshData));
-                        tc.MeshDirty = false;
+                        auto& rtc     = m_Registry.get_or_emplace<TerrainRuntimeComponent>(entity);
+                        rtc.MeshData  = std::make_unique<TerrainMeshData>(std::move(meshData));
+                        tc.MeshDirty  = false;
                     }
                 }
             }
@@ -96,31 +98,35 @@ namespace Engine
 
         // 注册 lifecycle coordinator 清理回调
         m_Lifecycle.ClearAll();
-        m_Lifecycle.RegisterEntityCleanup([](entt::registry& reg, entt::entity e)
-        {
-            if (reg.all_of<TerrainRuntimeComponent>(e))
-                reg.remove<TerrainRuntimeComponent>(e);
-        });
+        m_Lifecycle.RegisterEntityCleanup(
+            [](entt::registry& reg, entt::entity e)
+            {
+                if (reg.all_of<TerrainRuntimeComponent>(e))
+                    reg.remove<TerrainRuntimeComponent>(e);
+            });
         if (renderer)
         {
-            m_Lifecycle.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
-            {
-                if (reg.all_of<AudioSourceComponent>(e))
-                    renderer->GetAudioSystem().DestroyEntityAudio(static_cast<uint32_t>(e));
-            });
-            m_Lifecycle.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
-            {
-                if (reg.all_of<VideoPlayerComponent>(e))
-                    renderer->GetVideoSystem().DestroyEntityVideo(static_cast<uint32_t>(e));
-            });
-            m_Lifecycle.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
-            {
-                uint32_t eid = static_cast<uint32_t>(e);
-                if (reg.all_of<ParticleEmitterComponent>(e))
-                    renderer->ReleaseParticleSystem(eid);
-                if (reg.all_of<FluidEmitterComponent>(e))
-                    renderer->ReleaseFluidSystem(eid);
-            });
+            m_Lifecycle.RegisterEntityCleanup(
+                [renderer](entt::registry& reg, entt::entity e)
+                {
+                    if (reg.all_of<AudioSourceComponent>(e))
+                        renderer->GetAudioSystem().DestroyEntityAudio(static_cast<uint32_t>(e));
+                });
+            m_Lifecycle.RegisterEntityCleanup(
+                [renderer](entt::registry& reg, entt::entity e)
+                {
+                    if (reg.all_of<VideoPlayerComponent>(e))
+                        renderer->GetVideoSystem().DestroyEntityVideo(static_cast<uint32_t>(e));
+                });
+            m_Lifecycle.RegisterEntityCleanup(
+                [renderer](entt::registry& reg, entt::entity e)
+                {
+                    uint32_t eid = static_cast<uint32_t>(e);
+                    if (reg.all_of<ParticleEmitterComponent>(e))
+                        renderer->ReleaseParticleSystem(eid);
+                    if (reg.all_of<FluidEmitterComponent>(e))
+                        renderer->ReleaseFluidSystem(eid);
+                });
         }
 
         // Audio + Video 系统启动
@@ -192,7 +198,7 @@ namespace Engine
         {
             m_BulletPhysicsWorld->Step(ts, m_Registry);
 
-            const auto& events = m_BulletPhysicsWorld->GetCollisionEvents();
+            const auto&                             events = m_BulletPhysicsWorld->GetCollisionEvents();
             std::set<std::pair<uint32_t, uint32_t>> processedParticlePairs;
             ProcessCollisionParticleBursts(events, processedParticlePairs);
             DispatchCollisionCallbacks(events);
@@ -206,17 +212,16 @@ namespace Engine
         }
     }
 
-    void SceneRuntimeCoordinator::ProcessCollisionParticleBursts(
-        const std::vector<CollisionEvent>& events,
-        std::set<std::pair<uint32_t, uint32_t>>& processedPairs)
+    void
+    SceneRuntimeCoordinator::ProcessCollisionParticleBursts(const std::vector<CollisionEvent>&       events,
+                                                            std::set<std::pair<uint32_t, uint32_t>>& processedPairs)
     {
         for (const auto& event : events)
         {
             if (event.Type != CollisionEventType::Enter)
                 continue;
 
-            auto tryTriggerBurst =
-                [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal)
+            auto tryTriggerBurst = [&](entt::entity triggerEntity, entt::entity otherEntity, const glm::vec3& normal)
             {
                 if (!m_Registry.valid(triggerEntity))
                     return;
@@ -224,9 +229,9 @@ namespace Engine
                     return;
 
                 // entity pair 去重
-                uint32_t a = static_cast<uint32_t>(triggerEntity);
-                uint32_t b = static_cast<uint32_t>(otherEntity);
-                auto key = std::make_pair(std::min(a, b), std::max(a, b));
+                uint32_t a   = static_cast<uint32_t>(triggerEntity);
+                uint32_t b   = static_cast<uint32_t>(otherEntity);
+                auto     key = std::make_pair(std::min(a, b), std::max(a, b));
                 if (processedPairs.count(key))
                     return;
                 processedPairs.insert(key);
@@ -241,8 +246,8 @@ namespace Engine
 
                 // 按冲量比例缩放爆发数（MinImpulse 最小 0.001 防除零）
                 float safeMinImpulse = std::max(trigger.MinImpulse, 0.001f);
-                float scale = std::min(event.Impulse / safeMinImpulse, 5.0f);
-                int burst = static_cast<int>(trigger.BurstOnCollision * scale);
+                float scale          = std::min(event.Impulse / safeMinImpulse, 5.0f);
+                int   burst          = static_cast<int>(trigger.BurstOnCollision * scale);
                 emitter.CollisionBurstCount += burst;
 
                 // 限制每帧碰撞爆发数
@@ -292,19 +297,19 @@ namespace Engine
                     if (event.Type == CollisionEventType::Enter)
                     {
                         CollisionCallbackInfo info;
-                        info.OtherEntity = otherWrapped;
-                        info.ContactPoint = event.ContactPoint;
+                        info.OtherEntity   = otherWrapped;
+                        info.ContactPoint  = event.ContactPoint;
                         info.ContactNormal = contactNormal;
-                        info.Impulse = event.Impulse;
+                        info.Impulse       = event.Impulse;
                         nsc.Instance->OnCollisionEnter(info);
                     }
                     else if (event.Type == CollisionEventType::Stay)
                     {
                         CollisionCallbackInfo info;
-                        info.OtherEntity = otherWrapped;
-                        info.ContactPoint = event.ContactPoint;
+                        info.OtherEntity   = otherWrapped;
+                        info.ContactPoint  = event.ContactPoint;
                         info.ContactNormal = contactNormal;
-                        info.Impulse = event.Impulse;
+                        info.Impulse       = event.Impulse;
                         nsc.Instance->OnCollisionStay(info);
                     }
                     else if (event.Type == CollisionEventType::Exit)

@@ -18,9 +18,9 @@ namespace Engine
             float particleMass, restDensity, gasConstant;
             float viscosity, surfaceTension;
             float deltaTime;
-            int gridSize;
+            int   gridSize;
             float cellSize;
-            int aliveCount;
+            int   aliveCount;
             float gravity[3];
             float warmupTime; // SPH warm-up 时间（秒），新粒子逐步受 SPH 约束
         };
@@ -30,7 +30,7 @@ namespace Engine
         {
             float pcisphDelta;
             float boundaryStiffness, boundaryDamping;
-            int rigidBodyCount;
+            int   rigidBodyCount;
         };
 
         // 流体积分参数
@@ -39,7 +39,7 @@ namespace Engine
             float deltaTime, damping;
             float gravity[3];
             float boundaryMin[3], boundaryMax[3];
-            int useBoundary, particleCount;
+            int   useBoundary, particleCount;
         };
 
         // 流体发射参数
@@ -48,20 +48,20 @@ namespace Engine
             float emitterPos[3], emitExtents[3];
             float initialVelocity[3];
             float time;
-            int particleCount;
+            int   particleCount;
         };
 
         // ---- CUDA-native 网格/PCISPH 缓冲区生命周期 ----
         // 返回不透明上下文指针（持有 d_cellHash/Count/Start/SortedIndices/pcisph/rigidBody）
         void* CreateSPHContext(uint32_t maxParticles, uint32_t gridSize, uint32_t maxRigidBodies);
-        void DestroySPHContext(void* ctx);
+        void  DestroySPHContext(void* ctx);
 
         // 每帧：从 CPU 上传刚体数据
         void SPHUploadRigidBodies(void* ctx, const void* cpuData, uint32_t count);
 
         // ---- Grid Build（3 步合 1 调用，内部用 CUB prefix sum）----
-        void LaunchSPHGridBuild(void* ctx, void* particles, uint32_t aliveCount, int gridSize, float cellSize,
-                                void* stream);
+        void
+        LaunchSPHGridBuild(void* ctx, void* particles, uint32_t aliveCount, int gridSize, float cellSize, void* stream);
 
         // ---- WCSPH 路径 ----
         void LaunchSPHDensity(void* ctx, void* particles, const SPHParams& p, void* stream);
@@ -70,10 +70,10 @@ namespace Engine
         // ---- PCISPH 路径 ----
         void LaunchPCISPHInit(void* ctx, void* particles, const SPHParams& p, void* stream);
         void LaunchPCISPHPredict(void* ctx, void* particles, float dt, int aliveCount, void* stream);
-        void LaunchPCISPHDensity(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip,
-                                 void* stream);
-        void LaunchPCISPHForce(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip,
-                               void* stream);
+        void
+        LaunchPCISPHDensity(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream);
+        void
+        LaunchPCISPHForce(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream);
         void LaunchPCISPHApply(void* ctx, void* particles, int aliveCount, void* stream);
 
         // ---- 积分 + 边界 ----

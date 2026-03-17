@@ -15,10 +15,10 @@ namespace Engine
     // 碰撞回调信息
     struct CollisionCallbackInfo
     {
-        Entity OtherEntity;
-        glm::vec3 ContactPoint = {0, 0, 0};
+        Entity    OtherEntity;
+        glm::vec3 ContactPoint  = {0, 0, 0};
         glm::vec3 ContactNormal = {0, 0, 0};
-        float Impulse = 0.0f;
+        float     Impulse       = 0.0f;
     };
 
     class ScriptableEntity

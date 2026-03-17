@@ -7,20 +7,23 @@ namespace Engine
 {
     namespace
     {
-        void ApplyTransform(Entity entity, const glm::vec3& translation, const glm::vec3& rotation,
-                            const glm::vec3& scale)
+        void
+        ApplyTransform(Entity entity, const glm::vec3& translation, const glm::vec3& rotation, const glm::vec3& scale)
         {
             if (!entity || !entity.HasComponent<TransformComponent>())
                 return;
 
-            auto& tc = entity.GetComponent<TransformComponent>();
+            auto& tc       = entity.GetComponent<TransformComponent>();
             tc.Translation = translation;
-            tc.Rotation = rotation;
-            tc.Scale = scale;
+            tc.Rotation    = rotation;
+            tc.Scale       = scale;
         }
 
-        void ApplyTransformByUUID(const UUID& entityID, const Ref<Scene>& scene, const glm::vec3& translation,
-                                  const glm::vec3& rotation, const glm::vec3& scale)
+        void ApplyTransformByUUID(const UUID&       entityID,
+                                  const Ref<Scene>& scene,
+                                  const glm::vec3&  translation,
+                                  const glm::vec3&  rotation,
+                                  const glm::vec3&  scale)
         {
             if (!scene)
                 return;
@@ -116,13 +119,17 @@ namespace Engine
 
     // ==================== TransformChangeCommand ====================
 
-    TransformChangeCommand::TransformChangeCommand(Ref<Scene> scene, Entity entity, const glm::vec3& oldTranslation,
-                                                   const glm::vec3& oldRotation, const glm::vec3& oldScale,
-                                                   const glm::vec3& newTranslation, const glm::vec3& newRotation,
+    TransformChangeCommand::TransformChangeCommand(Ref<Scene>       scene,
+                                                   Entity           entity,
+                                                   const glm::vec3& oldTranslation,
+                                                   const glm::vec3& oldRotation,
+                                                   const glm::vec3& oldScale,
+                                                   const glm::vec3& newTranslation,
+                                                   const glm::vec3& newRotation,
                                                    const glm::vec3& newScale)
-        : m_EntityUUID(entity.GetUUID()), m_Scene(std::move(scene)),
-          m_OldTranslation(oldTranslation), m_OldRotation(oldRotation), m_OldScale(oldScale),
-          m_NewTranslation(newTranslation), m_NewRotation(newRotation), m_NewScale(newScale)
+        : m_EntityUUID(entity.GetUUID()), m_Scene(std::move(scene)), m_OldTranslation(oldTranslation),
+          m_OldRotation(oldRotation), m_OldScale(oldScale), m_NewTranslation(newTranslation),
+          m_NewRotation(newRotation), m_NewScale(newScale)
     {
     }
 
@@ -174,14 +181,14 @@ namespace Engine
         if (static_cast<uint64_t>(m_EntityUUID) == 0)
         {
             // 首次创建：分配新 UUID
-            Entity entity = m_Scene->CreateEntity(m_Name);
+            Entity entity   = m_Scene->CreateEntity(m_Name);
             m_CreatedHandle = static_cast<entt::entity>(entity);
-            m_EntityUUID = entity.GetUUID();
+            m_EntityUUID    = entity.GetUUID();
         }
         else
         {
             // Redo：使用相同 UUID 重建，保持引用一致性
-            Entity entity = m_Scene->CreateEntityWithUUID(m_EntityUUID, m_Name);
+            Entity entity   = m_Scene->CreateEntityWithUUID(m_EntityUUID, m_Name);
             m_CreatedHandle = static_cast<entt::entity>(entity);
         }
     }
@@ -212,8 +219,7 @@ namespace Engine
 
     // ==================== EntityDeleteCommand ====================
 
-    EntityDeleteCommand::EntityDeleteCommand(Ref<Scene> scene, Entity entity)
-        : m_Scene(scene)
+    EntityDeleteCommand::EntityDeleteCommand(Ref<Scene> scene, Entity entity) : m_Scene(scene)
     {
         // 记录根实体的外部父节点
         if (entity.HasComponent<RelationshipComponent>())
@@ -227,8 +233,8 @@ namespace Engine
     {
         EntitySnapshot snap;
         snap.EntityUUID = entity.GetUUID();
-        snap.Name = entity.GetName();
-        snap.Transform = entity.GetComponent<TransformComponent>();
+        snap.Name       = entity.GetName();
+        snap.Transform  = entity.GetComponent<TransformComponent>();
 
         if (entity.HasComponent<RelationshipComponent>())
             snap.Relationship = entity.GetComponent<RelationshipComponent>();
@@ -287,7 +293,7 @@ namespace Engine
             auto& snap = m_Snapshots[i];
             if (static_cast<uint64_t>(snap.Relationship.ParentID) != 0)
             {
-                Entity child = m_Scene->FindEntityByUUID(snap.EntityUUID);
+                Entity child  = m_Scene->FindEntityByUUID(snap.EntityUUID);
                 Entity parent = m_Scene->FindEntityByUUID(snap.Relationship.ParentID);
                 if (child && parent)
                     m_Scene->SetParent(child, parent);
@@ -297,7 +303,7 @@ namespace Engine
         // 步骤 3：将根实体挂回子树外的原始父节点
         if (static_cast<uint64_t>(m_OriginalParentUUID) != 0)
         {
-            Entity root = m_Scene->FindEntityByUUID(m_Snapshots[0].EntityUUID);
+            Entity root           = m_Scene->FindEntityByUUID(m_Snapshots[0].EntityUUID);
             Entity originalParent = m_Scene->FindEntityByUUID(m_OriginalParentUUID);
             if (root && originalParent)
                 m_Scene->SetParent(root, originalParent);
@@ -319,8 +325,10 @@ namespace Engine
 
     // ==================== PropertyChangeCommand ====================
 
-    PropertyChangeCommand::PropertyChangeCommand(const std::string& description, std::any oldValue, std::any newValue,
-                                                 ApplyFn applyFn)
+    PropertyChangeCommand::PropertyChangeCommand(const std::string& description,
+                                                 std::any           oldValue,
+                                                 std::any           newValue,
+                                                 ApplyFn            applyFn)
         : m_Description(description), m_OldValue(std::move(oldValue)), m_NewValue(std::move(newValue)),
           m_ApplyFn(std::move(applyFn))
     {
@@ -355,10 +363,10 @@ namespace Engine
             m_OldParentUUID = 0;
 
         // 保存变更前子实体的本地 Transform
-        auto& tc = child.GetComponent<TransformComponent>();
+        auto& tc         = child.GetComponent<TransformComponent>();
         m_OldTranslation = tc.Translation;
-        m_OldRotation = tc.Rotation;
-        m_OldScale = tc.Scale;
+        m_OldRotation    = tc.Rotation;
+        m_OldScale       = tc.Scale;
     }
 
     void ParentChangeCommand::Execute()
@@ -401,10 +409,10 @@ namespace Engine
 
         // 精确还原变更前的本地 Transform（因为 SetParent/RemoveParent 做了变换转换，
         // 但浮点精度可能导致微小偏差，直接用快照值更准确）
-        auto& tc = child.GetComponent<TransformComponent>();
+        auto& tc       = child.GetComponent<TransformComponent>();
         tc.Translation = m_OldTranslation;
-        tc.Rotation = m_OldRotation;
-        tc.Scale = m_OldScale;
+        tc.Rotation    = m_OldRotation;
+        tc.Scale       = m_OldScale;
     }
 
     std::string ParentChangeCommand::GetDescription() const

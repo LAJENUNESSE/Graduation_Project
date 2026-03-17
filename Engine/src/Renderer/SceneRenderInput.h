@@ -10,10 +10,10 @@ namespace Engine
 
     struct SceneRenderInput
     {
-        entt::registry* Registry = nullptr;
-        const SceneEntityIndex* EntityIndex = nullptr;
-        float DeltaTime = 0.0f;
-        WorldTransformCache* TransformCache = nullptr;
+        entt::registry*         Registry       = nullptr;
+        const SceneEntityIndex* EntityIndex    = nullptr;
+        float                   DeltaTime      = 0.0f;
+        WorldTransformCache*    TransformCache = nullptr;
     };
 
 } // namespace Engine

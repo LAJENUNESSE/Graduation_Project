@@ -45,16 +45,15 @@ namespace Engine
 
         // 这些回调捕获 EditorLayer::this，必须在 Assemble 之后设置
         m_Boot->SetSceneOpenCallback([this](const std::string& path) { OpenScene(path); });
-        m_Boot->SetMSAAChangedCallback([this](uint32_t samples) { m_Boot->RenderController().ApplyMSAASamples(samples); });
+        m_Boot->SetMSAAChangedCallback([this](uint32_t samples)
+                                       { m_Boot->RenderController().ApplyMSAASamples(samples); });
 
         BootstrapDefaultScene();
 
         // RenderSettingsPanel 初始 context（需要 m_ActiveScene，所以在 BootstrapDefaultScene 之后）
         m_Boot->GetRenderSettingsPanel().SetContext(
-            &m_Boot->RenderController().GetSceneRenderer(),
-            m_Boot->RenderController().GetPostProcessingSettings(),
-            m_Boot->ViewportController().GetHDRFramebuffer(), m_ActiveScene,
-            &m_Boot->ShowPhysicsColliders());
+            &m_Boot->RenderController().GetSceneRenderer(), m_Boot->RenderController().GetPostProcessingSettings(),
+            m_Boot->ViewportController().GetHDRFramebuffer(), m_ActiveScene, &m_Boot->ShowPhysicsColliders());
 
         ApplyActiveSceneContext(false);
 
@@ -62,10 +61,12 @@ namespace Engine
         Application::Get().SetCloseInterceptor([this]() { return PromptSaveIfDirty(); });
 
         // CommandHistory → MarkDirty 桥接
-        m_Boot->SetModifiedCallback([this]() {
-            m_Boot->SceneSession().MarkDirty();
-            UpdateWindowTitle();
-        });
+        m_Boot->SetModifiedCallback(
+            [this]()
+            {
+                m_Boot->SceneSession().MarkDirty();
+                UpdateWindowTitle();
+            });
 
         // 崩溃紧急保存
         CrashHandler::SetEmergencySaveCallback([this]() { PerformAutosave(); });
@@ -119,8 +120,8 @@ namespace Engine
         {
             m_Boot->SelectionGizmoController().UpdateHoveredEntity(
                 viewportContext, m_Boot->ViewportController().GetPickingFramebuffer(), m_ActiveScene);
-            m_Boot->SelectionGizmoController().RenderGizmos(
-                viewportContext, m_Boot->ViewportController().GetCamera(), m_ActiveScene);
+            m_Boot->SelectionGizmoController().RenderGizmos(viewportContext, m_Boot->ViewportController().GetCamera(),
+                                                            m_ActiveScene);
         }
         m_Boot->ViewportController().EndViewportWindow();
     }
@@ -145,8 +146,8 @@ namespace Engine
     bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e)
     {
         if (m_Boot->SceneSession().GetState() == SceneState::Edit)
-            m_Boot->SelectionGizmoController().OnMouseButtonPressed(
-                e, m_Boot->ViewportController().GetContext(), m_ActiveScene);
+            m_Boot->SelectionGizmoController().OnMouseButtonPressed(e, m_Boot->ViewportController().GetContext(),
+                                                                    m_ActiveScene);
         return false;
     }
 
@@ -183,7 +184,7 @@ namespace Engine
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
 
         EditorRenderSettings renderSettings;
-        const bool opened =
+        const bool           opened =
             m_Boot->SceneSession().OpenSceneFromPath(m_ActiveScene, filepath, static_cast<uint32_t>(renderSize.x),
                                                      static_cast<uint32_t>(renderSize.y), &renderSettings);
         SyncCommandHistorySuspension();
@@ -210,8 +211,8 @@ namespace Engine
         }
 
         Ref<Scene> sceneToSave = session.GetSceneForSaving(m_ActiveScene);
-        bool ok = session.SaveSceneToPath(sceneToSave, session.GetCurrentScenePath(),
-                                          m_Boot->RenderController().CollectRenderSettings(sceneToSave));
+        bool       ok          = session.SaveSceneToPath(sceneToSave, session.GetCurrentScenePath(),
+                                                         m_Boot->RenderController().CollectRenderSettings(sceneToSave));
         if (ok)
         {
             session.ClearDirty();
@@ -229,8 +230,8 @@ namespace Engine
             return;
 
         Ref<Scene> sceneToSave = m_Boot->SceneSession().GetSceneForSaving(m_ActiveScene);
-        bool ok = m_Boot->SceneSession().SaveSceneToPath(
-            sceneToSave, filepath, m_Boot->RenderController().CollectRenderSettings(sceneToSave));
+        bool       ok          = m_Boot->SceneSession().SaveSceneToPath(sceneToSave, filepath,
+                                                                        m_Boot->RenderController().CollectRenderSettings(sceneToSave));
         if (ok)
         {
             m_Boot->SceneSession().SetCurrentScenePath(filepath);
@@ -264,8 +265,7 @@ namespace Engine
         // Play 期间 viewport resize 只作用于 runtime scene，需同步回 editor scene
         glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
         if (m_ActiveScene && renderSize.x > 0 && renderSize.y > 0)
-            m_ActiveScene->OnViewportResize(static_cast<uint32_t>(renderSize.x),
-                                            static_cast<uint32_t>(renderSize.y));
+            m_ActiveScene->OnViewportResize(static_cast<uint32_t>(renderSize.x), static_cast<uint32_t>(renderSize.y));
 
         ApplyActiveSceneContext(false);
     }
@@ -300,15 +300,15 @@ namespace Engine
     EditorShellState EditorLayer::BuildShellState() const
     {
         EditorShellState state;
-        const bool allowHistoryActions = m_Boot->SceneSession().GetState() == SceneState::Edit;
-        state.CurrentSceneState = m_Boot->SceneSession().GetState();
-        state.CanSave = allowHistoryActions;
-        state.CanUndo = allowHistoryActions && m_Boot->GetCommandHistory().CanUndo();
-        state.CanRedo = allowHistoryActions && m_Boot->GetCommandHistory().CanRedo();
+        const bool       allowHistoryActions = m_Boot->SceneSession().GetState() == SceneState::Edit;
+        state.CurrentSceneState              = m_Boot->SceneSession().GetState();
+        state.CanSave                        = allowHistoryActions;
+        state.CanUndo                        = allowHistoryActions && m_Boot->GetCommandHistory().CanUndo();
+        state.CanRedo                        = allowHistoryActions && m_Boot->GetCommandHistory().CanRedo();
         state.UndoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetUndoDescription() : "";
         state.RedoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetRedoDescription() : "";
-        state.ShowStatsPanel = m_Boot->PanelCoordinator().IsStatsPanelVisible();
-        state.IsDirty = m_Boot->SceneSession().IsDirty();
+        state.ShowStatsPanel  = m_Boot->PanelCoordinator().IsStatsPanelVisible();
+        state.IsDirty         = m_Boot->SceneSession().IsDirty();
         return state;
     }
 
@@ -317,17 +317,17 @@ namespace Engine
         m_ActiveScene = CreateRef<Scene>();
         m_ActiveScene->SetSceneRenderer(&m_Boot->RenderController().GetSceneRenderer());
 
-        Entity cubeEntity = m_ActiveScene->CreateEntity("Cube");
-        auto& meshRenderer = cubeEntity.AddComponent<MeshRendererComponent>();
-        meshRenderer.Type = MeshType::Cube;
+        Entity cubeEntity      = m_ActiveScene->CreateEntity("Cube");
+        auto&  meshRenderer    = cubeEntity.AddComponent<MeshRendererComponent>();
+        meshRenderer.Type      = MeshType::Cube;
         meshRenderer.MeshAsset = AssetManager::Load<Mesh>("builtin:Cube");
-        meshRenderer.Color = {0.8f, 0.2f, 0.3f, 1.0f};
+        meshRenderer.Color     = {0.8f, 0.2f, 0.3f, 1.0f};
 
-        Entity lightEntity = m_ActiveScene->CreateEntity("方向光");
-        auto& light = lightEntity.AddComponent<LightComponent>();
-        light.Type = LightComponent::LightType::Directional;
-        light.Color = {1.0f, 0.95f, 0.9f};
-        auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
+        Entity lightEntity      = m_ActiveScene->CreateEntity("方向光");
+        auto&  light            = lightEntity.AddComponent<LightComponent>();
+        light.Type              = LightComponent::LightType::Directional;
+        light.Color             = {1.0f, 0.95f, 0.9f};
+        auto& lightTransform    = lightEntity.GetComponent<TransformComponent>();
         lightTransform.Rotation = {glm::radians(-45.0f), glm::radians(30.0f), 0.0f};
 
         m_Boot->SceneSession().SetEditorScene(m_ActiveScene);
@@ -352,22 +352,27 @@ namespace Engine
 
         auto result = FileDialogs::ShowYesNoCancelBox(
             "\xe4\xbf\x9d\xe5\xad\x98\xe6\x8f\x90\xe7\xa4\xba",
-            "\xe5\xbd\x93\xe5\x89\x8d\xe5\x9c\xba\xe6\x99\xaf\xe5\xb7\xb2\xe4\xbf\xae\xe6\x94\xb9\xe4\xbd\x86\xe5\xb0\x9a\xe6\x9c\xaa\xe4\xbf\x9d\xe5\xad\x98\xe3\x80\x82\n\xe6\x98\xaf\xe5\x90\xa6\xe4\xbf\x9d\xe5\xad\x98\xe6\x9b\xb4\xe6\x94\xb9\xef\xbc\x9f");
+            "\xe5\xbd\x93\xe5\x89\x8d\xe5\x9c\xba\xe6\x99\xaf\xe5\xb7\xb2\xe4\xbf\xae\xe6\x94\xb9\xe4\xbd\x86\xe5\xb0"
+            "\x9a\xe6\x9c\xaa\xe4\xbf\x9d\xe5\xad\x98\xe3\x80\x82\n\xe6\x98\xaf\xe5\x90\xa6\xe4\xbf\x9d\xe5\xad\x98\xe6"
+            "\x9b\xb4\xe6\x94\xb9\xef\xbc\x9f");
         // "保存提示" / "当前场景已修改但尚未保存。\n是否保存更改？"
 
         switch (result)
         {
-        case FileDialogs::MessageBoxResult::Yes:    return SaveSceneQuick();
-        case FileDialogs::MessageBoxResult::No:     return true;
+        case FileDialogs::MessageBoxResult::Yes:
+            return SaveSceneQuick();
+        case FileDialogs::MessageBoxResult::No:
+            return true;
         case FileDialogs::MessageBoxResult::Cancel:
-        default:                                    return false;
+        default:
+            return false;
         }
     }
 
     void EditorLayer::UpdateWindowTitle()
     {
-        auto& session = m_Boot->SceneSession();
-        std::string title = "Game Engine";
+        auto&       session = m_Boot->SceneSession();
+        std::string title   = "Game Engine";
 
         if (session.HasScenePath())
         {
@@ -391,7 +396,7 @@ namespace Engine
             return;
 
         std::error_code ec;
-        auto dir = PathUtils::GetProjectRoot() / ".autosave";
+        auto            dir = PathUtils::GetProjectRoot() / ".autosave";
         std::filesystem::create_directories(dir, ec);
         if (ec)
         {
@@ -399,8 +404,8 @@ namespace Engine
             return;
         }
 
-        auto path = (dir / "autosave.scene").string();
-        Ref<Scene> scene = m_Boot->SceneSession().GetSceneForSaving(m_ActiveScene);
+        auto            path  = (dir / "autosave.scene").string();
+        Ref<Scene>      scene = m_Boot->SceneSession().GetSceneForSaving(m_ActiveScene);
         SceneSerializer serializer(scene);
         if (serializer.Serialize(path, m_Boot->RenderController().CollectRenderSettings(scene)))
             ENGINE_INFO("[Autosave] Saved to {0}", path);
@@ -422,12 +427,15 @@ namespace Engine
 
         auto result = FileDialogs::ShowYesNoCancelBox(
             "\xe5\xb4\xa9\xe6\xba\x83\xe6\x81\xa2\xe5\xa4\x8d",
-            "\xe6\xa3\x80\xe6\xb5\x8b\xe5\x88\xb0\xe4\xb8\x8a\xe6\xac\xa1\xe7\xbc\x96\xe8\xbe\x91\xe5\x99\xa8\xe5\xbc\x82\xe5\xb8\xb8\xe9\x80\x80\xe5\x87\xba\xe6\x97\xb6\xe7\x9a\x84\xe8\x87\xaa\xe5\x8a\xa8\xe4\xbf\x9d\xe5\xad\x98\xe6\x96\x87\xe4\xbb\xb6\xe3\x80\x82\n\xe6\x98\xaf\xe5\x90\xa6\xe6\x81\xa2\xe5\xa4\x8d\xef\xbc\x9f");
+            "\xe6\xa3\x80\xe6\xb5\x8b\xe5\x88\xb0\xe4\xb8\x8a\xe6\xac\xa1\xe7\xbc\x96\xe8\xbe\x91\xe5\x99\xa8\xe5\xbc"
+            "\x82\xe5\xb8\xb8\xe9\x80\x80\xe5\x87\xba\xe6\x97\xb6\xe7\x9a\x84\xe8\x87\xaa\xe5\x8a\xa8\xe4\xbf\x9d\xe5"
+            "\xad\x98\xe6\x96\x87\xe4\xbb\xb6\xe3\x80\x82\n\xe6\x98\xaf\xe5\x90\xa6\xe6\x81\xa2\xe5\xa4\x8d\xef\xbc"
+            "\x9f");
         // "崩溃恢复" / "检测到上次编辑器异常退出时的自动保存文件。\n是否恢复？"
 
         if (result == FileDialogs::MessageBoxResult::Yes)
         {
-            glm::vec2 sz = m_Boot->ViewportController().GetRenderSize();
+            glm::vec2            sz = m_Boot->ViewportController().GetRenderSize();
             EditorRenderSettings rs;
             if (m_Boot->SceneSession().OpenSceneFromPath(m_ActiveScene, path, static_cast<uint32_t>(sz.x),
                                                          static_cast<uint32_t>(sz.y), &rs))
@@ -451,4 +459,3 @@ namespace Engine
     }
 
 } // namespace Engine
-

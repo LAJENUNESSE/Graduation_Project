@@ -19,7 +19,7 @@ namespace Engine
         m_TerrainShader = Shader::Create("assets/shaders/TerrainPBR.glsl");
 
         auto whiteHandle = AssetManager::Load<Texture2D>("builtin:white");
-        m_WhiteTexture = AssetManager::GetRef<Texture2D>(whiteHandle);
+        m_WhiteTexture   = AssetManager::GetRef<Texture2D>(whiteHandle);
     }
 
     void TerrainRenderSystem::UpdateTerrainMeshes(entt::registry& reg)
@@ -27,11 +27,11 @@ namespace Engine
         auto view = reg.view<TransformComponent, TerrainComponent>();
         for (auto entity : view)
         {
-            auto& tc = view.get<TerrainComponent>(entity);
+            auto&    tc  = view.get<TerrainComponent>(entity);
             uint32_t eid = static_cast<uint32_t>(entity);
 
-            auto& cache = m_Cache[eid];
-            bool needRebuild = tc.MeshDirty || cache.HeightmapPath != tc.HeightmapPath ||
+            auto& cache       = m_Cache[eid];
+            bool  needRebuild = tc.MeshDirty || cache.HeightmapPath != tc.HeightmapPath ||
                                cache.HeightScale != tc.HeightScale || cache.TerrainSize != tc.TerrainSize ||
                                cache.LODLevels != tc.LODLevels;
 
@@ -41,28 +41,32 @@ namespace Engine
                     TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
 
                 // 写入 TerrainRuntimeComponent（懒创建）
-                auto& rtc = reg.get_or_emplace<TerrainRuntimeComponent>(entity);
+                auto& rtc    = reg.get_or_emplace<TerrainRuntimeComponent>(entity);
                 rtc.MeshData = std::make_unique<TerrainMeshData>(std::move(meshData));
                 tc.MeshDirty = false;
 
                 cache.HeightmapPath = tc.HeightmapPath;
-                cache.HeightScale = tc.HeightScale;
-                cache.TerrainSize = tc.TerrainSize;
-                cache.LODLevels = tc.LODLevels;
+                cache.HeightScale   = tc.HeightScale;
+                cache.TerrainSize   = tc.TerrainSize;
+                cache.LODLevels     = tc.LODLevels;
             }
         }
     }
 
-    void TerrainRenderSystem::Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
-                                     const ShadowData& shadow, const ShadowSettings& shadowSettings,
-                                     const SceneEntityIndex& index, WorldTransformCache* cache)
+    void TerrainRenderSystem::Render(entt::registry&         reg,
+                                     const EditorCamera&     camera,
+                                     const LightEnvironment& lights,
+                                     const ShadowData&       shadow,
+                                     const ShadowSettings&   shadowSettings,
+                                     const SceneEntityIndex& index,
+                                     WorldTransformCache*    cache)
     {
-        auto view = reg.view<TransformComponent, TerrainComponent>();
+        auto view       = reg.view<TransformComponent, TerrainComponent>();
         bool anyTerrain = false;
 
         for (auto entity : view)
         {
-            auto& tc = view.get<TerrainComponent>(entity);
+            auto&            tc       = view.get<TerrainComponent>(entity);
             TerrainMeshData* meshData = nullptr;
             if (reg.all_of<TerrainRuntimeComponent>(entity))
                 meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
@@ -88,12 +92,12 @@ namespace Engine
                 m_TerrainShader->SetInt("u_ShadowMap", 1);
             }
 
-            auto& transform = view.get<TransformComponent>(entity);
-            uint32_t eid = static_cast<uint32_t>(entity);
+            auto&    transform = view.get<TransformComponent>(entity);
+            uint32_t eid       = static_cast<uint32_t>(entity);
 
             // LOD 选择
             float dist = glm::distance(camera.GetPosition(), transform.Translation);
-            int lod = 0;
+            int   lod  = 0;
             if (dist > tc.LODDistance2 && static_cast<int>(meshData->LODs.size()) >= 3)
                 lod = 2;
             else if (dist > tc.LODDistance1 && static_cast<int>(meshData->LODs.size()) >= 2)
@@ -112,7 +116,7 @@ namespace Engine
             {
                 if (splatCache.Path != tc.SplatmapPath || !splatCache.Texture)
                 {
-                    splatCache.Path = tc.SplatmapPath;
+                    splatCache.Path    = tc.SplatmapPath;
                     splatCache.Texture = Texture2D::Create(tc.SplatmapPath);
                 }
                 splatCache.Texture->Bind(6);
@@ -124,18 +128,18 @@ namespace Engine
             m_TerrainShader->SetInt("u_Splatmap", 6);
 
             // 绑定 4 层纹理
-            const int albedoUnits[4] = {7, 8, 9, 10};
-            const int normalUnits[4] = {11, 12, 13, 14};
-            const char* albedoNames[4] = {"u_Layer0Albedo", "u_Layer1Albedo", "u_Layer2Albedo", "u_Layer3Albedo"};
-            const char* normalNames[4] = {"u_Layer0Normal", "u_Layer1Normal", "u_Layer2Normal", "u_Layer3Normal"};
+            const int   albedoUnits[4]    = {7, 8, 9, 10};
+            const int   normalUnits[4]    = {11, 12, 13, 14};
+            const char* albedoNames[4]    = {"u_Layer0Albedo", "u_Layer1Albedo", "u_Layer2Albedo", "u_Layer3Albedo"};
+            const char* normalNames[4]    = {"u_Layer0Normal", "u_Layer1Normal", "u_Layer2Normal", "u_Layer3Normal"};
             const char* hasNormalNames[4] = {"u_HasLayer0Normal", "u_HasLayer1Normal", "u_HasLayer2Normal",
                                              "u_HasLayer3Normal"};
 
             float tilings[4], metallics[4], roughnesses[4];
             for (int i = 0; i < 4; i++)
             {
-                tilings[i] = tc.LayerTiling[i];
-                metallics[i] = tc.LayerMetallic[i];
+                tilings[i]     = tc.LayerTiling[i];
+                metallics[i]   = tc.LayerMetallic[i];
                 roughnesses[i] = tc.LayerRoughness[i];
 
                 // Albedo
@@ -163,10 +167,10 @@ namespace Engine
             }
 
             // 预生成的 uniform 名称数组，避免每帧循环内的字符串拼接
-            static const char* s_LayerTiling[] = {"u_LayerTiling[0]", "u_LayerTiling[1]", "u_LayerTiling[2]",
-                                                  "u_LayerTiling[3]"};
-            static const char* s_LayerMetallic[] = {"u_LayerMetallic[0]", "u_LayerMetallic[1]", "u_LayerMetallic[2]",
-                                                    "u_LayerMetallic[3]"};
+            static const char* s_LayerTiling[]    = {"u_LayerTiling[0]", "u_LayerTiling[1]", "u_LayerTiling[2]",
+                                                     "u_LayerTiling[3]"};
+            static const char* s_LayerMetallic[]  = {"u_LayerMetallic[0]", "u_LayerMetallic[1]", "u_LayerMetallic[2]",
+                                                     "u_LayerMetallic[3]"};
             static const char* s_LayerRoughness[] = {"u_LayerRoughness[0]", "u_LayerRoughness[1]",
                                                      "u_LayerRoughness[2]", "u_LayerRoughness[3]"};
 
@@ -188,13 +192,15 @@ namespace Engine
             Renderer::EndScene();
     }
 
-    void TerrainRenderSystem::RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader,
-                                          const SceneEntityIndex& index, WorldTransformCache* cache)
+    void TerrainRenderSystem::RenderDepth(entt::registry&         reg,
+                                          const Ref<Shader>&      depthShader,
+                                          const SceneEntityIndex& index,
+                                          WorldTransformCache*    cache)
     {
         auto view = reg.view<TransformComponent, TerrainComponent>();
         for (auto entity : view)
         {
-            auto& tc = view.get<TerrainComponent>(entity);
+            auto&            tc       = view.get<TerrainComponent>(entity);
             TerrainMeshData* meshData = nullptr;
             if (reg.all_of<TerrainRuntimeComponent>(entity))
                 meshData = reg.get<TerrainRuntimeComponent>(entity).MeshData.get();
@@ -202,7 +208,8 @@ namespace Engine
                 continue;
 
             auto& transform = view.get<TransformComponent>(entity);
-            depthShader->SetMat4("u_Transform", WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
+            depthShader->SetMat4("u_Transform",
+                                 WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
 
             // 阴影用 LOD0（最高精度）
             meshData->LODs[0].VAO->Bind();

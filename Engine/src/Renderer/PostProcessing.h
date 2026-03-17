@@ -10,10 +10,10 @@ namespace Engine
 
     struct PostProcessingSettings
     {
-        bool BloomEnabled = true;
-        float BloomThreshold = 1.0f;
-        float BloomStrength = 0.3f;
-        int BloomIterations = 3;
+        bool  BloomEnabled    = true;
+        float BloomThreshold  = 1.0f;
+        float BloomStrength   = 0.3f;
+        int   BloomIterations = 3;
 
         // Tone Mapping: 0 = Reinhard, 1 = ACES
         int ToneMappingMode = 1;
@@ -42,7 +42,7 @@ namespace Engine
         void CreateFullscreenQuad();
         void RenderFullscreenQuad();
 
-        uint32_t m_Width = 0;
+        uint32_t m_Width  = 0;
         uint32_t m_Height = 0;
 
         // Fullscreen quad

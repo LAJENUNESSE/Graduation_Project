@@ -112,8 +112,8 @@ namespace Engine
                     if (fieldNode.IsSequence() && fieldNode.size() == 2)
                     {
                         auto& v = *static_cast<glm::vec2*>(ptr);
-                        v.x = fieldNode[0].as<float>();
-                        v.y = fieldNode[1].as<float>();
+                        v.x     = fieldNode[0].as<float>();
+                        v.y     = fieldNode[1].as<float>();
                     }
                     break;
                 case PropertyType::Vec3:
@@ -121,9 +121,9 @@ namespace Engine
                     if (fieldNode.IsSequence() && fieldNode.size() == 3)
                     {
                         auto& v = *static_cast<glm::vec3*>(ptr);
-                        v.x = fieldNode[0].as<float>();
-                        v.y = fieldNode[1].as<float>();
-                        v.z = fieldNode[2].as<float>();
+                        v.x     = fieldNode[0].as<float>();
+                        v.y     = fieldNode[1].as<float>();
+                        v.z     = fieldNode[2].as<float>();
                     }
                     break;
                 case PropertyType::Vec4:
@@ -131,10 +131,10 @@ namespace Engine
                     if (fieldNode.IsSequence() && fieldNode.size() == 4)
                     {
                         auto& v = *static_cast<glm::vec4*>(ptr);
-                        v.x = fieldNode[0].as<float>();
-                        v.y = fieldNode[1].as<float>();
-                        v.z = fieldNode[2].as<float>();
-                        v.w = fieldNode[3].as<float>();
+                        v.x     = fieldNode[0].as<float>();
+                        v.y     = fieldNode[1].as<float>();
+                        v.z     = fieldNode[2].as<float>();
+                        v.w     = fieldNode[3].as<float>();
                     }
                     break;
                 case PropertyType::Enum:

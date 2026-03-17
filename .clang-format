@@ -12,3 +12,8 @@ PointerAlignment: Left
 AccessModifierOffset: -4
 SortIncludes: false
 IncludeBlocks: Preserve
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignTrailingComments: true
+BinPackParameters: false
+AllowShortBlocksOnASingleLine: Empty

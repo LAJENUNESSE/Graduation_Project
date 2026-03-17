@@ -15,9 +15,9 @@ namespace Engine
     // ========== 日志条目 ==========
     struct ConsoleLogEntry
     {
-        std::string Timestamp;
+        std::string               Timestamp;
         spdlog::level::level_enum Level = spdlog::level::info;
-        std::string Message;
+        std::string               Message;
     };
 
     // ========== 自定义 spdlog sink ==========
@@ -27,7 +27,7 @@ namespace Engine
         static constexpr size_t MaxEntries = 1000;
 
         std::vector<ConsoleLogEntry> CopyEntries();
-        void ClearEntries();
+        void                         ClearEntries();
 
     protected:
         void sink_it_(const spdlog::details::log_msg& msg) override;
@@ -52,17 +52,17 @@ namespace Engine
 
     private:
         Ref<ImGuiConsoleSink> m_Sink;
-        bool m_SinkRegistered = false;
+        bool                  m_SinkRegistered = false;
 
         // 过滤设置
         bool m_ShowTrace = true;
-        bool m_ShowInfo = true;
-        bool m_ShowWarn = true;
+        bool m_ShowInfo  = true;
+        bool m_ShowWarn  = true;
         bool m_ShowError = true;
 
         char m_SearchBuffer[256] = {};
-        bool m_AutoScroll = true;
-        bool m_ScrollToBottom = false;
+        bool m_AutoScroll        = true;
+        bool m_ScrollToBottom    = false;
     };
 
 } // namespace Engine

@@ -36,8 +36,8 @@ namespace Engine
             glBindTexture(GL_TEXTURE_2D, id);
         }
 
-        static void AttachColorTexture(uint32_t id, GLenum internalFormat, GLenum format, GLenum type, uint32_t width,
-                                       uint32_t height, int index)
+        static void AttachColorTexture(
+            uint32_t id, GLenum internalFormat, GLenum format, GLenum type, uint32_t width, uint32_t height, int index)
         {
             glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
 
@@ -52,8 +52,8 @@ namespace Engine
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + index, GL_TEXTURE_2D, id, 0);
         }
 
-        static void AttachDepthTexture(uint32_t id, GLenum format, GLenum attachmentType, uint32_t width,
-                                       uint32_t height)
+        static void
+        AttachDepthTexture(uint32_t id, GLenum format, GLenum attachmentType, uint32_t width, uint32_t height)
         {
             glRenderbufferStorage(GL_RENDERBUFFER, format, width, height);
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachmentType, GL_RENDERBUFFER, id);
@@ -105,7 +105,7 @@ namespace Engine
 
             m_ColorAttachments.clear();
             m_DepthAttachment = 0;
-            m_DepthIsTexture = false;
+            m_DepthIsTexture  = false;
         }
 
         // MSAA cleanup
@@ -114,7 +114,7 @@ namespace Engine
             glDeleteFramebuffers(1, &m_MSAAFBO);
             glDeleteRenderbuffers(1, &m_MSAAColorRenderbuffer);
             glDeleteRenderbuffers(1, &m_MSAADepthRenderbuffer);
-            m_MSAAFBO = 0;
+            m_MSAAFBO               = 0;
             m_MSAAColorRenderbuffer = 0;
             m_MSAADepthRenderbuffer = 0;
         }
@@ -337,7 +337,7 @@ namespace Engine
             return;
         }
 
-        m_Specification.Width = width;
+        m_Specification.Width  = width;
         m_Specification.Height = height;
 
         Invalidate();
@@ -396,7 +396,7 @@ namespace Engine
         }
         else
         {
-            float fValue = static_cast<float>(value);
+            float fValue        = static_cast<float>(value);
             float clearColor[4] = {fValue, fValue, fValue, fValue};
             glClearBufferfv(GL_COLOR, static_cast<GLint>(index), clearColor);
         }

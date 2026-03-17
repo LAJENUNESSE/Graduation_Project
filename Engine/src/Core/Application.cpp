@@ -50,7 +50,7 @@ namespace Engine
         PerformanceMonitor::Get().Init();
 
         auto imguiLayer = CreateScope<ImGuiLayer>();
-        m_ImGuiLayer = imguiLayer.get();
+        m_ImGuiLayer    = imguiLayer.get();
         PushOverlay(std::move(imguiLayer));
 
         m_Initialized = true;
@@ -130,9 +130,9 @@ namespace Engine
     {
         while (m_Running)
         {
-            double time = glfwGetTime();
+            double   time     = glfwGetTime();
             Timestep timestep = static_cast<float>(time - m_LastFrameTime);
-            m_LastFrameTime = time;
+            m_LastFrameTime   = time;
 
             PerformanceMonitor::Get().BeginFrame(static_cast<float>(time));
 

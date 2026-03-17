@@ -74,14 +74,14 @@ namespace Engine
         ENGINE_INFO("[Fluid] Init() called, particleCount={}", m_ParticleCount);
 
         // Fluid-specific shaders
-        m_EmitShader = Shader::Create("assets/shaders/fluid_emit.glsl");
+        m_EmitShader     = Shader::Create("assets/shaders/fluid_emit.glsl");
         m_SimulateShader = Shader::Create("assets/shaders/fluid_simulate.glsl");
 
         // Reuse existing SPH shaders
         m_SPHShaders = SPHShaderSet::Load();
 
         // Particle buffer: zero-initialized, 80 bytes per particle
-        uint32_t totalBytes = m_ParticleCount * sizeof(FluidGPUParticle);
+        uint32_t             totalBytes = m_ParticleCount * sizeof(FluidGPUParticle);
         std::vector<uint8_t> zeroData(totalBytes, 0);
         m_ParticleBuffer = ShaderStorageBuffer::CreateGPUOnly(zeroData.data(), totalBytes, 0);
 
@@ -127,7 +127,7 @@ namespace Engine
             else
             {
                 ENGINE_WARN("[Fluid] CUDA ProbeDeviceMatch failed or CUDA poisoned ({}), staying on GL path.",
-                           CudaInterop::GetCudaPoisonReason());
+                            CudaInterop::GetCudaPoisonReason());
             }
         }
 #endif
@@ -138,7 +138,7 @@ namespace Engine
         if (m_SPHInitialized)
             return;
 
-        float cellSize = 2.0f * smoothingRadius;
+        float    cellSize = 2.0f * smoothingRadius;
         uint32_t gridSize = 64;
         m_Grid.Init(m_ParticleCount, gridSize, cellSize);
         m_SPHInitialized = true;
@@ -148,7 +148,7 @@ namespace Engine
     {
         if (m_PCISPHInitialized)
             return;
-        m_PCISPHBuffer = ShaderStorageBuffer::CreateGPUOnly(m_ParticleCount * 48, 1);
+        m_PCISPHBuffer      = ShaderStorageBuffer::CreateGPUOnly(m_ParticleCount * 48, 1);
         m_PCISPHInitialized = true;
     }
 
@@ -178,8 +178,10 @@ namespace Engine
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
     }
 
-    void FluidSystemGPU::Update(float dt, const glm::vec3& emitterPos, const FluidEmitterComponent& emitter,
-                                entt::registry* registry)
+    void FluidSystemGPU::Update(float                        dt,
+                                const glm::vec3&             emitterPos,
+                                const FluidEmitterComponent& emitter,
+                                entt::registry*              registry)
     {
         if (!m_Initialized)
             return;
@@ -200,7 +202,7 @@ namespace Engine
         {
             if (m_CudaInterop->MapAll())
             {
-                void* stream = m_CudaInterop->GetStream();
+                void* stream       = m_CudaInterop->GetStream();
                 void* devParticles = m_CudaInterop->GetMappedPointer(m_CudaSlotParticle);
                 CudaInterop::RecordCudaEvent(m_CudaTiming.EventStart, stream);
 
@@ -212,21 +214,21 @@ namespace Engine
                 // 构造 SPHParams
                 CudaInterop::SPHParams p{};
                 p.smoothingRadius = kp.h;
-                p.poly6Coeff = kp.poly6Coeff;
-                p.spikyCoeff = kp.spikyCoeff;
-                p.particleMass = emitter.ParticleMass;
-                p.restDensity = emitter.RestDensity;
-                p.gasConstant = emitter.GasConstant;
-                p.viscosity = emitter.Viscosity;
-                p.surfaceTension = emitter.SurfaceTension;
-                p.deltaTime = clampedDt;
-                p.gridSize = 64;
-                p.cellSize = cellSize;
-                p.aliveCount = static_cast<int>(m_ParticleCount);
-                p.gravity[0] = emitter.Gravity.x;
-                p.gravity[1] = emitter.Gravity.y;
-                p.gravity[2] = emitter.Gravity.z;
-                p.warmupTime = 0.0f; // 流体粒子永久存活，不需要 warmup
+                p.poly6Coeff      = kp.poly6Coeff;
+                p.spikyCoeff      = kp.spikyCoeff;
+                p.particleMass    = emitter.ParticleMass;
+                p.restDensity     = emitter.RestDensity;
+                p.gasConstant     = emitter.GasConstant;
+                p.viscosity       = emitter.Viscosity;
+                p.surfaceTension  = emitter.SurfaceTension;
+                p.deltaTime       = clampedDt;
+                p.gridSize        = 64;
+                p.cellSize        = cellSize;
+                p.aliveCount      = static_cast<int>(m_ParticleCount);
+                p.gravity[0]      = emitter.Gravity.x;
+                p.gravity[1]      = emitter.Gravity.y;
+                p.gravity[2]      = emitter.Gravity.z;
+                p.warmupTime      = 0.0f; // 流体粒子永久存活，不需要 warmup
 
                 // 刚体数据：CPU→CUDA 每帧上传（WCSPH/PCISPH 共用）
                 uint32_t cudaRigidBodyCount = 0;
@@ -239,17 +241,17 @@ namespace Engine
                     {
                         if (bodies.size() >= MAX_RIGID_BODIES)
                             break;
-                        auto& tc = boxView.get<TransformComponent>(entity);
-                        auto& bc = boxView.get<BoxColliderComponent>(entity);
-                        glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
+                        auto&            tc     = boxView.get<TransformComponent>(entity);
+                        auto&            bc     = boxView.get<BoxColliderComponent>(entity);
+                        glm::mat4        rotMat = glm::toMat4(glm::quat(tc.Rotation));
                         GPURigidBodyData body{};
-                        body.posAndType = glm::vec4(tc.Translation + bc.Offset, 0.0f);
-                        body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
-                        body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
-                        body.rotCol2 = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
+                        body.posAndType  = glm::vec4(tc.Translation + bc.Offset, 0.0f);
+                        body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
+                        body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
+                        body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
                         body.halfExtents = glm::vec4(bc.HalfExtents * tc.Scale, 0.0f);
-                        body.linearVel = glm::vec4(0.0f);
-                        body.angularVel = glm::vec4(0.0f);
+                        body.linearVel   = glm::vec4(0.0f);
+                        body.angularVel  = glm::vec4(0.0f);
                         bodies.push_back(body);
                     }
                     auto sphereView = registry->view<TransformComponent, SphereColliderComponent>();
@@ -257,18 +259,18 @@ namespace Engine
                     {
                         if (bodies.size() >= MAX_RIGID_BODIES)
                             break;
-                        auto& tc = sphereView.get<TransformComponent>(entity);
-                        auto& sc = sphereView.get<SphereColliderComponent>(entity);
-                        glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
+                        auto&            tc     = sphereView.get<TransformComponent>(entity);
+                        auto&            sc     = sphereView.get<SphereColliderComponent>(entity);
+                        glm::mat4        rotMat = glm::toMat4(glm::quat(tc.Rotation));
                         GPURigidBodyData body{};
-                        body.posAndType = glm::vec4(tc.Translation + sc.Offset, 1.0f);
-                        body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
-                        body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
-                        body.rotCol2 = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
-                        float maxScale = std::max({tc.Scale.x, tc.Scale.y, tc.Scale.z});
+                        body.posAndType  = glm::vec4(tc.Translation + sc.Offset, 1.0f);
+                        body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
+                        body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
+                        body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
+                        float maxScale   = std::max({tc.Scale.x, tc.Scale.y, tc.Scale.z});
                         body.halfExtents = glm::vec4(sc.Radius * maxScale, 0.0f, 0.0f, 0.0f);
-                        body.linearVel = glm::vec4(0.0f);
-                        body.angularVel = glm::vec4(0.0f);
+                        body.linearVel   = glm::vec4(0.0f);
+                        body.angularVel  = glm::vec4(0.0f);
                         bodies.push_back(body);
                     }
                     cudaRigidBodyCount = static_cast<uint32_t>(bodies.size());
@@ -280,10 +282,10 @@ namespace Engine
                 CudaInterop::LaunchSPHDensity(m_CudaSPHCtx, devParticles, p, stream);
 
                 CudaInterop::PCISPHIterParams ip{};
-                ip.pcisphDelta = emitter.PCISPHDelta;
+                ip.pcisphDelta       = emitter.PCISPHDelta;
                 ip.boundaryStiffness = emitter.BoundaryStiffness;
-                ip.boundaryDamping = emitter.BoundaryDamping;
-                ip.rigidBodyCount = static_cast<int>(cudaRigidBodyCount);
+                ip.boundaryDamping   = emitter.BoundaryDamping;
+                ip.rigidBodyCount    = static_cast<int>(cudaRigidBodyCount);
 
                 if (emitter.PCISPHEnabled)
                 {
@@ -306,19 +308,19 @@ namespace Engine
                 }
 
                 CudaInterop::SPHSimulateParams sp{};
-                sp.deltaTime = clampedDt;
-                sp.damping = emitter.Damping;
-                sp.gravity[0] = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.x;
-                sp.gravity[1] = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.y;
-                sp.gravity[2] = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.z;
+                sp.deltaTime      = clampedDt;
+                sp.damping        = emitter.Damping;
+                sp.gravity[0]     = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.x;
+                sp.gravity[1]     = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.y;
+                sp.gravity[2]     = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.z;
                 sp.boundaryMin[0] = emitterPos.x + emitter.BoundaryMin.x;
                 sp.boundaryMin[1] = emitterPos.y + emitter.BoundaryMin.y;
                 sp.boundaryMin[2] = emitterPos.z + emitter.BoundaryMin.z;
                 sp.boundaryMax[0] = emitterPos.x + emitter.BoundaryMax.x;
                 sp.boundaryMax[1] = emitterPos.y + emitter.BoundaryMax.y;
                 sp.boundaryMax[2] = emitterPos.z + emitter.BoundaryMax.z;
-                sp.useBoundary = emitter.UseBoundary ? 1 : 0;
-                sp.particleCount = static_cast<int>(m_ParticleCount);
+                sp.useBoundary    = emitter.UseBoundary ? 1 : 0;
+                sp.particleCount  = static_cast<int>(m_ParticleCount);
                 CudaInterop::LaunchSPHSimulate(devParticles, sp, stream);
 
                 CudaInterop::RecordCudaEvent(m_CudaTiming.EventStop, stream);
@@ -327,7 +329,7 @@ namespace Engine
                 if (CudaInterop::IsCudaPoisoned())
                 {
                     ENGINE_WARN("[Fluid] CUDA poisoned during compute ({}); falling back to GL.",
-                               CudaInterop::GetCudaPoisonReason());
+                                CudaInterop::GetCudaPoisonReason());
                     m_UseCudaPath = false;
                 }
                 else
@@ -346,8 +348,7 @@ namespace Engine
             }
             else
             {
-                ENGINE_WARN("[Fluid] CUDA MapAll failed ({}); falling back to GL.",
-                           CudaInterop::GetCudaPoisonReason());
+                ENGINE_WARN("[Fluid] CUDA MapAll failed ({}); falling back to GL.", CudaInterop::GetCudaPoisonReason());
                 m_UseCudaPath = false;
             }
         }
@@ -362,7 +363,7 @@ namespace Engine
 
             // --- SPH Pipeline ---
             float cellSize = m_Grid.GetCellSize();
-            int gridSize = static_cast<int>(m_Grid.GetGridSize());
+            int   gridSize = static_cast<int>(m_Grid.GetGridSize());
 
             // Build spatial hash grid
             m_Grid.Build(m_ParticleCount);
@@ -391,8 +392,8 @@ namespace Engine
                 if (emitter.RigidBodyCoupling && registry)
                 {
                     InitRigidBodyBuffer();
-                    rigidBodyCount = UploadRigidBodiesToBuffer(
-                        registry, m_RigidBodyBuffer, MAX_RIGID_BODIES, RigidBodyUploadFilter::AllColliders);
+                    rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                               RigidBodyUploadFilter::AllColliders);
                 }
 
                 m_PCISPHBuffer->Bind(1);
@@ -479,8 +480,8 @@ namespace Engine
                 if (emitter.RigidBodyCoupling && registry)
                 {
                     InitRigidBodyBuffer();
-                    rigidBodyCount = UploadRigidBodiesToBuffer(
-                        registry, m_RigidBodyBuffer, MAX_RIGID_BODIES, RigidBodyUploadFilter::AllColliders);
+                    rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                               RigidBodyUploadFilter::AllColliders);
                     m_RigidBodyBuffer->Bind(3);
                 }
                 m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));

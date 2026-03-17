@@ -17,7 +17,7 @@ namespace Engine
         struct Vec3ControlEditState
         {
             bool ValueChanged = false;
-            bool EditStarted = false;
+            bool EditStarted  = false;
             bool EditFinished = false;
         };
 
@@ -30,18 +30,20 @@ namespace Engine
         void SetSceneModifiedCallback(std::function<void()> cb) { m_SceneModifiedCallback = std::move(cb); }
 
         // 公开给 AutoInspector 适配器使用
-        Vec3ControlEditState DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f,
-                                             float columnWidth = 100.0f);
+        Vec3ControlEditState DrawVec3Control(const std::string& label,
+                                             glm::vec3&         values,
+                                             float              resetValue  = 0.0f,
+                                             float              columnWidth = 100.0f);
 
     private:
         struct TransformEditSession
         {
-            bool Active = false;
-            UUID EntityID = 0;
-            Scene* SceneContext = nullptr;
-            glm::vec3 Translation = {};
-            glm::vec3 Rotation = {};
-            glm::vec3 Scale = {1.0f, 1.0f, 1.0f};
+            bool      Active       = false;
+            UUID      EntityID     = 0;
+            Scene*    SceneContext = nullptr;
+            glm::vec3 Translation  = {};
+            glm::vec3 Rotation     = {};
+            glm::vec3 Scale        = {1.0f, 1.0f, 1.0f};
         };
 
         void DrawComponents(Entity entity);
@@ -50,16 +52,18 @@ namespace Engine
         void DrawComponent(const std::string& name, Entity entity, UIFunction uiFunction, bool removable = true);
 
         // 反射组件通用绘制（类型擦除版）
-        void DrawComponent_Auto(const std::string& name, Entity entity, const ComponentMeta& meta,
+        void DrawComponent_Auto(const std::string&        name,
+                                Entity                    entity,
+                                const ComponentMeta&      meta,
                                 AutoInspector::DrawVec3Fn drawVec3);
 
     private:
-        CommandHistory* m_CommandHistory = nullptr;
-        Ref<Scene> m_ActiveScene;
-        TransformEditSession m_TransformEditSession;
-        bool m_ReadOnly = false;
+        CommandHistory*       m_CommandHistory = nullptr;
+        Ref<Scene>            m_ActiveScene;
+        TransformEditSession  m_TransformEditSession;
+        bool                  m_ReadOnly = false;
         std::function<void()> m_SceneModifiedCallback;
-        bool m_FrameModified = false;
+        bool                  m_FrameModified = false;
     };
 
 } // namespace Engine

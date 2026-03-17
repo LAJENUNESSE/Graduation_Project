@@ -14,7 +14,7 @@ namespace Engine
             return result;
 
         std::string s(filter);
-        size_t start = 0;
+        size_t      start = 0;
         while (start < s.size())
         {
             size_t end = s.find(';', start);
@@ -36,7 +36,7 @@ namespace Engine
         tinyfd_winUtf8 = 1;
 #endif
         std::vector<std::string> storage;
-        auto patterns = SplitFilter(filter, storage);
+        auto                     patterns = SplitFilter(filter, storage);
 
         const char* result = tinyfd_openFileDialog("打开文件",                        // title
                                                    "",                                // default path
@@ -55,7 +55,7 @@ namespace Engine
         tinyfd_winUtf8 = 1;
 #endif
         std::vector<std::string> storage;
-        auto patterns = SplitFilter(filter, storage);
+        auto                     patterns = SplitFilter(filter, storage);
 
         const char* result = tinyfd_saveFileDialog("保存文件",                        // title
                                                    "",                                // default path
@@ -76,9 +76,12 @@ namespace Engine
         int result = tinyfd_messageBox(title, message, "yesnocancel", "warning", 1);
         switch (result)
         {
-        case 1:  return MessageBoxResult::Yes;
-        case 2:  return MessageBoxResult::No;
-        default: return MessageBoxResult::Cancel;
+        case 1:
+            return MessageBoxResult::Yes;
+        case 2:
+            return MessageBoxResult::No;
+        default:
+            return MessageBoxResult::Cancel;
         }
     }
 

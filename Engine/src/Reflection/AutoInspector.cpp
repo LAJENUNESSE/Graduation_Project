@@ -34,8 +34,8 @@ namespace Engine
                 ImGui::Text("%s", prop.Hints.Group);
             }
 
-            float speed = prop.Hints.Speed > 0.0f ? prop.Hints.Speed : 0.1f;
-            const char* fmt = prop.Hints.Format ? prop.Hints.Format : "%.3f";
+            float       speed = prop.Hints.Speed > 0.0f ? prop.Hints.Speed : 0.1f;
+            const char* fmt   = prop.Hints.Format ? prop.Hints.Format : "%.3f";
 
             ImGui::PushID(prop.Name);
 
@@ -52,17 +52,17 @@ namespace Engine
             }
             case PropertyType::Int:
             {
-                int* val = static_cast<int*>(ptr);
-                int imin = static_cast<int>(prop.Hints.Min);
-                int imax = static_cast<int>(prop.Hints.Max);
+                int* val  = static_cast<int*>(ptr);
+                int  imin = static_cast<int>(prop.Hints.Min);
+                int  imax = static_cast<int>(prop.Hints.Max);
                 ImGui::DragInt(prop.DisplayName, val, speed, imin, imax);
                 break;
             }
             case PropertyType::UInt32:
             {
                 int tempVal = static_cast<int>(*static_cast<uint32_t*>(ptr));
-                int imin = static_cast<int>(prop.Hints.Min);
-                int imax = prop.Hints.Max > 0.0f ? static_cast<int>(prop.Hints.Max) : 1000000;
+                int imin    = static_cast<int>(prop.Hints.Min);
+                int imax    = prop.Hints.Max > 0.0f ? static_cast<int>(prop.Hints.Max) : 1000000;
                 if (ImGui::DragInt(prop.DisplayName, &tempVal, speed, imin, imax))
                     *static_cast<uint32_t*>(ptr) = static_cast<uint32_t>(std::max(tempVal, 0));
                 break;
@@ -74,7 +74,7 @@ namespace Engine
             case PropertyType::AssetPath:
             {
                 auto& str = *static_cast<std::string*>(ptr);
-                char buf[256];
+                char  buf[256];
                 memset(buf, 0, sizeof(buf));
                 std::strncpy(buf, str.c_str(), sizeof(buf) - 1);
                 if (ImGui::InputText(prop.DisplayName, buf, sizeof(buf)))

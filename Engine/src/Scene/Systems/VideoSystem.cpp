@@ -20,12 +20,12 @@ namespace Engine
         if (OpenThread.joinable())
             OpenThread.join();
     }
-    VideoRuntimeState::VideoRuntimeState(VideoRuntimeState&&) noexcept = default;
+    VideoRuntimeState::VideoRuntimeState(VideoRuntimeState&&) noexcept            = default;
     VideoRuntimeState& VideoRuntimeState::operator=(VideoRuntimeState&&) noexcept = default;
 
     // AL_FORMAT_STEREO16 = 0x1103
-    static constexpr uint32_t kALFormatStereo16 = 0x1103;
-    static constexpr int kStreamingBufferCount = 4;
+    static constexpr uint32_t kALFormatStereo16     = 0x1103;
+    static constexpr int      kStreamingBufferCount = 4;
 
     void VideoSystem::Init()
     {
@@ -47,15 +47,15 @@ namespace Engine
             if (vp.StreamURL.empty())
                 continue;
 
-            uint32_t eid = static_cast<uint32_t>(entity);
+            uint32_t          eid = static_cast<uint32_t>(entity);
             VideoRuntimeState state;
-            state.Decoder = std::make_unique<FFmpegDecoder>();
+            state.Decoder   = std::make_unique<FFmpegDecoder>();
             state.IsPlaying = false;
 
             // 后台线程打开流，避免阻塞主线程
-            std::string url = vp.StreamURL;
+            std::string    url        = vp.StreamURL;
             FFmpegDecoder* rawDecoder = state.Decoder.get();
-            state.OpenThread = std::thread(
+            state.OpenThread          = std::thread(
                 [rawDecoder, url]()
                 {
                     if (!rawDecoder->Open(url))
@@ -118,9 +118,9 @@ namespace Engine
         auto view = reg.view<VideoPlayerComponent>();
         for (auto entity : view)
         {
-            auto& vp = view.get<VideoPlayerComponent>(entity);
-            uint32_t eid = static_cast<uint32_t>(entity);
-            auto* state = m_Store.Get(eid);
+            auto&    vp    = view.get<VideoPlayerComponent>(entity);
+            uint32_t eid   = static_cast<uint32_t>(entity);
+            auto*    state = m_Store.Get(eid);
 
             if (!state || !state->Decoder)
                 continue;
@@ -151,10 +151,10 @@ namespace Engine
                     for (int i = 0; i < kStreamingBufferCount; i++)
                     {
                         AudioClip emptyClip;
-                        emptyClip.SampleRate = static_cast<uint32_t>(state->Decoder->GetAudioSampleRate());
-                        emptyClip.Channels = 2;
+                        emptyClip.SampleRate    = static_cast<uint32_t>(state->Decoder->GetAudioSampleRate());
+                        emptyClip.Channels      = 2;
                         emptyClip.BitsPerSample = 16;
-                        emptyClip.ALFormat = kALFormatStereo16;
+                        emptyClip.ALFormat      = kALFormatStereo16;
                         emptyClip.Data.resize(4, 0);
                         state->AudioBuffers[i] = audio.CreateBuffer(emptyClip);
                     }
@@ -177,8 +177,8 @@ namespace Engine
                 const uint8_t* frameData = state->Decoder->GetVideoFrameRGBA();
                 if (frameData)
                 {
-                    int w = state->Decoder->GetVideoWidth();
-                    int h = state->Decoder->GetVideoHeight();
+                    int      w        = state->Decoder->GetVideoWidth();
+                    int      h        = state->Decoder->GetVideoHeight();
                     uint32_t dataSize = static_cast<uint32_t>(w * h * 4);
                     state->Texture->SetData((void*)frameData, dataSize);
                 }
@@ -196,16 +196,16 @@ namespace Engine
                 {
                     uint32_t buf = audio.UnqueueBuffer(state->AudioSource);
 
-                    int sampleCount = 0;
-                    const int16_t* audioData = state->Decoder->GetAudioData(sampleCount);
+                    int            sampleCount = 0;
+                    const int16_t* audioData   = state->Decoder->GetAudioData(sampleCount);
                     if (audioData && sampleCount > 0)
                     {
                         AudioClip clip;
-                        clip.SampleRate = static_cast<uint32_t>(state->Decoder->GetAudioSampleRate());
-                        clip.Channels = 2;
+                        clip.SampleRate    = static_cast<uint32_t>(state->Decoder->GetAudioSampleRate());
+                        clip.Channels      = 2;
                         clip.BitsPerSample = 16;
-                        clip.ALFormat = kALFormatStereo16;
-                        size_t byteSize = static_cast<size_t>(sampleCount) * 2 * sizeof(int16_t);
+                        clip.ALFormat      = kALFormatStereo16;
+                        size_t byteSize    = static_cast<size_t>(sampleCount) * 2 * sizeof(int16_t);
                         clip.Data.resize(byteSize);
                         std::memcpy(clip.Data.data(), audioData, byteSize);
 

@@ -25,23 +25,23 @@ namespace Engine
 
     OpenGLShader::OpenGLShader(const std::string& filepath) : m_FilePath(filepath)
     {
-        std::string source = ReadFile(filepath);
-        auto shaderSources = PreProcess(source);
+        std::string source        = ReadFile(filepath);
+        auto        shaderSources = PreProcess(source);
         Compile(shaderSources);
 
         // Extract name from filepath
         auto lastSlash = filepath.find_last_of("/\\");
-        lastSlash = lastSlash == std::string::npos ? 0 : lastSlash + 1;
-        auto lastDot = filepath.rfind('.');
-        auto count = lastDot == std::string::npos ? filepath.size() - lastSlash : lastDot - lastSlash;
-        m_Name = filepath.substr(lastSlash, count);
+        lastSlash      = lastSlash == std::string::npos ? 0 : lastSlash + 1;
+        auto lastDot   = filepath.rfind('.');
+        auto count     = lastDot == std::string::npos ? filepath.size() - lastSlash : lastDot - lastSlash;
+        m_Name         = filepath.substr(lastSlash, count);
     }
 
     OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
         : m_Name(name)
     {
         std::unordered_map<unsigned int, std::string> sources;
-        sources[GL_VERTEX_SHADER] = vertexSrc;
+        sources[GL_VERTEX_SHADER]   = vertexSrc;
         sources[GL_FRAGMENT_SHADER] = fragmentSrc;
         Compile(sources);
     }
@@ -53,9 +53,9 @@ namespace Engine
 
     std::string OpenGLShader::ReadFile(const std::string& filepath)
     {
-        std::string result;
+        std::string       result;
         const std::string resolvedPath = PathUtils::ResolvePathString(filepath);
-        std::ifstream in(resolvedPath, std::ios::in | std::ios::binary);
+        std::ifstream     in(resolvedPath, std::ios::in | std::ios::binary);
         if (in)
         {
             in.seekg(0, std::ios::end);
@@ -82,17 +82,17 @@ namespace Engine
     {
         std::unordered_map<unsigned int, std::string> shaderSources;
 
-        const char* typeToken = "#type";
-        size_t typeTokenLength = strlen(typeToken);
-        size_t pos = source.find(typeToken, 0);
+        const char* typeToken       = "#type";
+        size_t      typeTokenLength = strlen(typeToken);
+        size_t      pos             = source.find(typeToken, 0);
 
         while (pos != std::string::npos)
         {
             size_t eol = source.find_first_of("\r\n", pos);
             ENGINE_CORE_RELEASE_ASSERT(eol != std::string::npos, "Syntax error in shader file");
 
-            size_t begin = pos + typeTokenLength + 1;
-            std::string type = source.substr(begin, eol - begin);
+            size_t      begin = pos + typeTokenLength + 1;
+            std::string type  = source.substr(begin, eol - begin);
 
             size_t nextLinePos = source.find_first_not_of("\r\n", eol);
             ENGINE_CORE_RELEASE_ASSERT(nextLinePos != std::string::npos, "Syntax error in shader file");
@@ -111,7 +111,7 @@ namespace Engine
         ENGINE_CORE_RELEASE_ASSERT(shaderSources.size() <= 3, "We only support 3 shaders for now");
 
         std::array<GLuint, 3> glShaderIDs;
-        int glShaderIDIndex = 0;
+        int                   glShaderIDIndex = 0;
 
         for (auto& [type, source] : shaderSources)
         {

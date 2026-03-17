@@ -23,29 +23,35 @@ namespace Engine
     public:
         void Init();
         void UpdateTerrainMeshes(entt::registry& reg);
-        void Render(entt::registry& reg, const EditorCamera& camera, const LightEnvironment& lights,
-                    const ShadowData& shadow, const ShadowSettings& shadowSettings, const SceneEntityIndex& index,
-                    WorldTransformCache* cache = nullptr);
-        void RenderDepth(entt::registry& reg, const Ref<Shader>& depthShader, const SceneEntityIndex& index,
-                         WorldTransformCache* cache = nullptr);
+        void Render(entt::registry&         reg,
+                    const EditorCamera&     camera,
+                    const LightEnvironment& lights,
+                    const ShadowData&       shadow,
+                    const ShadowSettings&   shadowSettings,
+                    const SceneEntityIndex& index,
+                    WorldTransformCache*    cache = nullptr);
+        void RenderDepth(entt::registry&         reg,
+                         const Ref<Shader>&      depthShader,
+                         const SceneEntityIndex& index,
+                         WorldTransformCache*    cache = nullptr);
 
     private:
-        Ref<Shader> m_TerrainShader;
+        Ref<Shader>    m_TerrainShader;
         Ref<Texture2D> m_WhiteTexture;
 
         struct TerrainCache
         {
             std::string HeightmapPath;
-            float HeightScale = 0;
-            float TerrainSize = 0;
-            int LODLevels = 0;
+            float       HeightScale = 0;
+            float       TerrainSize = 0;
+            int         LODLevels   = 0;
         };
         std::unordered_map<uint32_t, TerrainCache> m_Cache;
 
         // Splatmap 纹理缓存
         struct SplatmapCache
         {
-            std::string Path;
+            std::string    Path;
             Ref<Texture2D> Texture;
         };
         std::unordered_map<uint32_t, SplatmapCache> m_SplatmapCache;

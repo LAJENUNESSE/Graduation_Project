@@ -19,9 +19,9 @@ namespace Engine
     class ICommand
     {
     public:
-        virtual ~ICommand() = default;
-        virtual void Execute() = 0;
-        virtual void Undo() = 0;
+        virtual ~ICommand()                        = default;
+        virtual void        Execute()              = 0;
+        virtual void        Undo()                 = 0;
         virtual std::string GetDescription() const = 0;
     };
 
@@ -59,25 +59,29 @@ namespace Engine
 
         std::vector<Ref<ICommand>> m_UndoStack;
         std::vector<Ref<ICommand>> m_RedoStack;
-        bool m_Suspended = false;
-        ModifiedCallback m_ModifiedCallback;
+        bool                       m_Suspended = false;
+        ModifiedCallback           m_ModifiedCallback;
     };
 
     // ========== Transform 修改命令 ==========
     class TransformChangeCommand : public ICommand
     {
     public:
-        TransformChangeCommand(Ref<Scene> scene, Entity entity, const glm::vec3& oldTranslation,
-                               const glm::vec3& oldRotation, const glm::vec3& oldScale,
-                               const glm::vec3& newTranslation, const glm::vec3& newRotation,
+        TransformChangeCommand(Ref<Scene>       scene,
+                               Entity           entity,
+                               const glm::vec3& oldTranslation,
+                               const glm::vec3& oldRotation,
+                               const glm::vec3& oldScale,
+                               const glm::vec3& newTranslation,
+                               const glm::vec3& newRotation,
                                const glm::vec3& newScale);
 
-        void Execute() override;
-        void Undo() override;
+        void        Execute() override;
+        void        Undo() override;
         std::string GetDescription() const override;
 
     private:
-        UUID m_EntityUUID;
+        UUID       m_EntityUUID;
         Ref<Scene> m_Scene;
 
         glm::vec3 m_OldTranslation, m_OldRotation, m_OldScale;
@@ -89,23 +93,23 @@ namespace Engine
     public:
         struct Entry
         {
-            UUID EntityID = 0;
+            UUID      EntityID       = 0;
             glm::vec3 OldTranslation = {};
-            glm::vec3 OldRotation = {};
-            glm::vec3 OldScale = {1.0f, 1.0f, 1.0f};
+            glm::vec3 OldRotation    = {};
+            glm::vec3 OldScale       = {1.0f, 1.0f, 1.0f};
             glm::vec3 NewTranslation = {};
-            glm::vec3 NewRotation = {};
-            glm::vec3 NewScale = {1.0f, 1.0f, 1.0f};
+            glm::vec3 NewRotation    = {};
+            glm::vec3 NewScale       = {1.0f, 1.0f, 1.0f};
         };
 
         MultiTransformChangeCommand(Ref<Scene> scene, std::vector<Entry> entries);
 
-        void Execute() override;
-        void Undo() override;
+        void        Execute() override;
+        void        Undo() override;
         std::string GetDescription() const override;
 
     private:
-        Ref<Scene> m_Scene;
+        Ref<Scene>         m_Scene;
         std::vector<Entry> m_Entries;
     };
     // ========== 实体创建命令 ==========
@@ -114,17 +118,17 @@ namespace Engine
     public:
         EntityCreateCommand(Ref<Scene> scene, const std::string& name);
 
-        void Execute() override;
-        void Undo() override;
+        void        Execute() override;
+        void        Undo() override;
         std::string GetDescription() const override;
 
         Entity GetCreatedEntity() const;
 
     private:
-        Ref<Scene> m_Scene;
-        std::string m_Name;
+        Ref<Scene>   m_Scene;
+        std::string  m_Name;
         entt::entity m_CreatedHandle = entt::null;
-        UUID m_EntityUUID = 0; // 首次 Execute 记录，Redo 时复用
+        UUID         m_EntityUUID    = 0; // 首次 Execute 记录，Redo 时复用
     };
 
     // ========== 实体删除命令 ==========
@@ -133,32 +137,32 @@ namespace Engine
     public:
         EntityDeleteCommand(Ref<Scene> scene, Entity entity);
 
-        void Execute() override;
-        void Undo() override;
+        void        Execute() override;
+        void        Undo() override;
         std::string GetDescription() const override;
 
     private:
         struct ComponentSnapshot
         {
             std::string TypeName;
-            std::any Data;
+            std::any    Data;
         };
 
         // 单个实体的完整快照（包含核心组件 + 数据组件）
         struct EntitySnapshot
         {
-            UUID EntityUUID = 0;
-            std::string Name;
-            TransformComponent Transform;
-            RelationshipComponent Relationship;
+            UUID                           EntityUUID = 0;
+            std::string                    Name;
+            TransformComponent             Transform;
+            RelationshipComponent          Relationship;
             std::vector<ComponentSnapshot> Components;
         };
 
         void CollectSubtree(Entity entity);
 
-        Ref<Scene> m_Scene;
-        UUID m_OriginalParentUUID = 0; // 根实体删除前的父节点（子树外部）
-        std::vector<EntitySnapshot> m_Snapshots; // DFS 先序（根在前）
+        Ref<Scene>                  m_Scene;
+        UUID                        m_OriginalParentUUID = 0; // 根实体删除前的父节点（子树外部）
+        std::vector<EntitySnapshot> m_Snapshots;              // DFS 先序（根在前）
     };
 
     // ========== 泛型属性修改命令 ==========
@@ -170,15 +174,15 @@ namespace Engine
 
         PropertyChangeCommand(const std::string& description, std::any oldValue, std::any newValue, ApplyFn applyFn);
 
-        void Execute() override;
-        void Undo() override;
+        void        Execute() override;
+        void        Undo() override;
         std::string GetDescription() const override;
 
     private:
         std::string m_Description;
-        std::any m_OldValue;
-        std::any m_NewValue;
-        ApplyFn m_ApplyFn;
+        std::any    m_OldValue;
+        std::any    m_NewValue;
+        ApplyFn     m_ApplyFn;
     };
 
     // ========== 父子关系变更命令 ==========
@@ -189,15 +193,15 @@ namespace Engine
         // newParent 为无效 Entity 时表示解除父子关系（RemoveParent）
         ParentChangeCommand(Ref<Scene> scene, Entity child, Entity newParent);
 
-        void Execute() override;
-        void Undo() override;
+        void        Execute() override;
+        void        Undo() override;
         std::string GetDescription() const override;
 
     private:
         Ref<Scene> m_Scene;
-        UUID m_ChildUUID;
-        UUID m_OldParentUUID; // 0 = 原来是根节点
-        UUID m_NewParentUUID; // 0 = 解除父子关系
+        UUID       m_ChildUUID;
+        UUID       m_OldParentUUID; // 0 = 原来是根节点
+        UUID       m_NewParentUUID; // 0 = 解除父子关系
         // 保存变更前子实体的本地 Transform，用于精确还原
         glm::vec3 m_OldTranslation, m_OldRotation, m_OldScale;
     };

@@ -13,11 +13,11 @@ namespace Engine
     class SceneEntityIndex
     {
     public:
-        void Insert(UUID uuid, entt::entity entity);
-        void Remove(UUID uuid);
+        void         Insert(UUID uuid, entt::entity entity);
+        void         Remove(UUID uuid);
         entt::entity Find(UUID uuid) const;
-        void Clear();
-        size_t Size() const { return m_Map.size(); }
+        void         Clear();
+        size_t       Size() const { return m_Map.size(); }
 
     private:
         std::unordered_map<UUID, entt::entity> m_Map;

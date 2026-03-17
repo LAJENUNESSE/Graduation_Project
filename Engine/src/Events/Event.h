@@ -34,11 +34,11 @@ namespace Engine
 
     enum EventCategory
     {
-        EventCategoryNone = 0,
+        EventCategoryNone        = 0,
         EventCategoryApplication = BIT(0),
-        EventCategoryInput = BIT(1),
-        EventCategoryKeyboard = BIT(2),
-        EventCategoryMouse = BIT(3),
+        EventCategoryInput       = BIT(1),
+        EventCategoryKeyboard    = BIT(2),
+        EventCategoryMouse       = BIT(3),
         EventCategoryMouseButton = BIT(4)
     };
 
@@ -69,9 +69,9 @@ namespace Engine
 
         virtual ~Event() = default;
 
-        virtual EventType GetEventType() const = 0;
-        virtual const char* GetName() const = 0;
-        virtual int GetCategoryFlags() const = 0;
+        virtual EventType   GetEventType() const     = 0;
+        virtual const char* GetName() const          = 0;
+        virtual int         GetCategoryFlags() const = 0;
 
         virtual std::string ToString() const { return GetName(); }
 

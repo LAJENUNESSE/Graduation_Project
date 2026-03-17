@@ -67,14 +67,14 @@ namespace Engine
 
         bool operator!=(const Entity& other) const { return !(*this == other); }
 
-        UUID GetUUID();
+        UUID               GetUUID();
         const std::string& GetName();
 
         Scene* GetScene() const { return m_Scene; }
 
     private:
         entt::entity m_EntityHandle{entt::null};
-        Scene* m_Scene = nullptr;
+        Scene*       m_Scene = nullptr;
     };
 
 } // namespace Engine

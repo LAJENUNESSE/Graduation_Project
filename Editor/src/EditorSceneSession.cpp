@@ -49,8 +49,8 @@ namespace Engine
         return activeScene;
     }
 
-    Ref<Scene> EditorSceneSession::PrepareScene(Ref<Scene>& activeScene, uint32_t viewportWidth,
-                                                uint32_t viewportHeight)
+    Ref<Scene>
+    EditorSceneSession::PrepareScene(Ref<Scene>& activeScene, uint32_t viewportWidth, uint32_t viewportHeight)
     {
         if (m_State == SceneState::Play)
             EndPlay(activeScene);
@@ -59,9 +59,9 @@ namespace Engine
         newScene->SetSceneRenderer(&m_SceneRenderer);
         newScene->OnViewportResize(viewportWidth, viewportHeight);
 
-        m_EditorScene = newScene;
+        m_EditorScene  = newScene;
         m_RuntimeScene = nullptr;
-        activeScene = m_EditorScene;
+        activeScene    = m_EditorScene;
 
         return newScene;
     }
@@ -74,8 +74,10 @@ namespace Engine
         ENGINE_INFO("[EditorEvent] NewScene ready, entities={0}", CountSceneEntities(activeScene));
     }
 
-    bool EditorSceneSession::OpenSceneFromPath(Ref<Scene>& activeScene, const std::string& filepath,
-                                               uint32_t viewportWidth, uint32_t viewportHeight,
+    bool EditorSceneSession::OpenSceneFromPath(Ref<Scene>&           activeScene,
+                                               const std::string&    filepath,
+                                               uint32_t              viewportWidth,
+                                               uint32_t              viewportHeight,
                                                EditorRenderSettings* outRenderSettings)
     {
         if (filepath.empty())
@@ -87,7 +89,7 @@ namespace Engine
         auto newScene = CreateRef<Scene>();
 
         EditorRenderSettings loadedRenderSettings;
-        SceneSerializer serializer(newScene);
+        SceneSerializer      serializer(newScene);
         if (!serializer.Deserialize(filepath, &loadedRenderSettings))
         {
             ENGINE_WARN("Failed to load scene from '{0}', keeping current scene", filepath);
@@ -99,9 +101,9 @@ namespace Engine
         newScene->SetSceneRenderer(&m_SceneRenderer);
 
         newScene->OnViewportResize(viewportWidth, viewportHeight);
-        m_EditorScene = newScene;
+        m_EditorScene  = newScene;
         m_RuntimeScene = nullptr;
-        activeScene = m_EditorScene;
+        activeScene    = m_EditorScene;
 
         if (outRenderSettings)
             *outRenderSettings = loadedRenderSettings;
@@ -112,7 +114,8 @@ namespace Engine
         return true;
     }
 
-    bool EditorSceneSession::SaveSceneToPath(const Ref<Scene>& sceneToSave, const std::string& filepath,
+    bool EditorSceneSession::SaveSceneToPath(const Ref<Scene>&           sceneToSave,
+                                             const std::string&          filepath,
                                              const EditorRenderSettings& renderSettings)
     {
         if (!sceneToSave || filepath.empty())
@@ -157,12 +160,12 @@ namespace Engine
         if (m_RuntimeScene)
             m_RuntimeScene->OnRuntimeStop();
 
-        activeScene = m_EditorScene;
+        activeScene    = m_EditorScene;
         m_RuntimeScene = nullptr;
 
         if (activeScene)
         {
-            auto& shadowSystem = m_SceneRenderer.GetShadowSystem();
+            auto& shadowSystem         = m_SceneRenderer.GetShadowSystem();
             shadowSystem.GetSettings() = activeScene->GetShadowSettings();
             shadowSystem.ResizeShadowMap(activeScene->GetShadowSettings().MapResolution);
             // 恢复 skybox（与 Scene::SetSceneRenderer 逻辑一致）

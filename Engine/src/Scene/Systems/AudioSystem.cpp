@@ -28,7 +28,7 @@ namespace Engine
         auto view = reg.view<AudioSourceComponent>();
         for (auto entity : view)
         {
-            auto& asc = view.get<AudioSourceComponent>(entity);
+            auto&       asc       = view.get<AudioSourceComponent>(entity);
             std::string audioPath = asc.AudioPath;
 
             if (audioPath.empty())
@@ -40,7 +40,7 @@ namespace Engine
                 if (PathUtils::TryToProjectRelative(audioPath, normalizedPath))
                 {
                     asc.AudioPath = normalizedPath;
-                    audioPath = normalizedPath;
+                    audioPath     = normalizedPath;
                 }
                 else
                 {
@@ -77,7 +77,7 @@ namespace Engine
             audio.SetSourceMaxDistance(source, asc.MaxDistance);
             audio.SetSourceSpatial(source, asc.Spatial);
 
-            uint32_t eid = static_cast<uint32_t>(entity);
+            uint32_t          eid = static_cast<uint32_t>(entity);
             AudioRuntimeState state;
             state.Source = source;
             state.Buffer = buffer;
@@ -131,9 +131,9 @@ namespace Engine
                 if (!alc.Active)
                     continue;
 
-                auto& tc = listenerView.get<TransformComponent>(entity);
+                auto&     tc      = listenerView.get<TransformComponent>(entity);
                 glm::vec3 forward = glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+                glm::vec3 up      = glm::vec3(0.0f, 1.0f, 0.0f);
                 audio.SetListenerPosition(tc.Translation, forward, up);
                 break; // 只取第一个激活的听众
             }
@@ -144,9 +144,9 @@ namespace Engine
             auto sourceView = reg.view<AudioSourceComponent>();
             for (auto entity : sourceView)
             {
-                auto& asc = sourceView.get<AudioSourceComponent>(entity);
-                uint32_t eid = static_cast<uint32_t>(entity);
-                auto* state = m_Store.Get(eid);
+                auto&    asc   = sourceView.get<AudioSourceComponent>(entity);
+                uint32_t eid   = static_cast<uint32_t>(entity);
+                auto*    state = m_Store.Get(eid);
                 if (!state || state->Source == 0)
                     continue;
 

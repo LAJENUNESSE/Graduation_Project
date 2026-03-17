@@ -26,7 +26,7 @@ namespace Engine
 
             // Performance stats tracking
             uint32_t count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
-            auto& stats = PerformanceMonitor::Get().GetStats();
+            auto&    stats = PerformanceMonitor::Get().GetStats();
             stats.DrawCalls++;
             stats.Vertices += count;
             stats.Triangles += count / 3;

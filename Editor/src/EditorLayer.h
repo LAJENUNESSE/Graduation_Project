@@ -46,9 +46,9 @@ namespace Engine
         void CleanupAutosave();
         void CheckAndPromptRestore();
 
-        void OnScenePlay();
-        void OnSceneStop();
-        void HandleShellActions(const EditorShellActions& actions);
+        void             OnScenePlay();
+        void             OnSceneStop();
+        void             HandleShellActions(const EditorShellActions& actions);
         EditorShellState BuildShellState() const;
 
         void BootstrapDefaultScene();
@@ -57,11 +57,11 @@ namespace Engine
         void RestoreEditorRenderSettingsSnapshot();
 
     private:
-        Scope<EditorBootstrapper> m_Boot;
-        Ref<Scene> m_ActiveScene;
+        Scope<EditorBootstrapper>           m_Boot;
+        Ref<Scene>                          m_ActiveScene;
         std::optional<EditorRenderSettings> m_PrePlayRenderSettings;
-        float m_AutosaveTimer = 0.0f;
-        static constexpr float AutosaveInterval = 300.0f; // 5 分钟
+        float                               m_AutosaveTimer  = 0.0f;
+        static constexpr float              AutosaveInterval = 300.0f; // 5 分钟
     };
 
 } // namespace Engine

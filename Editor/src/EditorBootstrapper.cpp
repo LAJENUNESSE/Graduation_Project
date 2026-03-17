@@ -26,26 +26,26 @@ namespace Engine
     void EditorBootstrapper::Assemble()
     {
         // 基础设施
-        m_CommandHistory = CreateScope<CommandHistory>();
-        m_SceneRenderer = CreateScope<SceneRenderer>();
-        m_PostProcessing = CreateScope<PostProcessing>();
+        m_CommandHistory         = CreateScope<CommandHistory>();
+        m_SceneRenderer          = CreateScope<SceneRenderer>();
+        m_PostProcessing         = CreateScope<PostProcessing>();
         m_PostProcessingSettings = CreateScope<PostProcessingSettings>();
-        m_PhysicsDebugDraw = CreateScope<PhysicsDebugDraw>();
+        m_PhysicsDebugDraw       = CreateScope<PhysicsDebugDraw>();
 
         // 面板
-        m_HierarchyPanel = CreateScope<SceneHierarchyPanel>();
-        m_PropertiesPanel = CreateScope<PropertiesPanel>();
-        m_ConsolePanel = CreateScope<ConsolePanel>();
-        m_AssetBrowserPanel = CreateScope<AssetBrowserPanel>();
+        m_HierarchyPanel      = CreateScope<SceneHierarchyPanel>();
+        m_PropertiesPanel     = CreateScope<PropertiesPanel>();
+        m_ConsolePanel        = CreateScope<ConsolePanel>();
+        m_AssetBrowserPanel   = CreateScope<AssetBrowserPanel>();
         m_RenderSettingsPanel = CreateScope<RenderSettingsPanel>();
 
         // 控制器
-        m_SceneSession = CreateScope<EditorSceneSession>(*m_SceneRenderer);
-        m_PanelCoordinator = CreateScope<EditorPanelCoordinator>();
+        m_SceneSession             = CreateScope<EditorSceneSession>(*m_SceneRenderer);
+        m_PanelCoordinator         = CreateScope<EditorPanelCoordinator>();
         m_SelectionGizmoController = CreateScope<EditorSelectionGizmoController>();
-        m_EditorShell = CreateScope<EditorShell>();
-        m_ViewportController = CreateScope<EditorViewportController>();
-        m_RenderController = CreateScope<EditorRenderController>(EditorRenderController::Dependencies{
+        m_EditorShell              = CreateScope<EditorShell>();
+        m_ViewportController       = CreateScope<EditorViewportController>();
+        m_RenderController         = CreateScope<EditorRenderController>(EditorRenderController::Dependencies{
             *m_SceneRenderer,
             *m_PostProcessing,
             *m_PostProcessingSettings,

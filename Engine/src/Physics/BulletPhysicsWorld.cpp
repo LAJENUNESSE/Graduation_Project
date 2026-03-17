@@ -48,12 +48,12 @@ namespace Engine
     }
 
     // 从模型文件加载顶点和索引数据（用于 MeshCollider）
-    static bool LoadMeshData(const std::string& filepath, std::vector<glm::vec3>& outVertices,
-                             std::vector<uint32_t>& outIndices)
+    static bool
+    LoadMeshData(const std::string& filepath, std::vector<glm::vec3>& outVertices, std::vector<uint32_t>& outIndices)
     {
-        Assimp::Importer importer;
+        Assimp::Importer  importer;
         const std::string resolvedFilepath = PathUtils::ResolvePathString(filepath);
-        unsigned int flags = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices;
+        unsigned int      flags            = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices;
 
         const aiScene* scene = importer.ReadFile(resolvedFilepath, flags);
         if (!scene || !scene->mRootNode)
@@ -95,10 +95,10 @@ namespace Engine
     void BulletPhysicsWorld::Init(glm::vec3 gravity)
     {
         m_CollisionConfig = new btDefaultCollisionConfiguration();
-        m_Dispatcher = new btCollisionDispatcher(m_CollisionConfig);
-        m_Broadphase = new btDbvtBroadphase();
-        m_Solver = new btSequentialImpulseConstraintSolver();
-        m_DynamicsWorld = new btDiscreteDynamicsWorld(m_Dispatcher, m_Broadphase, m_Solver, m_CollisionConfig);
+        m_Dispatcher      = new btCollisionDispatcher(m_CollisionConfig);
+        m_Broadphase      = new btDbvtBroadphase();
+        m_Solver          = new btSequentialImpulseConstraintSolver();
+        m_DynamicsWorld   = new btDiscreteDynamicsWorld(m_Dispatcher, m_Broadphase, m_Solver, m_CollisionConfig);
         m_DynamicsWorld->setGravity(ToBt(gravity));
 
         m_PreviousFrameContacts.clear();
@@ -151,19 +151,19 @@ namespace Engine
                 continue;
 
             auto& transform = view.get<TransformComponent>(entity);
-            auto& rb = view.get<RigidBodyComponent>(entity);
+            auto& rb        = view.get<RigidBodyComponent>(entity);
 
             uint32_t entityId = static_cast<uint32_t>(entity);
 
             // 确定碰撞形状
-            btCollisionShape* shape = nullptr;
-            btTriangleMesh* triangleMesh = nullptr;
-            bool isTrigger = false;
+            btCollisionShape* shape        = nullptr;
+            btTriangleMesh*   triangleMesh = nullptr;
+            bool              isTrigger    = false;
 
             if (reg.all_of<MeshColliderComponent>(entity))
             {
                 // MeshCollider 优先
-                auto& mc = reg.get<MeshColliderComponent>(entity);
+                auto& mc  = reg.get<MeshColliderComponent>(entity);
                 isTrigger = mc.IsTrigger;
 
                 // 确定网格数据来源
@@ -180,7 +180,7 @@ namespace Engine
                 }
 
                 std::vector<glm::vec3> vertices;
-                std::vector<uint32_t> indices;
+                std::vector<uint32_t>  indices;
 
                 bool loaded = false;
                 if (!meshPath.empty())
@@ -221,16 +221,16 @@ namespace Engine
             }
             else if (reg.all_of<SphereColliderComponent>(entity))
             {
-                auto& sphere = reg.get<SphereColliderComponent>(entity);
-                isTrigger = sphere.IsTrigger;
+                auto& sphere   = reg.get<SphereColliderComponent>(entity);
+                isTrigger      = sphere.IsTrigger;
                 float maxScale = std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
-                shape = new btSphereShape(sphere.Radius * maxScale);
+                shape          = new btSphereShape(sphere.Radius * maxScale);
             }
             else if (reg.all_of<BoxColliderComponent>(entity))
             {
                 auto& box = reg.get<BoxColliderComponent>(entity);
                 isTrigger = box.IsTrigger;
-                shape = new btBoxShape(ToBt(box.HalfExtents * transform.Scale));
+                shape     = new btBoxShape(ToBt(box.HalfExtents * transform.Scale));
             }
             else
             {
@@ -269,7 +269,7 @@ namespace Engine
 
             btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, motionState, shape, localInertia);
             rbInfo.m_restitution = rb.Restitution;
-            rbInfo.m_friction = rb.Friction;
+            rbInfo.m_friction    = rb.Friction;
 
             auto* body = new btRigidBody(rbInfo);
 
@@ -302,11 +302,11 @@ namespace Engine
             m_DynamicsWorld->addRigidBody(body);
 
             BodyInfo info;
-            info.body = body;
-            info.shape = shape;
-            info.motionState = motionState;
-            info.triangleMesh = triangleMesh;
-            info.isTrigger = isTrigger;
+            info.body          = body;
+            info.shape         = shape;
+            info.motionState   = motionState;
+            info.triangleMesh  = triangleMesh;
+            info.isTrigger     = isTrigger;
             m_Bodies[entityId] = info;
         }
 
@@ -314,9 +314,9 @@ namespace Engine
         auto terrainView = reg.view<TransformComponent, TerrainComponent>();
         for (auto entity : terrainView)
         {
-            auto& transform = terrainView.get<TransformComponent>(entity);
-            auto& terrain = terrainView.get<TerrainComponent>(entity);
-            uint32_t entityId = static_cast<uint32_t>(entity);
+            auto&    transform = terrainView.get<TransformComponent>(entity);
+            auto&    terrain   = terrainView.get<TerrainComponent>(entity);
+            uint32_t entityId  = static_cast<uint32_t>(entity);
 
             auto* meshData = reg.all_of<TerrainRuntimeComponent>(entity)
                                  ? reg.get<TerrainRuntimeComponent>(entity).MeshData.get()
@@ -338,14 +338,14 @@ namespace Engine
             terrainShape->setLocalScaling(btVector3(cellSizeX, terrain.HeightScale, cellSizeZ));
 
             // btHeightfieldTerrainShape 中心在 (0, (min+max)/2, 0)
-            float midH = (meshData->MinHeight + meshData->MaxHeight) * 0.5f * terrain.HeightScale;
+            float       midH = (meshData->MinHeight + meshData->MaxHeight) * 0.5f * terrain.HeightScale;
             btTransform startTransform;
             startTransform.setIdentity();
             startTransform.setOrigin(ToBt(transform.Translation) + btVector3(0, midH, 0));
 
-            auto* motionState = new btDefaultMotionState(startTransform);
+            auto*                                    motionState = new btDefaultMotionState(startTransform);
             btRigidBody::btRigidBodyConstructionInfo rbInfo(0.0f, motionState, terrainShape, btVector3(0, 0, 0));
-            rbInfo.m_friction = terrain.Friction;
+            rbInfo.m_friction    = terrain.Friction;
             rbInfo.m_restitution = terrain.Restitution;
 
             auto* body = new btRigidBody(rbInfo);
@@ -381,9 +381,9 @@ namespace Engine
         int numManifolds = m_Dispatcher->getNumManifolds();
         for (int i = 0; i < numManifolds; i++)
         {
-            btPersistentManifold* manifold = m_Dispatcher->getManifoldByIndexInternal(i);
-            const btCollisionObject* objA = manifold->getBody0();
-            const btCollisionObject* objB = manifold->getBody1();
+            btPersistentManifold*    manifold = m_Dispatcher->getManifoldByIndexInternal(i);
+            const btCollisionObject* objA     = manifold->getBody0();
+            const btCollisionObject* objB     = manifold->getBody1();
 
             int numContacts = manifold->getNumContacts();
             if (numContacts <= 0)
@@ -396,8 +396,8 @@ namespace Engine
             auto key = std::make_pair(std::min(idA, idB), std::max(idA, idB));
 
             // 取第一个有效接触点的信息
-            float maxImpulse = 0.0f;
-            glm::vec3 bestContactPoint = {0, 0, 0};
+            float     maxImpulse        = 0.0f;
+            glm::vec3 bestContactPoint  = {0, 0, 0};
             glm::vec3 bestContactNormal = {0, 0, 0};
 
             bool hasContact = false;
@@ -407,12 +407,12 @@ namespace Engine
                 // 只要距离够近就算碰撞（不仅看 impulse，因为 trigger 无 impulse）
                 if (pt.getDistance() <= 0.0f)
                 {
-                    hasContact = true;
+                    hasContact    = true;
                     float impulse = pt.getAppliedImpulse();
                     if (impulse > maxImpulse || !hasContact)
                     {
-                        maxImpulse = impulse;
-                        bestContactPoint = ToGlm(pt.getPositionWorldOnB());
+                        maxImpulse        = impulse;
+                        bestContactPoint  = ToGlm(pt.getPositionWorldOnB());
                         bestContactNormal = ToGlm(pt.m_normalWorldOnB);
                     }
                 }
@@ -422,17 +422,17 @@ namespace Engine
                 continue;
 
             // 判断是否为触发器碰撞
-            auto entityA = static_cast<entt::entity>(idA);
-            auto entityB = static_cast<entt::entity>(idB);
+            auto entityA   = static_cast<entt::entity>(idA);
+            auto entityB   = static_cast<entt::entity>(idB);
             bool isTrigger = false;
             if (reg.valid(entityA) && reg.valid(entityB))
                 isTrigger = IsEntityTrigger(reg, entityA) || IsEntityTrigger(reg, entityB);
 
             ContactPairInfo pairInfo;
-            pairInfo.ContactPoint = bestContactPoint;
+            pairInfo.ContactPoint  = bestContactPoint;
             pairInfo.ContactNormal = bestContactNormal;
-            pairInfo.Impulse = maxImpulse;
-            pairInfo.IsTrigger = isTrigger;
+            pairInfo.Impulse       = maxImpulse;
+            pairInfo.IsTrigger     = isTrigger;
 
             m_CurrentFrameContacts[key] = pairInfo;
         }
@@ -443,12 +443,12 @@ namespace Engine
         for (auto& [key, info] : m_CurrentFrameContacts)
         {
             CollisionEvent event;
-            event.EntityA = static_cast<entt::entity>(key.first);
-            event.EntityB = static_cast<entt::entity>(key.second);
-            event.ContactPoint = info.ContactPoint;
+            event.EntityA       = static_cast<entt::entity>(key.first);
+            event.EntityB       = static_cast<entt::entity>(key.second);
+            event.ContactPoint  = info.ContactPoint;
             event.ContactNormal = info.ContactNormal;
-            event.Impulse = info.Impulse;
-            event.IsTrigger = info.IsTrigger;
+            event.Impulse       = info.Impulse;
+            event.IsTrigger     = info.IsTrigger;
 
             if (m_PreviousFrameContacts.find(key) == m_PreviousFrameContacts.end())
             {
@@ -468,13 +468,13 @@ namespace Engine
             if (m_CurrentFrameContacts.find(key) == m_CurrentFrameContacts.end())
             {
                 CollisionEvent event;
-                event.Type = CollisionEventType::Exit;
-                event.EntityA = static_cast<entt::entity>(key.first);
-                event.EntityB = static_cast<entt::entity>(key.second);
-                event.ContactPoint = {0, 0, 0};
+                event.Type          = CollisionEventType::Exit;
+                event.EntityA       = static_cast<entt::entity>(key.first);
+                event.EntityB       = static_cast<entt::entity>(key.second);
+                event.ContactPoint  = {0, 0, 0};
                 event.ContactNormal = {0, 0, 0};
-                event.Impulse = 0.0f;
-                event.IsTrigger = info.IsTrigger;
+                event.Impulse       = 0.0f;
+                event.IsTrigger     = info.IsTrigger;
 
                 m_CollisionEvents.push_back(event);
             }
@@ -499,7 +499,7 @@ namespace Engine
             if (rb.Type != RigidBodyComponent::BodyType::Kinematic)
                 continue;
 
-            auto& transform = reg.get<TransformComponent>(entity);
+            auto&       transform = reg.get<TransformComponent>(entity);
             btTransform btTrans;
             btTrans.setIdentity();
             btTrans.setOrigin(ToBt(transform.Translation));
@@ -533,7 +533,7 @@ namespace Engine
                 transform.Rotation = BtQuatToEuler(btTrans.getRotation());
 
             // 同步速度到 ECS 组件
-            rb.LinearVelocity = ToGlm(info.body->getLinearVelocity());
+            rb.LinearVelocity  = ToGlm(info.body->getLinearVelocity());
             rb.AngularVelocity = ToGlm(info.body->getAngularVelocity());
         }
     }
@@ -544,7 +544,7 @@ namespace Engine
             return;
 
         uint32_t entityId = static_cast<uint32_t>(entity);
-        auto it = m_Bodies.find(entityId);
+        auto     it       = m_Bodies.find(entityId);
         if (it == m_Bodies.end())
             return;
 

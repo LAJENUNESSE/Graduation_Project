@@ -21,7 +21,7 @@ namespace Engine
     // 根据文件路径的扩展名推断 AssetType（替代各种 IsXxxFile()）
     AssetType AssetTypeFromPath(const std::filesystem::path& path);
 
-    AssetType AssetTypeFromExtension(const std::string& ext);
+    AssetType   AssetTypeFromExtension(const std::string& ext);
     const char* AssetTypeToString(AssetType type);
 
 } // namespace Engine

@@ -21,9 +21,12 @@ namespace Engine
     class EditorPanelCoordinator
     {
     public:
-        void Initialize(SceneHierarchyPanel* hierarchyPanel, PropertiesPanel* propertiesPanel,
-                        ConsolePanel* consolePanel, AssetBrowserPanel* assetBrowserPanel,
-                        RenderSettingsPanel* renderSettingsPanel, CommandHistory* commandHistory);
+        void Initialize(SceneHierarchyPanel* hierarchyPanel,
+                        PropertiesPanel*     propertiesPanel,
+                        ConsolePanel*        consolePanel,
+                        AssetBrowserPanel*   assetBrowserPanel,
+                        RenderSettingsPanel* renderSettingsPanel,
+                        CommandHistory*      commandHistory);
 
         void ApplyScene(const Ref<Scene>& scene, bool clearCommandHistory);
         void RenderPanels();
@@ -31,10 +34,10 @@ namespace Engine
         void SetPanelsReadOnly(bool readOnly);
         void SetSceneModifiedCallback(std::function<void()> cb);
 
-        Entity GetPrimarySelection() const;
+        Entity                     GetPrimarySelection() const;
         const std::vector<Entity>& GetSelectedEntities() const;
-        void SetPrimarySelection(Entity entity);
-        void ClearSelection();
+        void                       SetPrimarySelection(Entity entity);
+        void                       ClearSelection();
 
         bool IsStatsPanelVisible() const { return m_ShowStatsPanel; }
         void SetStatsPanelVisible(bool visible) { m_ShowStatsPanel = visible; }
@@ -44,13 +47,13 @@ namespace Engine
         void RenderStatsPanel();
 
     private:
-        SceneHierarchyPanel* m_HierarchyPanel = nullptr;
-        PropertiesPanel* m_PropertiesPanel = nullptr;
-        ConsolePanel* m_ConsolePanel = nullptr;
-        AssetBrowserPanel* m_AssetBrowserPanel = nullptr;
+        SceneHierarchyPanel* m_HierarchyPanel      = nullptr;
+        PropertiesPanel*     m_PropertiesPanel     = nullptr;
+        ConsolePanel*        m_ConsolePanel        = nullptr;
+        AssetBrowserPanel*   m_AssetBrowserPanel   = nullptr;
         RenderSettingsPanel* m_RenderSettingsPanel = nullptr;
-        CommandHistory* m_CommandHistory = nullptr;
-        bool m_ShowStatsPanel = true;
+        CommandHistory*      m_CommandHistory      = nullptr;
+        bool                 m_ShowStatsPanel      = true;
     };
 
 } // namespace Engine

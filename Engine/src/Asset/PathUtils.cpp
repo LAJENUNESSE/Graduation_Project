@@ -22,14 +22,14 @@ namespace Engine::PathUtils
                 return {};
 
             const int utf8Size = static_cast<int>(utf8.size());
-            int wideSize = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.c_str(), utf8Size, nullptr, 0);
-            UINT codePage = CP_UTF8;
-            DWORD flags = MB_ERR_INVALID_CHARS;
+            int       wideSize = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.c_str(), utf8Size, nullptr, 0);
+            UINT      codePage = CP_UTF8;
+            DWORD     flags    = MB_ERR_INVALID_CHARS;
 
             if (wideSize <= 0)
             {
                 codePage = CP_ACP;
-                flags = 0;
+                flags    = 0;
                 wideSize = MultiByteToWideChar(codePage, flags, utf8.c_str(), utf8Size, nullptr, 0);
             }
 
@@ -50,12 +50,12 @@ namespace Engine::PathUtils
                 return {};
 
             const int wideSize = static_cast<int>(wide.size());
-            int utf8Size = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideSize, nullptr, 0, nullptr, nullptr);
+            int       utf8Size = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideSize, nullptr, 0, nullptr, nullptr);
             if (utf8Size <= 0)
                 return {};
 
             std::string utf8(static_cast<size_t>(utf8Size), '\0');
-            const int converted =
+            const int   converted =
                 WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideSize, utf8.data(), utf8Size, nullptr, nullptr);
             if (converted <= 0)
                 return {};
@@ -67,8 +67,8 @@ namespace Engine::PathUtils
         std::filesystem::path NormalizePath(const std::filesystem::path& path)
         {
             std::error_code ec;
-            auto normalized = path.lexically_normal();
-            auto weak = std::filesystem::weakly_canonical(normalized, ec);
+            auto            normalized = path.lexically_normal();
+            auto            weak       = std::filesystem::weakly_canonical(normalized, ec);
             return ec ? normalized : weak;
         }
 
@@ -118,8 +118,8 @@ namespace Engine::PathUtils
         if (path.empty())
             return false;
 
-        std::string normalized = NormalizeSeparators(path);
-        std::filesystem::path filePath = PathFromUtf8(normalized);
+        std::string           normalized = NormalizeSeparators(path);
+        std::filesystem::path filePath   = PathFromUtf8(normalized);
         if (filePath.is_absolute())
             return false;
         if (normalized.find("..") != std::string::npos)
@@ -219,7 +219,7 @@ namespace Engine::PathUtils
             return false;
 
         std::filesystem::path absolutePath = ResolvePath(path);
-        std::error_code ec;
+        std::error_code       ec;
         std::filesystem::path relative = std::filesystem::relative(absolutePath, GetProjectRoot(), ec);
         if (ec)
             return false;

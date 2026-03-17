@@ -11,7 +11,7 @@ namespace Engine
 
     struct WindowProps
     {
-        std::string Title;
+        std::string  Title;
         unsigned int Width;
         unsigned int Height;
 
@@ -36,18 +36,18 @@ namespace Engine
 
         virtual void OnUpdate() = 0;
 
-        virtual unsigned int GetWidth() const = 0;
+        virtual unsigned int GetWidth() const  = 0;
         virtual unsigned int GetHeight() const = 0;
 
-        virtual void SetEventCallback(const EventCallbackFn& callback) = 0;
-        virtual void SetVSync(bool enabled) = 0;
-        virtual bool IsVSync() const = 0;
-        virtual void SetTitle(const std::string& title) = 0;
-        virtual void SetCursorMode(CursorMode mode) = 0;
-        virtual CursorMode GetCursorMode() const = 0;
-        virtual bool SupportsRawMouseInput() const = 0;
-        virtual void SetRawMouseInput(bool enabled) = 0;
-        virtual bool IsRawMouseInputEnabled() const = 0;
+        virtual void       SetEventCallback(const EventCallbackFn& callback) = 0;
+        virtual void       SetVSync(bool enabled)                            = 0;
+        virtual bool       IsVSync() const                                   = 0;
+        virtual void       SetTitle(const std::string& title)                = 0;
+        virtual void       SetCursorMode(CursorMode mode)                    = 0;
+        virtual CursorMode GetCursorMode() const                             = 0;
+        virtual bool       SupportsRawMouseInput() const                     = 0;
+        virtual void       SetRawMouseInput(bool enabled)                    = 0;
+        virtual bool       IsRawMouseInputEnabled() const                    = 0;
 
         virtual void* GetNativeWindow() const = 0;
 

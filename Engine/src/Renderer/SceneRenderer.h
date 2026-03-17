@@ -33,11 +33,11 @@ namespace Engine
 
     struct RenderContext
     {
-        const EditorCamera* Camera = nullptr;
-        entt::registry* Registry = nullptr;
-        const SceneEntityIndex* EntityIndex = nullptr;
-        WorldTransformCache* TransformCache = nullptr;
-        float DeltaTime = 0.0f;
+        const EditorCamera*     Camera         = nullptr;
+        entt::registry*         Registry       = nullptr;
+        const SceneEntityIndex* EntityIndex    = nullptr;
+        WorldTransformCache*    TransformCache = nullptr;
+        float                   DeltaTime      = 0.0f;
 
         // 供 FluidPass 使用
         uint32_t SceneColorTexID = 0;
@@ -45,15 +45,15 @@ namespace Engine
 
         // 供 SSAO Pass 使用（由 EditorLayer 设置）
         uint32_t SSAODepthTexID = 0;
-        uint32_t ViewportWidth = 0;
+        uint32_t ViewportWidth  = 0;
         uint32_t ViewportHeight = 0;
     };
 
     struct RenderPassConfig
     {
-        std::string Name;
+        std::string                         Name;
         std::function<void(RenderContext&)> ExecuteFn;
-        bool Enabled = true;
+        bool                                Enabled = true;
     };
 
     class SceneRenderer
@@ -71,23 +71,23 @@ namespace Engine
         // 供 MSAA 解析后单独绘制粒子，避免颜色被 blit 覆盖
         void RenderParticlePass();
 
-        ShadowSystem& GetShadowSystem() { return m_ShadowSystem; }
-        SkyboxSystem& GetSkyboxSystem() { return m_SkyboxSystem; }
+        ShadowSystem&        GetShadowSystem() { return m_ShadowSystem; }
+        SkyboxSystem&        GetSkyboxSystem() { return m_SkyboxSystem; }
         TerrainRenderSystem& GetTerrainSystem() { return m_TerrainSystem; }
-        GrassRenderSystem& GetGrassSystem() { return m_GrassSystem; }
-        AudioSystem& GetAudioSystem() { return m_AudioSystem; }
-        VideoSystem& GetVideoSystem() { return m_VideoSystem; }
-        FluidRenderer& GetFluidRenderer() { return m_FluidRenderer; }
+        GrassRenderSystem&   GetGrassSystem() { return m_GrassSystem; }
+        AudioSystem&         GetAudioSystem() { return m_AudioSystem; }
+        VideoSystem&         GetVideoSystem() { return m_VideoSystem; }
+        FluidRenderer&       GetFluidRenderer() { return m_FluidRenderer; }
 
         // 逐实体释放粒子/流体 GPU 缓存
         void ReleaseParticleSystem(uint32_t entityID);
         void ReleaseFluidSystem(uint32_t entityID);
 
         // SSAO 设置
-        bool& GetSSAOEnabled() { return m_SSAOEnabled; }
+        bool&  GetSSAOEnabled() { return m_SSAOEnabled; }
         float& GetSSAORadius() { return m_SSAORadius; }
         float& GetSSAOBias() { return m_SSAOBias; }
-        int& GetSSAOKernelSize() { return m_SSAOKernelSize; }
+        int&   GetSSAOKernelSize() { return m_SSAOKernelSize; }
         float& GetSSAOIntensity() { return m_SSAOIntensity; }
 
         // IBL 调试模式
@@ -98,7 +98,7 @@ namespace Engine
 
         // 供 EditorLayer 精细控制 pass 执行
         std::vector<RenderPassConfig>& GetPassQueue() { return m_PassQueue; }
-        RenderContext& GetContext() { return m_Context; }
+        RenderContext&                 GetContext() { return m_Context; }
 
         // 完整渲染管线：Shadow → HDR → MSAA → Fluid → DebugDraw → PostProcess → 输出到 targetFBO
         void SetHDRFramebuffer(const Ref<Framebuffer>& hdrFBO);
@@ -114,35 +114,35 @@ namespace Engine
     private:
         std::vector<RenderPassConfig> m_PassQueue;
 
-        RenderContext m_Context;
+        RenderContext    m_Context;
         LightEnvironment m_LightEnv;
-        ShadowData m_ShadowData;
+        ShadowData       m_ShadowData;
 
-        ShadowSystem m_ShadowSystem;
-        SkyboxSystem m_SkyboxSystem;
+        ShadowSystem        m_ShadowSystem;
+        SkyboxSystem        m_SkyboxSystem;
         TerrainRenderSystem m_TerrainSystem;
-        GrassRenderSystem m_GrassSystem;
-        RenderQueue m_RenderQueue;
-        AudioSystem m_AudioSystem;
-        VideoSystem m_VideoSystem;
+        GrassRenderSystem   m_GrassSystem;
+        RenderQueue         m_RenderQueue;
+        AudioSystem         m_AudioSystem;
+        VideoSystem         m_VideoSystem;
 
-        Ref<Shader> m_PBRShader;
+        Ref<Shader>    m_PBRShader;
         Ref<Texture2D> m_WhiteTexture;
-        AssetHandle m_WhiteTextureHandle;
+        AssetHandle    m_WhiteTextureHandle;
 
         // SSAO 资源
-        Ref<Shader> m_SSAOShader;
-        Ref<Shader> m_SSAOBlurShader;
+        Ref<Shader>      m_SSAOShader;
+        Ref<Shader>      m_SSAOBlurShader;
         Ref<Framebuffer> m_SSAOFBO;
         Ref<Framebuffer> m_SSAOBlurFBO;
-        uint32_t m_SSAONoiseTexID = 0;
-        uint32_t m_SSAOBlurredTexID = 0;
-        bool m_SSAOEnabled = false;
-        float m_SSAORadius = 0.5f;
-        float m_SSAOBias = 0.025f;
-        int m_SSAOKernelSize = 32;
-        float m_SSAOIntensity = 1.5f;
-        int m_IBLDebugMode = 0; // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
+        uint32_t         m_SSAONoiseTexID   = 0;
+        uint32_t         m_SSAOBlurredTexID = 0;
+        bool             m_SSAOEnabled      = false;
+        float            m_SSAORadius       = 0.5f;
+        float            m_SSAOBias         = 0.025f;
+        int              m_SSAOKernelSize   = 32;
+        float            m_SSAOIntensity    = 1.5f;
+        int              m_IBLDebugMode     = 0; // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
         Ref<VertexArray> m_FullscreenQuadVAO;
 
         // 追踪当前绑定的 registry，用于检测场景切换（不受 EndScene 清空影响）
@@ -153,15 +153,15 @@ namespace Engine
 
         // Fluid systems keyed by entity ID
         std::unordered_map<uint32_t, Ref<FluidSystemGPU>> m_FluidSystems;
-        std::unordered_set<uint32_t> m_FluidEmitted; // 替代 FluidEmitterComponent::Emitted
-        FluidRenderer m_FluidRenderer;
-        float m_TotalTime = 0.0f;
+        std::unordered_set<uint32_t>                      m_FluidEmitted; // 替代 FluidEmitterComponent::Emitted
+        FluidRenderer                                     m_FluidRenderer;
+        float                                             m_TotalTime = 0.0f;
 
         // 完整渲染管线依赖（由外部注入）
-        Ref<Framebuffer> m_HDRFramebuffer;
-        PostProcessing* m_PostProcessing = nullptr;
+        Ref<Framebuffer>        m_HDRFramebuffer;
+        PostProcessing*         m_PostProcessing         = nullptr;
         PostProcessingSettings* m_PostProcessingSettings = nullptr;
-        DebugDrawCallback m_DebugDrawCallback;
+        DebugDrawCallback       m_DebugDrawCallback;
     };
 
 } // namespace Engine

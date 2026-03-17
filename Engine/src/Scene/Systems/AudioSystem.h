@@ -19,7 +19,7 @@ namespace Engine
 
         void DestroyEntityAudio(uint32_t entityID);
 
-        AudioRuntimeStore& GetStore() { return m_Store; }
+        AudioRuntimeStore&       GetStore() { return m_Store; }
         const AudioRuntimeStore& GetStore() const { return m_Store; }
 
     private:

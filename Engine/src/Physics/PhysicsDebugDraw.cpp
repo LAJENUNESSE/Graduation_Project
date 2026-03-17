@@ -45,7 +45,7 @@ namespace Engine
         m_LineVertices.clear();
 
         // 绿色画碰撞体线框
-        glm::vec3 boxColor = {0.0f, 1.0f, 0.0f};
+        glm::vec3 boxColor    = {0.0f, 1.0f, 0.0f};
         glm::vec3 sphereColor = {0.0f, 0.8f, 1.0f};
 
         // 盒碰撞器
@@ -54,9 +54,9 @@ namespace Engine
             for (auto entity : view)
             {
                 auto& transform = view.get<TransformComponent>(entity);
-                auto& box = view.get<BoxColliderComponent>(entity);
+                auto& box       = view.get<BoxColliderComponent>(entity);
 
-                glm::vec3 center = transform.Translation + box.Offset;
+                glm::vec3 center      = transform.Translation + box.Offset;
                 glm::vec3 halfExtents = box.HalfExtents * transform.Scale;
                 DrawBox(center, halfExtents, transform.Rotation, boxColor);
             }
@@ -68,11 +68,11 @@ namespace Engine
             for (auto entity : view)
             {
                 auto& transform = view.get<TransformComponent>(entity);
-                auto& sphere = view.get<SphereColliderComponent>(entity);
+                auto& sphere    = view.get<SphereColliderComponent>(entity);
 
-                glm::vec3 center = transform.Translation + sphere.Offset;
-                float maxScale = std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
-                float radius = sphere.Radius * maxScale;
+                glm::vec3 center   = transform.Translation + sphere.Offset;
+                float     maxScale = std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
+                float     radius   = sphere.Radius * maxScale;
                 DrawSphere(center, radius, sphereColor);
             }
         }
@@ -80,7 +80,7 @@ namespace Engine
         // 网格碰撞器（以紫色方框简易表示 AABB）
         {
             glm::vec3 meshColor = {0.8f, 0.2f, 0.8f}; // 紫色
-            auto view = reg.view<TransformComponent, MeshColliderComponent>();
+            auto      view      = reg.view<TransformComponent, MeshColliderComponent>();
             for (auto entity : view)
             {
                 auto& transform = view.get<TransformComponent>(entity);
@@ -93,7 +93,7 @@ namespace Engine
         // 地形碰撞器
         {
             glm::vec3 terrainColor = {1.0f, 0.6f, 0.0f}; // 橙色
-            auto view = reg.view<TransformComponent, TerrainComponent>();
+            auto      view         = reg.view<TransformComponent, TerrainComponent>();
             for (auto entity : view)
             {
                 auto& transform = view.get<TransformComponent>(entity);
@@ -104,18 +104,18 @@ namespace Engine
         // 流体边界盒
         {
             glm::vec3 fluidBoundaryColor = {0.2f, 0.8f, 1.0f}; // 青色
-            auto view = reg.view<TransformComponent, FluidEmitterComponent>();
+            auto      view               = reg.view<TransformComponent, FluidEmitterComponent>();
             for (auto entity : view)
             {
                 auto& transform = view.get<TransformComponent>(entity);
-                auto& fluid = view.get<FluidEmitterComponent>(entity);
+                auto& fluid     = view.get<FluidEmitterComponent>(entity);
                 if (!fluid.UseBoundary)
                     continue;
 
                 // BoundaryMin/Max 是相对 Transform 的偏移，转为世界空间 AABB
-                glm::vec3 worldMin = transform.Translation + fluid.BoundaryMin;
-                glm::vec3 worldMax = transform.Translation + fluid.BoundaryMax;
-                glm::vec3 center = (worldMin + worldMax) * 0.5f;
+                glm::vec3 worldMin    = transform.Translation + fluid.BoundaryMin;
+                glm::vec3 worldMax    = transform.Translation + fluid.BoundaryMax;
+                glm::vec3 center      = (worldMin + worldMax) * 0.5f;
                 glm::vec3 halfExtents = (worldMax - worldMin) * 0.5f;
                 DrawBox(center, halfExtents, glm::vec3(0.0f), fluidBoundaryColor);
             }
@@ -131,7 +131,9 @@ namespace Engine
         m_LineVertices.push_back({to, color});
     }
 
-    void PhysicsDebugDraw::DrawBox(const glm::vec3& center, const glm::vec3& half, const glm::vec3& rotation,
+    void PhysicsDebugDraw::DrawBox(const glm::vec3& center,
+                                   const glm::vec3& half,
+                                   const glm::vec3& rotation,
                                    const glm::vec3& color)
     {
         // 用四元数旋转 8 个局部顶点到世界空间
@@ -167,8 +169,8 @@ namespace Engine
 
     void PhysicsDebugDraw::DrawSphere(const glm::vec3& center, float radius, const glm::vec3& color)
     {
-        constexpr int segments = 24;
-        constexpr float step = 2.0f * glm::pi<float>() / segments;
+        constexpr int   segments = 24;
+        constexpr float step     = 2.0f * glm::pi<float>() / segments;
 
         // 3 个圆环（XY, XZ, YZ 平面）
         for (int i = 0; i < segments; i++)
@@ -192,7 +194,7 @@ namespace Engine
 
     void PhysicsDebugDraw::DrawTerrainWireframe(const glm::vec3& translation, entt::registry& reg, entt::entity entity)
     {
-        auto& tc = reg.get<TerrainComponent>(entity);
+        auto& tc       = reg.get<TerrainComponent>(entity);
         auto* meshData = reg.all_of<TerrainRuntimeComponent>(entity)
                              ? reg.get<TerrainRuntimeComponent>(entity).MeshData.get()
                              : nullptr;
@@ -201,21 +203,21 @@ namespace Engine
 
         glm::vec3 color = {1.0f, 0.6f, 0.0f}; // 橙色
 
-        int hmW = meshData->HeightmapWidth;
-        int hmH = meshData->HeightmapHeight;
-        float size = tc.TerrainSize;
+        int   hmW         = meshData->HeightmapWidth;
+        int   hmH         = meshData->HeightmapHeight;
+        float size        = tc.TerrainSize;
         float heightScale = tc.HeightScale;
-        float halfSize = size * 0.5f;
+        float halfSize    = size * 0.5f;
 
         // 简化线框: 每隔 step 个网格点画一条线（避免线太多）
         int step = std::max(1, std::max(hmW, hmH) / 32);
 
         auto getWorldPos = [&](int ix, int iy) -> glm::vec3
         {
-            float u = static_cast<float>(ix) / static_cast<float>(hmW - 1);
-            float v = static_cast<float>(iy) / static_cast<float>(hmH - 1);
-            int idx = std::min(iy, hmH - 1) * hmW + std::min(ix, hmW - 1);
-            float h = meshData->HeightData[idx];
+            float u   = static_cast<float>(ix) / static_cast<float>(hmW - 1);
+            float v   = static_cast<float>(iy) / static_cast<float>(hmH - 1);
+            int   idx = std::min(iy, hmH - 1) * hmW + std::min(ix, hmW - 1);
+            float h   = meshData->HeightData[idx];
             return translation + glm::vec3(u * size - halfSize, h * heightScale, v * size - halfSize);
         };
 

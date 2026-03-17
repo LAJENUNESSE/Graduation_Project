@@ -20,7 +20,9 @@ namespace Engine
 {
     namespace
     {
-        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel,
+        bool TrySelectProjectAssetPath(const char*  filter,
+                                       const char*  description,
+                                       const char*  assetLabel,
                                        std::string& outPath)
         {
             std::string selectedPath = FileDialogs::OpenFile(filter, description);
@@ -34,8 +36,10 @@ namespace Engine
             return false;
         }
 
-        bool TryNormalizeProjectAssetPath(const std::string& candidatePath, const char* assetLabel,
-                                          std::string& outPath, bool warnOnFailure = true)
+        bool TryNormalizeProjectAssetPath(const std::string& candidatePath,
+                                          const char*        assetLabel,
+                                          std::string&       outPath,
+                                          bool               warnOnFailure = true)
         {
             if (candidatePath.empty())
             {
@@ -62,7 +66,7 @@ namespace Engine
             if (!meshHandle.IsValid())
                 return;
 
-            component.Type = MeshType::Model;
+            component.Type      = MeshType::Model;
             component.MeshAsset = meshHandle;
 
             Mesh* mesh = AssetManager::Get<Mesh>(meshHandle);
@@ -97,12 +101,14 @@ namespace Engine
     {
         namespace
         {
-            bool DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f,
-                                 float columnWidth = 100.0f)
+            bool DrawVec3Control(const std::string& label,
+                                 glm::vec3&         values,
+                                 float              resetValue  = 0.0f,
+                                 float              columnWidth = 100.0f)
             {
-                bool modified = false;
-                ImGuiIO& io = ImGui::GetIO();
-                ImFont* boldFont = io.Fonts->Fonts[0];
+                bool     modified = false;
+                ImGuiIO& io       = ImGui::GetIO();
+                ImFont*  boldFont = io.Fonts->Fonts[0];
 
                 ImGui::PushID(label.c_str());
                 ImGui::Columns(2);
@@ -113,7 +119,7 @@ namespace Engine
                 ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
 
-                const float lineHeight = ImGui::GetFrameHeight();
+                const float  lineHeight = ImGui::GetFrameHeight();
                 const ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
 
                 auto drawAxis = [&](const char* axisLabel, int axisIndex, const ImVec4& color, const ImVec4& hoverColor)
@@ -125,13 +131,13 @@ namespace Engine
                     if (ImGui::Button(axisLabel, buttonSize))
                     {
                         values[axisIndex] = resetValue;
-                        modified = true;
+                        modified          = true;
                     }
                     ImGui::PopFont();
                     ImGui::PopStyleColor(3);
                     ImGui::SameLine();
-                    modified |= ImGui::DragFloat((std::string("##") + axisLabel).c_str(), &values[axisIndex], 0.1f, 0.0f, 0.0f,
-                                     "%.2f");
+                    modified |= ImGui::DragFloat((std::string("##") + axisLabel).c_str(), &values[axisIndex], 0.1f,
+                                                 0.0f, 0.0f, "%.2f");
                     ImGui::PopItemWidth();
                 };
 
@@ -155,7 +161,7 @@ namespace Engine
             modified |= ImGui::ColorEdit4("颜色", glm::value_ptr(component.Color));
 
             const char* meshTypeLabels[] = {"Cube", "Plane", "Sphere", "Model"};
-            int currentIdx = static_cast<int>(component.Type);
+            int         currentIdx       = static_cast<int>(component.Type);
             if (currentIdx > 3)
                 currentIdx = 0;
 
@@ -163,21 +169,21 @@ namespace Engine
             {
                 if (ImGui::Selectable("Cube", component.Type == MeshType::Cube))
                 {
-                    component.Type = MeshType::Cube;
+                    component.Type      = MeshType::Cube;
                     component.MeshAsset = AssetManager::Load<Mesh>("builtin:Cube");
-                    modified = true;
+                    modified            = true;
                 }
                 if (ImGui::Selectable("Plane", component.Type == MeshType::Plane))
                 {
-                    component.Type = MeshType::Plane;
+                    component.Type      = MeshType::Plane;
                     component.MeshAsset = AssetManager::Load<Mesh>("builtin:Plane");
-                    modified = true;
+                    modified            = true;
                 }
                 if (ImGui::Selectable("Sphere", component.Type == MeshType::Sphere))
                 {
-                    component.Type = MeshType::Sphere;
+                    component.Type      = MeshType::Sphere;
                     component.MeshAsset = AssetManager::Load<Mesh>("builtin:Sphere");
-                    modified = true;
+                    modified            = true;
                 }
                 ImGui::EndCombo();
             }
@@ -212,7 +218,7 @@ namespace Engine
             }
 
             const std::string& modelPath = AssetManager::GetPath<Mesh>(component.MeshAsset);
-            char modelPathBuf[256];
+            char               modelPathBuf[256];
             memset(modelPathBuf, 0, sizeof(modelPathBuf));
             std::strncpy(modelPathBuf, modelPath.c_str(), sizeof(modelPathBuf) - 1);
             ImGui::SetNextItemWidth(-FLT_MIN);
@@ -242,7 +248,7 @@ namespace Engine
 
             {
                 const std::string& texPath = AssetManager::GetPath<Texture2D>(component.DiffuseTextureAsset);
-                char texPathBuf[256];
+                char               texPathBuf[256];
                 memset(texPathBuf, 0, sizeof(texPathBuf));
                 std::strncpy(texPathBuf, texPath.c_str(), sizeof(texPathBuf) - 1);
                 if (ImGui::InputText("纹理路径", texPathBuf, sizeof(texPathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
@@ -262,7 +268,7 @@ namespace Engine
                     {
                         std::string droppedPath(static_cast<const char*>(payload->Data));
                         component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(droppedPath);
-                        modified = true;
+                        modified                      = true;
                     }
                     ImGui::EndDragDropTarget();
                 }
@@ -274,7 +280,7 @@ namespace Engine
                 if (TrySelectProjectAssetPath("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "图片文件", "纹理", relStr))
                 {
                     component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(relStr);
-                    modified = true;
+                    modified                      = true;
                 }
             }
 
@@ -284,14 +290,14 @@ namespace Engine
                 if (!texPath.empty())
                 {
                     component.DiffuseTextureAsset = AssetManager::Load<Texture2D>(texPath);
-                    modified = true;
+                    modified                      = true;
                 }
             }
             ImGui::SameLine();
             if (ImGui::Button("清除纹理"))
             {
                 component.DiffuseTextureAsset = {};
-                modified = true;
+                modified                      = true;
             }
 
             modified |= ImGui::DragFloat("平铺 X", &component.Tiling.x, 0.1f, 0.01f, 100.0f, "%.2f");
@@ -301,7 +307,7 @@ namespace Engine
             ImGui::Text("法线贴图");
             {
                 const std::string& normalPath = AssetManager::GetPath<Texture2D>(component.NormalMapAsset);
-                char normalPathBuf[256];
+                char               normalPathBuf[256];
                 memset(normalPathBuf, 0, sizeof(normalPathBuf));
                 std::strncpy(normalPathBuf, normalPath.c_str(), sizeof(normalPathBuf) - 1);
                 if (ImGui::InputText("法线贴图路径", normalPathBuf, sizeof(normalPathBuf),
@@ -322,7 +328,7 @@ namespace Engine
                     {
                         std::string droppedPath(static_cast<const char*>(payload->Data));
                         component.NormalMapAsset = AssetManager::Load<Texture2D>(droppedPath);
-                        modified = true;
+                        modified                 = true;
                     }
                     ImGui::EndDragDropTarget();
                 }
@@ -334,7 +340,7 @@ namespace Engine
                 if (TrySelectProjectAssetPath("*.png;*.jpg;*.jpeg;*.bmp;*.tga", "法线贴图", "法线贴图", relStr))
                 {
                     component.NormalMapAsset = AssetManager::Load<Texture2D>(relStr);
-                    modified = true;
+                    modified                 = true;
                 }
             }
 
@@ -344,14 +350,14 @@ namespace Engine
                 if (!normalPath.empty())
                 {
                     component.NormalMapAsset = AssetManager::Load<Texture2D>(normalPath);
-                    modified = true;
+                    modified                 = true;
                 }
             }
             ImGui::SameLine();
             if (ImGui::Button("清除法线贴图"))
             {
                 component.NormalMapAsset = {};
-                modified = true;
+                modified                 = true;
             }
 
             return modified;
@@ -368,8 +374,8 @@ namespace Engine
                 if (ImGui::InputText("高度图路径", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     component.HeightmapPath = std::string(buf);
-                    component.MeshDirty = true;
-                    modified = true;
+                    component.MeshDirty     = true;
+                    modified                = true;
                 }
             }
             ImGui::SameLine();
@@ -379,26 +385,26 @@ namespace Engine
                 if (TrySelectProjectAssetPath("*.png;*.jpg;*.bmp;*.tga", "高度图", "高度图", relStr))
                 {
                     component.HeightmapPath = relStr;
-                    component.MeshDirty = true;
-                    modified = true;
+                    component.MeshDirty     = true;
+                    modified                = true;
                 }
             }
 
             if (ImGui::Button("重新生成网格"))
             {
                 component.MeshDirty = true;
-                modified = true;
+                modified            = true;
             }
 
             if (ImGui::DragFloat("高度缩放", &component.HeightScale, 0.5f, 0.1f, 500.0f, "%.1f"))
             {
                 component.MeshDirty = true;
-                modified = true;
+                modified            = true;
             }
             if (ImGui::DragFloat("地形尺寸", &component.TerrainSize, 1.0f, 1.0f, 1000.0f, "%.1f"))
             {
                 component.MeshDirty = true;
-                modified = true;
+                modified            = true;
             }
 
             ImGui::Separator();
@@ -411,7 +417,7 @@ namespace Engine
                 if (ImGui::InputText("Splatmap 路径", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     component.SplatmapPath = std::string(buf);
-                    modified = true;
+                    modified               = true;
                 }
             }
             ImGui::SameLine();
@@ -421,7 +427,7 @@ namespace Engine
                 if (TrySelectProjectAssetPath("*.png;*.jpg;*.bmp;*.tga", "Splatmap", "Splatmap", relStr))
                 {
                     component.SplatmapPath = relStr;
-                    modified = true;
+                    modified               = true;
                 }
             }
 
@@ -434,14 +440,14 @@ namespace Engine
                 if (ImGui::TreeNode(layerNames[i]))
                 {
                     const std::string& texPath = AssetManager::GetPath<Texture2D>(component.LayerTextures[i]);
-                    char texBuf[256];
+                    char               texBuf[256];
                     memset(texBuf, 0, sizeof(texBuf));
                     std::strncpy(texBuf, texPath.c_str(), sizeof(texBuf) - 1);
                     if (ImGui::InputText("反照率", texBuf, sizeof(texBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                     {
                         std::string p(texBuf);
                         component.LayerTextures[i] = p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
-                        modified = true;
+                        modified                   = true;
                     }
                     ImGui::SameLine();
                     std::string browseId = "浏览##LayerTex" + std::to_string(i);
@@ -451,19 +457,19 @@ namespace Engine
                         if (TrySelectProjectAssetPath("*.png;*.jpg;*.bmp;*.tga", "贴图", "贴图", relStr))
                         {
                             component.LayerTextures[i] = AssetManager::Load<Texture2D>(relStr);
-                            modified = true;
+                            modified                   = true;
                         }
                     }
 
                     const std::string& normPath = AssetManager::GetPath<Texture2D>(component.LayerNormalMaps[i]);
-                    char normBuf[256];
+                    char               normBuf[256];
                     memset(normBuf, 0, sizeof(normBuf));
                     std::strncpy(normBuf, normPath.c_str(), sizeof(normBuf) - 1);
                     if (ImGui::InputText("法线", normBuf, sizeof(normBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                     {
                         std::string p(normBuf);
                         component.LayerNormalMaps[i] = p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
-                        modified = true;
+                        modified                     = true;
                     }
 
                     modified |= ImGui::DragFloat("平铺", &component.LayerTiling[i], 0.5f, 0.1f, 100.0f, "%.1f");
@@ -487,7 +493,7 @@ namespace Engine
             if (ImGui::SliderInt("LOD 层数", &component.LODLevels, 1, 3))
             {
                 component.MeshDirty = true;
-                modified = true;
+                modified            = true;
             }
             modified |= ImGui::DragFloat("LOD1 距离", &component.LODDistance1, 1.0f, 10.0f, 500.0f, "%.0f");
             modified |= ImGui::DragFloat("LOD2 距离", &component.LODDistance2, 1.0f, 20.0f, 1000.0f, "%.0f");
@@ -504,14 +510,14 @@ namespace Engine
                 modified |= ImGui::DragFloat("风力", &component.GrassWindStrength, 0.01f, 0.0f, 2.0f, "%.2f");
 
                 const std::string& grassPath = AssetManager::GetPath<Texture2D>(component.GrassTexture);
-                char grassBuf[256];
+                char               grassBuf[256];
                 memset(grassBuf, 0, sizeof(grassBuf));
                 std::strncpy(grassBuf, grassPath.c_str(), sizeof(grassBuf) - 1);
                 if (ImGui::InputText("草贴图", grassBuf, sizeof(grassBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     std::string p(grassBuf);
                     component.GrassTexture = p.empty() ? AssetHandle{} : AssetManager::Load<Texture2D>(p);
-                    modified = true;
+                    modified               = true;
                 }
             }
 
@@ -520,9 +526,9 @@ namespace Engine
 
         bool DrawParticleEmitterInspector(ParticleEmitterComponent& component)
         {
-            bool changed = false;
+            bool        changed       = false;
             const char* presetNames[] = {"自定义", "火焰", "烟雾", "爆炸", "火花"};
-            int presetIdx = static_cast<int>(component.CurrentPreset);
+            int         presetIdx     = static_cast<int>(component.CurrentPreset);
             if (ImGui::Combo("预设", &presetIdx, presetNames, 5))
             {
                 auto preset = static_cast<ParticleEmitterComponent::Preset>(presetIdx);
@@ -543,14 +549,14 @@ namespace Engine
             if (ImGui::Button("触发爆发"))
             {
                 component.PendingBurst = component.BurstCount;
-                changed = true;
+                changed                = true;
             }
 
             int maxParticles = static_cast<int>(component.MaxParticles);
             if (ImGui::DragInt("最大粒子数", &maxParticles, 100, 100, 1000000))
             {
                 component.MaxParticles = static_cast<uint32_t>(std::max(maxParticles, 100));
-                changed = true;
+                changed                = true;
             }
 
             ImGui::Separator();
@@ -586,11 +592,11 @@ namespace Engine
 
             ImGui::Separator();
             const char* blendModes[] = {"加法混合", "Alpha混合"};
-            int blendIdx = static_cast<int>(component.Blend);
+            int         blendIdx     = static_cast<int>(component.Blend);
             if (ImGui::Combo("混合模式", &blendIdx, blendModes, 2))
             {
                 component.Blend = static_cast<ParticleEmitterComponent::BlendMode>(blendIdx);
-                changed = true;
+                changed         = true;
             }
 
             if (changed && component.CurrentPreset != ParticleEmitterComponent::Preset::Custom)
@@ -626,7 +632,8 @@ namespace Engine
             changed |= ImGui::Checkbox("启用刚体耦合", &component.SPH.RigidBodyCoupling);
             if (component.SPH.RigidBodyCoupling)
             {
-                changed |= ImGui::DragFloat("边界刚度", &component.SPH.BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
+                changed |=
+                    ImGui::DragFloat("边界刚度", &component.SPH.BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
                 changed |= ImGui::DragFloat("边界阻尼", &component.SPH.BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
             }
 
@@ -645,7 +652,7 @@ namespace Engine
                 if (TryNormalizeProjectAssetPath(pathBuf, "音频", normalizedPath))
                 {
                     component.AudioPath = normalizedPath;
-                    modified = true;
+                    modified            = true;
                 }
             }
 
@@ -659,7 +666,7 @@ namespace Engine
                                                      false))
                     {
                         component.AudioPath = normalizedPath;
-                        modified = true;
+                        modified            = true;
                     }
                 }
                 ImGui::EndDragDropTarget();
@@ -672,7 +679,7 @@ namespace Engine
                 if (TrySelectProjectAssetPath("*.wav", "WAV 音频文件", "音频", relStr))
                 {
                     component.AudioPath = relStr;
-                    modified = true;
+                    modified            = true;
                 }
             }
 
@@ -719,7 +726,7 @@ namespace Engine
             if (ImGui::InputText("流地址", urlBuf, sizeof(urlBuf), ImGuiInputTextFlags_EnterReturnsTrue))
             {
                 component.StreamURL = std::string(urlBuf);
-                modified = true;
+                modified            = true;
             }
 
             ImGui::TextWrapped("支持 rtmp:// 或本地文件路径");
@@ -731,12 +738,11 @@ namespace Engine
             {
                 ImGui::Separator();
                 ImGui::Text("视频预览");
-                float w = ImGui::GetContentRegionAvail().x;
-                float aspect =
-                    (float)runtimeState->Texture->GetWidth() / (float)runtimeState->Texture->GetHeight();
-                float h = w / aspect;
-                ImGui::Image((ImTextureID)(uintptr_t)runtimeState->Texture->GetRendererID(), ImVec2(w, h),
-                             ImVec2(0, 1), ImVec2(1, 0));
+                float w      = ImGui::GetContentRegionAvail().x;
+                float aspect = (float)runtimeState->Texture->GetWidth() / (float)runtimeState->Texture->GetHeight();
+                float h      = w / aspect;
+                ImGui::Image((ImTextureID)(uintptr_t)runtimeState->Texture->GetRendererID(), ImVec2(w, h), ImVec2(0, 1),
+                             ImVec2(1, 0));
             }
 
             if (runtimeState && runtimeState->Decoder)
@@ -750,8 +756,8 @@ namespace Engine
 
         bool DrawNativeScriptInspector(NativeScriptComponent& component)
         {
-            bool modified = false;
-            auto& scripts = ScriptRegistry::Instance().GetAll();
+            bool        modified    = false;
+            auto&       scripts     = ScriptRegistry::Instance().GetAll();
             const char* currentName = component.ScriptName.empty() ? "(无)" : component.ScriptName.c_str();
 
             for (auto& [name, entry] : scripts)
@@ -770,7 +776,7 @@ namespace Engine
             {
                 component.ScriptName.clear();
                 component.InstantiateScript = nullptr;
-                component.DestroyScript = nullptr;
+                component.DestroyScript     = nullptr;
                 if (component.Instance)
                     component.Instance.reset();
                 modified = true;

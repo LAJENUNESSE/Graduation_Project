@@ -20,7 +20,7 @@ namespace Engine
         __device__ static uint32_t pcg_hash(uint32_t v)
         {
             uint32_t state = v * 747796405u + 2891336453u;
-            uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+            uint32_t word  = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
             return (word >> 22u) ^ word;
         }
 
@@ -33,8 +33,8 @@ namespace Engine
         // 发射内核——blockDim = 64
         // ======================================================================
 
-        __global__ static void EmitKernel(GPUParticle* particles, uint32_t* deadList, CounterData* counter,
-                                          EmitParams p)
+        __global__ static void
+        EmitKernel(GPUParticle* particles, uint32_t* deadList, CounterData* counter, EmitParams p)
         {
             uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
             if (gid >= p.emitCount)
@@ -61,18 +61,18 @@ namespace Engine
             uint32_t seed = pcg_hash(gid + static_cast<uint32_t>(p.time * 1000.0f) * 1099u);
 
             float life = p.lifeMin + (p.lifeMax - p.lifeMin) * pcg_randf(seed);
-            seed = pcg_hash(seed);
+            seed       = pcg_hash(seed);
 
             // ---- 锥体内随机方向 ----
             float cosAngle = cosf(p.emitAngle);
-            float z = cosAngle + (1.0f - cosAngle) * pcg_randf(seed);
-            seed = pcg_hash(seed);
-            float phi = pcg_randf(seed) * 6.28318530718f;
-            seed = pcg_hash(seed);
+            float z        = cosAngle + (1.0f - cosAngle) * pcg_randf(seed);
+            seed           = pcg_hash(seed);
+            float phi      = pcg_randf(seed) * 6.28318530718f;
+            seed           = pcg_hash(seed);
             float sinTheta = sqrtf(1.0f - z * z);
-            float lx = sinTheta * cosf(phi);
-            float ly = sinTheta * sinf(phi);
-            float lz = z;
+            float lx       = sinTheta * cosf(phi);
+            float ly       = sinTheta * sinf(phi);
+            float lz       = z;
 
             // 规范化发射方向
             float dx = p.emitDirection[0], dy = p.emitDirection[1], dz = p.emitDirection[2];
@@ -97,9 +97,9 @@ namespace Engine
             }
 
             // 切线 = normalize(cross(up, dir))
-            float tx = uy * dz - uz * dy;
-            float ty = uz * dx - ux * dz;
-            float tz = ux * dy - uy * dx;
+            float tx   = uy * dz - uz * dy;
+            float ty   = uz * dx - ux * dz;
+            float tz   = ux * dy - uy * dx;
             float tInv = rsqrtf(tx * tx + ty * ty + tz * tz + 1e-12f);
             tx *= tInv;
             ty *= tInv;
@@ -116,23 +116,23 @@ namespace Engine
 
             // 随机速度
             float speed = p.speedMin + (p.speedMax - p.speedMin) * pcg_randf(seed);
-            seed = pcg_hash(seed);
+            seed        = pcg_hash(seed);
 
             // ---- 写入粒子 ----
-            GPUParticle& part = particles[idx];
-            part.posAndLife = {p.emitterPos[0], p.emitterPos[1], p.emitterPos[2], life};
+            GPUParticle& part  = particles[idx];
+            part.posAndLife    = {p.emitterPos[0], p.emitterPos[1], p.emitterPos[2], life};
             part.velAndMaxLife = {wx * speed, wy * speed, wz * speed, life};
-            part.startColor = {p.startColor[0], p.startColor[1], p.startColor[2], p.startColor[3]};
-            part.endColor = {p.endColor[0], p.endColor[1], p.endColor[2], p.endColor[3]};
-            part.params = {p.sizeStart, p.sizeEnd, 0.0f, 0.0f};
+            part.startColor    = {p.startColor[0], p.startColor[1], p.startColor[2], p.startColor[3]};
+            part.endColor      = {p.endColor[0], p.endColor[1], p.endColor[2], p.endColor[3]};
+            part.params        = {p.sizeStart, p.sizeEnd, 0.0f, 0.0f};
         }
 
         // ======================================================================
         // 模拟内核——blockDim = 256
         // ======================================================================
 
-        __global__ static void SimulateKernel(GPUParticle* particles, uint32_t* deadList, uint32_t* aliveList,
-                                              CounterData* counter, SimulateParams p)
+        __global__ static void SimulateKernel(
+            GPUParticle* particles, uint32_t* deadList, uint32_t* aliveList, CounterData* counter, SimulateParams p)
         {
             uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
             if (idx >= p.maxParticles)
@@ -148,7 +148,7 @@ namespace Engine
             {
                 // 粒子刚死亡
                 particles[idx].posAndLife.w = 0.0f;
-                uint32_t slot = atomicAdd(&counter->deadCount, 1u);
+                uint32_t slot               = atomicAdd(&counter->deadCount, 1u);
                 if (slot < p.maxParticles)
                     deadList[slot] = idx;
             }
@@ -206,8 +206,8 @@ namespace Engine
             CUDA_CHECK_KERNEL("EmitKernel");
         }
 
-        void LaunchSimulate(void* particles, void* deadList, void* aliveList, void* counter,
-                            const SimulateParams& params, void* stream)
+        void LaunchSimulate(
+            void* particles, void* deadList, void* aliveList, void* counter, const SimulateParams& params, void* stream)
         {
             if (IsCudaPoisoned() || params.maxParticles == 0)
                 return;
@@ -221,7 +221,8 @@ namespace Engine
 
         void LaunchRenderArgs(void* counter, void* indirectArgs, void* stream)
         {
-            if (IsCudaPoisoned()) return;
+            if (IsCudaPoisoned())
+                return;
 
             RenderArgsKernel<<<1, 1, 0, static_cast<cudaStream_t>(stream)>>>(
                 static_cast<CounterData*>(counter), static_cast<IndirectDrawCommand*>(indirectArgs));
@@ -234,7 +235,8 @@ namespace Engine
 
         void* CreateCudaEvent()
         {
-            if (IsCudaPoisoned()) return nullptr;
+            if (IsCudaPoisoned())
+                return nullptr;
             cudaEvent_t ev = nullptr;
             CUDA_CHECK(cudaEventCreate(&ev));
             return static_cast<void*>(ev);
@@ -248,13 +250,15 @@ namespace Engine
 
         void RecordCudaEvent(void* event, void* stream)
         {
-            if (IsCudaPoisoned() || !event) return;
+            if (IsCudaPoisoned() || !event)
+                return;
             CUDA_CHECK(cudaEventRecord(static_cast<cudaEvent_t>(event), static_cast<cudaStream_t>(stream)));
         }
 
         float CudaEventElapsedMs(void* start, void* stop)
         {
-            if (IsCudaPoisoned() || !start || !stop) return 0.0f;
+            if (IsCudaPoisoned() || !start || !stop)
+                return 0.0f;
             // 非阻塞查询：避免每帧 CPU/GPU 同步
             cudaError_t queryErr = cudaEventQuery(static_cast<cudaEvent_t>(stop));
             if (queryErr == cudaErrorNotReady)

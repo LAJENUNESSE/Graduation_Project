@@ -25,7 +25,7 @@ namespace Engine
         ~CudaGLInteropContext();
 
         // 非可复制，非可移动（资源与设备/上下文相关）
-        CudaGLInteropContext(const CudaGLInteropContext&) = delete;
+        CudaGLInteropContext(const CudaGLInteropContext&)            = delete;
         CudaGLInteropContext& operator=(const CudaGLInteropContext&) = delete;
 
         // 为 CUDA 互操作注册 GL 缓冲区。
@@ -53,7 +53,7 @@ namespace Engine
         void* GetStream() const;
 
         bool IsMapped() const;
-        int GetSlotCount() const;
+        int  GetSlotCount() const;
 
     private:
         struct Impl;

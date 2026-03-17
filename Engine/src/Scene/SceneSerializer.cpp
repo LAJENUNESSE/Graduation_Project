@@ -218,7 +218,7 @@ namespace Engine
         {
             out << YAML::Key << "CameraComponent";
             out << YAML::BeginMap;
-            auto& cc = entity.GetComponent<CameraComponent>();
+            auto& cc     = entity.GetComponent<CameraComponent>();
             auto& camera = cc.Camera;
 
             out << YAML::Key << "ProjectionType" << YAML::Value << static_cast<int>(camera.GetProjectionType());
@@ -240,7 +240,7 @@ namespace Engine
                 continue;
 
             uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
-            auto* scene = entity.GetScene();
+            auto*    scene    = entity.GetScene();
             if (scene && meta.Has(*scene, entityId))
             {
                 void* comp = meta.Get(*scene, entityId);
@@ -419,7 +419,7 @@ namespace Engine
         out << YAML::EndMap;
 
         const std::filesystem::path resolvedFilepath = PathUtils::ResolvePath(filepath);
-        std::error_code ec;
+        std::error_code             ec;
         std::filesystem::create_directories(resolvedFilepath.parent_path(), ec);
         std::ofstream fout(resolvedFilepath);
         if (!fout.is_open())
@@ -437,8 +437,8 @@ namespace Engine
         return true;
     }
 
-    static AssetHandle CreateMeshHandleFromType(MeshType& outType, const std::string& meshType,
-                                                   const std::string& modelPath = "")
+    static AssetHandle
+    CreateMeshHandleFromType(MeshType& outType, const std::string& meshType, const std::string& modelPath = "")
     {
         if (meshType == "Cube")
         {
@@ -471,7 +471,7 @@ namespace Engine
 
     bool SceneSerializer::Deserialize(const std::string& filepath, EditorRenderSettings* outRenderSettings)
     {
-        YAML::Node data;
+        YAML::Node                  data;
         const std::filesystem::path resolvedFilepath = PathUtils::ResolvePath(filepath);
 
         try
@@ -511,7 +511,7 @@ namespace Engine
             if (shadowNode["MapResolution"])
             {
                 int rawRes = shadowNode["MapResolution"].as<int>();
-                int res = EditorRenderSettingDomains::NormalizeShadowMapResolution(rawRes);
+                int res    = EditorRenderSettingDomains::NormalizeShadowMapResolution(rawRes);
                 if (res != rawRes)
                     ENGINE_CORE_WARN("Unsupported Shadow MapResolution {0}, normalized to {1}", rawRes, res);
                 m_Scene->ResizeShadowMap(res);
@@ -553,7 +553,7 @@ namespace Engine
             }
             if (renderNode["ToneMappingMode"])
             {
-                int mode = renderNode["ToneMappingMode"].as<int>();
+                int mode           = renderNode["ToneMappingMode"].as<int>();
                 int normalizedMode = EditorRenderSettingDomains::NormalizeToneMappingMode(mode);
                 if (normalizedMode != mode)
                     ENGINE_CORE_WARN("Invalid ToneMappingMode {0}, falling back to {1}", mode, normalizedMode);
@@ -563,7 +563,7 @@ namespace Engine
                 outRenderSettings->PostProcessing.GammaCorrection = renderNode["GammaCorrection"].as<bool>();
             if (renderNode["MSAASamples"])
             {
-                uint32_t samples = renderNode["MSAASamples"].as<uint32_t>();
+                uint32_t samples           = renderNode["MSAASamples"].as<uint32_t>();
                 uint32_t normalizedSamples = EditorRenderSettingDomains::NormalizeMSAASamples(samples);
                 if (normalizedSamples != samples)
                     ENGINE_CORE_WARN("Invalid MSAASamples {0}, falling back to {1}", samples, normalizedSamples);
@@ -619,7 +619,7 @@ namespace Engine
                     entityNode["Entity"] ? entityNode["Entity"].as<uint64_t>() : static_cast<uint64_t>(UUID());
 
                 std::string name;
-                auto tagComponent = entityNode["TagComponent"];
+                auto        tagComponent = entityNode["TagComponent"];
                 if (tagComponent && tagComponent["Tag"])
                     name = tagComponent["Tag"].as<std::string>();
 
@@ -628,7 +628,7 @@ namespace Engine
                 // ParentID（父子层级，向后兼容：无该字段默认为根节点）
                 if (entityNode["ParentID"])
                 {
-                    auto& rel = deserializedEntity.GetComponent<RelationshipComponent>();
+                    auto& rel    = deserializedEntity.GetComponent<RelationshipComponent>();
                     rel.ParentID = UUID(entityNode["ParentID"].as<uint64_t>());
                 }
 
@@ -649,7 +649,7 @@ namespace Engine
                 auto meshRendererComponent = entityNode["MeshRendererComponent"];
                 if (meshRendererComponent)
                 {
-                    auto& mrc = deserializedEntity.AddComponent<MeshRendererComponent>();
+                    auto&       mrc      = deserializedEntity.AddComponent<MeshRendererComponent>();
                     std::string meshType = meshRendererComponent["MeshType"]
                                                ? meshRendererComponent["MeshType"].as<std::string>()
                                                : "Cube";
@@ -710,9 +710,9 @@ namespace Engine
                         return {};
                     };
 
-                    mrc.MetallicTextureAsset = loadSafeTextureHandle(meshRendererComponent, "MetallicTexturePath");
+                    mrc.MetallicTextureAsset  = loadSafeTextureHandle(meshRendererComponent, "MetallicTexturePath");
                     mrc.RoughnessTextureAsset = loadSafeTextureHandle(meshRendererComponent, "RoughnessTexturePath");
-                    mrc.AOTextureAsset = loadSafeTextureHandle(meshRendererComponent, "AOTexturePath");
+                    mrc.AOTextureAsset        = loadSafeTextureHandle(meshRendererComponent, "AOTexturePath");
                 }
 
                 // CameraComponent（手写：getter/setter API）
@@ -787,8 +787,8 @@ namespace Engine
 
                     for (int i = 0; i < 4; i++)
                     {
-                        std::string p = "Layer" + std::to_string(i);
-                        tc.LayerTextures[i] = loadSafeTexHandle(terrainNode, p + "Texture");
+                        std::string p         = "Layer" + std::to_string(i);
+                        tc.LayerTextures[i]   = loadSafeTexHandle(terrainNode, p + "Texture");
                         tc.LayerNormalMaps[i] = loadSafeTexHandle(terrainNode, p + "NormalMap");
                         if (terrainNode[p + "Tiling"])
                             tc.LayerTiling[i] = terrainNode[p + "Tiling"].as<float>();
@@ -819,7 +819,7 @@ namespace Engine
                     if (terrainNode["GrassWindStrength"])
                         tc.GrassWindStrength = terrainNode["GrassWindStrength"].as<float>();
                     tc.GrassTexture = loadSafeTexHandle(terrainNode, "GrassTexture");
-                    tc.MeshDirty = true;
+                    tc.MeshDirty    = true;
                 }
 
                 // ParticleEmitterComponent
@@ -889,7 +889,7 @@ namespace Engine
                             pe.SPH.PCISPHEnabled = sphNode["PCISPHEnabled"].as<bool>();
                         if (sphNode["PCISPHIterations"])
                         {
-                            int iters = sphNode["PCISPHIterations"].as<int>();
+                            int iters               = sphNode["PCISPHIterations"].as<int>();
                             pe.SPH.PCISPHIterations = std::clamp(iters, 1, 8);
                         }
                         if (sphNode["PCISPHDelta"])
@@ -922,7 +922,7 @@ namespace Engine
                             pe.SPH.PCISPHEnabled = particleEmitterComponent["SPH_PCISPHEnabled"].as<bool>();
                         if (particleEmitterComponent["SPH_PCISPHIterations"])
                         {
-                            int iters = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
+                            int iters               = particleEmitterComponent["SPH_PCISPHIterations"].as<int>();
                             pe.SPH.PCISPHIterations = std::clamp(iters, 1, 8);
                         }
                         if (particleEmitterComponent["SPH_PCISPHDelta"])
@@ -946,7 +946,7 @@ namespace Engine
                     if (nativeScriptNode["ScriptName"])
                     {
                         std::string scriptName = nativeScriptNode["ScriptName"].as<std::string>();
-                        nsc.ScriptName = scriptName;
+                        nsc.ScriptName         = scriptName;
                         if (!scriptName.empty())
                             ScriptRegistry::Instance().Bind(nsc, scriptName);
                     }
@@ -979,7 +979,7 @@ namespace Engine
                     if (parent && parent.HasComponent<RelationshipComponent>())
                     {
                         auto& parentRel = parent.GetComponent<RelationshipComponent>();
-                        UUID childUUID = m_Scene->GetRegistry().get<IDComponent>(entity).ID;
+                        UUID  childUUID = m_Scene->GetRegistry().get<IDComponent>(entity).ID;
                         parentRel.Children.push_back(childUUID);
                     }
                     else
@@ -990,7 +990,6 @@ namespace Engine
                 }
             }
         }
-
 
         if (hadEntityErrors)
         {

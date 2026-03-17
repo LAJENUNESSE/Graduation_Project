@@ -46,7 +46,7 @@ namespace Engine
         ImGuiStyle& style = ImGui::GetStyle();
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
-            style.WindowRounding = 0.0f;
+            style.WindowRounding              = 0.0f;
             style.Colors[ImGuiCol_WindowBg].w = 1.0f;
         }
 
@@ -82,7 +82,7 @@ namespace Engine
 
     void ImGuiLayer::End()
     {
-        ImGuiIO& io = ImGui::GetIO();
+        ImGuiIO&     io  = ImGui::GetIO();
         Application& app = Application::Get();
         io.DisplaySize =
             ImVec2(static_cast<float>(app.GetWindow().GetWidth()), static_cast<float>(app.GetWindow().GetHeight()));

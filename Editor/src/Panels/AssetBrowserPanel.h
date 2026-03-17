@@ -28,10 +28,11 @@ namespace Engine
 
     private:
         bool EnsureCurrentDirectoryValid();
-        bool TryEnumerateDirectory(const std::filesystem::path& directory,
+        bool TryEnumerateDirectory(const std::filesystem::path&                   directory,
                                    std::vector<std::filesystem::directory_entry>& outEntries);
-        bool TryBuildRelativePath(const std::filesystem::path& path, const std::filesystem::path& base,
-                                  std::filesystem::path& outRelative);
+        bool TryBuildRelativePath(const std::filesystem::path& path,
+                                  const std::filesystem::path& base,
+                                  std::filesystem::path&       outRelative);
         bool TryGetFileSizeText(const std::filesystem::directory_entry& entry, std::string& outText);
         void SetFilesystemError(const std::string& message);
 
@@ -58,16 +59,16 @@ namespace Engine
         std::filesystem::path m_RootDirectory;
         std::filesystem::path m_CurrentDirectory;
 
-        Ref<Scene> m_Scene;
+        Ref<Scene>        m_Scene;
         SceneOpenCallback m_OnSceneOpen;
-        std::string m_LastFilesystemError;
+        std::string       m_LastFilesystemError;
 
         // 图片预览
-        bool m_ShowImagePreview = false;
-        std::string m_PreviewImagePath;
+        bool           m_ShowImagePreview = false;
+        std::string    m_PreviewImagePath;
         Ref<Texture2D> m_PreviewTexture;
-        int m_PreviewImageWidth = 0;
-        int m_PreviewImageHeight = 0;
+        int            m_PreviewImageWidth  = 0;
+        int            m_PreviewImageHeight = 0;
     };
 
 } // namespace Engine

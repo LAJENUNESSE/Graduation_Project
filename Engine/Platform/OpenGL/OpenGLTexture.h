@@ -30,10 +30,10 @@ namespace Engine
         }
 
     private:
-        std::string m_Path;
-        uint32_t m_Width;
-        uint32_t m_Height;
-        uint32_t m_RendererID;
+        std::string  m_Path;
+        uint32_t     m_Width;
+        uint32_t     m_Height;
+        uint32_t     m_RendererID;
         unsigned int m_InternalFormat;
         unsigned int m_DataFormat;
     };
@@ -57,8 +57,8 @@ namespace Engine
         }
 
     private:
-        uint32_t m_Width = 0;
-        uint32_t m_Height = 0;
+        uint32_t m_Width      = 0;
+        uint32_t m_Height     = 0;
         uint32_t m_RendererID = 0;
     };
 

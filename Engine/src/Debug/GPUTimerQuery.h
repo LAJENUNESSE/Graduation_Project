@@ -29,16 +29,16 @@ namespace Engine
         float GetElapsedMs() const { return m_ElapsedMs; }
 
         // Non-copyable
-        GPUTimerQuery(const GPUTimerQuery&) = delete;
+        GPUTimerQuery(const GPUTimerQuery&)            = delete;
         GPUTimerQuery& operator=(const GPUTimerQuery&) = delete;
 
     private:
-        uint32_t m_QueryIDs[2] = {0, 0};
-        int m_CurrentIndex = 0;
-        float m_ElapsedMs = 0.0f;
-        bool m_QueryActive = false; // Is there an active query in End() waiting?
-        int m_FrameCount = 0;       // Track frames to know when results are available
-        bool m_Disabled = false;    // Disabled on unstable drivers (e.g., VMware) or env override
+        uint32_t m_QueryIDs[2]  = {0, 0};
+        int      m_CurrentIndex = 0;
+        float    m_ElapsedMs    = 0.0f;
+        bool     m_QueryActive  = false; // Is there an active query in End() waiting?
+        int      m_FrameCount   = 0;     // Track frames to know when results are available
+        bool     m_Disabled     = false; // Disabled on unstable drivers (e.g., VMware) or env override
     };
 
 } // namespace Engine

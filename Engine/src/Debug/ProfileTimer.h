@@ -15,19 +15,19 @@ namespace Engine
 
         ~ProfileTimer()
         {
-            auto endTime = std::chrono::high_resolution_clock::now();
+            auto endTime  = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration<float, std::milli>(endTime - m_StartTime);
             if (m_OutputMs)
                 *m_OutputMs = duration.count();
         }
 
         // Non-copyable
-        ProfileTimer(const ProfileTimer&) = delete;
+        ProfileTimer(const ProfileTimer&)            = delete;
         ProfileTimer& operator=(const ProfileTimer&) = delete;
 
     private:
-        const char* m_Name;
-        float* m_OutputMs;
+        const char*                                    m_Name;
+        float*                                         m_OutputMs;
         std::chrono::high_resolution_clock::time_point m_StartTime;
     };
 

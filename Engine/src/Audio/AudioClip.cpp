@@ -24,7 +24,7 @@ namespace Engine
 
     AudioClip AudioClip::LoadFromFile(const std::string& path)
     {
-        AudioClip clip;
+        AudioClip         clip;
         const std::string resolvedPath = PathUtils::ResolvePathString(path);
 
         // 1. Open file in binary mode
@@ -48,7 +48,7 @@ namespace Engine
         file.close();
 
         const uint8_t* data = fileData.data();
-        size_t size = fileData.size();
+        size_t         size = fileData.size();
 
         // 2. Verify RIFF header: "RIFF" + fileSize + "WAVE"
         if (size < 12 || !TagEquals(data, "RIFF") || !TagEquals(data + 8, "WAVE"))
@@ -58,18 +58,18 @@ namespace Engine
         }
 
         // 3. Scan chunks to find "fmt " and "data"
-        bool foundFmt = false;
-        bool foundData = false;
-        uint16_t audioFormat = 0;
-        uint16_t numChannels = 0;
-        uint32_t sampleRate = 0;
+        bool     foundFmt      = false;
+        bool     foundData     = false;
+        uint16_t audioFormat   = 0;
+        uint16_t numChannels   = 0;
+        uint32_t sampleRate    = 0;
         uint16_t bitsPerSample = 0;
 
         size_t offset = 12; // skip past RIFF header
         while (offset + 8 <= size)
         {
             const uint8_t* chunkHeader = data + offset;
-            uint32_t chunkSize = ReadU32(chunkHeader + 4);
+            uint32_t       chunkSize   = ReadU32(chunkHeader + 4);
 
             if (TagEquals(chunkHeader, "fmt "))
             {
@@ -80,9 +80,9 @@ namespace Engine
                 }
 
                 const uint8_t* fmtData = chunkHeader + 8;
-                audioFormat = ReadU16(fmtData + 0);
-                numChannels = ReadU16(fmtData + 2);
-                sampleRate = ReadU32(fmtData + 4);
+                audioFormat            = ReadU16(fmtData + 0);
+                numChannels            = ReadU16(fmtData + 2);
+                sampleRate             = ReadU32(fmtData + 4);
                 // byteRate   = ReadU32(fmtData + 8);  // not needed
                 // blockAlign = ReadU16(fmtData + 12);  // not needed
                 bitsPerSample = ReadU16(fmtData + 14);
@@ -105,7 +105,7 @@ namespace Engine
                 else
                 {
                     size_t dataStart = offset + 8;
-                    size_t dataSize = chunkSize;
+                    size_t dataSize  = chunkSize;
                     if (dataStart + dataSize > size)
                         dataSize = size - dataStart; // clamp to file size
 
@@ -128,12 +128,12 @@ namespace Engine
             while (offset + 8 <= size)
             {
                 const uint8_t* chunkHeader = data + offset;
-                uint32_t chunkSize = ReadU32(chunkHeader + 4);
+                uint32_t       chunkSize   = ReadU32(chunkHeader + 4);
 
                 if (TagEquals(chunkHeader, "data"))
                 {
                     size_t dataStart = offset + 8;
-                    size_t dataSize = chunkSize;
+                    size_t dataSize  = chunkSize;
                     if (dataStart + dataSize > size)
                         dataSize = size - dataStart;
 
@@ -177,8 +177,8 @@ namespace Engine
             return clip;
         }
 
-        clip.SampleRate = sampleRate;
-        clip.Channels = numChannels;
+        clip.SampleRate    = sampleRate;
+        clip.Channels      = numChannels;
         clip.BitsPerSample = bitsPerSample;
 
         ENGINE_CORE_INFO("AudioClip: 已加载 '{}' ({}Hz, {}ch, {}bit, {} 字节 PCM)", path, sampleRate, numChannels,

@@ -59,7 +59,7 @@ namespace Engine
             alcDestroyContext(m_Context);
             alcCloseDevice(m_Device);
             m_Context = nullptr;
-            m_Device = nullptr;
+            m_Device  = nullptr;
             return;
         }
 

@@ -11,8 +11,10 @@
 namespace Engine
 {
 
-    void SceneHierarchyService::SetParent(entt::registry& reg, const SceneEntityIndex& index,
-                                          entt::entity child, entt::entity parent)
+    void SceneHierarchyService::SetParent(entt::registry&         reg,
+                                          const SceneEntityIndex& index,
+                                          entt::entity            child,
+                                          entt::entity            parent)
     {
         if (child == entt::null || parent == entt::null)
             return;
@@ -36,7 +38,7 @@ namespace Engine
                 if (oldParent != entt::null && reg.valid(oldParent) && reg.all_of<RelationshipComponent>(oldParent))
                 {
                     auto& oldParentChildren = reg.get<RelationshipComponent>(oldParent).Children;
-                    UUID childUUID = reg.get<IDComponent>(child).ID;
+                    UUID  childUUID         = reg.get<IDComponent>(child).ID;
                     oldParentChildren.erase(
                         std::remove_if(oldParentChildren.begin(), oldParentChildren.end(), [childUUID](UUID id)
                                        { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
@@ -47,7 +49,7 @@ namespace Engine
         }
 
         // 3. 建立新的父子关系
-        auto& childRel = reg.get<RelationshipComponent>(child);
+        auto& childRel  = reg.get<RelationshipComponent>(child);
         auto& parentRel = reg.get<RelationshipComponent>(parent);
 
         childRel.ParentID = reg.get<IDComponent>(parent).ID;
@@ -55,7 +57,7 @@ namespace Engine
 
         // 4. 计算新父物体的世界变换，将子物体世界变换转为相对于新父的本地变换
         glm::mat4 parentWorldMatrix = WorldTransformService::ComputeWorldTransform(reg, parent, index);
-        glm::mat4 childLocalMatrix = glm::inverse(parentWorldMatrix) * childWorldMatrix;
+        glm::mat4 childLocalMatrix  = glm::inverse(parentWorldMatrix) * childWorldMatrix;
 
         // 5. 从本地矩阵分解出 Translation / Rotation / Scale 写回子实体
         glm::vec3 scale;
@@ -65,14 +67,13 @@ namespace Engine
         glm::vec4 perspective;
         glm::decompose(childLocalMatrix, scale, rotation, translation, skew, perspective);
 
-        auto& childTransform = reg.get<TransformComponent>(child);
+        auto& childTransform       = reg.get<TransformComponent>(child);
         childTransform.Translation = translation;
-        childTransform.Rotation = glm::eulerAngles(rotation);
-        childTransform.Scale = scale;
+        childTransform.Rotation    = glm::eulerAngles(rotation);
+        childTransform.Scale       = scale;
     }
 
-    void SceneHierarchyService::RemoveParent(entt::registry& reg, const SceneEntityIndex& index,
-                                             entt::entity child)
+    void SceneHierarchyService::RemoveParent(entt::registry& reg, const SceneEntityIndex& index, entt::entity child)
     {
         if (child == entt::null || !reg.all_of<RelationshipComponent>(child))
             return;
@@ -89,7 +90,7 @@ namespace Engine
         if (parent != entt::null && reg.valid(parent) && reg.all_of<RelationshipComponent>(parent))
         {
             auto& parentChildren = reg.get<RelationshipComponent>(parent).Children;
-            UUID childUUID = reg.get<IDComponent>(child).ID;
+            UUID  childUUID      = reg.get<IDComponent>(child).ID;
             parentChildren.erase(
                 std::remove_if(parentChildren.begin(), parentChildren.end(), [childUUID](UUID id)
                                { return static_cast<uint64_t>(id) == static_cast<uint64_t>(childUUID); }),
@@ -106,14 +107,14 @@ namespace Engine
         glm::vec4 perspective;
         glm::decompose(childWorldMatrix, scale, rotation, translation, skew, perspective);
 
-        auto& childTransform = reg.get<TransformComponent>(child);
+        auto& childTransform       = reg.get<TransformComponent>(child);
         childTransform.Translation = translation;
-        childTransform.Rotation = glm::eulerAngles(rotation);
-        childTransform.Scale = scale;
+        childTransform.Rotation    = glm::eulerAngles(rotation);
+        childTransform.Scale       = scale;
     }
 
-    std::vector<entt::entity> SceneHierarchyService::GetChildren(entt::registry& reg, const SceneEntityIndex& index,
-                                                                  entt::entity parent)
+    std::vector<entt::entity>
+    SceneHierarchyService::GetChildren(entt::registry& reg, const SceneEntityIndex& index, entt::entity parent)
     {
         std::vector<entt::entity> result;
         if (parent == entt::null || !reg.all_of<RelationshipComponent>(parent))
@@ -129,8 +130,10 @@ namespace Engine
         return result;
     }
 
-    bool SceneHierarchyService::IsAncestorOf(entt::registry& reg, const SceneEntityIndex& index,
-                                             entt::entity ancestor, entt::entity entity)
+    bool SceneHierarchyService::IsAncestorOf(entt::registry&         reg,
+                                             const SceneEntityIndex& index,
+                                             entt::entity            ancestor,
+                                             entt::entity            entity)
     {
         if (entity == entt::null || !reg.all_of<RelationshipComponent>(entity))
             return false;
@@ -151,7 +154,7 @@ namespace Engine
     std::vector<entt::entity> SceneHierarchyService::GetRootEntities(entt::registry& reg)
     {
         std::vector<entt::entity> roots;
-        auto view = reg.view<IDComponent, RelationshipComponent>();
+        auto                      view = reg.view<IDComponent, RelationshipComponent>();
         for (auto entity : view)
         {
             auto& rel = view.get<RelationshipComponent>(entity);

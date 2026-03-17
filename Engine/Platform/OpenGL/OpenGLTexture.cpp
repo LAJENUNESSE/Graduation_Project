@@ -27,7 +27,7 @@ namespace Engine
     OpenGLTexture2D::OpenGLTexture2D(const std::string& path)
         : m_Path(path), m_Width(0), m_Height(0), m_RendererID(0), m_InternalFormat(GL_RGBA8), m_DataFormat(GL_RGBA)
     {
-        int width, height, channels;
+        int               width, height, channels;
         const std::string resolvedPath = PathUtils::ResolvePathString(path);
         stbi_set_flip_vertically_on_load(1);
         // Force RGBA output — handles 1/2/3/4 channel images uniformly
@@ -36,7 +36,7 @@ namespace Engine
         {
             ENGINE_CORE_ERROR("Failed to load image: {0}", resolvedPath);
             // Create 1x1 magenta fallback
-            m_Width = 1;
+            m_Width  = 1;
             m_Height = 1;
             glGenTextures(1, &m_RendererID);
             glBindTexture(GL_TEXTURE_2D, m_RendererID);
@@ -50,7 +50,7 @@ namespace Engine
             return;
         }
 
-        m_Width = width;
+        m_Width  = width;
         m_Height = height;
 
         glGenTextures(1, &m_RendererID);
@@ -117,7 +117,7 @@ namespace Engine
         {
             ENGINE_CORE_ERROR("Cubemap requires exactly 6 face paths, got {0}. Using fallback.", facePaths.size());
             // 创建 1x1 品红 fallback cubemap
-            m_Width = 1;
+            m_Width  = 1;
             m_Height = 1;
             glGenTextures(1, &m_RendererID);
             glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
@@ -140,16 +140,16 @@ namespace Engine
 
         for (int i = 0; i < 6; i++)
         {
-            int width, height, channels;
+            int               width, height, channels;
             const std::string resolvedPath = PathUtils::ResolvePathString(facePaths[i]);
-            stbi_uc* data = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
+            stbi_uc*          data         = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
             if (data)
             {
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, width, height, 0, GL_RGBA,
                              GL_UNSIGNED_BYTE, data);
                 if (i == 0)
                 {
-                    m_Width = width;
+                    m_Width  = width;
                     m_Height = height;
                 }
                 stbi_image_free(data);

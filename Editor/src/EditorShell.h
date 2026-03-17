@@ -13,27 +13,27 @@ namespace Engine
 
     struct EditorShellState
     {
-        SceneState CurrentSceneState = SceneState::Edit;
-        bool CanSave = true;
-        bool CanUndo = false;
-        bool CanRedo = false;
+        SceneState  CurrentSceneState = SceneState::Edit;
+        bool        CanSave           = true;
+        bool        CanUndo           = false;
+        bool        CanRedo           = false;
         std::string UndoDescription;
         std::string RedoDescription;
-        bool ShowStatsPanel = true;
-        bool IsDirty = false;
+        bool        ShowStatsPanel = true;
+        bool        IsDirty        = false;
     };
 
     struct EditorShellActions
     {
-        bool RequestNewScene = false;
-        bool RequestOpenScene = false;
-        bool RequestSaveScene = false;
-        bool RequestSaveSceneQuick = false;
-        bool RequestPlay = false;
-        bool RequestStop = false;
-        bool RequestUndo = false;
-        bool RequestRedo = false;
-        bool ToggleStatsPanel = false;
+        bool RequestNewScene         = false;
+        bool RequestOpenScene        = false;
+        bool RequestSaveScene        = false;
+        bool RequestSaveSceneQuick   = false;
+        bool RequestPlay             = false;
+        bool RequestStop             = false;
+        bool RequestUndo             = false;
+        bool RequestRedo             = false;
+        bool ToggleStatsPanel        = false;
         bool RequestCloseApplication = false;
     };
 
@@ -44,7 +44,7 @@ namespace Engine
         EditorShellActions OnKeyPressed(const KeyPressedEvent& e, const EditorShellState& state) const;
 
     private:
-        bool m_DockspaceOpen = true;
+        bool               m_DockspaceOpen  = true;
         ImGuiDockNodeFlags m_DockspaceFlags = ImGuiDockNodeFlags_None;
     };
 

@@ -23,7 +23,7 @@ namespace Engine
         // clang-format on
 
         m_QuadVAO = VertexArray::Create();
-        auto vb = VertexBuffer::Create(quadVertices, sizeof(quadVertices));
+        auto vb   = VertexBuffer::Create(quadVertices, sizeof(quadVertices));
         vb->SetLayout({
             {ShaderDataType::Float2, "a_Position"},
             {ShaderDataType::Float2, "a_TexCoord"},
@@ -37,8 +37,8 @@ namespace Engine
     void PostProcessing::CreateShaders()
     {
         m_BrightnessExtractShader = Shader::Create("assets/shaders/BrightnessExtract.glsl");
-        m_GaussianBlurShader = Shader::Create("assets/shaders/GaussianBlur.glsl");
-        m_ToneMappingShader = Shader::Create("assets/shaders/ToneMapping.glsl");
+        m_GaussianBlurShader      = Shader::Create("assets/shaders/GaussianBlur.glsl");
+        m_ToneMappingShader       = Shader::Create("assets/shaders/ToneMapping.glsl");
     }
 
     void PostProcessing::Init(uint32_t width, uint32_t height)
@@ -49,7 +49,7 @@ namespace Engine
             CreateFullscreenQuad();
         }
 
-        m_Width = width;
+        m_Width  = width;
         m_Height = height;
 
         uint32_t halfW = std::max(width / 2, 1u);
@@ -59,9 +59,9 @@ namespace Engine
         {
             FramebufferSpecification spec;
             spec.Attachments = {FramebufferTextureFormat::RGBA16F};
-            spec.Width = halfW;
-            spec.Height = halfH;
-            m_BrightnessFBO = Framebuffer::Create(spec);
+            spec.Width       = halfW;
+            spec.Height      = halfH;
+            m_BrightnessFBO  = Framebuffer::Create(spec);
         }
 
         // Ping-pong FBOs for Gaussian blur (half-res RGBA16F, no depth)
@@ -69,8 +69,8 @@ namespace Engine
         {
             FramebufferSpecification spec;
             spec.Attachments = {FramebufferTextureFormat::RGBA16F};
-            spec.Width = halfW;
-            spec.Height = halfH;
+            spec.Width       = halfW;
+            spec.Height      = halfH;
             m_PingPongFBO[i] = Framebuffer::Create(spec);
         }
     }
@@ -82,7 +82,7 @@ namespace Engine
         if (width == 0 || height == 0)
             return;
 
-        m_Width = width;
+        m_Width  = width;
         m_Height = height;
 
         uint32_t halfW = std::max(width / 2, 1u);
@@ -119,7 +119,7 @@ namespace Engine
             RenderFullscreenQuad();
 
             // Step 2: Gaussian blur (ping-pong)
-            bool horizontal = true;
+            bool     horizontal   = true;
             uint32_t inputTexture = m_BrightnessFBO->GetColorAttachmentRendererID(0);
 
             m_GaussianBlurShader->Bind();
@@ -134,7 +134,7 @@ namespace Engine
                 RenderFullscreenQuad();
 
                 inputTexture = m_PingPongFBO[horizontal ? 0 : 1]->GetColorAttachmentRendererID(0);
-                horizontal = !horizontal;
+                horizontal   = !horizontal;
             }
 
             bloomTextureID = inputTexture;

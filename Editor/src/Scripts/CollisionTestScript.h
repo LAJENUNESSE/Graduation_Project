@@ -18,9 +18,9 @@ namespace Engine
 
         void OnCollisionEnter(const CollisionCallbackInfo& info) override
         {
-            auto& myTag = GetComponent<TagComponent>();
+            auto&       myTag     = GetComponent<TagComponent>();
             std::string otherName = "未知";
-            Entity other = info.OtherEntity;
+            Entity      other     = info.OtherEntity;
             if (other && other.HasComponent<TagComponent>())
                 otherName = other.GetComponent<TagComponent>().Tag;
 
@@ -42,7 +42,7 @@ namespace Engine
 
         void OnCollisionExit(Entity other) override
         {
-            auto& myTag = GetComponent<TagComponent>();
+            auto&       myTag     = GetComponent<TagComponent>();
             std::string otherName = "未知";
             if (other && other.HasComponent<TagComponent>())
                 otherName = other.GetComponent<TagComponent>().Tag;
@@ -52,7 +52,7 @@ namespace Engine
 
         void OnTriggerEnter(Entity other) override
         {
-            auto& myTag = GetComponent<TagComponent>();
+            auto&       myTag     = GetComponent<TagComponent>();
             std::string otherName = "未知";
             if (other && other.HasComponent<TagComponent>())
                 otherName = other.GetComponent<TagComponent>().Tag;
@@ -62,7 +62,7 @@ namespace Engine
 
         void OnTriggerExit(Entity other) override
         {
-            auto& myTag = GetComponent<TagComponent>();
+            auto&       myTag     = GetComponent<TagComponent>();
             std::string otherName = "未知";
             if (other && other.HasComponent<TagComponent>())
                 otherName = other.GetComponent<TagComponent>().Tag;

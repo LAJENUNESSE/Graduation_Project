@@ -15,36 +15,36 @@ namespace Engine
     {
         SPHShaderSet set;
         set.DensityShader = Shader::Create("assets/shaders/sph_density.glsl");
-        set.ForceShader = Shader::Create("assets/shaders/sph_force.glsl");
-        set.PCISPHInit = Shader::Create("assets/shaders/sph_pcisph_init.glsl");
+        set.ForceShader   = Shader::Create("assets/shaders/sph_force.glsl");
+        set.PCISPHInit    = Shader::Create("assets/shaders/sph_pcisph_init.glsl");
         set.PCISPHPredict = Shader::Create("assets/shaders/sph_pcisph_predict.glsl");
         set.PCISPHDensity = Shader::Create("assets/shaders/sph_pcisph_density.glsl");
-        set.PCISPHForce = Shader::Create("assets/shaders/sph_pcisph_force.glsl");
-        set.PCISPHApply = Shader::Create("assets/shaders/sph_pcisph_apply.glsl");
+        set.PCISPHForce   = Shader::Create("assets/shaders/sph_pcisph_force.glsl");
+        set.PCISPHApply   = Shader::Create("assets/shaders/sph_pcisph_apply.glsl");
         return set;
     }
 
     SPHKernelParams SPHKernelParams::Compute(float smoothingRadius)
     {
         SPHKernelParams p;
-        p.h = smoothingRadius;
-        p.h2 = p.h * p.h;
-        p.h6 = p.h2 * p.h2 * p.h2;
-        p.h9 = p.h6 * p.h2 * p.h;
+        p.h          = smoothingRadius;
+        p.h2         = p.h * p.h;
+        p.h6         = p.h2 * p.h2 * p.h2;
+        p.h9         = p.h6 * p.h2 * p.h;
         p.poly6Coeff = 315.0f / (64.0f * glm::pi<float>() * p.h9);
         p.spikyCoeff = -45.0f / (glm::pi<float>() * p.h6);
         return p;
     }
 
-    uint32_t UploadRigidBodiesToBuffer(entt::registry* registry,
+    uint32_t UploadRigidBodiesToBuffer(entt::registry*                 registry,
                                        const Ref<ShaderStorageBuffer>& buffer,
-                                       uint32_t maxRigidBodies,
-                                       RigidBodyUploadFilter filter)
+                                       uint32_t                        maxRigidBodies,
+                                       RigidBodyUploadFilter           filter)
     {
         if (!registry || !buffer)
             return 0;
 
-        const bool requireRigidBody = (filter == RigidBodyUploadFilter::RequireRigidBodyComponent);
+        const bool                    requireRigidBody = (filter == RigidBodyUploadFilter::RequireRigidBodyComponent);
         std::vector<GPURigidBodyData> bodies;
         bodies.reserve(maxRigidBodies);
 
@@ -57,18 +57,18 @@ namespace Engine
             if (requireRigidBody && !registry->all_of<RigidBodyComponent>(entity))
                 continue;
 
-            auto& tc = boxView.get<TransformComponent>(entity);
-            auto& bc = boxView.get<BoxColliderComponent>(entity);
+            auto&     tc     = boxView.get<TransformComponent>(entity);
+            auto&     bc     = boxView.get<BoxColliderComponent>(entity);
             glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
 
             GPURigidBodyData body{};
-            body.posAndType = glm::vec4(tc.Translation + bc.Offset, 0.0f); // w=0 for box
-            body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
-            body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
-            body.rotCol2 = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
+            body.posAndType  = glm::vec4(tc.Translation + bc.Offset, 0.0f); // w=0 for box
+            body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
+            body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
+            body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
             body.halfExtents = glm::vec4(bc.HalfExtents * tc.Scale, 0.0f);
-            body.linearVel = glm::vec4(0.0f);
-            body.angularVel = glm::vec4(0.0f);
+            body.linearVel   = glm::vec4(0.0f);
+            body.angularVel  = glm::vec4(0.0f);
             bodies.push_back(body);
         }
 
@@ -81,19 +81,19 @@ namespace Engine
             if (requireRigidBody && !registry->all_of<RigidBodyComponent>(entity))
                 continue;
 
-            auto& tc = sphereView.get<TransformComponent>(entity);
-            auto& sc = sphereView.get<SphereColliderComponent>(entity);
+            auto&     tc     = sphereView.get<TransformComponent>(entity);
+            auto&     sc     = sphereView.get<SphereColliderComponent>(entity);
             glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
 
             GPURigidBodyData body{};
-            body.posAndType = glm::vec4(tc.Translation + sc.Offset, 1.0f); // w=1 for sphere
-            body.rotCol0 = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
-            body.rotCol1 = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
-            body.rotCol2 = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
-            float maxScale = std::max({tc.Scale.x, tc.Scale.y, tc.Scale.z});
+            body.posAndType  = glm::vec4(tc.Translation + sc.Offset, 1.0f); // w=1 for sphere
+            body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
+            body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
+            body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
+            float maxScale   = std::max({tc.Scale.x, tc.Scale.y, tc.Scale.z});
             body.halfExtents = glm::vec4(sc.Radius * maxScale, 0.0f, 0.0f, 0.0f);
-            body.linearVel = glm::vec4(0.0f);
-            body.angularVel = glm::vec4(0.0f);
+            body.linearVel   = glm::vec4(0.0f);
+            body.angularVel  = glm::vec4(0.0f);
             bodies.push_back(body);
         }
 
@@ -107,9 +107,9 @@ namespace Engine
     void CudaTimingHelper::Init()
     {
         EventStart = CudaInterop::CreateCudaEvent();
-        EventStop = CudaInterop::CreateCudaEvent();
-        PrevStart = CudaInterop::CreateCudaEvent();
-        PrevStop = CudaInterop::CreateCudaEvent();
+        EventStop  = CudaInterop::CreateCudaEvent();
+        PrevStart  = CudaInterop::CreateCudaEvent();
+        PrevStop   = CudaInterop::CreateCudaEvent();
     }
 
     void CudaTimingHelper::SwapEvents()
@@ -130,7 +130,7 @@ namespace Engine
         if (PrevStop)
             CudaInterop::DestroyCudaEvent(PrevStop);
         EventStart = EventStop = PrevStart = PrevStop = nullptr;
-        HasPrevTiming = false;
+        HasPrevTiming                                 = false;
     }
 #endif
 

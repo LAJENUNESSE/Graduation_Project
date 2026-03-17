@@ -22,7 +22,9 @@ namespace Engine
 
     private:
         void DrawLine(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color);
-        void DrawBox(const glm::vec3& center, const glm::vec3& halfExtents, const glm::vec3& rotation,
+        void DrawBox(const glm::vec3& center,
+                     const glm::vec3& halfExtents,
+                     const glm::vec3& rotation,
                      const glm::vec3& color);
         void DrawSphere(const glm::vec3& center, float radius, const glm::vec3& color);
         void DrawTerrainWireframe(const glm::vec3& translation, entt::registry& reg, entt::entity entity);
@@ -35,10 +37,10 @@ namespace Engine
         };
 
         std::vector<LineVertex> m_LineVertices;
-        Ref<Shader> m_LineShader;
-        Ref<VertexArray> m_LineVAO;
-        Ref<VertexBuffer> m_LineVBO;
-        bool m_Initialized = false;
+        Ref<Shader>             m_LineShader;
+        Ref<VertexArray>        m_LineVAO;
+        Ref<VertexBuffer>       m_LineVBO;
+        bool                    m_Initialized = false;
     };
 
 } // namespace Engine

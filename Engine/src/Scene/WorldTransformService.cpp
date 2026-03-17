@@ -7,9 +7,10 @@
 namespace Engine
 {
 
-    glm::mat4 WorldTransformService::ComputeWorldTransform(entt::registry& reg, entt::entity entity,
+    glm::mat4 WorldTransformService::ComputeWorldTransform(entt::registry&         reg,
+                                                           entt::entity            entity,
                                                            const SceneEntityIndex& index,
-                                                           WorldTransformCache* cache)
+                                                           WorldTransformCache*    cache)
     {
         if (cache)
         {
@@ -18,8 +19,8 @@ namespace Engine
                 return cached;
         }
 
-        auto& transform = reg.get<TransformComponent>(entity);
-        glm::mat4 result = transform.GetTransform();
+        auto&     transform = reg.get<TransformComponent>(entity);
+        glm::mat4 result    = transform.GetTransform();
 
         if (reg.all_of<RelationshipComponent>(entity))
         {

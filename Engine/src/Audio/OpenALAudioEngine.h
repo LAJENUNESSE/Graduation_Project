@@ -21,10 +21,10 @@ namespace Engine
         bool IsInitialized() const { return m_Initialized; }
 
         uint32_t CreateBuffer(const AudioClip& clip);
-        void DestroyBuffer(uint32_t buffer);
+        void     DestroyBuffer(uint32_t buffer);
 
         uint32_t CreateSource();
-        void DestroySource(uint32_t source);
+        void     DestroySource(uint32_t source);
 
         void Play(uint32_t source, uint32_t buffer, bool loop = false);
         void Stop(uint32_t source);
@@ -42,17 +42,17 @@ namespace Engine
         void SetListenerPosition(const glm::vec3& pos, const glm::vec3& forward, const glm::vec3& up);
 
         // Streaming for video audio (queue buffers)
-        void QueueBuffer(uint32_t source, uint32_t buffer);
-        int GetProcessedBuffers(uint32_t source);
+        void     QueueBuffer(uint32_t source, uint32_t buffer);
+        int      GetProcessedBuffers(uint32_t source);
         uint32_t UnqueueBuffer(uint32_t source);
 
     private:
-        OpenALAudioEngine() = default;
+        OpenALAudioEngine()  = default;
         ~OpenALAudioEngine() = default;
 
-        ALCdevice* m_Device = nullptr;
-        ALCcontext* m_Context = nullptr;
-        bool m_Initialized = false;
+        ALCdevice*  m_Device      = nullptr;
+        ALCcontext* m_Context     = nullptr;
+        bool        m_Initialized = false;
     };
 
 } // namespace Engine

@@ -10,8 +10,8 @@ namespace Engine
     {
         EditorShellActions actions;
 
-        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGuiWindowFlags     windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+        const ImGuiViewport* viewport    = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGui::SetNextWindowViewport(viewport->ID);
@@ -83,8 +83,8 @@ namespace Engine
         ImGui::Begin("##工具栏", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        float windowWidth = ImGui::GetWindowContentRegionMax().x;
-        constexpr float buttonWidth = 80.0f;
+        float           windowWidth  = ImGui::GetWindowContentRegionMax().x;
+        constexpr float buttonWidth  = 80.0f;
         constexpr float buttonHeight = 28.0f;
 
         ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
@@ -122,7 +122,7 @@ namespace Engine
             return actions;
 
         bool control = Input::IsKeyPressed(KeyCode::LeftControl) || Input::IsKeyPressed(KeyCode::RightControl);
-        bool shift = Input::IsKeyPressed(KeyCode::LeftShift) || Input::IsKeyPressed(KeyCode::RightShift);
+        bool shift   = Input::IsKeyPressed(KeyCode::LeftShift) || Input::IsKeyPressed(KeyCode::RightShift);
 
         switch (static_cast<KeyCode>(e.GetKeyCode()))
         {

@@ -16,7 +16,7 @@ namespace Engine
     class FluidRenderer
     {
     public:
-        FluidRenderer() = default;
+        FluidRenderer()  = default;
         ~FluidRenderer() = default;
 
         void Init(uint32_t width, uint32_t height);
@@ -32,17 +32,23 @@ namespace Engine
         // sceneColorTexID: scene HDR color texture (read-only copy will be made)
         // sceneDepthTexID: scene depth texture
         // emitter: rendering parameters (FluidColor, Fresnel, etc.)
-        void Render(const Ref<ShaderStorageBuffer>& particleBuffer, const Ref<VertexArray>& emptyVAO,
-                    uint32_t particleCount, float particleRadius, const glm::mat4& view, const glm::mat4& projection,
-                    uint32_t sceneColorTexID, uint32_t sceneDepthTexID, const FluidEmitterComponent& emitter);
+        void Render(const Ref<ShaderStorageBuffer>& particleBuffer,
+                    const Ref<VertexArray>&         emptyVAO,
+                    uint32_t                        particleCount,
+                    float                           particleRadius,
+                    const glm::mat4&                view,
+                    const glm::mat4&                projection,
+                    uint32_t                        sceneColorTexID,
+                    uint32_t                        sceneDepthTexID,
+                    const FluidEmitterComponent&    emitter);
 
     private:
         void CreateFullscreenQuad();
         void RenderFullscreenQuad();
 
-        uint32_t m_Width = 0;
-        uint32_t m_Height = 0;
-        bool m_Initialized = false;
+        uint32_t m_Width       = 0;
+        uint32_t m_Height      = 0;
+        bool     m_Initialized = false;
 
         // FBOs
         Ref<Framebuffer> m_DepthFBO;     // R32F + DEPTH24STENCIL8
@@ -50,8 +56,8 @@ namespace Engine
         Ref<Framebuffer> m_ThicknessFBO; // R16F
 
         // Scene color copy texture (avoids feedback loop)
-        uint32_t m_SceneColorCopyTex = 0;
-        uint32_t m_SceneColorCopyWidth = 0;
+        uint32_t m_SceneColorCopyTex    = 0;
+        uint32_t m_SceneColorCopyWidth  = 0;
         uint32_t m_SceneColorCopyHeight = 0;
 
         // Fullscreen quad

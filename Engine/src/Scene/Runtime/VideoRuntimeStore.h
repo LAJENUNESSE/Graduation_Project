@@ -17,33 +17,27 @@ namespace Engine
     struct VideoRuntimeState
     {
         std::unique_ptr<FFmpegDecoder> Decoder;
-        uint32_t AudioSource = 0;
-        Ref<Texture2D> Texture;
-        std::vector<uint32_t> AudioBuffers;
-        std::thread OpenThread;
-        bool IsPlaying = false;
+        uint32_t                       AudioSource = 0;
+        Ref<Texture2D>                 Texture;
+        std::vector<uint32_t>          AudioBuffers;
+        std::thread                    OpenThread;
+        bool                           IsPlaying = false;
 
         VideoRuntimeState();
         ~VideoRuntimeState();
         VideoRuntimeState(VideoRuntimeState&&) noexcept;
         VideoRuntimeState& operator=(VideoRuntimeState&&) noexcept;
 
-        VideoRuntimeState(const VideoRuntimeState&) = delete;
+        VideoRuntimeState(const VideoRuntimeState&)            = delete;
         VideoRuntimeState& operator=(const VideoRuntimeState&) = delete;
     };
 
     class VideoRuntimeStore
     {
     public:
-        void Insert(uint32_t entityID, VideoRuntimeState state)
-        {
-            m_States[entityID] = std::move(state);
-        }
+        void Insert(uint32_t entityID, VideoRuntimeState state) { m_States[entityID] = std::move(state); }
 
-        void Remove(uint32_t entityID)
-        {
-            m_States.erase(entityID);
-        }
+        void Remove(uint32_t entityID) { m_States.erase(entityID); }
 
         VideoRuntimeState* Get(uint32_t entityID)
         {

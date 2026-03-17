@@ -23,21 +23,21 @@ namespace Engine
 
     struct PropertyHints
     {
-        float Min = 0.0f;
-        float Max = 0.0f;
-        float Speed = 0.0f;
-        const char* Format = nullptr;
-        const char* Group = nullptr;
-        bool ReadOnly = false;
-        bool Transient = false;
+        float       Min       = 0.0f;
+        float       Max       = 0.0f;
+        float       Speed     = 0.0f;
+        const char* Format    = nullptr;
+        const char* Group     = nullptr;
+        bool        ReadOnly  = false;
+        bool        Transient = false;
 
         // Enum
         const char* const* EnumNames = nullptr;
-        int EnumCount = 0;
+        int                EnumCount = 0;
 
         // AssetPath
         const char* FileFilter = nullptr;
-        const char* FileDesc = nullptr;
+        const char* FileDesc   = nullptr;
     };
 
 } // namespace Engine

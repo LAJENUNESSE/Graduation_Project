@@ -15,7 +15,12 @@ namespace Engine
         static std::string SaveFile(const char* filter, const char* description = nullptr);
 
         // 三选一消息对话框
-        enum class MessageBoxResult { Cancel = 0, Yes = 1, No = 2 };
+        enum class MessageBoxResult
+        {
+            Cancel = 0,
+            Yes    = 1,
+            No     = 2
+        };
         static MessageBoxResult ShowYesNoCancelBox(const char* title, const char* message);
     };
 

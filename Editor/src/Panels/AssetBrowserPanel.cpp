@@ -51,8 +51,8 @@ namespace Engine
             return std::filesystem::is_directory(path, ec) && !ec;
         }
 
-        std::string BuildFilesystemError(const char* action, const std::filesystem::path& path,
-                                         const std::error_code& ec)
+        std::string
+        BuildFilesystemError(const char* action, const std::filesystem::path& path, const std::error_code& ec)
         {
             return std::string(action) + ": " + PathUtils::PathToUtf8String(path) + " (" + ec.message() + ")";
         }
@@ -72,8 +72,8 @@ namespace Engine
 
         void RevealPathInExplorer(const std::filesystem::path& path)
         {
-            const std::filesystem::path resolved = PathUtils::ResolvePath(path);
-            std::wstring parameters = L"/select,\"";
+            const std::filesystem::path resolved   = PathUtils::ResolvePath(path);
+            std::wstring                parameters = L"/select,\"";
             parameters += resolved.wstring();
             parameters += L"\"";
             ExecuteExplorerCommand(L"explorer.exe", parameters.c_str());
@@ -83,7 +83,7 @@ namespace Engine
 
     AssetBrowserPanel::AssetBrowserPanel()
     {
-        m_RootDirectory = PathUtils::GetAssetRoot();
+        m_RootDirectory    = PathUtils::GetAssetRoot();
         m_CurrentDirectory = m_RootDirectory;
     }
 
@@ -96,7 +96,7 @@ namespace Engine
     bool AssetBrowserPanel::EnsureCurrentDirectoryValid()
     {
         std::error_code ec;
-        bool currentExists = std::filesystem::exists(m_CurrentDirectory, ec);
+        bool            currentExists = std::filesystem::exists(m_CurrentDirectory, ec);
         if (ec)
         {
             SetFilesystemError(BuildFilesystemError("检查当前目录失败", m_CurrentDirectory, ec));
@@ -131,13 +131,13 @@ namespace Engine
         return false;
     }
 
-    bool AssetBrowserPanel::TryEnumerateDirectory(const std::filesystem::path& directory,
+    bool AssetBrowserPanel::TryEnumerateDirectory(const std::filesystem::path&                   directory,
                                                   std::vector<std::filesystem::directory_entry>& outEntries)
     {
         outEntries.clear();
 
         std::error_code ec;
-        bool exists = std::filesystem::exists(directory, ec);
+        bool            exists = std::filesystem::exists(directory, ec);
         if (ec)
         {
             SetFilesystemError(BuildFilesystemError("检查目录失败", directory, ec));
@@ -179,8 +179,9 @@ namespace Engine
         return true;
     }
 
-    bool AssetBrowserPanel::TryBuildRelativePath(const std::filesystem::path& path, const std::filesystem::path& base,
-                                                 std::filesystem::path& outRelative)
+    bool AssetBrowserPanel::TryBuildRelativePath(const std::filesystem::path& path,
+                                                 const std::filesystem::path& base,
+                                                 std::filesystem::path&       outRelative)
     {
         std::error_code ec;
         outRelative = std::filesystem::relative(path, base, ec);
@@ -198,7 +199,7 @@ namespace Engine
         outText.clear();
 
         std::error_code ec;
-        uintmax_t fileSize = entry.file_size(ec);
+        uintmax_t       fileSize = entry.file_size(ec);
         if (ec)
         {
             SetFilesystemError(BuildFilesystemError("读取文件大小失败", entry.path(), ec));
@@ -225,7 +226,7 @@ namespace Engine
         ImGui::Begin("资产浏览器");
 
         std::error_code ec;
-        bool rootExists = std::filesystem::exists(m_RootDirectory, ec);
+        bool            rootExists = std::filesystem::exists(m_RootDirectory, ec);
         if (ec)
         {
             SetFilesystemError(BuildFilesystemError("检查 assets 根目录失败", m_RootDirectory, ec));
@@ -264,7 +265,7 @@ namespace Engine
         ImGui::Separator();
 
         float panelWidth = ImGui::GetContentRegionAvail().x;
-        float treeWidth = (std::max)(panelWidth * 0.25f, 150.0f);
+        float treeWidth  = (std::max)(panelWidth * 0.25f, 150.0f);
 
         ImGui::BeginChild("FolderTree", ImVec2(treeWidth, 0), true);
         DrawDirectoryTree(m_RootDirectory);
@@ -330,7 +331,7 @@ namespace Engine
             dirName = directory.string();
 
         std::vector<std::filesystem::directory_entry> entries;
-        bool hasSubDirs = false;
+        bool                                          hasSubDirs = false;
         if (TryEnumerateDirectory(directory, entries))
         {
             for (const auto& entry : entries)
@@ -366,7 +367,7 @@ namespace Engine
             for (const auto& entry : entries)
             {
                 std::error_code ec;
-                bool isDirectory = entry.is_directory(ec);
+                bool            isDirectory = entry.is_directory(ec);
                 if (ec)
                 {
                     SetFilesystemError(BuildFilesystemError("检查子目录失败", entry.path(), ec));
@@ -411,25 +412,25 @@ namespace Engine
                   {
                       std::error_code aEc;
                       std::error_code bEc;
-                      bool aIsDirectory = a.is_directory(aEc) && !aEc;
-                      bool bIsDirectory = b.is_directory(bEc) && !bEc;
+                      bool            aIsDirectory = a.is_directory(aEc) && !aEc;
+                      bool            bIsDirectory = b.is_directory(bEc) && !bEc;
                       if (aIsDirectory != bIsDirectory)
                           return aIsDirectory;
                       return a.path().filename() < b.path().filename();
                   });
 
-        float cellSize = 80.0f;
-        float padding = 8.0f;
-        float panelWidth = ImGui::GetContentRegionAvail().x;
-        int columnCount = (std::max)(1, static_cast<int>(panelWidth / (cellSize + padding)));
+        float cellSize    = 80.0f;
+        float padding     = 8.0f;
+        float panelWidth  = ImGui::GetContentRegionAvail().x;
+        int   columnCount = (std::max)(1, static_cast<int>(panelWidth / (cellSize + padding)));
 
         ImGui::Columns(columnCount, nullptr, false);
 
         for (const auto& entry : entries)
         {
-            const auto& path = entry.path();
+            const auto& path     = entry.path();
             std::string filename = path.filename().string();
-            const char* icon = GetFileIcon(path);
+            const char* icon     = GetFileIcon(path);
 
             ImGui::PushID(filename.c_str());
 
@@ -441,7 +442,7 @@ namespace Engine
             ImGui::PopStyleColor(2);
 
             std::error_code dirEc;
-            bool isDirectory = entry.is_directory(dirEc);
+            bool            isDirectory = entry.is_directory(dirEc);
             if (dirEc)
             {
                 SetFilesystemError(BuildFilesystemError("检查条目类型失败", path, dirEc));
@@ -452,7 +453,7 @@ namespace Engine
             {
                 std::string relStr = PathUtils::ToProjectRelativeOrAbsolute(path);
 
-                AssetType assetType = AssetTypeFromPath(path);
+                AssetType   assetType   = AssetTypeFromPath(path);
                 const char* payloadType = GetEditorAssetDescriptor(assetType).PayloadType;
 
                 ImGui::SetDragDropPayload(payloadType, relStr.c_str(), relStr.size() + 1);
@@ -519,7 +520,7 @@ namespace Engine
             m_PreviewTexture = Texture2D::Create(m_PreviewImagePath);
             if (m_PreviewTexture)
             {
-                m_PreviewImageWidth = static_cast<int>(m_PreviewTexture->GetWidth());
+                m_PreviewImageWidth  = static_cast<int>(m_PreviewTexture->GetWidth());
                 m_PreviewImageHeight = static_cast<int>(m_PreviewTexture->GetHeight());
             }
             else
@@ -537,7 +538,7 @@ namespace Engine
     {
         m_PreviewTexture.reset();
         m_PreviewImagePath.clear();
-        m_PreviewImageWidth = 0;
+        m_PreviewImageWidth  = 0;
         m_PreviewImageHeight = 0;
     }
 
@@ -554,10 +555,10 @@ namespace Engine
 
             if (m_PreviewTexture)
             {
-                ImVec2 avail = ImGui::GetContentRegionAvail();
-                float aspect = static_cast<float>(m_PreviewImageWidth) / static_cast<float>(m_PreviewImageHeight);
-                float w = avail.x;
-                float h = w / aspect;
+                ImVec2 avail  = ImGui::GetContentRegionAvail();
+                float  aspect = static_cast<float>(m_PreviewImageWidth) / static_cast<float>(m_PreviewImageHeight);
+                float  w      = avail.x;
+                float  h      = w / aspect;
                 if (h > avail.y)
                 {
                     h = avail.y;

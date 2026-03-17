@@ -14,10 +14,14 @@ namespace Engine
 
     // ------------------------------------------------------------------ 中毒通知回调注册
 
-    static bool s_PoisonCallbackRegistered = []() {
-        CudaInterop::SetCudaPoisonNotify([](const char* reason) {
-            ENGINE_CORE_ERROR("[CUDA] GPU 计算上下文已中毒，后续 CUDA 调用将跳过并回退到 OpenGL Compute。原因: {}", reason);
-        });
+    static bool s_PoisonCallbackRegistered = []()
+    {
+        CudaInterop::SetCudaPoisonNotify(
+            [](const char* reason)
+            {
+                ENGINE_CORE_ERROR("[CUDA] GPU 计算上下文已中毒，后续 CUDA 调用将跳过并回退到 OpenGL Compute。原因: {}",
+                                  reason);
+            });
         return true;
     }();
 
@@ -36,26 +40,27 @@ namespace Engine
     {
         struct Slot
         {
-            cudaGraphicsResource_t resource = nullptr;
-            void* mappedPtr = nullptr;
-            std::string name;
+            cudaGraphicsResource_t resource  = nullptr;
+            void*                  mappedPtr = nullptr;
+            std::string            name;
         };
 
         std::vector<Slot> slots;
-        cudaStream_t stream = nullptr;
-        int deviceId = -1;
-        bool mapped = false;
+        cudaStream_t      stream   = nullptr;
+        int               deviceId = -1;
+        bool              mapped   = false;
     };
 
     // ------------------------------------------------------------------ 静态
 
     bool CudaGLInteropContext::ProbeDeviceMatch()
     {
-        if (CudaInterop::IsCudaPoisoned()) return false;
+        if (CudaInterop::IsCudaPoisoned())
+            return false;
 
-        unsigned int count = 0;
-        int device = -1;
-        cudaError_t err = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
+        unsigned int count  = 0;
+        int          device = -1;
+        cudaError_t  err    = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
         if (err != cudaSuccess || count == 0)
         {
             ENGINE_CORE_WARN("[CUDA] ProbeDeviceMatch: count={0}, err={1}", count, cudaGetErrorString(err));
@@ -68,9 +73,9 @@ namespace Engine
 
     CudaGLInteropContext::CudaGLInteropContext() : m_Impl(CreateScope<Impl>())
     {
-        unsigned int count = 0;
-        int device = -1;
-        cudaError_t err = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
+        unsigned int count  = 0;
+        int          device = -1;
+        cudaError_t  err    = cudaGLGetDevices(&count, &device, 1, cudaGLDeviceListAll);
         if (err != cudaSuccess || count == 0)
         {
             ENGINE_CORE_ERROR("[CUDA] No CUDA device matching GL context");
@@ -107,7 +112,7 @@ namespace Engine
     int CudaGLInteropContext::RegisterBuffer(uint32_t glBufferID, const char* debugName)
     {
         cudaGraphicsResource_t resource = nullptr;
-        cudaError_t err = cudaGraphicsGLRegisterBuffer(&resource, glBufferID, cudaGraphicsRegisterFlagsNone);
+        cudaError_t            err = cudaGraphicsGLRegisterBuffer(&resource, glBufferID, cudaGraphicsRegisterFlagsNone);
 
         if (err != cudaSuccess)
         {
@@ -138,11 +143,12 @@ namespace Engine
 
     bool CudaGLInteropContext::MapAll()
     {
-        if (CudaInterop::IsCudaPoisoned()) return false;
+        if (CudaInterop::IsCudaPoisoned())
+            return false;
         if (m_Impl->mapped || m_Impl->slots.empty())
             return false;
 
-        int n = static_cast<int>(m_Impl->slots.size());
+        int                                 n = static_cast<int>(m_Impl->slots.size());
         std::vector<cudaGraphicsResource_t> res(n);
         for (int i = 0; i < n; i++)
             res[i] = m_Impl->slots[i].resource;
@@ -158,7 +164,7 @@ namespace Engine
         for (int i = 0; i < n; i++)
         {
             size_t sz = 0;
-            err = cudaGraphicsResourceGetMappedPointer(&m_Impl->slots[i].mappedPtr, &sz, res[i]);
+            err       = cudaGraphicsResourceGetMappedPointer(&m_Impl->slots[i].mappedPtr, &sz, res[i]);
             if (err != cudaSuccess)
             {
                 ENGINE_CORE_ERROR("[CUDA] GetMappedPointer slot {0} ('{1}') failed: {2}", i, m_Impl->slots[i].name,
@@ -190,7 +196,7 @@ namespace Engine
         if (sDebugSync && m_Impl->stream)
             cudaStreamSynchronize(m_Impl->stream);
 
-        int n = static_cast<int>(m_Impl->slots.size());
+        int                                 n = static_cast<int>(m_Impl->slots.size());
         std::vector<cudaGraphicsResource_t> res(n);
         for (int i = 0; i < n; i++)
             res[i] = m_Impl->slots[i].resource;

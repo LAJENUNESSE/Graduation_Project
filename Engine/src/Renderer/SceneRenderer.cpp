@@ -23,7 +23,7 @@ namespace Engine
     static std::vector<glm::vec3> GenerateSSAOKernel(int kernelSize)
     {
         std::uniform_real_distribution<float> randomFloats(0.0f, 1.0f);
-        std::default_random_engine generator;
+        std::default_random_engine            generator;
 
         std::vector<glm::vec3> ssaoKernel;
         for (int i = 0; i < kernelSize; ++i)
@@ -36,7 +36,7 @@ namespace Engine
 
             // 加速插值：让更多采样点靠近原点
             float scale = static_cast<float>(i) / static_cast<float>(kernelSize);
-            scale = 0.1f + scale * scale * 0.9f; // lerp(0.1, 1.0, scale^2)
+            scale       = 0.1f + scale * scale * 0.9f; // lerp(0.1, 1.0, scale^2)
             sample *= scale;
 
             ssaoKernel.push_back(sample);
@@ -49,7 +49,7 @@ namespace Engine
         m_PBRShader = Shader::Create("assets/shaders/PBR.glsl");
 
         m_WhiteTextureHandle = AssetManager::Load<Texture2D>("builtin:white");
-        m_WhiteTexture = AssetManager::GetRef<Texture2D>(m_WhiteTextureHandle);
+        m_WhiteTexture       = AssetManager::GetRef<Texture2D>(m_WhiteTextureHandle);
 
         m_ShadowSystem.Init();
         m_SkyboxSystem.Init();
@@ -59,7 +59,7 @@ namespace Engine
         m_VideoSystem.Init();
 
         // ---- SSAO 初始化 ----
-        m_SSAOShader = Shader::Create("assets/shaders/SSAO.glsl");
+        m_SSAOShader     = Shader::Create("assets/shaders/SSAO.glsl");
         m_SSAOBlurShader = Shader::Create("assets/shaders/SSAOBlur.glsl");
 
         // SSAO FBO（R16F 单通道，半分辨率）
@@ -69,22 +69,22 @@ namespace Engine
 
             FramebufferSpecification ssaoSpec;
             ssaoSpec.Attachments = {FramebufferTextureFormat::R16F};
-            ssaoSpec.Width = halfW;
-            ssaoSpec.Height = halfH;
-            m_SSAOFBO = Framebuffer::Create(ssaoSpec);
+            ssaoSpec.Width       = halfW;
+            ssaoSpec.Height      = halfH;
+            m_SSAOFBO            = Framebuffer::Create(ssaoSpec);
 
             FramebufferSpecification ssaoBlurSpec;
             ssaoBlurSpec.Attachments = {FramebufferTextureFormat::R16F};
-            ssaoBlurSpec.Width = halfW;
-            ssaoBlurSpec.Height = halfH;
-            m_SSAOBlurFBO = Framebuffer::Create(ssaoBlurSpec);
+            ssaoBlurSpec.Width       = halfW;
+            ssaoBlurSpec.Height      = halfH;
+            m_SSAOBlurFBO            = Framebuffer::Create(ssaoBlurSpec);
         }
 
         // SSAO 4x4 噪声纹理
         {
             std::uniform_real_distribution<float> randomFloats(0.0f, 1.0f);
-            std::default_random_engine generator;
-            std::vector<glm::vec3> ssaoNoise;
+            std::default_random_engine            generator;
+            std::vector<glm::vec3>                ssaoNoise;
             for (int i = 0; i < 16; i++)
             {
                 glm::vec3 noise(randomFloats(generator) * 2.0f - 1.0f, randomFloats(generator) * 2.0f - 1.0f, 0.0f);
@@ -108,7 +108,7 @@ namespace Engine
             uint32_t quadIndices[] = {0, 1, 2, 2, 3, 0};
 
             m_FullscreenQuadVAO = VertexArray::Create();
-            auto vb = VertexBuffer::Create(quadVertices, sizeof(quadVertices));
+            auto vb             = VertexBuffer::Create(quadVertices, sizeof(quadVertices));
             vb->SetLayout({
                 {ShaderDataType::Float2, "a_Position"},
                 {ShaderDataType::Float2, "a_TexCoord"},
@@ -118,16 +118,15 @@ namespace Engine
             m_FullscreenQuadVAO->SetIndexBuffer(ib);
         }
 
-        m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx)
-                               { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache); }});
+        m_PassQueue.push_back(
+            {"LightCollect", [this](RenderContext& ctx)
+             { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache); }});
 
         m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx)
                                {
                                    // 使用 CSM 版本
-                                   m_ShadowData = m_ShadowSystem.ExecuteCSM(*ctx.Registry, m_LightEnv,
-                                                                            *ctx.Camera,
-                                                                            *ctx.EntityIndex,
-                                                                            ctx.TransformCache);
+                                   m_ShadowData = m_ShadowSystem.ExecuteCSM(*ctx.Registry, m_LightEnv, *ctx.Camera,
+                                                                            *ctx.EntityIndex, ctx.TransformCache);
 
                                    // 地形阴影深度渲染
                                    if (m_ShadowData.HasValidShadowCaster)
@@ -149,8 +148,7 @@ namespace Engine
                                            auto depthShader = m_ShadowSystem.GetDepthShader();
                                            depthShader->Bind();
                                            depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
-                                           m_TerrainSystem.RenderDepth(*ctx.Registry, depthShader,
-                                                                       *ctx.EntityIndex,
+                                           m_TerrainSystem.RenderDepth(*ctx.Registry, depthShader, *ctx.EntityIndex,
                                                                        ctx.TransformCache);
                                            RenderCommand::SetCullFaceMode(CullFaceMode::Back);
                                            m_ShadowSystem.GetShadowMapFBO()->Unbind();
@@ -161,17 +159,17 @@ namespace Engine
         m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx)
                                {
                                    m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
-                                   m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
-                                                          m_ShadowData, m_ShadowSystem.GetSettings(),
-                                                          *ctx.EntityIndex, ctx.TransformCache);
+                                   m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
+                                                          m_ShadowSystem.GetSettings(), *ctx.EntityIndex,
+                                                          ctx.TransformCache);
                                }});
 
         m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx)
                                {
                                    m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
-                                   m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv,
-                                                        m_ShadowData, m_ShadowSystem.GetSettings(), m_TotalTime,
-                                                        *ctx.EntityIndex, ctx.TransformCache);
+                                   m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
+                                                        m_ShadowSystem.GetSettings(), m_TotalTime, *ctx.EntityIndex,
+                                                        ctx.TransformCache);
                                }});
 
         m_PassQueue.push_back({"SSAOPass", [this](RenderContext& ctx)
@@ -328,9 +326,8 @@ namespace Engine
                  }
 
                  m_RenderQueue.Clear();
-                 MeshRenderSystem::SubmitRenderPackets(*ctx.Registry, m_RenderQueue, m_PBRShader,
-                                                       m_WhiteTexture, &m_VideoSystem.GetStore(),
-                                                       ctx.EntityIndex, ctx.TransformCache);
+                 MeshRenderSystem::SubmitRenderPackets(*ctx.Registry, m_RenderQueue, m_PBRShader, m_WhiteTexture,
+                                                       &m_VideoSystem.GetStore(), ctx.EntityIndex, ctx.TransformCache);
 
                  m_RenderQueue.Flush(ctx.Camera->GetViewProjection());
 
@@ -353,10 +350,10 @@ namespace Engine
                  for (auto entity : view)
                  {
                      auto& transform = view.get<TransformComponent>(entity);
-                     auto& emitter = view.get<ParticleEmitterComponent>(entity);
+                     auto& emitter   = view.get<ParticleEmitterComponent>(entity);
 
-                     uint32_t eid = static_cast<uint32_t>(entity);
-                     auto& system = m_ParticleSystems[eid];
+                     uint32_t eid    = static_cast<uint32_t>(entity);
+                     auto&    system = m_ParticleSystems[eid];
 
                      if (!system || system->GetMaxParticles() != emitter.MaxParticles)
                      {
@@ -376,60 +373,59 @@ namespace Engine
                      RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
                      // 重置本帧触发的爆发（用户配置的 BurstCount 保持不变）
-                     emitter.PendingBurst = 0;
+                     emitter.PendingBurst        = 0;
                      emitter.CollisionBurstCount = 0;
                  }
              }});
 
-        m_PassQueue.push_back(
-            {"FluidPass", [this](RenderContext& ctx)
-             {
-                 if (!ctx.Registry)
-                     return;
+        m_PassQueue.push_back({"FluidPass", [this](RenderContext& ctx)
+                               {
+                                   if (!ctx.Registry)
+                                       return;
 
-                 auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
+                                   auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
 
-                 // 一次性诊断：报告 FluidEmitter 实体数量
-                 static bool s_FluidPassLogged = false;
-                 if (!s_FluidPassLogged)
-                 {
-                     s_FluidPassLogged = true;
-                     ENGINE_WARN("[FluidPass] First execution: found {} FluidEmitter entities",
-                                 static_cast<int>(fluidView.size_hint()));
-                 }
+                                   // 一次性诊断：报告 FluidEmitter 实体数量
+                                   static bool s_FluidPassLogged = false;
+                                   if (!s_FluidPassLogged)
+                                   {
+                                       s_FluidPassLogged = true;
+                                       ENGINE_WARN("[FluidPass] First execution: found {} FluidEmitter entities",
+                                                   static_cast<int>(fluidView.size_hint()));
+                                   }
 
-                 for (auto entity : fluidView)
-                 {
-                     auto& transform = fluidView.get<TransformComponent>(entity);
-                     auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
+                                   for (auto entity : fluidView)
+                                   {
+                                       auto& transform = fluidView.get<TransformComponent>(entity);
+                                       auto& emitter   = fluidView.get<FluidEmitterComponent>(entity);
 
-                     uint32_t eid = static_cast<uint32_t>(entity);
-                     auto& system = m_FluidSystems[eid];
+                                       uint32_t eid    = static_cast<uint32_t>(entity);
+                                       auto&    system = m_FluidSystems[eid];
 
-                     if (!system || system->GetParticleCount() != emitter.ParticleCount)
-                     {
-                         system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
-                         system->Init();
-                         m_FluidEmitted.erase(eid); // 重建后需要重新发射
-                     }
+                                       if (!system || system->GetParticleCount() != emitter.ParticleCount)
+                                       {
+                                           system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
+                                           system->Init();
+                                           m_FluidEmitted.erase(eid); // 重建后需要重新发射
+                                       }
 
-                     // 首次发射
-                     if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
-                     {
-                         system->Emit(transform.Translation, emitter);
-                         m_FluidEmitted.insert(eid);
-                     }
+                                       // 首次发射
+                                       if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
+                                       {
+                                           system->Emit(transform.Translation, emitter);
+                                           m_FluidEmitted.insert(eid);
+                                       }
 
-                     // 每帧模拟
-                     system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
+                                       // 每帧模拟
+                                       system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
 
-                     // Screen-Space Fluid 渲染
-                     m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(), emitter.ParticleCount,
-                                            emitter.ParticleRadius, ctx.Camera->GetViewMatrix(),
-                                            ctx.Camera->GetProjection(), ctx.SceneColorTexID, ctx.SceneDepthTexID,
-                                            emitter);
-                 }
-             }});
+                                       // Screen-Space Fluid 渲染
+                                       m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(),
+                                                              emitter.ParticleCount, emitter.ParticleRadius,
+                                                              ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection(),
+                                                              ctx.SceneColorTexID, ctx.SceneDepthTexID, emitter);
+                                   }
+                               }});
 
         m_FluidRenderer.Init(viewportWidth, viewportHeight);
     }
@@ -465,11 +461,11 @@ namespace Engine
             m_BoundRegistry = input.Registry;
         }
 
-        m_Context.Camera = &camera;
-        m_Context.Registry = input.Registry;
-        m_Context.EntityIndex = input.EntityIndex;
+        m_Context.Camera         = &camera;
+        m_Context.Registry       = input.Registry;
+        m_Context.EntityIndex    = input.EntityIndex;
         m_Context.TransformCache = input.TransformCache;
-        m_Context.DeltaTime = input.DeltaTime;
+        m_Context.DeltaTime      = input.DeltaTime;
         m_TotalTime += input.DeltaTime;
     }
 
@@ -484,11 +480,11 @@ namespace Engine
 
     void SceneRenderer::EndScene()
     {
-        m_Context.Camera = nullptr;
-        m_Context.Registry = nullptr;
-        m_Context.EntityIndex = nullptr;
+        m_Context.Camera         = nullptr;
+        m_Context.Registry       = nullptr;
+        m_Context.EntityIndex    = nullptr;
         m_Context.TransformCache = nullptr;
-        m_Context.DeltaTime = 0.0f;
+        m_Context.DeltaTime      = 0.0f;
     }
 
     void SceneRenderer::RenderGeometryAndSkybox()
@@ -532,7 +528,7 @@ namespace Engine
 
     void SceneRenderer::SetPostProcessing(PostProcessing* pp, PostProcessingSettings* settings)
     {
-        m_PostProcessing = pp;
+        m_PostProcessing         = pp;
         m_PostProcessingSettings = settings;
     }
 
@@ -553,7 +549,7 @@ namespace Engine
     void SceneRenderer::RenderPipeline(const Ref<Framebuffer>& targetFBO)
     {
         // 设置视口信息
-        m_Context.ViewportWidth = m_HDRFramebuffer->GetSpecification().Width;
+        m_Context.ViewportWidth  = m_HDRFramebuffer->GetSpecification().Width;
         m_Context.ViewportHeight = m_HDRFramebuffer->GetSpecification().Height;
 
         // Shadow pass（渲染到阴影系统自己的 FBO）— 独立 CPU 计时
@@ -579,9 +575,8 @@ namespace Engine
         // 先写入当前帧几何深度，供后续 SSAO 采样
         for (auto& pass : m_PassQueue)
         {
-            bool runPass =
-                pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" ||
-                                 pass.Name == "TerrainPass" || pass.Name == "GrassPass");
+            bool runPass = pass.Enabled && (pass.Name == "GeometryPass" || pass.Name == "SkyboxPass" ||
+                                            pass.Name == "TerrainPass" || pass.Name == "GrassPass");
 
             if (runPass)
                 pass.ExecuteFn(m_Context);
@@ -684,5 +679,3 @@ namespace Engine
     }
 
 } // namespace Engine
-
-

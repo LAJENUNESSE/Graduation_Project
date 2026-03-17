@@ -14,8 +14,7 @@ namespace Engine
 {
     namespace
     {
-        template <typename T, size_t N>
-        int FindSelectedIndex(const std::array<T, N>& values, const T& currentValue)
+        template <typename T, size_t N> int FindSelectedIndex(const std::array<T, N>& values, const T& currentValue)
         {
             for (size_t i = 0; i < values.size(); ++i)
             {
@@ -25,14 +24,17 @@ namespace Engine
             return 0;
         }
     } // namespace
-    void RenderSettingsPanel::SetContext(SceneRenderer* sceneRenderer, PostProcessingSettings* postProcessingSettings,
-                                         Ref<Framebuffer> hdrFramebuffer, Ref<Scene> scene, bool* showPhysicsColliders)
+    void RenderSettingsPanel::SetContext(SceneRenderer*          sceneRenderer,
+                                         PostProcessingSettings* postProcessingSettings,
+                                         Ref<Framebuffer>        hdrFramebuffer,
+                                         Ref<Scene>              scene,
+                                         bool*                   showPhysicsColliders)
     {
-        m_SceneRenderer = sceneRenderer;
+        m_SceneRenderer          = sceneRenderer;
         m_PostProcessingSettings = postProcessingSettings;
-        m_HDRFramebuffer = hdrFramebuffer;
-        m_Scene = scene;
-        m_ShowPhysicsColliders = showPhysicsColliders;
+        m_HDRFramebuffer         = hdrFramebuffer;
+        m_Scene                  = scene;
+        m_ShowPhysicsColliders   = showPhysicsColliders;
     }
 
     void RenderSettingsPanel::OnImGuiRender()
@@ -46,8 +48,8 @@ namespace Engine
             return;
         }
 
-        auto& shadow = m_Scene->GetShadowSettings();
-        bool shadowDirty = false;
+        auto& shadow      = m_Scene->GetShadowSettings();
+        bool  shadowDirty = false;
 
         if (m_ReadOnly)
             ImGui::BeginDisabled();
@@ -108,7 +110,8 @@ namespace Engine
             ImGui::DragInt("泛光迭代", &m_PostProcessingSettings->BloomIterations, 1, 1, 10);
         }
 
-        int toneMappingMode = EditorRenderSettingDomains::NormalizeToneMappingMode(m_PostProcessingSettings->ToneMappingMode);
+        int toneMappingMode =
+            EditorRenderSettingDomains::NormalizeToneMappingMode(m_PostProcessingSettings->ToneMappingMode);
         int currentToneMappingIdx = FindSelectedIndex(EditorRenderSettingDomains::ToneMappingModes, toneMappingMode);
         if (ImGui::Combo("色调映射", &currentToneMappingIdx, EditorRenderSettingDomains::ToneMappingModeLabels.data(),
                          static_cast<int>(EditorRenderSettingDomains::ToneMappingModeLabels.size())))
@@ -121,7 +124,7 @@ namespace Engine
         ImGui::Text("MSAA 抗锯齿");
         {
             uint32_t currentSamples = m_HDRFramebuffer->GetSpecification().Samples;
-            int currentMsaaIdx = FindSelectedIndex(EditorRenderSettingDomains::MSAASamples, currentSamples);
+            int      currentMsaaIdx = FindSelectedIndex(EditorRenderSettingDomains::MSAASamples, currentSamples);
             if (ImGui::Combo("MSAA", &currentMsaaIdx, EditorRenderSettingDomains::MSAASampleLabels.data(),
                              static_cast<int>(EditorRenderSettingDomains::MSAASampleLabels.size())))
             {
@@ -146,16 +149,15 @@ namespace Engine
 
         if (ImGui::Button("加载天空盒..."))
         {
-            std::string dir = FileDialogs::OpenFile(
-                "*.jpg *.png *.tga", "天空盒文件夹中任意一张图");
+            std::string dir = FileDialogs::OpenFile("*.jpg *.png *.tga", "天空盒文件夹中任意一张图");
             if (!dir.empty())
             {
-                std::filesystem::path p(dir);
-                std::filesystem::path folder = p.parent_path();
-                std::string ext = p.extension().string();
+                std::filesystem::path    p(dir);
+                std::filesystem::path    folder   = p.parent_path();
+                std::string              ext      = p.extension().string();
                 std::vector<std::string> suffixes = {"right", "left", "top", "bottom", "front", "back"};
                 std::vector<std::string> faces;
-                bool allFound = true;
+                bool                     allFound = true;
                 for (const auto& s : suffixes)
                 {
                     std::filesystem::path facePath = folder / (s + ext);
@@ -195,8 +197,8 @@ namespace Engine
         ImGui::Separator();
         ImGui::Text("帧率控制");
         {
-            auto& app = Application::Get();
-            bool vsync = app.GetWindow().IsVSync();
+            auto& app   = Application::Get();
+            bool  vsync = app.GetWindow().IsVSync();
             if (ImGui::Checkbox("VSync", &vsync))
                 app.GetWindow().SetVSync(vsync);
 
@@ -214,7 +216,7 @@ namespace Engine
         ImGui::Text("物理设置");
         {
             const char* backendItems[] = {"手写物理", "Bullet3"};
-            int currentBackend = static_cast<int>(m_Scene->GetPhysicsBackend());
+            int         currentBackend = static_cast<int>(m_Scene->GetPhysicsBackend());
             if (ImGui::Combo("物理后端", &currentBackend, backendItems, 2))
                 m_Scene->SetPhysicsBackend(static_cast<PhysicsBackend>(currentBackend));
         }
@@ -226,4 +228,3 @@ namespace Engine
         ImGui::End();
     }
 } // namespace Engine
-

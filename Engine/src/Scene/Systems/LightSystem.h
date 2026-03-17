@@ -16,18 +16,18 @@ namespace Engine
         {
             glm::vec3 Direction;
             glm::vec3 Color;
-            float Intensity;
-            bool CastShadows;
+            float     Intensity;
+            bool      CastShadows;
         };
 
         struct PointLight
         {
             glm::vec3 Position;
             glm::vec3 Color;
-            float Intensity;
-            float Constant;
-            float Linear;
-            float Quadratic;
+            float     Intensity;
+            float     Constant;
+            float     Linear;
+            float     Quadratic;
         };
 
         struct SpotLight
@@ -35,18 +35,18 @@ namespace Engine
             glm::vec3 Position;
             glm::vec3 Direction;
             glm::vec3 Color;
-            float Intensity;
-            float Constant;
-            float Linear;
-            float Quadratic;
-            float InnerCutoff;
-            float OuterCutoff;
+            float     Intensity;
+            float     Constant;
+            float     Linear;
+            float     Quadratic;
+            float     InnerCutoff;
+            float     OuterCutoff;
         };
 
-        std::vector<DirLight> DirLights;     // max 2
+        std::vector<DirLight>   DirLights;   // max 2
         std::vector<PointLight> PointLights; // max 8
-        std::vector<SpotLight> SpotLights;   // max 4
-        float AmbientStrength = 0.3f;
+        std::vector<SpotLight>  SpotLights;  // max 4
+        float                   AmbientStrength = 0.3f;
     };
 
     class SceneEntityIndex;
@@ -55,8 +55,8 @@ namespace Engine
     class LightSystem
     {
     public:
-        static LightEnvironment CollectLights(entt::registry& reg, const SceneEntityIndex& index,
-                                               WorldTransformCache* cache = nullptr);
+        static LightEnvironment
+        CollectLights(entt::registry& reg, const SceneEntityIndex& index, WorldTransformCache* cache = nullptr);
         static void UploadToShader(const Ref<Shader>& shader, const LightEnvironment& env);
     };
 

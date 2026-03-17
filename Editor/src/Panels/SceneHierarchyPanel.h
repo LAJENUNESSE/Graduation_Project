@@ -25,12 +25,12 @@ namespace Engine
 
         // 单选兼容（返回主选中实体）
         Entity GetSelectedEntity() const;
-        void SetSelectedEntity(Entity entity);
+        void   SetSelectedEntity(Entity entity);
 
         // 多选接口
         const std::vector<Entity>& GetSelectedEntities() const { return m_SelectedEntities; }
-        void ClearSelection();
-        bool IsSelected(Entity entity) const;
+        void                       ClearSelection();
+        bool                       IsSelected(Entity entity) const;
 
     private:
         void DrawEntityNode(Entity entity, Entity& entityToDelete);
@@ -39,10 +39,10 @@ namespace Engine
         bool IsEntityValid(Entity entity) const;
 
     private:
-        Ref<Scene> m_Context;
+        Ref<Scene>          m_Context;
         std::vector<Entity> m_SelectedEntities;
-        CommandHistory* m_CommandHistory = nullptr;
-        bool m_ReadOnly = false;
+        CommandHistory*     m_CommandHistory = nullptr;
+        bool                m_ReadOnly       = false;
     };
 
 } // namespace Engine

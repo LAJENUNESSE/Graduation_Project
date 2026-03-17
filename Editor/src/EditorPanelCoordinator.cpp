@@ -15,16 +15,19 @@
 namespace Engine
 {
 
-    void EditorPanelCoordinator::Initialize(SceneHierarchyPanel* hierarchyPanel, PropertiesPanel* propertiesPanel,
-                                            ConsolePanel* consolePanel, AssetBrowserPanel* assetBrowserPanel,
-                                            RenderSettingsPanel* renderSettingsPanel, CommandHistory* commandHistory)
+    void EditorPanelCoordinator::Initialize(SceneHierarchyPanel* hierarchyPanel,
+                                            PropertiesPanel*     propertiesPanel,
+                                            ConsolePanel*        consolePanel,
+                                            AssetBrowserPanel*   assetBrowserPanel,
+                                            RenderSettingsPanel* renderSettingsPanel,
+                                            CommandHistory*      commandHistory)
     {
-        m_HierarchyPanel = hierarchyPanel;
-        m_PropertiesPanel = propertiesPanel;
-        m_ConsolePanel = consolePanel;
-        m_AssetBrowserPanel = assetBrowserPanel;
+        m_HierarchyPanel      = hierarchyPanel;
+        m_PropertiesPanel     = propertiesPanel;
+        m_ConsolePanel        = consolePanel;
+        m_AssetBrowserPanel   = assetBrowserPanel;
         m_RenderSettingsPanel = renderSettingsPanel;
-        m_CommandHistory = commandHistory;
+        m_CommandHistory      = commandHistory;
 
         if (m_PropertiesPanel)
             m_PropertiesPanel->SetCommandHistory(commandHistory);

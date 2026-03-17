@@ -18,9 +18,9 @@ namespace Engine
         T* Get() const;
         T* operator->() const { return Get(); }
 
-        explicit operator bool() const { return m_Handle.IsValid(); }
+        explicit    operator bool() const { return m_Handle.IsValid(); }
         AssetHandle GetHandle() const { return m_Handle; }
-        bool IsValid() const { return m_Handle.IsValid(); }
+        bool        IsValid() const { return m_Handle.IsValid(); }
 
     private:
         AssetHandle m_Handle = {};

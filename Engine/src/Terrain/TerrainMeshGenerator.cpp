@@ -12,22 +12,22 @@
 namespace Engine
 {
 
-    TerrainMeshData TerrainMeshGenerator::Generate(const std::string& heightmapPath, float size, float heightScale,
-                                                   int lodLevels)
+    TerrainMeshData
+    TerrainMeshGenerator::Generate(const std::string& heightmapPath, float size, float heightScale, int lodLevels)
     {
         TerrainMeshData data;
 
-        int w = 0, h = 0, channels = 0;
+        int               w = 0, h = 0, channels = 0;
         const std::string resolvedPath = PathUtils::ResolvePathString(heightmapPath);
-        unsigned char* pixels = stbi_load(resolvedPath.c_str(), &w, &h, &channels, 1);
+        unsigned char*    pixels       = stbi_load(resolvedPath.c_str(), &w, &h, &channels, 1);
 
         if (!pixels)
         {
             ENGINE_CORE_WARN("TerrainMeshGenerator: 高度图加载失败 '{}', 生成平面地形", heightmapPath);
             // 生成平面高度数据 64x64
-            w = 64;
-            h = 64;
-            data.HeightmapWidth = w;
+            w                    = 64;
+            h                    = 64;
+            data.HeightmapWidth  = w;
             data.HeightmapHeight = h;
             data.HeightData.resize(w * h, 0.0f);
             data.MinHeight = 0.0f;
@@ -35,7 +35,7 @@ namespace Engine
         }
         else
         {
-            data.HeightmapWidth = w;
+            data.HeightmapWidth  = w;
             data.HeightmapHeight = h;
             data.HeightData.resize(w * h);
 
@@ -44,10 +44,10 @@ namespace Engine
 
             for (int i = 0; i < w * h; ++i)
             {
-                float normalized = static_cast<float>(pixels[i]) / 255.0f;
+                float normalized   = static_cast<float>(pixels[i]) / 255.0f;
                 data.HeightData[i] = normalized;
-                minH = std::min(minH, normalized);
-                maxH = std::max(maxH, normalized);
+                minH               = std::min(minH, normalized);
+                maxH               = std::max(maxH, normalized);
             }
 
             data.MinHeight = minH;
@@ -58,7 +58,7 @@ namespace Engine
 
         // 生成 LOD 级别: LOD0=(w-1), LOD1=(w-1)/2, LOD2=(w-1)/4, ...
         int baseRes = std::max(w - 1, 1);
-        lodLevels = std::min(lodLevels, 4); // 最多 4 级
+        lodLevels   = std::min(lodLevels, 4); // 最多 4 级
 
         for (int lod = 0; lod < lodLevels; ++lod)
         {
@@ -99,8 +99,8 @@ namespace Engine
         return h0 + sy * (h1 - h0);
     }
 
-    TerrainLODMesh TerrainMeshGenerator::BuildLOD(const std::vector<float>& heightData, int hmWidth, int hmHeight,
-                                                  int gridRes, float size, float heightScale)
+    TerrainLODMesh TerrainMeshGenerator::BuildLOD(
+        const std::vector<float>& heightData, int hmWidth, int hmHeight, int gridRes, float size, float heightScale)
     {
         TerrainLODMesh lod;
         lod.GridResolution = gridRes;
@@ -127,7 +127,7 @@ namespace Engine
         {
             for (int i = 0; i < vertCountX; ++i)
             {
-                int idx = j * vertCountX + i;
+                int idx    = j * vertCountX + i;
                 int offset = idx * 11;
 
                 float h = getHeight(i, j);
@@ -147,39 +147,39 @@ namespace Engine
 
                 if (i == 0)
                 {
-                    hL = h;
-                    hR = getHeight(i + 1, j);
+                    hL      = h;
+                    hR      = getHeight(i + 1, j);
                     dxScale = cellSize;
                 }
                 else if (i == gridRes)
                 {
-                    hL = getHeight(i - 1, j);
-                    hR = h;
+                    hL      = getHeight(i - 1, j);
+                    hR      = h;
                     dxScale = cellSize;
                 }
                 else
                 {
-                    hL = getHeight(i - 1, j);
-                    hR = getHeight(i + 1, j);
+                    hL      = getHeight(i - 1, j);
+                    hR      = getHeight(i + 1, j);
                     dxScale = 2.0f * cellSize;
                 }
 
                 if (j == 0)
                 {
-                    hD = h;
-                    hU = getHeight(i, j + 1);
+                    hD      = h;
+                    hU      = getHeight(i, j + 1);
                     dzScale = cellSize;
                 }
                 else if (j == gridRes)
                 {
-                    hD = getHeight(i, j - 1);
-                    hU = h;
+                    hD      = getHeight(i, j - 1);
+                    hU      = h;
                     dzScale = cellSize;
                 }
                 else
                 {
-                    hD = getHeight(i, j - 1);
-                    hU = getHeight(i, j + 1);
+                    hD      = getHeight(i, j - 1);
+                    hU      = getHeight(i, j + 1);
                     dzScale = 2.0f * cellSize;
                 }
 
@@ -194,22 +194,22 @@ namespace Engine
                 vertices[offset + 5] = normal.z;
 
                 // UV: 全局 UV 用于 Splatmap
-                float u = static_cast<float>(i) / static_cast<float>(gridRes);
-                float v = static_cast<float>(j) / static_cast<float>(gridRes);
+                float u              = static_cast<float>(i) / static_cast<float>(gridRes);
+                float v              = static_cast<float>(j) / static_cast<float>(gridRes);
                 vertices[offset + 6] = u;
                 vertices[offset + 7] = v;
 
                 // 切线: 沿 X 方向
                 glm::vec3 tangent = glm::normalize(glm::vec3(dxScale, (hR - hL) * heightScale, 0.0f));
 
-                vertices[offset + 8] = tangent.x;
-                vertices[offset + 9] = tangent.y;
+                vertices[offset + 8]  = tangent.x;
+                vertices[offset + 9]  = tangent.y;
                 vertices[offset + 10] = tangent.z;
             }
         }
 
         // 索引: 每格两个三角形
-        int totalQuads = gridRes * gridRes;
+        int                   totalQuads = gridRes * gridRes;
         std::vector<uint32_t> indices(totalQuads * 6);
 
         int idxOffset = 0;
@@ -217,9 +217,9 @@ namespace Engine
         {
             for (int i = 0; i < gridRes; ++i)
             {
-                uint32_t topLeft = static_cast<uint32_t>(j * vertCountX + i);
-                uint32_t topRight = topLeft + 1;
-                uint32_t bottomLeft = static_cast<uint32_t>((j + 1) * vertCountX + i);
+                uint32_t topLeft     = static_cast<uint32_t>(j * vertCountX + i);
+                uint32_t topRight    = topLeft + 1;
+                uint32_t bottomLeft  = static_cast<uint32_t>((j + 1) * vertCountX + i);
                 uint32_t bottomRight = bottomLeft + 1;
 
                 // 三角形 1

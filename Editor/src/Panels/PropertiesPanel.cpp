@@ -33,7 +33,9 @@ namespace Engine
                    std::abs(lhs.z - rhs.z) <= kVec3ControlEpsilon;
         }
 
-        bool TrySelectProjectAssetPath(const char* filter, const char* description, const char* assetLabel,
+        bool TrySelectProjectAssetPath(const char*  filter,
+                                       const char*  description,
+                                       const char*  assetLabel,
                                        std::string& outPath)
         {
             std::string selectedPath = FileDialogs::OpenFile(filter, description);
@@ -64,7 +66,7 @@ namespace Engine
         if (!entity.HasComponent<T>())
             return;
 
-        auto& component = entity.GetComponent<T>();
+        auto&     component   = entity.GetComponent<T>();
         const int componentID = static_cast<int>(typeid(T).hash_code());
         ImGui::PushID(componentID);
 
@@ -106,14 +108,16 @@ namespace Engine
         ImGui::PopID();
     }
 
-    void PropertiesPanel::DrawComponent_Auto(const std::string& name, Entity entity, const ComponentMeta& meta,
+    void PropertiesPanel::DrawComponent_Auto(const std::string&        name,
+                                             Entity                    entity,
+                                             const ComponentMeta&      meta,
                                              AutoInspector::DrawVec3Fn drawVec3)
     {
         const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
                                                  ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap |
                                                  ImGuiTreeNodeFlags_FramePadding;
 
-        auto* scene = entity.GetScene();
+        auto*    scene    = entity.GetScene();
         uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
         if (!scene || !meta.Has(*scene, entityId))
             return;
@@ -155,11 +159,11 @@ namespace Engine
         ImGui::PopID();
     }
 
-    PropertiesPanel::Vec3ControlEditState PropertiesPanel::DrawVec3Control(const std::string& label, glm::vec3& values,
-                                                                           float resetValue, float columnWidth)
+    PropertiesPanel::Vec3ControlEditState
+    PropertiesPanel::DrawVec3Control(const std::string& label, glm::vec3& values, float resetValue, float columnWidth)
     {
-        ImGuiIO& io = ImGui::GetIO();
-        auto boldFont = io.Fonts->Fonts[0];
+        ImGuiIO&             io       = ImGui::GetIO();
+        auto                 boldFont = io.Fonts->Fonts[0];
         Vec3ControlEditState state;
 
         ImGui::PushID(label.c_str());
@@ -172,7 +176,7 @@ namespace Engine
         ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
 
-        float lineHeight = ImGui::GetFrameHeight();
+        float  lineHeight = ImGui::GetFrameHeight();
         ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
@@ -181,9 +185,9 @@ namespace Engine
         ImGui::PushFont(boldFont);
         if (ImGui::Button("X", buttonSize))
         {
-            values.x = resetValue;
+            values.x           = resetValue;
             state.ValueChanged = true;
-            state.EditStarted = true;
+            state.EditStarted  = true;
             state.EditFinished = true;
         }
         ImGui::PopFont();
@@ -191,7 +195,7 @@ namespace Engine
 
         ImGui::SameLine();
         state.ValueChanged = ImGui::DragFloat("##X", &values.x, 0.1f, 0.0f, 0.0f, "%.2f") || state.ValueChanged;
-        state.EditStarted = ImGui::IsItemActivated() || state.EditStarted;
+        state.EditStarted  = ImGui::IsItemActivated() || state.EditStarted;
         state.EditFinished = ImGui::IsItemDeactivatedAfterEdit() || state.EditFinished;
         ImGui::PopItemWidth();
         ImGui::SameLine();
@@ -202,9 +206,9 @@ namespace Engine
         ImGui::PushFont(boldFont);
         if (ImGui::Button("Y", buttonSize))
         {
-            values.y = resetValue;
+            values.y           = resetValue;
             state.ValueChanged = true;
-            state.EditStarted = true;
+            state.EditStarted  = true;
             state.EditFinished = true;
         }
         ImGui::PopFont();
@@ -212,7 +216,7 @@ namespace Engine
 
         ImGui::SameLine();
         state.ValueChanged = ImGui::DragFloat("##Y", &values.y, 0.1f, 0.0f, 0.0f, "%.2f") || state.ValueChanged;
-        state.EditStarted = ImGui::IsItemActivated() || state.EditStarted;
+        state.EditStarted  = ImGui::IsItemActivated() || state.EditStarted;
         state.EditFinished = ImGui::IsItemDeactivatedAfterEdit() || state.EditFinished;
         ImGui::PopItemWidth();
         ImGui::SameLine();
@@ -223,9 +227,9 @@ namespace Engine
         ImGui::PushFont(boldFont);
         if (ImGui::Button("Z", buttonSize))
         {
-            values.z = resetValue;
+            values.z           = resetValue;
             state.ValueChanged = true;
-            state.EditStarted = true;
+            state.EditStarted  = true;
             state.EditFinished = true;
         }
         ImGui::PopFont();
@@ -233,7 +237,7 @@ namespace Engine
 
         ImGui::SameLine();
         state.ValueChanged = ImGui::DragFloat("##Z", &values.z, 0.1f, 0.0f, 0.0f, "%.2f") || state.ValueChanged;
-        state.EditStarted = ImGui::IsItemActivated() || state.EditStarted;
+        state.EditStarted  = ImGui::IsItemActivated() || state.EditStarted;
         state.EditFinished = ImGui::IsItemDeactivatedAfterEdit() || state.EditFinished;
         ImGui::PopItemWidth();
 
@@ -290,7 +294,7 @@ namespace Engine
             std::strncpy(buffer, tag.c_str(), sizeof(buffer) - 1);
             if (ImGui::InputText("##Tag", buffer, sizeof(buffer)))
             {
-                tag = std::string(buffer);
+                tag             = std::string(buffer);
                 m_FrameModified = true;
             }
         }
@@ -326,7 +330,7 @@ namespace Engine
 
             // 所有 ComponentRegistry 注册的组件统一添加菜单
             {
-                auto* scene = entity.GetScene();
+                auto*    scene    = entity.GetScene();
                 uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
                 for (auto& meta : ComponentRegistry::Instance().GetAll())
                 {
@@ -352,23 +356,23 @@ namespace Engine
         ImGui::PopItemWidth();
 
         // Transform
-        const entt::entity entityHandle = static_cast<entt::entity>(entity);
-        const uint64_t entityIDValue = static_cast<uint64_t>(entity.GetUUID());
-        Scene* const entityScene = entity.GetScene();
+        const entt::entity entityHandle  = static_cast<entt::entity>(entity);
+        const uint64_t     entityIDValue = static_cast<uint64_t>(entity.GetUUID());
+        Scene* const       entityScene   = entity.GetScene();
 
         DrawComponent<TransformComponent>(
             "变换", entity,
             [this, entityHandle, entityIDValue, entityScene](auto& component)
             {
                 const glm::vec3 oldTranslation = component.Translation;
-                glm::vec3 rotation = glm::degrees(component.Rotation);
-                const glm::vec3 oldRotation = component.Rotation;
-                const glm::vec3 oldScale = component.Scale;
+                glm::vec3       rotation       = glm::degrees(component.Rotation);
+                const glm::vec3 oldRotation    = component.Rotation;
+                const glm::vec3 oldScale       = component.Scale;
 
                 const Vec3ControlEditState translationState = DrawVec3Control("位移", component.Translation);
-                const Vec3ControlEditState rotationState = DrawVec3Control("旋转", rotation);
-                component.Rotation = glm::radians(rotation);
-                const Vec3ControlEditState scaleState = DrawVec3Control("缩放", component.Scale, 1.0f);
+                const Vec3ControlEditState rotationState    = DrawVec3Control("旋转", rotation);
+                component.Rotation                          = glm::radians(rotation);
+                const Vec3ControlEditState scaleState       = DrawVec3Control("缩放", component.Scale, 1.0f);
 
                 const bool editStarted =
                     translationState.EditStarted || rotationState.EditStarted || scaleState.EditStarted;
@@ -377,12 +381,12 @@ namespace Engine
 
                 if (editStarted && !m_TransformEditSession.Active)
                 {
-                    m_TransformEditSession.Active = true;
-                    m_TransformEditSession.EntityID = UUID(entityIDValue);
+                    m_TransformEditSession.Active       = true;
+                    m_TransformEditSession.EntityID     = UUID(entityIDValue);
                     m_TransformEditSession.SceneContext = entityScene;
-                    m_TransformEditSession.Translation = oldTranslation;
-                    m_TransformEditSession.Rotation = oldRotation;
-                    m_TransformEditSession.Scale = oldScale;
+                    m_TransformEditSession.Translation  = oldTranslation;
+                    m_TransformEditSession.Rotation     = oldRotation;
+                    m_TransformEditSession.Scale        = oldScale;
                 }
 
                 if (editFinished && m_TransformEditSession.Active)
@@ -394,8 +398,7 @@ namespace Engine
                          !AreVec3Equal(m_TransformEditSession.Scale, component.Scale)))
                     {
                         m_CommandHistory->PushExecutedCommand(CreateRef<TransformChangeCommand>(
-                            m_ActiveScene, Entity(entityHandle, entityScene),
-                            m_TransformEditSession.Translation,
+                            m_ActiveScene, Entity(entityHandle, entityScene), m_TransformEditSession.Translation,
                             m_TransformEditSession.Rotation, m_TransformEditSession.Scale, component.Translation,
                             component.Rotation, component.Scale));
                     }
@@ -497,8 +500,9 @@ namespace Engine
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // Mesh Renderer
-        DrawComponent<MeshRendererComponent>("\u7f51\u683c\u6e32\u67d3\u5668", entity, [this](auto& component)
-                                             { m_FrameModified |= PropertiesPanelCustomDrawers::DrawMeshRendererInspector(component); });
+        DrawComponent<MeshRendererComponent>(
+            "\u7f51\u683c\u6e32\u67d3\u5668", entity, [this](auto& component)
+            { m_FrameModified |= PropertiesPanelCustomDrawers::DrawMeshRendererInspector(component); });
         // RigidBody — 通过反射自动绘制（见下方统一循环）
 
         // BoxCollider — 通过反射自动绘制
@@ -506,56 +510,61 @@ namespace Engine
         // SphereCollider — 通过反射自动绘制
 
         // Terrain
-        DrawComponent<TerrainComponent>("\u5730\u5f62", entity, [this](auto& component)
-                                        { m_FrameModified |= PropertiesPanelCustomDrawers::DrawTerrainInspector(component); });
+        DrawComponent<TerrainComponent>(
+            "\u5730\u5f62", entity, [this](auto& component)
+            { m_FrameModified |= PropertiesPanelCustomDrawers::DrawTerrainInspector(component); });
         // ParticleEmitter
         DrawComponent<ParticleEmitterComponent>(
-            "粒子发射器", entity,
-            [this](auto& component) { m_FrameModified |= PropertiesPanelCustomDrawers::DrawParticleEmitterInspector(component); });
+            "粒子发射器", entity, [this](auto& component)
+            { m_FrameModified |= PropertiesPanelCustomDrawers::DrawParticleEmitterInspector(component); });
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // AudioSource
-        DrawComponent<AudioSourceComponent>("\u97f3\u9891\u6e90", entity, [this, entity](auto& component)
-        {
-            const AudioRuntimeState* audioState = nullptr;
-            auto* scene = entity.GetScene();
-            if (scene && scene->GetSceneRenderer())
-                audioState = scene->GetSceneRenderer()->GetAudioSystem().GetStore().Get(
-                    static_cast<uint32_t>((entt::entity)entity));
-            m_FrameModified |= PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component, audioState);
-        });
+        DrawComponent<AudioSourceComponent>(
+            "\u97f3\u9891\u6e90", entity,
+            [this, entity](auto& component)
+            {
+                const AudioRuntimeState* audioState = nullptr;
+                auto*                    scene      = entity.GetScene();
+                if (scene && scene->GetSceneRenderer())
+                    audioState = scene->GetSceneRenderer()->GetAudioSystem().GetStore().Get(
+                        static_cast<uint32_t>((entt::entity)entity));
+                m_FrameModified |= PropertiesPanelCustomDrawers::DrawAudioSourceInspector(component, audioState);
+            });
         // AudioListener
-        DrawComponent<AudioListenerComponent>("\u97f3\u9891\u76d1\u542c\u5668", entity, [this](auto& component)
-                                              { m_FrameModified |= PropertiesPanelCustomDrawers::DrawAudioListenerInspector(component); });
+        DrawComponent<AudioListenerComponent>(
+            "\u97f3\u9891\u76d1\u542c\u5668", entity, [this](auto& component)
+            { m_FrameModified |= PropertiesPanelCustomDrawers::DrawAudioListenerInspector(component); });
         // VideoPlayer
-        DrawComponent<VideoPlayerComponent>("\u89c6\u9891\u64ad\u653e\u5668", entity, [this, entity](auto& component)
-        {
-            const VideoRuntimeState* videoState = nullptr;
-            auto* scene = entity.GetScene();
-            if (scene && scene->GetSceneRenderer())
-                videoState = scene->GetSceneRenderer()->GetVideoSystem().GetStore().Get(
-                    static_cast<uint32_t>((entt::entity)entity));
-            m_FrameModified |= PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component, videoState);
-        });
+        DrawComponent<VideoPlayerComponent>(
+            "\u89c6\u9891\u64ad\u653e\u5668", entity,
+            [this, entity](auto& component)
+            {
+                const VideoRuntimeState* videoState = nullptr;
+                auto*                    scene      = entity.GetScene();
+                if (scene && scene->GetSceneRenderer())
+                    videoState = scene->GetSceneRenderer()->GetVideoSystem().GetStore().Get(
+                        static_cast<uint32_t>((entt::entity)entity));
+                m_FrameModified |= PropertiesPanelCustomDrawers::DrawVideoPlayerInspector(component, videoState);
+            });
         // ---- 反射组件统一绘制 ----
         {
             // DrawVec3Control 适配函数（包装成 AutoInspector 需要的签名）
             static PropertiesPanel* s_Panel = nullptr;
-            s_Panel = this;
-            auto drawVec3Wrapper = [](const char* label, float* values, float resetValue)
+            s_Panel                         = this;
+            auto drawVec3Wrapper            = [](const char* label, float* values, float resetValue)
             {
                 auto state = s_Panel->DrawVec3Control(label, *reinterpret_cast<glm::vec3*>(values), resetValue);
                 if (state.ValueChanged)
                     s_Panel->m_FrameModified = true;
             };
 
-            auto* scene = entity.GetScene();
+            auto*    scene    = entity.GetScene();
             uint32_t entityId = static_cast<uint32_t>(static_cast<entt::entity>(entity));
 
             for (auto& meta : ComponentRegistry::Instance().GetAll())
             {
-                if (scene && meta.Has(*scene, entityId) &&
-                    !(meta.Flags & ComponentMeta::CustomUI))
+                if (scene && meta.Has(*scene, entityId) && !(meta.Flags & ComponentMeta::CustomUI))
                 {
                     DrawComponent_Auto(meta.DisplayName, entity, meta, drawVec3Wrapper);
                 }
@@ -563,8 +572,9 @@ namespace Engine
         }
 
         // ---- NativeScript 组件 ----
-        DrawComponent<NativeScriptComponent>("\u811a\u672c", entity, [this](auto& component)
-                                             { m_FrameModified |= PropertiesPanelCustomDrawers::DrawNativeScriptInspector(component); });
+        DrawComponent<NativeScriptComponent>(
+            "\u811a\u672c", entity, [this](auto& component)
+            { m_FrameModified |= PropertiesPanelCustomDrawers::DrawNativeScriptInspector(component); });
     }
 
 } // namespace Engine

@@ -53,15 +53,15 @@ namespace Engine
         unsigned int GetWidth() const override { return m_Data.Width; }
         unsigned int GetHeight() const override { return m_Data.Height; }
 
-        void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
-        void SetTitle(const std::string& title) override;
-        void SetVSync(bool enabled) override;
-        bool IsVSync() const override;
-        void SetCursorMode(CursorMode mode) override;
+        void       SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
+        void       SetTitle(const std::string& title) override;
+        void       SetVSync(bool enabled) override;
+        bool       IsVSync() const override;
+        void       SetCursorMode(CursorMode mode) override;
         CursorMode GetCursorMode() const override;
-        bool SupportsRawMouseInput() const override;
-        void SetRawMouseInput(bool enabled) override;
-        bool IsRawMouseInputEnabled() const override;
+        bool       SupportsRawMouseInput() const override;
+        void       SetRawMouseInput(bool enabled) override;
+        bool       IsRawMouseInputEnabled() const override;
 
         void* GetNativeWindow() const override { return m_Window; }
 
@@ -70,20 +70,20 @@ namespace Engine
         void Shutdown();
 
     private:
-        GLFWwindow* m_Window = nullptr;
+        GLFWwindow*          m_Window = nullptr;
         Scope<OpenGLContext> m_Context;
 
         struct WindowData
         {
-            std::string Title;
-            unsigned int Width = 0;
-            unsigned int Height = 0;
-            bool VSync = false;
-            CursorMode CurrentCursorMode = CursorMode::Normal;
-            bool RawMouseInput = false;
-            float PendingMouseX = 0.0f;
-            float PendingMouseY = 0.0f;
-            bool HasPendingMouseMove = false;
+            std::string     Title;
+            unsigned int    Width               = 0;
+            unsigned int    Height              = 0;
+            bool            VSync               = false;
+            CursorMode      CurrentCursorMode   = CursorMode::Normal;
+            bool            RawMouseInput       = false;
+            float           PendingMouseX       = 0.0f;
+            float           PendingMouseY       = 0.0f;
+            bool            HasPendingMouseMove = false;
             EventCallbackFn EventCallback;
         };
 
@@ -107,8 +107,8 @@ namespace Engine
 
     void GLFWWindowImpl::Init(const WindowProps& props)
     {
-        m_Data.Title = props.Title;
-        m_Data.Width = props.Width;
+        m_Data.Title  = props.Title;
+        m_Data.Width  = props.Width;
         m_Data.Height = props.Height;
 
         ENGINE_CORE_INFO("Creating window {0} ({1}, {2})", props.Title, props.Width, props.Height);
@@ -166,8 +166,8 @@ namespace Engine
                                   [](GLFWwindow* window, int width, int height)
                                   {
                                       WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
-                                      data.Width = width;
-                                      data.Height = height;
+                                      data.Width       = width;
+                                      data.Height      = height;
 
                                       WindowResizeEvent event(width, height);
                                       data.EventCallback(event);
@@ -216,7 +216,7 @@ namespace Engine
                             {
                                 ImGui_ImplGlfw_CharCallback(window, keycode);
 
-                                WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                WindowData&   data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
                                 KeyTypedEvent event(static_cast<int>(keycode));
                                 data.EventCallback(event);
                             });
@@ -250,7 +250,7 @@ namespace Engine
                               {
                                   ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
 
-                                  WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                  WindowData&        data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
                                   MouseScrolledEvent event(static_cast<float>(xOffset), static_cast<float>(yOffset));
                                   data.EventCallback(event);
                               });
@@ -258,7 +258,7 @@ namespace Engine
         glfwSetCursorPosCallback(m_Window,
                                  [](GLFWwindow* window, double xPos, double yPos)
                                  {
-                                     WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+                                     WindowData& data   = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
                                      data.PendingMouseX = static_cast<float>(xPos);
                                      data.PendingMouseY = static_cast<float>(yPos);
                                      data.HasPendingMouseMove = true;

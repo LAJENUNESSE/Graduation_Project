@@ -55,27 +55,27 @@ namespace Engine
         bool OnMouseScroll(MouseScrolledEvent& e);
 
         glm::vec2 PanSpeed() const;
-        float RotationSpeed() const;
-        float ZoomSpeed() const;
+        float     RotationSpeed() const;
+        float     ZoomSpeed() const;
 
-        float m_FOV = 45.0f;
+        float m_FOV         = 45.0f;
         float m_AspectRatio = 1.778f;
-        float m_NearClip = 0.1f;
-        float m_FarClip = 1000.0f;
+        float m_NearClip    = 0.1f;
+        float m_FarClip     = 1000.0f;
 
         glm::mat4 m_ViewMatrix{1.0f};
-        glm::vec3 m_Position = {0.0f, 0.0f, 5.0f};
+        glm::vec3 m_Position   = {0.0f, 0.0f, 5.0f};
         glm::vec3 m_FocalPoint = {0.0f, 0.0f, 0.0f};
 
-        float m_Distance = 10.0f;
-        float m_Pitch = 0.0f;
-        float m_Yaw = 0.0f;
-        bool m_ViewMatrixDirty = false;
+        float m_Distance        = 10.0f;
+        float m_Pitch           = 0.0f;
+        float m_Yaw             = 0.0f;
+        bool  m_ViewMatrixDirty = false;
 
         glm::vec2 m_InitialMousePosition = {0.0f, 0.0f};
-        bool m_MouseCaptured = false;
+        bool      m_MouseCaptured        = false;
 
-        float m_ViewportWidth = 1280;
+        float m_ViewportWidth  = 1280;
         float m_ViewportHeight = 720;
     };
 

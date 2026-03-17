@@ -14,11 +14,11 @@ namespace Engine
     struct SubMesh
     {
         Ref<VertexArray> VAO;
-        uint32_t IndexCount = 0;
-        std::string DiffuseTexturePath;  // relative path (extracted from model)
-        AssetHandle DiffuseTextureAsset; // loaded texture handle
-        std::string NormalTexturePath;   // relative path (extracted from model)
-        AssetHandle NormalTextureAsset;  // loaded normal map handle
+        uint32_t         IndexCount = 0;
+        std::string      DiffuseTexturePath;  // relative path (extracted from model)
+        AssetHandle      DiffuseTextureAsset; // loaded texture handle
+        std::string      NormalTexturePath;   // relative path (extracted from model)
+        AssetHandle      NormalTextureAsset;  // loaded normal map handle
     };
 
     class Mesh
@@ -55,7 +55,7 @@ namespace Engine
             : m_MeshType(meshType)
         {
             SubMesh sub;
-            sub.VAO = vertexArray;
+            sub.VAO        = vertexArray;
             sub.IndexCount = indexCount;
             m_SubMeshes.push_back(std::move(sub));
         }
@@ -68,8 +68,8 @@ namespace Engine
 
     private:
         std::vector<SubMesh> m_SubMeshes;
-        std::string m_MeshType;
-        std::string m_ModelPath; // non-empty for loaded models
+        std::string          m_MeshType;
+        std::string          m_ModelPath; // non-empty for loaded models
     };
 
 } // namespace Engine

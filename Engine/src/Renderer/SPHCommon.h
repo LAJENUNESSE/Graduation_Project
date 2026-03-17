@@ -41,11 +41,11 @@ namespace Engine
     // 与 GLSL GPURigidBody 和 CUDA RigidBodyData 布局完全一致
     struct GPURigidBodyData
     {
-        glm::vec4 posAndType;   // xyz=center, w=0(box)/1(sphere)
+        glm::vec4 posAndType; // xyz=center, w=0(box)/1(sphere)
         glm::vec4 rotCol0;
         glm::vec4 rotCol1;
         glm::vec4 rotCol2;
-        glm::vec4 halfExtents;  // box: xyz=半尺寸; sphere: x=radius
+        glm::vec4 halfExtents; // box: xyz=半尺寸; sphere: x=radius
         glm::vec4 linearVel;
         glm::vec4 angularVel;
     };
@@ -60,20 +60,20 @@ namespace Engine
     // 返回实际上传的刚体数量
     static constexpr uint32_t MAX_RIGID_BODIES = 64;
 
-    uint32_t UploadRigidBodiesToBuffer(entt::registry* registry,
+    uint32_t UploadRigidBodiesToBuffer(entt::registry*                 registry,
                                        const Ref<ShaderStorageBuffer>& buffer,
-                                       uint32_t maxRigidBodies,
-                                       RigidBodyUploadFilter filter = RigidBodyUploadFilter::AllColliders);
+                                       uint32_t                        maxRigidBodies,
+                                       RigidBodyUploadFilter           filter = RigidBodyUploadFilter::AllColliders);
 
 #ifdef ENGINE_ENABLE_CUDA
     // CUDA event 计时 ping-pong 双缓冲辅助（避免 GPU 同步阻塞）
     struct CudaTimingHelper
     {
-        void* EventStart = nullptr;
-        void* EventStop = nullptr;
-        void* PrevStart = nullptr;
-        void* PrevStop = nullptr;
-        bool HasPrevTiming = false;
+        void* EventStart    = nullptr;
+        void* EventStop     = nullptr;
+        void* PrevStart     = nullptr;
+        void* PrevStop      = nullptr;
+        bool  HasPrevTiming = false;
 
         void Init();
         void SwapEvents();

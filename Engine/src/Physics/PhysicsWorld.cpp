@@ -36,7 +36,7 @@ namespace Engine
 
     void PhysicsWorld::Init(glm::vec3 gravity)
     {
-        m_Gravity = gravity;
+        m_Gravity     = gravity;
         m_Accumulator = 0.0f;
         m_Contacts.clear();
     }
@@ -80,7 +80,7 @@ namespace Engine
         for (auto entity : view)
         {
             auto& transform = view.get<TransformComponent>(entity);
-            auto& rb = view.get<RigidBodyComponent>(entity);
+            auto& rb        = view.get<RigidBodyComponent>(entity);
 
             if (rb.Type != RigidBodyComponent::BodyType::Dynamic)
                 continue;
@@ -105,12 +105,12 @@ namespace Engine
                 glm::quat q = glm::quat(transform.Rotation);
                 glm::quat w(0.0f, rb.AngularVelocity.x, rb.AngularVelocity.y, rb.AngularVelocity.z);
                 q += 0.5f * dt * w * q;
-                q = glm::normalize(q);
+                q                  = glm::normalize(q);
                 transform.Rotation = glm::eulerAngles(q);
             }
 
             // 清除本帧外力
-            rb.Force = {0, 0, 0};
+            rb.Force  = {0, 0, 0};
             rb.Torque = {0, 0, 0};
         }
     }
@@ -123,7 +123,7 @@ namespace Engine
         struct ColliderInfo
         {
             entt::entity entity;
-            glm::vec3 worldPos;
+            glm::vec3    worldPos;
             enum Type
             {
                 Box,
@@ -132,7 +132,7 @@ namespace Engine
             glm::vec3 halfExtents;          // Box/OBB 本地半尺寸
             glm::quat rotation;             // Box 朝向
             glm::vec3 worldAABBHalfExtents; // 用于保守 Box-Box 检测
-            float radius;                   // Sphere
+            float     radius;               // Sphere
         };
 
         std::vector<ColliderInfo> colliders;
@@ -143,20 +143,20 @@ namespace Engine
             for (auto entity : view)
             {
                 auto& transform = view.get<TransformComponent>(entity);
-                auto& box = view.get<BoxColliderComponent>(entity);
+                auto& box       = view.get<BoxColliderComponent>(entity);
 
                 const glm::quat rotation(transform.Rotation);
-                const glm::vec3 absScale = AbsVec3(transform.Scale);
+                const glm::vec3 absScale    = AbsVec3(transform.Scale);
                 const glm::vec3 halfExtents = box.HalfExtents * absScale;
 
                 ColliderInfo ci;
-                ci.entity = entity;
-                ci.worldPos = transform.Translation + RotateScaledOffset(rotation, box.Offset, transform.Scale);
-                ci.type = ColliderInfo::Box;
+                ci.entity      = entity;
+                ci.worldPos    = transform.Translation + RotateScaledOffset(rotation, box.Offset, transform.Scale);
+                ci.type        = ColliderInfo::Box;
                 ci.halfExtents = halfExtents;
-                ci.rotation = rotation;
+                ci.rotation    = rotation;
                 ci.worldAABBHalfExtents = ComputeWorldAABBHalfExtents(halfExtents, rotation);
-                ci.radius = 0.0f;
+                ci.radius               = 0.0f;
                 colliders.push_back(ci);
             }
         }
@@ -167,21 +167,21 @@ namespace Engine
             for (auto entity : view)
             {
                 auto& transform = view.get<TransformComponent>(entity);
-                auto& sphere = view.get<SphereColliderComponent>(entity);
+                auto& sphere    = view.get<SphereColliderComponent>(entity);
 
                 const glm::quat rotation(transform.Rotation);
                 const glm::vec3 absScale = AbsVec3(transform.Scale);
 
                 ColliderInfo ci;
-                ci.entity = entity;
-                ci.worldPos = transform.Translation + RotateScaledOffset(rotation, sphere.Offset, transform.Scale);
-                ci.type = ColliderInfo::Sphere;
+                ci.entity      = entity;
+                ci.worldPos    = transform.Translation + RotateScaledOffset(rotation, sphere.Offset, transform.Scale);
+                ci.type        = ColliderInfo::Sphere;
                 ci.halfExtents = {0, 0, 0};
-                ci.rotation = rotation;
+                ci.rotation    = rotation;
                 ci.worldAABBHalfExtents = {0, 0, 0};
                 // 取 Scale 最大分量作为球半径缩放
                 float maxScale = std::max({absScale.x, absScale.y, absScale.z});
-                ci.radius = sphere.Radius * maxScale;
+                ci.radius      = sphere.Radius * maxScale;
                 colliders.push_back(ci);
             }
         }
@@ -216,7 +216,8 @@ namespace Engine
                 }
                 else if (a.type == ColliderInfo::Box && b.type == ColliderInfo::Box)
                 {
-                    collided = OBBOBB(a.worldPos, a.halfExtents, a.rotation, b.worldPos, b.halfExtents, b.rotation, info);
+                    collided =
+                        OBBOBB(a.worldPos, a.halfExtents, a.rotation, b.worldPos, b.halfExtents, b.rotation, info);
                 }
                 else if (a.type == ColliderInfo::Sphere && b.type == ColliderInfo::Box)
                 {
@@ -242,24 +243,27 @@ namespace Engine
 
     // ===== 碰撞检测算法 =====
 
-    bool PhysicsWorld::SphereSphere(const glm::vec3& posA, float radiusA, const glm::vec3& posB, float radiusB,
-                                    CollisionInfo& info)
+    bool PhysicsWorld::SphereSphere(
+        const glm::vec3& posA, float radiusA, const glm::vec3& posB, float radiusB, CollisionInfo& info)
     {
         glm::vec3 diff = posB - posA;
-        float dist = glm::length(diff);
-        float sumR = radiusA + radiusB;
+        float     dist = glm::length(diff);
+        float     sumR = radiusA + radiusB;
 
         if (dist >= sumR || dist < 1e-6f)
             return false;
 
-        info.contactNormal = diff / dist; // A→B
+        info.contactNormal    = diff / dist; // A→B
         info.penetrationDepth = sumR - dist;
-        info.contactPoint = posA + info.contactNormal * radiusA;
+        info.contactPoint     = posA + info.contactNormal * radiusA;
         return true;
     }
 
-    bool PhysicsWorld::AABBAABB(const glm::vec3& posA, const glm::vec3& halfA, const glm::vec3& posB,
-                                const glm::vec3& halfB, CollisionInfo& info)
+    bool PhysicsWorld::AABBAABB(const glm::vec3& posA,
+                                const glm::vec3& halfA,
+                                const glm::vec3& posB,
+                                const glm::vec3& halfB,
+                                CollisionInfo&   info)
     {
         glm::vec3 diff = posB - posA;
 
@@ -279,17 +283,17 @@ namespace Engine
         // 选择穿透最小的轴作为碰撞法线
         if (overlapX <= overlapY && overlapX <= overlapZ)
         {
-            info.contactNormal = (diff.x > 0) ? glm::vec3(1, 0, 0) : glm::vec3(-1, 0, 0);
+            info.contactNormal    = (diff.x > 0) ? glm::vec3(1, 0, 0) : glm::vec3(-1, 0, 0);
             info.penetrationDepth = overlapX;
         }
         else if (overlapY <= overlapX && overlapY <= overlapZ)
         {
-            info.contactNormal = (diff.y > 0) ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
+            info.contactNormal    = (diff.y > 0) ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
             info.penetrationDepth = overlapY;
         }
         else
         {
-            info.contactNormal = (diff.z > 0) ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
+            info.contactNormal    = (diff.z > 0) ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
             info.penetrationDepth = overlapZ;
         }
 
@@ -297,9 +301,13 @@ namespace Engine
         return true;
     }
 
-    bool PhysicsWorld::OBBOBB(const glm::vec3& posA, const glm::vec3& halfA, const glm::quat& rotA,
-                              const glm::vec3& posB, const glm::vec3& halfB, const glm::quat& rotB,
-                              CollisionInfo& info)
+    bool PhysicsWorld::OBBOBB(const glm::vec3& posA,
+                              const glm::vec3& halfA,
+                              const glm::quat& rotA,
+                              const glm::vec3& posB,
+                              const glm::vec3& halfB,
+                              const glm::quat& rotB,
+                              CollisionInfo&   info)
     {
         const glm::mat3 mA = glm::mat3_cast(rotA);
         const glm::mat3 mB = glm::mat3_cast(rotB);
@@ -311,7 +319,7 @@ namespace Engine
 
         const glm::vec3 d = posB - posA; // A 中心到 B 中心
 
-        float minOverlap = std::numeric_limits<float>::max();
+        float     minOverlap = std::numeric_limits<float>::max();
         glm::vec3 bestAxis(0.0f);
 
         // 测试单条分离轴的 lambda
@@ -324,16 +332,14 @@ namespace Engine
             glm::vec3 n = axis / len;
 
             // A 在轴上的投影半径
-            float rA = halfA.x * std::abs(glm::dot(axesA[0], n)) +
-                        halfA.y * std::abs(glm::dot(axesA[1], n)) +
-                        halfA.z * std::abs(glm::dot(axesA[2], n));
+            float rA = halfA.x * std::abs(glm::dot(axesA[0], n)) + halfA.y * std::abs(glm::dot(axesA[1], n)) +
+                       halfA.z * std::abs(glm::dot(axesA[2], n));
 
             // B 在轴上的投影半径
-            float rB = halfB.x * std::abs(glm::dot(axesB[0], n)) +
-                        halfB.y * std::abs(glm::dot(axesB[1], n)) +
-                        halfB.z * std::abs(glm::dot(axesB[2], n));
+            float rB = halfB.x * std::abs(glm::dot(axesB[0], n)) + halfB.y * std::abs(glm::dot(axesB[1], n)) +
+                       halfB.z * std::abs(glm::dot(axesB[2], n));
 
-            float dist = std::abs(glm::dot(d, n));
+            float dist    = std::abs(glm::dot(d, n));
             float overlap = rA + rB - dist;
 
             if (overlap <= 0.0f)
@@ -342,7 +348,7 @@ namespace Engine
             if (overlap < minOverlap)
             {
                 minOverlap = overlap;
-                bestAxis = n;
+                bestAxis   = n;
             }
             return true;
         };
@@ -368,17 +374,21 @@ namespace Engine
         if (glm::dot(bestAxis, d) < 0.0f)
             bestAxis = -bestAxis;
 
-        info.contactNormal = bestAxis;
+        info.contactNormal    = bestAxis;
         info.penetrationDepth = minOverlap;
-        info.contactPoint = (posA + posB) * 0.5f;
+        info.contactPoint     = (posA + posB) * 0.5f;
         return true;
     }
 
-    bool PhysicsWorld::SphereOBB(const glm::vec3& spherePos, float sphereRadius, const glm::vec3& boxPos,
-                                 const glm::vec3& boxHalf, const glm::quat& boxRotation, CollisionInfo& info)
+    bool PhysicsWorld::SphereOBB(const glm::vec3& spherePos,
+                                 float            sphereRadius,
+                                 const glm::vec3& boxPos,
+                                 const glm::vec3& boxHalf,
+                                 const glm::quat& boxRotation,
+                                 CollisionInfo&   info)
     {
         const glm::quat inverseRotation = glm::inverse(boxRotation);
-        const glm::vec3 localSphere = inverseRotation * (spherePos - boxPos);
+        const glm::vec3 localSphere     = inverseRotation * (spherePos - boxPos);
 
         glm::vec3 closest;
         closest.x = std::clamp(localSphere.x, -boxHalf.x, boxHalf.x);
@@ -386,7 +396,7 @@ namespace Engine
         closest.z = std::clamp(localSphere.z, -boxHalf.z, boxHalf.z);
 
         glm::vec3 localDiff = localSphere - closest;
-        float distSq = glm::dot(localDiff, localDiff);
+        float     distSq    = glm::dot(localDiff, localDiff);
         glm::vec3 localNormal(0.0f);
 
         if (distSq < 1e-6f)
@@ -400,20 +410,20 @@ namespace Engine
 
             if (dx <= dy && dx <= dz)
             {
-                localNormal = (localSphere.x >= 0.0f) ? glm::vec3(1, 0, 0) : glm::vec3(-1, 0, 0);
-                closest = {localNormal.x * boxHalf.x, localSphere.y, localSphere.z};
+                localNormal           = (localSphere.x >= 0.0f) ? glm::vec3(1, 0, 0) : glm::vec3(-1, 0, 0);
+                closest               = {localNormal.x * boxHalf.x, localSphere.y, localSphere.z};
                 info.penetrationDepth = dx + sphereRadius;
             }
             else if (dy <= dx && dy <= dz)
             {
-                localNormal = (localSphere.y >= 0.0f) ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
-                closest = {localSphere.x, localNormal.y * boxHalf.y, localSphere.z};
+                localNormal           = (localSphere.y >= 0.0f) ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
+                closest               = {localSphere.x, localNormal.y * boxHalf.y, localSphere.z};
                 info.penetrationDepth = dy + sphereRadius;
             }
             else
             {
-                localNormal = (localSphere.z >= 0.0f) ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
-                closest = {localSphere.x, localSphere.y, localNormal.z * boxHalf.z};
+                localNormal           = (localSphere.z >= 0.0f) ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
+                closest               = {localSphere.x, localSphere.y, localNormal.z * boxHalf.z};
                 info.penetrationDepth = dz + sphereRadius;
             }
         }
@@ -423,21 +433,21 @@ namespace Engine
             if (dist >= sphereRadius)
                 return false;
 
-            localNormal = localDiff / dist;
+            localNormal           = localDiff / dist;
             info.penetrationDepth = sphereRadius - dist;
         }
 
         info.contactNormal = boxRotation * localNormal;
-        info.contactPoint = boxPos + boxRotation * closest;
+        info.contactPoint  = boxPos + boxRotation * closest;
         return true;
     }
     // ===== Phase 9c: 冲量碰撞响应（论文核心亮点）=====
 
     void PhysicsWorld::ResolveCollisions(entt::registry& reg)
     {
-        constexpr float SLOP = 0.005f;    // 允许的微小穿透量（防抖动）
-        constexpr float BAUMGARTE = 0.2f; // 速度级 Baumgarte 偏置系数
-        constexpr float EPSILON = 1e-6f;
+        constexpr float SLOP           = 0.005f; // 允许的微小穿透量（防抖动）
+        constexpr float BAUMGARTE      = 0.2f;   // 速度级 Baumgarte 偏置系数
+        constexpr float EPSILON        = 1e-6f;
         constexpr float REST_THRESHOLD = 0.5f; // 低于此速度视为静止，取消弹性
 
         for (auto& contact : m_Contacts)
@@ -460,8 +470,8 @@ namespace Engine
             auto& transformA = reg.get<TransformComponent>(entityA);
             auto& transformB = reg.get<TransformComponent>(entityB);
 
-            float massA = (rbA && aIsDynamic) ? rbA->Mass : 0.0f;
-            float massB = (rbB && bIsDynamic) ? rbB->Mass : 0.0f;
+            float massA    = (rbA && aIsDynamic) ? rbA->Mass : 0.0f;
+            float massB    = (rbB && bIsDynamic) ? rbB->Mass : 0.0f;
             float invMassA = (massA > 0.0f) ? 1.0f / massA : 0.0f;
             float invMassB = (massB > 0.0f) ? 1.0f / massB : 0.0f;
 
@@ -476,8 +486,8 @@ namespace Engine
             float penetration = contact.penetrationDepth;
             if (penetration > SLOP)
             {
-                float correctionMag = (penetration - SLOP) / (invMassA + invMassB + EPSILON);
-                glm::vec3 correction = correctionMag * n;
+                float     correctionMag = (penetration - SLOP) / (invMassA + invMassB + EPSILON);
+                glm::vec3 correction    = correctionMag * n;
 
                 if (rbA && aIsDynamic)
                     transformA.Translation -= correction * invMassA;
@@ -497,7 +507,7 @@ namespace Engine
 
             // 相对速度
             glm::vec3 vRel = vB - vA;
-            float vn = glm::dot(vRel, n);
+            float     vn   = glm::dot(vRel, n);
 
             // 如果正在分离，跳过冲量（位置已修正）
             if (vn > 0.0f)
@@ -557,19 +567,19 @@ namespace Engine
                  (rbB ? glm::cross(rbB->AngularVelocity, rB) : glm::vec3(0));
             vRel = vB - vA;
 
-            glm::vec3 vTangent = vRel - glm::dot(vRel, n) * n;
-            float tangentLen = glm::length(vTangent);
+            glm::vec3 vTangent   = vRel - glm::dot(vRel, n) * n;
+            float     tangentLen = glm::length(vTangent);
 
             if (tangentLen > EPSILON)
             {
                 glm::vec3 t = vTangent / tangentLen;
 
                 // 切向冲量大小
-                glm::vec3 rAxT = glm::cross(rA, t);
-                glm::vec3 rBxT = glm::cross(rB, t);
-                float angTermA_t = glm::dot(glm::cross(rAxT * invIA, rA), t);
-                float angTermB_t = glm::dot(glm::cross(rBxT * invIB, rB), t);
-                float denom_t = invMassA + invMassB + angTermA_t + angTermB_t;
+                glm::vec3 rAxT       = glm::cross(rA, t);
+                glm::vec3 rBxT       = glm::cross(rB, t);
+                float     angTermA_t = glm::dot(glm::cross(rAxT * invIA, rA), t);
+                float     angTermB_t = glm::dot(glm::cross(rBxT * invIB, rB), t);
+                float     denom_t    = invMassA + invMassB + angTermA_t + angTermB_t;
 
                 if (denom_t > EPSILON)
                 {

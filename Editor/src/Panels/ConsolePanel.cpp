@@ -26,8 +26,8 @@ namespace Engine
     void ImGuiConsoleSink::sink_it_(const spdlog::details::log_msg& msg)
     {
         // 格式化时间戳 HH:MM:SS
-        auto time = msg.time;
-        auto tt = std::chrono::system_clock::to_time_t(time);
+        auto    time = msg.time;
+        auto    tt   = std::chrono::system_clock::to_time_t(time);
         std::tm tm{};
 #ifdef _WIN32
         localtime_s(&tm, &tt);
@@ -39,8 +39,8 @@ namespace Engine
 
         ConsoleLogEntry entry;
         entry.Timestamp = timeBuf;
-        entry.Level = msg.level;
-        entry.Message = std::string(msg.payload.data(), msg.payload.size());
+        entry.Level     = msg.level;
+        entry.Message   = std::string(msg.payload.data(), msg.payload.size());
 
         m_Entries.push_back(std::move(entry));
 
@@ -153,7 +153,7 @@ namespace Engine
         // 日志内容区域
         ImGui::BeginChild("ConsoleScrollRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 
-        const auto entries = m_Sink->CopyEntries();
+        const auto  entries = m_Sink->CopyEntries();
         std::string searchStr(m_SearchBuffer);
 
         for (const auto& entry : entries)
@@ -194,33 +194,33 @@ namespace Engine
             }
 
             // 颜色编码
-            ImVec4 color;
+            ImVec4      color;
             const char* levelTag;
             switch (entry.Level)
             {
             case spdlog::level::trace:
             case spdlog::level::debug:
-                color = ImVec4(0.6f, 0.6f, 0.6f, 1.0f); // 灰色
+                color    = ImVec4(0.6f, 0.6f, 0.6f, 1.0f); // 灰色
                 levelTag = "[TRACE]";
                 break;
             case spdlog::level::info:
-                color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // 白色
+                color    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // 白色
                 levelTag = "[INFO] ";
                 break;
             case spdlog::level::warn:
-                color = ImVec4(1.0f, 0.9f, 0.3f, 1.0f); // 黄色
+                color    = ImVec4(1.0f, 0.9f, 0.3f, 1.0f); // 黄色
                 levelTag = "[WARN] ";
                 break;
             case spdlog::level::err:
-                color = ImVec4(1.0f, 0.3f, 0.3f, 1.0f); // 红色
+                color    = ImVec4(1.0f, 0.3f, 0.3f, 1.0f); // 红色
                 levelTag = "[ERROR]";
                 break;
             case spdlog::level::critical:
-                color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // 亮红
+                color    = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // 亮红
                 levelTag = "[CRIT] ";
                 break;
             default:
-                color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+                color    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
                 levelTag = "[????] ";
                 break;
             }

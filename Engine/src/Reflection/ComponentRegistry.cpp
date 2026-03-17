@@ -26,7 +26,8 @@ namespace Engine
 
     ENGINE_COMPONENT(SphereColliderComponent, "球碰撞器")
     ENGINE_PROPERTY_EX(SphereColliderComponent, Radius, "半径", Float, hints.Speed = 0.01f; hints.Min = 0.01f;
-                       hints.Max = 100.0f; hints.Format = "%.2f")
+                       hints.Max    = 100.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY(SphereColliderComponent, Offset, "偏移", Vec3)
     ENGINE_PROPERTY(SphereColliderComponent, IsTrigger, "触发器", Bool)
 
@@ -43,9 +44,9 @@ namespace Engine
     ENGINE_COMPONENT(MeshColliderComponent, "网格碰撞器")
     ENGINE_PROPERTY_EX(MeshColliderComponent, Type, "碰撞类型", Enum, hints.EnumNames = s_MeshColliderTypeNames;
                        hints.EnumCount = 2)
-    ENGINE_PROPERTY_EX(MeshColliderComponent, MeshPath, "网格路径", AssetPath,
-                       hints.FileFilter = "*.gltf;*.glb;*.obj;*.fbx";
-                       hints.FileDesc = "3D 模型")
+    ENGINE_PROPERTY_EX(
+        MeshColliderComponent, MeshPath, "网格路径", AssetPath, hints.FileFilter = "*.gltf;*.glb;*.obj;*.fbx";
+        hints.FileDesc = "3D 模型")
     ENGINE_PROPERTY(MeshColliderComponent, IsTrigger, "触发器", Bool)
 
     REGISTER_COMPONENT_BEGIN(MeshColliderComponent)
@@ -59,12 +60,16 @@ namespace Engine
     ENGINE_COMPONENT(CollisionParticleTriggerComponent, "碰撞粒子触发器")
     ENGINE_PROPERTY(CollisionParticleTriggerComponent, Enabled, "启用", Bool)
     ENGINE_PROPERTY_EX(CollisionParticleTriggerComponent, BurstOnCollision, "爆发粒子数", Int, hints.Speed = 1.0f;
-                       hints.Min = 1.0f; hints.Max = 1000.0f)
+                       hints.Min = 1.0f;
+                       hints.Max = 1000.0f)
     ENGINE_PROPERTY_EX(CollisionParticleTriggerComponent, MinImpulse, "最小冲量", Float, hints.Speed = 0.1f;
-                       hints.Min = 0.0f; hints.Max = 100.0f; hints.Format = "%.1f")
+                       hints.Min    = 0.0f;
+                       hints.Max    = 100.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY(CollisionParticleTriggerComponent, UseCollisionNormal, "使用碰撞法线", Bool)
     ENGINE_PROPERTY_EX(CollisionParticleTriggerComponent, MaxBurstPerFrame, "每帧最大爆发", Int, hints.Speed = 10.0f;
-                       hints.Min = 1.0f; hints.Max = 10000.0f)
+                       hints.Min = 1.0f;
+                       hints.Max = 10000.0f)
 
     REGISTER_COMPONENT_BEGIN(CollisionParticleTriggerComponent)
     REGISTER_COMPONENT_PROPERTY(CollisionParticleTriggerComponent, Enabled)
@@ -81,13 +86,17 @@ namespace Engine
     ENGINE_COMPONENT(RigidBodyComponent, "刚体")
     ENGINE_PROPERTY_EX(RigidBodyComponent, Type, "类型", Enum, hints.EnumNames = s_BodyTypeNames; hints.EnumCount = 3)
     ENGINE_PROPERTY_EX(RigidBodyComponent, Mass, "质量", Float, hints.Speed = 0.1f; hints.Min = 0.01f;
-                       hints.Max = 1000.0f; hints.Format = "%.2f")
+                       hints.Max    = 1000.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(RigidBodyComponent, Restitution, "弹性系数", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
-                       hints.Max = 1.0f; hints.Format = "%.2f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(RigidBodyComponent, Friction, "摩擦系数", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
-                       hints.Max = 1.0f; hints.Format = "%.2f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(RigidBodyComponent, GravityScale, "重力缩放", Float, hints.Speed = 0.1f; hints.Min = -10.0f;
-                       hints.Max = 10.0f; hints.Format = "%.1f")
+                       hints.Max    = 10.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY(RigidBodyComponent, FixedRotation, "固定旋转", Bool)
     ENGINE_PROPERTY_EX(RigidBodyComponent, LinearVelocity, "线速度", Vec3, hints.Transient = true)
     ENGINE_PROPERTY_EX(RigidBodyComponent, AngularVelocity, "角速度", Vec3, hints.Transient = true)
@@ -115,13 +124,18 @@ namespace Engine
     ENGINE_PROPERTY_EX(LightComponent, Type, "灯光类型", Enum, hints.EnumNames = s_LightTypeNames; hints.EnumCount = 3)
     ENGINE_PROPERTY(LightComponent, Color, "颜色", Color3)
     ENGINE_PROPERTY_EX(LightComponent, Intensity, "强度", Float, hints.Speed = 0.05f; hints.Min = 0.0f;
-                       hints.Max = 100.0f; hints.Format = "%.2f")
+                       hints.Max    = 100.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(LightComponent, Constant, "常数项", Float, hints.Speed = 0.01f; hints.Min = 0.001f;
-                       hints.Max = 10.0f; hints.Format = "%.3f"; hints.Group = "衰减")
+                       hints.Max    = 10.0f;
+                       hints.Format = "%.3f";
+                       hints.Group  = "衰减")
     ENGINE_PROPERTY_EX(LightComponent, Linear, "线性项", Float, hints.Speed = 0.001f; hints.Min = 0.0f;
-                       hints.Max = 1.0f; hints.Format = "%.4f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.4f")
     ENGINE_PROPERTY_EX(LightComponent, Quadratic, "二次项", Float, hints.Speed = 0.001f; hints.Min = 0.0f;
-                       hints.Max = 1.0f; hints.Format = "%.4f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.4f")
     ENGINE_PROPERTY_EX(LightComponent, InnerCutoff, "内锥角", Float, hints.Speed = 0.001f; hints.Group = "锥角")
     ENGINE_PROPERTY_EX(LightComponent, OuterCutoff, "外锥角", Float, hints.Speed = 0.001f)
     ENGINE_PROPERTY(LightComponent, CastShadows, "投射阴影", Bool)
@@ -144,42 +158,59 @@ namespace Engine
 
     // 发射参数
     ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleCount, "粒子数量", UInt32, hints.Speed = 100.0f;
-                       hints.Min = 100.0f; hints.Max = 100000.0f)
+                       hints.Min = 100.0f;
+                       hints.Max = 100000.0f)
     ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleRadius, "粒子半径", Float, hints.Speed = 0.001f;
-                       hints.Min = 0.001f; hints.Max = 1.0f; hints.Format = "%.3f")
+                       hints.Min    = 0.001f;
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.3f")
     ENGINE_PROPERTY(FluidEmitterComponent, EmitExtents, "发射区域半尺寸", Vec3)
     ENGINE_PROPERTY(FluidEmitterComponent, InitialVelocity, "初始速度", Vec3)
 
     // SPH 参数
     ENGINE_PROPERTY_EX(FluidEmitterComponent, RestDensity, "静止密度", Float, hints.Speed = 1.0f; hints.Min = 1.0f;
-                       hints.Max = 10000.0f; hints.Format = "%.1f")
+                       hints.Max    = 10000.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, GasConstant, "气体常数", Float, hints.Speed = 0.5f; hints.Min = 0.0f;
-                       hints.Max = 500.0f; hints.Format = "%.1f")
+                       hints.Max    = 500.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, Viscosity, "粘性系数", Float, hints.Speed = 0.1f; hints.Min = 0.0f;
-                       hints.Max = 100.0f; hints.Format = "%.1f")
+                       hints.Max    = 100.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothingRadius, "光滑核半径", Float, hints.Speed = 0.005f;
-                       hints.Min = 0.01f; hints.Max = 1.0f; hints.Format = "%.3f")
+                       hints.Min    = 0.01f;
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.3f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleMass, "粒子质量", Float, hints.Speed = 0.001f; hints.Min = 0.001f;
-                       hints.Max = 1.0f; hints.Format = "%.3f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.3f")
     ENGINE_PROPERTY(FluidEmitterComponent, Gravity, "重力", Vec3)
     ENGINE_PROPERTY_EX(FluidEmitterComponent, Damping, "速度阻尼", Float, hints.Speed = 0.001f; hints.Min = 0.9f;
-                       hints.Max = 1.0f; hints.Format = "%.3f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.3f")
 
     // PCISPH
     ENGINE_PROPERTY(FluidEmitterComponent, PCISPHEnabled, "PCISPH 启用", Bool)
     ENGINE_PROPERTY_EX(FluidEmitterComponent, PCISPHIterations, "PCISPH 迭代次数", Int, hints.Speed = 1.0f;
-                       hints.Min = 1.0f; hints.Max = 8.0f)
+                       hints.Min = 1.0f;
+                       hints.Max = 8.0f)
     ENGINE_PROPERTY_EX(FluidEmitterComponent, PCISPHDelta, "PCISPH Delta", Float, hints.Speed = 0.01f;
-                       hints.Min = 0.01f; hints.Max = 1.0f; hints.Format = "%.2f")
+                       hints.Min    = 0.01f;
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, SurfaceTension, "表面张力", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
-                       hints.Max = 10.0f; hints.Format = "%.2f")
+                       hints.Max    = 10.0f;
+                       hints.Format = "%.2f")
 
     // 刚体耦合
     ENGINE_PROPERTY(FluidEmitterComponent, RigidBodyCoupling, "刚体耦合", Bool)
     ENGINE_PROPERTY_EX(FluidEmitterComponent, BoundaryStiffness, "边界刚度", Float, hints.Speed = 100.0f;
-                       hints.Min = 0.0f; hints.Max = 50000.0f; hints.Format = "%.0f")
+                       hints.Min    = 0.0f;
+                       hints.Max    = 50000.0f;
+                       hints.Format = "%.0f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, BoundaryDamping, "边界阻尼", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
-                       hints.Max = 1.0f; hints.Format = "%.2f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
 
     // 边界盒
     ENGINE_PROPERTY(FluidEmitterComponent, UseBoundary, "使用边界盒", Bool)
@@ -190,19 +221,29 @@ namespace Engine
     ENGINE_PROPERTY(FluidEmitterComponent, FluidColor, "流体颜色", Color3)
     ENGINE_PROPERTY(FluidEmitterComponent, AbsorptionColor, "吸收颜色", Color3)
     ENGINE_PROPERTY_EX(FluidEmitterComponent, AbsorptionScale, "吸收强度", Float, hints.Speed = 0.1f; hints.Min = 0.0f;
-                       hints.Max = 20.0f; hints.Format = "%.1f")
+                       hints.Max    = 20.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, FresnelPower, "Fresnel 指数", Float, hints.Speed = 0.1f; hints.Min = 0.1f;
-                       hints.Max = 10.0f; hints.Format = "%.1f")
+                       hints.Max    = 10.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, RefractionStrength, "折射强度", Float, hints.Speed = 0.01f;
-                       hints.Min = 0.0f; hints.Max = 1.0f; hints.Format = "%.2f")
+                       hints.Min    = 0.0f;
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, Reflectivity, "反射率", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
-                       hints.Max = 1.0f; hints.Format = "%.2f")
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothIterations, "平滑迭代次数", Int, hints.Speed = 1.0f;
-                       hints.Min = 0.0f; hints.Max = 10.0f)
+                       hints.Min = 0.0f;
+                       hints.Max = 10.0f)
     ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothFilterRadius, "平滑核半径", Float, hints.Speed = 0.5f;
-                       hints.Min = 1.0f; hints.Max = 30.0f; hints.Format = "%.1f")
+                       hints.Min    = 1.0f;
+                       hints.Max    = 30.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, SmoothDepthFalloff, "深度衰减", Float, hints.Speed = 1.0f;
-                       hints.Min = 1.0f; hints.Max = 500.0f; hints.Format = "%.0f")
+                       hints.Min    = 1.0f;
+                       hints.Max    = 500.0f;
+                       hints.Format = "%.0f")
 
     REGISTER_COMPONENT_BEGIN(FluidEmitterComponent)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleCount)
@@ -243,13 +284,17 @@ namespace Engine
     ENGINE_PROPERTY_EX(AudioSourceComponent, AudioPath, "音频路径", AssetPath, hints.FileFilter = "*.wav;*.mp3;*.ogg";
                        hints.FileDesc = "音频文件")
     ENGINE_PROPERTY_EX(AudioSourceComponent, Volume, "音量", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
-                       hints.Max = 2.0f; hints.Format = "%.2f")
+                       hints.Max    = 2.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(AudioSourceComponent, Pitch, "音调", Float, hints.Speed = 0.01f; hints.Min = 0.1f;
-                       hints.Max = 3.0f; hints.Format = "%.2f")
+                       hints.Max    = 3.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(AudioSourceComponent, MinDistance, "最小距离", Float, hints.Speed = 0.1f; hints.Min = 0.0f;
-                       hints.Max = 100.0f; hints.Format = "%.1f")
+                       hints.Max    = 100.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY_EX(AudioSourceComponent, MaxDistance, "最大距离", Float, hints.Speed = 1.0f; hints.Min = 0.0f;
-                       hints.Max = 1000.0f; hints.Format = "%.1f")
+                       hints.Max    = 1000.0f;
+                       hints.Format = "%.1f")
     ENGINE_PROPERTY(AudioSourceComponent, Loop, "循环", Bool)
     ENGINE_PROPERTY(AudioSourceComponent, PlayOnStart, "启动播放", Bool)
     ENGINE_PROPERTY(AudioSourceComponent, Spatial, "3D空间音效", Bool)
@@ -283,7 +328,8 @@ namespace Engine
     ENGINE_PROPERTY(VideoPlayerComponent, PlayOnStart, "启动播放", Bool)
     ENGINE_PROPERTY(VideoPlayerComponent, Loop, "循环", Bool)
     ENGINE_PROPERTY_EX(VideoPlayerComponent, Volume, "音量", Float, hints.Speed = 0.01f; hints.Min = 0.0f;
-                       hints.Max = 2.0f; hints.Format = "%.2f")
+                       hints.Max    = 2.0f;
+                       hints.Format = "%.2f")
 
     REGISTER_COMPONENT_BEGIN(VideoPlayerComponent)
     REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI)

@@ -18,8 +18,8 @@ namespace Engine
     Scene::Scene()
     {
         ComponentRegistry::EnsureRegistered();
-        m_RuntimeCoordinator = std::make_unique<SceneRuntimeCoordinator>(
-            m_Registry, m_EntityIndex, m_LifecycleCoordinator, this);
+        m_RuntimeCoordinator =
+            std::make_unique<SceneRuntimeCoordinator>(m_Registry, m_EntityIndex, m_LifecycleCoordinator, this);
     }
 
     Scene::~Scene()
@@ -65,7 +65,7 @@ namespace Engine
                 if (parent && parent.HasComponent<RelationshipComponent>())
                 {
                     auto& parentChildren = parent.GetComponent<RelationshipComponent>().Children;
-                    UUID myUUID = entity.GetUUID();
+                    UUID  myUUID         = entity.GetUUID();
                     parentChildren.erase(
                         std::remove_if(parentChildren.begin(), parentChildren.end(), [myUUID](UUID id)
                                        { return static_cast<uint64_t>(id) == static_cast<uint64_t>(myUUID); }),
@@ -113,8 +113,8 @@ namespace Engine
 
     bool Scene::IsAncestorOf(Entity ancestor, Entity entity)
     {
-        return SceneHierarchyService::IsAncestorOf(m_Registry, m_EntityIndex,
-                                                    (entt::entity)ancestor, (entt::entity)entity);
+        return SceneHierarchyService::IsAncestorOf(m_Registry, m_EntityIndex, (entt::entity)ancestor,
+                                                   (entt::entity)entity);
     }
 
     glm::mat4 Scene::GetWorldTransform(Entity entity)
@@ -128,7 +128,7 @@ namespace Engine
 
     std::vector<Entity> Scene::GetRootEntities()
     {
-        auto entities = SceneHierarchyService::GetRootEntities(m_Registry);
+        auto                entities = SceneHierarchyService::GetRootEntities(m_Registry);
         std::vector<Entity> result;
         for (auto e : entities)
             result.push_back(Entity{e, this});
@@ -160,7 +160,7 @@ namespace Engine
     {
         auto newScene = CreateRef<Scene>();
 
-        newScene->m_ViewportWidth = src->m_ViewportWidth;
+        newScene->m_ViewportWidth  = src->m_ViewportWidth;
         newScene->m_ViewportHeight = src->m_ViewportHeight;
         newScene->m_PhysicsBackend = src->m_PhysicsBackend;
 
@@ -169,12 +169,12 @@ namespace Engine
 
         // Copy all entities
         auto& srcReg = src->m_Registry;
-        auto view = srcReg.view<IDComponent>();
+        auto  view   = srcReg.view<IDComponent>();
         for (auto srcEntity : view)
         {
-            UUID uuid = srcReg.get<IDComponent>(srcEntity).ID;
-            const auto& name = srcReg.get<TagComponent>(srcEntity).Tag;
-            Entity newEntity = newScene->CreateEntityWithUUID(uuid, name);
+            UUID        uuid      = srcReg.get<IDComponent>(srcEntity).ID;
+            const auto& name      = srcReg.get<TagComponent>(srcEntity).Tag;
+            Entity      newEntity = newScene->CreateEntityWithUUID(uuid, name);
 
             if (srcReg.all_of<TransformComponent>(srcEntity))
                 newEntity.GetComponent<TransformComponent>() = srcReg.get<TransformComponent>(srcEntity);
@@ -207,14 +207,14 @@ namespace Engine
 
             if (srcReg.all_of<TerrainComponent>(srcEntity))
             {
-                auto tc = srcReg.get<TerrainComponent>(srcEntity);
+                auto tc      = srcReg.get<TerrainComponent>(srcEntity);
                 tc.MeshDirty = true; // 新场景重建网格（runtime 组件不拷贝）
                 newEntity.AddComponent<TerrainComponent>(tc);
             }
 
             if (srcReg.all_of<ParticleEmitterComponent>(srcEntity))
             {
-                auto pe = srcReg.get<ParticleEmitterComponent>(srcEntity);
+                auto pe                = srcReg.get<ParticleEmitterComponent>(srcEntity);
                 pe.CollisionBurstCount = 0;
                 newEntity.AddComponent<ParticleEmitterComponent>(pe);
             }
@@ -222,11 +222,11 @@ namespace Engine
             // NativeScriptComponent: 只拷贝 ScriptName，不拷运行时实例
             if (srcReg.all_of<NativeScriptComponent>(srcEntity))
             {
-                auto& srcNsc = srcReg.get<NativeScriptComponent>(srcEntity);
-                auto& dstNsc = newEntity.AddComponent<NativeScriptComponent>();
-                dstNsc.ScriptName = srcNsc.ScriptName;
+                auto& srcNsc             = srcReg.get<NativeScriptComponent>(srcEntity);
+                auto& dstNsc             = newEntity.AddComponent<NativeScriptComponent>();
+                dstNsc.ScriptName        = srcNsc.ScriptName;
                 dstNsc.InstantiateScript = srcNsc.InstantiateScript;
-                dstNsc.DestroyScript = srcNsc.DestroyScript;
+                dstNsc.DestroyScript     = srcNsc.DestroyScript;
                 // Instance 不拷贝（运行时创建）
             }
         }
@@ -253,7 +253,7 @@ namespace Engine
 
     void Scene::OnViewportResize(uint32_t width, uint32_t height)
     {
-        m_ViewportWidth = width;
+        m_ViewportWidth  = width;
         m_ViewportHeight = height;
 
         auto view = m_Registry.view<CameraComponent>();
@@ -271,7 +271,7 @@ namespace Engine
         if (!renderer)
             return;
 
-        auto& shadowSystem = renderer->GetShadowSystem();
+        auto& shadowSystem         = renderer->GetShadowSystem();
         shadowSystem.GetSettings() = m_EnvironmentState.Shadow;
         shadowSystem.ResizeShadowMap(m_EnvironmentState.Shadow.MapResolution);
 
@@ -281,14 +281,15 @@ namespace Engine
             renderer->GetSkyboxSystem().LoadSkybox(m_EnvironmentState.SkyboxFacePaths);
 
         // 注册编辑态粒子/流体清理回调（运行时 OnRuntimeStart 会 ClearAll 后重新注册完整版本）
-        m_LifecycleCoordinator.RegisterEntityCleanup([renderer](entt::registry& reg, entt::entity e)
-        {
-            uint32_t eid = static_cast<uint32_t>(e);
-            if (reg.all_of<ParticleEmitterComponent>(e))
-                renderer->ReleaseParticleSystem(eid);
-            if (reg.all_of<FluidEmitterComponent>(e))
-                renderer->ReleaseFluidSystem(eid);
-        });
+        m_LifecycleCoordinator.RegisterEntityCleanup(
+            [renderer](entt::registry& reg, entt::entity e)
+            {
+                uint32_t eid = static_cast<uint32_t>(e);
+                if (reg.all_of<ParticleEmitterComponent>(e))
+                    renderer->ReleaseParticleSystem(eid);
+                if (reg.all_of<FluidEmitterComponent>(e))
+                    renderer->ReleaseFluidSystem(eid);
+            });
     }
 
     // Skybox 委托
@@ -337,11 +338,8 @@ namespace Engine
         if (!m_SceneRenderer)
             return;
 
-        m_EnvironmentState.Shadow = m_SceneRenderer->GetShadowSystem().GetSettings();
+        m_EnvironmentState.Shadow          = m_SceneRenderer->GetShadowSystem().GetSettings();
         m_EnvironmentState.SkyboxFacePaths = m_SceneRenderer->GetSkyboxSystem().GetFacePaths();
     }
 
 } // namespace Engine
-
-
-

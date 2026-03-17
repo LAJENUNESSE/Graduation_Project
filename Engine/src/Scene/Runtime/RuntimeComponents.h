@@ -13,12 +13,12 @@ namespace Engine
     {
         Scope<TerrainMeshData> MeshData;
 
-        TerrainRuntimeComponent() = default;
-        TerrainRuntimeComponent(TerrainRuntimeComponent&&) noexcept = default;
+        TerrainRuntimeComponent()                                              = default;
+        TerrainRuntimeComponent(TerrainRuntimeComponent&&) noexcept            = default;
         TerrainRuntimeComponent& operator=(TerrainRuntimeComponent&&) noexcept = default;
 
         // 不可拷贝（Scope = unique_ptr）
-        TerrainRuntimeComponent(const TerrainRuntimeComponent&) = delete;
+        TerrainRuntimeComponent(const TerrainRuntimeComponent&)            = delete;
         TerrainRuntimeComponent& operator=(const TerrainRuntimeComponent&) = delete;
     };
 

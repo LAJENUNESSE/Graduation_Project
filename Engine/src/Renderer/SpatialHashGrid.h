@@ -21,7 +21,7 @@ namespace Engine
         Ref<ShaderStorageBuffer> GetCellHash() const { return m_CellHash; }
 
         uint32_t GetGridSize() const { return m_GridSize; }
-        float GetCellSize() const { return m_CellSize; }
+        float    GetCellSize() const { return m_CellSize; }
         uint32_t GetTotalCells() const { return m_GridSize * m_GridSize * m_GridSize; }
 
     private:
@@ -37,8 +37,8 @@ namespace Engine
         Ref<Shader> m_PrefixSumShader;
         Ref<Shader> m_ScatterShader;
 
-        uint32_t m_GridSize = 64; // 64^3 = 262144 cells
-        float m_CellSize = 0.2f;  // = 2 * smoothing radius
+        uint32_t m_GridSize     = 64;   // 64^3 = 262144 cells
+        float    m_CellSize     = 0.2f; // = 2 * smoothing radius
         uint32_t m_MaxParticles = 0;
 
         bool m_Initialized = false;

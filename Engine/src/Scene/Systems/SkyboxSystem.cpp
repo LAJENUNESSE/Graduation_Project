@@ -35,9 +35,9 @@ namespace Engine
         // 预计算 BRDF LUT（只需一次，与 skybox 无关）
         if (RendererCapabilities::Get().SupportsComputeShaders)
         {
-            m_BRDFLutShader = Shader::Create("assets/shaders/IBL_BRDF_LUT.glsl");
+            m_BRDFLutShader    = Shader::Create("assets/shaders/IBL_BRDF_LUT.glsl");
             m_IrradianceShader = Shader::Create("assets/shaders/IBL_Irradiance.glsl");
-            m_PrefilterShader = Shader::Create("assets/shaders/IBL_Prefilter.glsl");
+            m_PrefilterShader  = Shader::Create("assets/shaders/IBL_Prefilter.glsl");
 
             // ★ 验证 IBL shader 编译是否成功（RelWithDebInfo 下 assert 不终止，需运行时检查）
             auto validateShader = [](const Ref<Shader>& shader, const char* name)
@@ -104,7 +104,7 @@ namespace Engine
             ENGINE_CORE_ERROR("Skybox requires exactly 6 face paths");
             return;
         }
-        m_FacePaths = facePaths;
+        m_FacePaths     = facePaths;
         m_SkyboxTexture = TextureCubemap::Create(facePaths);
 
         // 加载天空盒后生成 IBL 资源（需要 shader 有效）
@@ -164,7 +164,7 @@ namespace Engine
         // 用 sampler2D 采样 atlas 替代 samplerCube，绕开 compute shader 中
         // texture(samplerCube) 在某些驱动上返回全零的问题
         uint32_t envMapID = m_SkyboxTexture->GetRendererID();
-        int faceSize = static_cast<int>(m_SkyboxTexture->GetWidth());
+        int      faceSize = static_cast<int>(m_SkyboxTexture->GetWidth());
 
         std::vector<uint8_t> atlasPixels(faceSize * 6 * faceSize * 4, 0);
 
@@ -316,7 +316,7 @@ namespace Engine
                     mipSize = 1;
 
                 float roughness = static_cast<float>(mip) / static_cast<float>(PREFILTER_MIP_LEVELS - 1);
-                roughness = std::max(roughness, 0.05f);
+                roughness       = std::max(roughness, 0.05f);
 
                 // immutable storage
                 uint32_t prefilterTemp;

@@ -10,7 +10,7 @@ namespace Engine
 
     struct ScriptEntry
     {
-        const char* DisplayName;
+        const char*                                        DisplayName;
         std::function<std::shared_ptr<ScriptableEntity>()> Factory;
     };
 
@@ -23,7 +23,8 @@ namespace Engine
             return s_Instance;
         }
 
-        void Register(const std::string& name, const char* displayName,
+        void Register(const std::string&                                 name,
+                      const char*                                        displayName,
                       std::function<std::shared_ptr<ScriptableEntity>()> factory)
         {
             m_Scripts[name] = {displayName, std::move(factory)};
@@ -35,10 +36,10 @@ namespace Engine
             if (it == m_Scripts.end())
                 return;
 
-            nsc.ScriptName = name;
-            auto factory = it->second.Factory;
+            nsc.ScriptName        = name;
+            auto factory          = it->second.Factory;
             nsc.InstantiateScript = [factory](NativeScriptComponent& comp) { comp.Instance = factory(); };
-            nsc.DestroyScript = [](NativeScriptComponent& comp) { comp.Instance.reset(); };
+            nsc.DestroyScript     = [](NativeScriptComponent& comp) { comp.Instance.reset(); };
         }
 
         const std::unordered_map<std::string, ScriptEntry>& GetAll() const { return m_Scripts; }

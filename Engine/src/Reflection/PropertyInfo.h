@@ -8,10 +8,10 @@ namespace Engine
 
     struct PropertyInfo
     {
-        const char* Name;
-        const char* DisplayName;
-        PropertyType Type;
-        size_t Offset;
+        const char*   Name;
+        const char*   DisplayName;
+        PropertyType  Type;
+        size_t        Offset;
         PropertyHints Hints;
     };
 

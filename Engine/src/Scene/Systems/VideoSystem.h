@@ -19,7 +19,7 @@ namespace Engine
 
         void DestroyEntityVideo(uint32_t entityID);
 
-        VideoRuntimeStore& GetStore() { return m_Store; }
+        VideoRuntimeStore&       GetStore() { return m_Store; }
         const VideoRuntimeStore& GetStore() const { return m_Store; }
 
     private:

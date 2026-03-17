@@ -50,8 +50,8 @@ namespace Engine
         static void RegisterBuiltins();
         static void ReloadAsset(AssetHandle handle, AssetType type);
 
-        static SlotMap<Texture2D> s_Textures;
-        static SlotMap<Mesh> s_Meshes;
+        static SlotMap<Texture2D>      s_Textures;
+        static SlotMap<Mesh>           s_Meshes;
         static SlotMap<TextureCubemap> s_Cubemaps;
 
         static std::unordered_map<std::string, AssetHandle> s_TexturePathIndex;
@@ -62,8 +62,8 @@ namespace Engine
         static std::unordered_map<AssetHandle, AssetType> s_HandleTypes;
 
         static Scope<AsyncLoadQueue> s_AsyncQueue;
-        static Scope<FileWatcher> s_FileWatcher;
-        static bool s_Initialized;
+        static Scope<FileWatcher>    s_FileWatcher;
+        static bool                  s_Initialized;
     };
 
     // Template specializations
@@ -71,12 +71,12 @@ namespace Engine
     template <> AssetHandle AssetManager::Load<Mesh>(const std::string& path);
     template <> AssetHandle AssetManager::Load<TextureCubemap>(const std::string& path);
 
-    template <> Texture2D* AssetManager::Get<Texture2D>(AssetHandle handle);
-    template <> Mesh* AssetManager::Get<Mesh>(AssetHandle handle);
+    template <> Texture2D*      AssetManager::Get<Texture2D>(AssetHandle handle);
+    template <> Mesh*           AssetManager::Get<Mesh>(AssetHandle handle);
     template <> TextureCubemap* AssetManager::Get<TextureCubemap>(AssetHandle handle);
 
-    template <> Ref<Texture2D> AssetManager::GetRef<Texture2D>(AssetHandle handle);
-    template <> Ref<Mesh> AssetManager::GetRef<Mesh>(AssetHandle handle);
+    template <> Ref<Texture2D>      AssetManager::GetRef<Texture2D>(AssetHandle handle);
+    template <> Ref<Mesh>           AssetManager::GetRef<Mesh>(AssetHandle handle);
     template <> Ref<TextureCubemap> AssetManager::GetRef<TextureCubemap>(AssetHandle handle);
 
     template <> bool AssetManager::IsValid<Texture2D>(AssetHandle handle);

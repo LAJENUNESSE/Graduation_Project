@@ -26,8 +26,8 @@ namespace Engine
 
     private:
         uint32_t m_RendererID = 0;
-        uint32_t m_Size = 0;
-        bool m_Immutable = false;
+        uint32_t m_Size       = 0;
+        bool     m_Immutable  = false;
     };
 
 } // namespace Engine

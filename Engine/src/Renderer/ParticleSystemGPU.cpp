@@ -112,10 +112,10 @@ namespace Engine
             return;
 
         // Load compute shaders
-        m_EmitShader = Shader::Create("assets/shaders/particle_emit.glsl");
-        m_SimulateShader = Shader::Create("assets/shaders/particle_simulate.glsl");
+        m_EmitShader       = Shader::Create("assets/shaders/particle_emit.glsl");
+        m_SimulateShader   = Shader::Create("assets/shaders/particle_simulate.glsl");
         m_RenderArgsShader = Shader::Create("assets/shaders/particle_render_args.glsl");
-        m_BillboardShader = Shader::Create("assets/shaders/particle_billboard.glsl");
+        m_BillboardShader  = Shader::Create("assets/shaders/particle_billboard.glsl");
 
         // SPH shaders (loaded eagerly, only dispatched when SPHEnabled)
         m_SPHShaders = SPHShaderSet::Load();
@@ -125,8 +125,8 @@ namespace Engine
         // NaN or positive life values, causing simulate to treat uninitialized
         // particles as alive and permanently corrupting the dead/alive counters.
         // GPU-only immutable storage: after init, only GPU reads/writes this buffer.
-        uint32_t particleSize = sizeof(GPUParticleData); // 80 bytes
-        uint32_t totalBytes = m_MaxParticles * particleSize;
+        uint32_t             particleSize = sizeof(GPUParticleData); // 80 bytes
+        uint32_t             totalBytes   = m_MaxParticles * particleSize;
         std::vector<uint8_t> zeroData(totalBytes, 0);
         m_ParticleBuffer = ShaderStorageBuffer::CreateGPUOnly(zeroData.data(), totalBytes, 0);
 
@@ -157,15 +157,15 @@ namespace Engine
         glBufferData(GL_COPY_WRITE_BUFFER, sizeof(CounterData), nullptr, GL_STREAM_READ);
         glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 
-        const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const char* vendor   = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
         const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
 
         // VMware SVGA has known instability with advanced compute/indirect paths.
-        bool vmwareDriver = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
+        bool vmwareDriver  = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
         m_VMwareCompatMode = vmwareDriver;
 
-        const char* forceDirect = std::getenv("ENGINE_PARTICLE_DIRECT_DRAW");
-        bool envForceDirect = forceDirect && forceDirect[0] == '1';
+        const char* forceDirect    = std::getenv("ENGINE_PARTICLE_DIRECT_DRAW");
+        bool        envForceDirect = forceDirect && forceDirect[0] == '1';
 
         m_UseIndirectDraw = !(vmwareDriver || envForceDirect);
         if (!m_UseIndirectDraw)
@@ -173,9 +173,9 @@ namespace Engine
             ENGINE_WARN("[Particle] Using direct instanced draw fallback (VMware compatibility mode).");
         }
 
-        const char* allowSPHEnv = std::getenv("ENGINE_ENABLE_SPH_ON_VMWARE");
-        bool allowSPHOnVMware = allowSPHEnv && allowSPHEnv[0] == '1';
-        m_DisableSPHOnDriver = vmwareDriver && !allowSPHOnVMware;
+        const char* allowSPHEnv      = std::getenv("ENGINE_ENABLE_SPH_ON_VMWARE");
+        bool        allowSPHOnVMware = allowSPHEnv && allowSPHEnv[0] == '1';
+        m_DisableSPHOnDriver         = vmwareDriver && !allowSPHOnVMware;
         if (m_DisableSPHOnDriver)
         {
             ENGINE_WARN("[Particle] SPH/PCISPH disabled on VMware for stability. Set ENGINE_ENABLE_SPH_ON_VMWARE=1 to "
@@ -191,12 +191,12 @@ namespace Engine
             m_CudaInitAttempted = true;
             if (!CudaInterop::IsCudaPoisoned() && CudaGLInteropContext::ProbeDeviceMatch())
             {
-                m_CudaInterop = CreateScope<CudaGLInteropContext>();
+                m_CudaInterop      = CreateScope<CudaGLInteropContext>();
                 m_CudaSlotParticle = m_CudaInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
                 m_CudaSlotDeadList = m_CudaInterop->RegisterBuffer(m_DeadList->GetRendererID(), "DeadList");
                 m_CudaSlotAliveList = m_CudaInterop->RegisterBuffer(m_AliveList->GetRendererID(), "AliveList");
-                m_CudaSlotCounter = m_CudaInterop->RegisterBuffer(m_CounterBuffer->GetRendererID(), "CounterBuffer");
-                m_CudaSlotIndirect = m_CudaInterop->RegisterBuffer(m_IndirectArgs->GetRendererID(), "IndirectArgs");
+                m_CudaSlotCounter   = m_CudaInterop->RegisterBuffer(m_CounterBuffer->GetRendererID(), "CounterBuffer");
+                m_CudaSlotIndirect  = m_CudaInterop->RegisterBuffer(m_IndirectArgs->GetRendererID(), "IndirectArgs");
 
                 if (m_CudaSlotParticle >= 0 && m_CudaSlotDeadList >= 0 && m_CudaSlotAliveList >= 0 &&
                     m_CudaSlotCounter >= 0 && m_CudaSlotIndirect >= 0)
@@ -226,7 +226,7 @@ namespace Engine
             return;
 
         // Grid cell size = 2 * smoothing radius (保证邻域在 3x3x3 cell 内)
-        float cellSize = 2.0f * smoothingRadius;
+        float    cellSize = 2.0f * smoothingRadius;
         uint32_t gridSize = 64;
 
         m_Grid.Init(m_MaxParticles, gridSize, cellSize);
@@ -238,7 +238,7 @@ namespace Engine
         if (m_PCISPHInitialized)
             return;
         // PCISPHData: 3 × vec4 = 48 bytes per particle
-        m_PCISPHBuffer = ShaderStorageBuffer::CreateGPUOnly(m_MaxParticles * 48, 1);
+        m_PCISPHBuffer      = ShaderStorageBuffer::CreateGPUOnly(m_MaxParticles * 48, 1);
         m_PCISPHInitialized = true;
     }
 
@@ -249,8 +249,10 @@ namespace Engine
         m_RigidBodyBuffer = ShaderStorageBuffer::Create(MAX_RIGID_BODIES * sizeof(GPURigidBodyData), 3);
     }
 
-    void ParticleSystemGPU::Update(float dt, const glm::vec3& emitterPos, const ParticleEmitterComponent& emitter,
-                                   entt::registry* registry)
+    void ParticleSystemGPU::Update(float                           dt,
+                                   const glm::vec3&                emitterPos,
+                                   const ParticleEmitterComponent& emitter,
+                                   entt::registry*                 registry)
     {
         if (!m_Initialized)
             return;
@@ -296,31 +298,31 @@ namespace Engine
                 if (emitCount > 0)
                 {
                     CudaInterop::EmitParams ep{};
-                    ep.emitterPos[0] = emitterPos.x;
-                    ep.emitterPos[1] = emitterPos.y;
-                    ep.emitterPos[2] = emitterPos.z;
+                    ep.emitterPos[0]    = emitterPos.x;
+                    ep.emitterPos[1]    = emitterPos.y;
+                    ep.emitterPos[2]    = emitterPos.z;
                     ep.emitDirection[0] = emitter.EmitDirection.x;
                     ep.emitDirection[1] = emitter.EmitDirection.y;
                     ep.emitDirection[2] = emitter.EmitDirection.z;
-                    ep.emitAngle = glm::radians(emitter.EmitAngle);
-                    ep.lifeMin = emitter.LifeMin;
-                    ep.lifeMax = emitter.LifeMax;
-                    ep.speedMin = emitter.SpeedMin;
-                    ep.speedMax = emitter.SpeedMax;
-                    ep.sizeStart = emitter.SizeStart;
-                    ep.sizeEnd = emitter.SizeEnd;
-                    ep.startColor[0] = emitter.ColorStart.r;
-                    ep.startColor[1] = emitter.ColorStart.g;
-                    ep.startColor[2] = emitter.ColorStart.b;
-                    ep.startColor[3] = emitter.ColorStart.a;
-                    ep.endColor[0] = emitter.ColorEnd.r;
-                    ep.endColor[1] = emitter.ColorEnd.g;
-                    ep.endColor[2] = emitter.ColorEnd.b;
-                    ep.endColor[3] = emitter.ColorEnd.a;
+                    ep.emitAngle        = glm::radians(emitter.EmitAngle);
+                    ep.lifeMin          = emitter.LifeMin;
+                    ep.lifeMax          = emitter.LifeMax;
+                    ep.speedMin         = emitter.SpeedMin;
+                    ep.speedMax         = emitter.SpeedMax;
+                    ep.sizeStart        = emitter.SizeStart;
+                    ep.sizeEnd          = emitter.SizeEnd;
+                    ep.startColor[0]    = emitter.ColorStart.r;
+                    ep.startColor[1]    = emitter.ColorStart.g;
+                    ep.startColor[2]    = emitter.ColorStart.b;
+                    ep.startColor[3]    = emitter.ColorStart.a;
+                    ep.endColor[0]      = emitter.ColorEnd.r;
+                    ep.endColor[1]      = emitter.ColorEnd.g;
+                    ep.endColor[2]      = emitter.ColorEnd.b;
+                    ep.endColor[3]      = emitter.ColorEnd.a;
                     m_TotalTime += dt;
-                    ep.time = m_TotalTime;
+                    ep.time         = m_TotalTime;
                     ep.maxParticles = m_MaxParticles;
-                    ep.emitCount = emitCount;
+                    ep.emitCount    = emitCount;
 
                     CudaInterop::LaunchEmit(m_CudaInterop->GetMappedPointer(m_CudaSlotParticle),
                                             m_CudaInterop->GetMappedPointer(m_CudaSlotDeadList),
@@ -330,11 +332,11 @@ namespace Engine
                 // Simulate
                 {
                     CudaInterop::SimulateParams sp{};
-                    sp.deltaTime = std::min(dt, 0.05f);
-                    sp.gravity[0] = emitter.Gravity.x;
-                    sp.gravity[1] = emitter.Gravity.y;
-                    sp.gravity[2] = emitter.Gravity.z;
-                    sp.damping = emitter.Damping;
+                    sp.deltaTime    = std::min(dt, 0.05f);
+                    sp.gravity[0]   = emitter.Gravity.x;
+                    sp.gravity[1]   = emitter.Gravity.y;
+                    sp.gravity[2]   = emitter.Gravity.z;
+                    sp.damping      = emitter.Damping;
                     sp.maxParticles = m_MaxParticles;
 
                     CudaInterop::LaunchSimulate(m_CudaInterop->GetMappedPointer(m_CudaSlotParticle),
@@ -353,7 +355,7 @@ namespace Engine
                 if (CudaInterop::IsCudaPoisoned())
                 {
                     ENGINE_WARN("[Particle] CUDA poisoned during compute ({}); permanently falling back to GL compute.",
-                               CudaInterop::GetCudaPoisonReason());
+                                CudaInterop::GetCudaPoisonReason());
                     m_UseCudaPath = false;
                 }
                 else
@@ -373,7 +375,7 @@ namespace Engine
             else
             {
                 ENGINE_WARN("[Particle] CUDA MapAll failed ({}); permanently falling back to GL compute.",
-                           CudaInterop::GetCudaPoisonReason());
+                            CudaInterop::GetCudaPoisonReason());
                 m_UseCudaPath = false;
             }
         }
@@ -427,7 +429,7 @@ namespace Engine
                 if (m_LastAliveCount > 0)
                 {
                     float cellSize = m_Grid.GetCellSize();
-                    int gridSize = static_cast<int>(m_Grid.GetGridSize());
+                    int   gridSize = static_cast<int>(m_Grid.GetGridSize());
 
                     // CPU 侧预计算 SPH kernel 常量（避免 GPU 每粒子每邻居重复计算）
                     SPHKernelParams kp = SPHKernelParams::Compute(emitter.SPH.SmoothingRadius);
@@ -459,9 +461,9 @@ namespace Engine
                         if (emitter.SPH.RigidBodyCoupling && registry)
                         {
                             InitRigidBodyBuffer();
-                            rigidBodyCount = UploadRigidBodiesToBuffer(
-                                registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                RigidBodyUploadFilter::RequireRigidBodyComponent);
+                            rigidBodyCount =
+                                UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                          RigidBodyUploadFilter::RequireRigidBodyComponent);
                         }
 
                         m_PCISPHBuffer->Bind(1);
@@ -558,9 +560,9 @@ namespace Engine
                         if (emitter.SPH.RigidBodyCoupling && registry)
                         {
                             InitRigidBodyBuffer();
-                            rigidBodyCount = UploadRigidBodiesToBuffer(
-                                registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                RigidBodyUploadFilter::RequireRigidBodyComponent);
+                            rigidBodyCount =
+                                UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                          RigidBodyUploadFilter::RequireRigidBodyComponent);
                             m_RigidBodyBuffer->Bind(3);
                         }
                         m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
@@ -586,7 +588,7 @@ namespace Engine
             {
                 // PCISPH handles gravity internally, so pass zero gravity to simulate pass
                 glm::vec3 simGravity = (sphEnabled && emitter.SPH.PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;
-                float simulateDt = std::min(dt, 0.05f);
+                float     simulateDt = std::min(dt, 0.05f);
                 m_SimulateShader->Bind();
                 m_SimulateShader->SetFloat("u_DeltaTime", simulateDt);
                 m_SimulateShader->SetFloat3("u_Gravity", simGravity);
@@ -626,17 +628,17 @@ namespace Engine
                     glBindBuffer(GL_COPY_READ_BUFFER, 0);
 
                     CounterData sanitized = counters;
-                    bool corrected = false;
+                    bool        corrected = false;
 
                     if (sanitized.deadCount > m_MaxParticles)
                     {
                         sanitized.deadCount = m_MaxParticles;
-                        corrected = true;
+                        corrected           = true;
                     }
                     if (sanitized.aliveCount > m_MaxParticles)
                     {
                         sanitized.aliveCount = m_MaxParticles;
-                        corrected = true;
+                        corrected            = true;
                     }
 
                     if (corrected)
@@ -673,7 +675,7 @@ namespace Engine
             glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 
             // 插入栅栏：下一帧检查时拷贝已完成
-            m_ReadbackFence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            m_ReadbackFence   = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
             m_ReadbackPending = true;
         }
     }

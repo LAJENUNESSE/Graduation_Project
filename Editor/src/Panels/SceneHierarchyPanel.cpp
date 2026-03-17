@@ -124,8 +124,8 @@ namespace Engine
                 {
                     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE"))
                     {
-                        uint64_t droppedUUID = *static_cast<const uint64_t*>(payload->Data);
-                        Entity droppedEntity = m_Context->FindEntityByUUID(UUID(droppedUUID));
+                        uint64_t droppedUUID   = *static_cast<const uint64_t*>(payload->Data);
+                        Entity   droppedEntity = m_Context->FindEntityByUUID(UUID(droppedUUID));
                         if (droppedEntity)
                         {
                             if (m_CommandHistory)
@@ -145,8 +145,8 @@ namespace Engine
                 // 空白区域右键菜单（挂在 InvisibleButton 上）
                 if (ImGui::BeginPopupContextItem("##blank_context_menu", ImGuiPopupFlags_MouseButtonRight))
                 {
-                    if (ImGui::MenuItem("\xe5\x88\x9b\xe5\xbb\xba\xe7\xa9\xba\xe5\xae\x9e\xe4\xbd\x93", nullptr,
-                                        false, !m_ReadOnly))
+                    if (ImGui::MenuItem("\xe5\x88\x9b\xe5\xbb\xba\xe7\xa9\xba\xe5\xae\x9e\xe4\xbd\x93", nullptr, false,
+                                        !m_ReadOnly))
                     {
                         if (m_CommandHistory)
                         {
@@ -168,7 +168,8 @@ namespace Engine
             }
 
             // Delete 键批量删除
-            if (!m_ReadOnly && ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete) && !m_SelectedEntities.empty())
+            if (!m_ReadOnly && ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete) &&
+                !m_SelectedEntities.empty())
             {
                 auto toDelete = m_SelectedEntities;
                 m_SelectedEntities.clear();
@@ -201,7 +202,7 @@ namespace Engine
         bool hasChildren = false;
         if (entity.HasComponent<RelationshipComponent>())
         {
-            auto& rel = entity.GetComponent<RelationshipComponent>();
+            auto& rel   = entity.GetComponent<RelationshipComponent>();
             hasChildren = !rel.Children.empty();
         }
 
@@ -238,8 +239,8 @@ namespace Engine
         {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE"))
             {
-                uint64_t droppedUUID = *static_cast<const uint64_t*>(payload->Data);
-                Entity droppedEntity = m_Context->FindEntityByUUID(UUID(droppedUUID));
+                uint64_t droppedUUID   = *static_cast<const uint64_t*>(payload->Data);
+                Entity   droppedEntity = m_Context->FindEntityByUUID(UUID(droppedUUID));
                 if (droppedEntity && droppedEntity != entity)
                 {
                     if (m_CommandHistory)
@@ -262,8 +263,8 @@ namespace Engine
         {
             if (ImGui::MenuItem("\xe5\x88\xa0\xe9\x99\xa4\xe5\xae\x9e\xe4\xbd\x93", nullptr, false, !m_ReadOnly))
                 entityDeleted = true;
-            if (ImGui::MenuItem("\xe8\xa7\xa3\xe9\x99\xa4\xe7\x88\xb6\xe8\x8a\x82\xe7\x82\xb9", nullptr,
-                                false, !m_ReadOnly))
+            if (ImGui::MenuItem("\xe8\xa7\xa3\xe9\x99\xa4\xe7\x88\xb6\xe8\x8a\x82\xe7\x82\xb9", nullptr, false,
+                                !m_ReadOnly))
             {
                 if (m_CommandHistory)
                 {

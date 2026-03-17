@@ -27,12 +27,14 @@ namespace Engine
 
         void Init();
         void Emit(const glm::vec3& emitterPos, const FluidEmitterComponent& emitter);
-        void Update(float dt, const glm::vec3& emitterPos, const FluidEmitterComponent& emitter,
-                    entt::registry* registry = nullptr);
+        void Update(float                        dt,
+                    const glm::vec3&             emitterPos,
+                    const FluidEmitterComponent& emitter,
+                    entt::registry*              registry = nullptr);
 
-        uint32_t GetParticleCount() const { return m_ParticleCount; }
+        uint32_t                 GetParticleCount() const { return m_ParticleCount; }
         Ref<ShaderStorageBuffer> GetParticleBuffer() const { return m_ParticleBuffer; }
-        Ref<VertexArray> GetEmptyVAO() const { return m_EmptyVAO; }
+        Ref<VertexArray>         GetEmptyVAO() const { return m_EmptyVAO; }
 
     private:
         uint32_t m_ParticleCount;
@@ -54,14 +56,14 @@ namespace Engine
         // Empty VAO for instanced draw
         Ref<VertexArray> m_EmptyVAO;
 
-        bool m_Initialized = false;
-        bool m_SPHInitialized = false;
-        float m_TotalTime = 0.0f;
+        bool  m_Initialized    = false;
+        bool  m_SPHInitialized = false;
+        float m_TotalTime      = 0.0f;
 
         // PCISPH
         Ref<ShaderStorageBuffer> m_PCISPHBuffer;    // 48B/particle
         Ref<ShaderStorageBuffer> m_RigidBodyBuffer; // 112B × MAX_RIGID_BODIES
-        bool m_PCISPHInitialized = false;
+        bool                     m_PCISPHInitialized = false;
 
         void InitSPH(float smoothingRadius);
         void InitPCISPH();
@@ -69,10 +71,10 @@ namespace Engine
 
 #ifdef ENGINE_ENABLE_CUDA
         Scope<CudaGLInteropContext> m_CudaInterop;
-        bool m_UseCudaPath = false;
-        bool m_CudaInitAttempted = false;
-        int m_CudaSlotParticle = -1;  // 仅 ParticleBuffer 注册 interop（渲染需要）
-        void* m_CudaSPHCtx = nullptr; // CudaSPHContext（grid + PCISPH + rigidBody）
+        bool                        m_UseCudaPath       = false;
+        bool                        m_CudaInitAttempted = false;
+        int                         m_CudaSlotParticle  = -1;      // 仅 ParticleBuffer 注册 interop（渲染需要）
+        void*                       m_CudaSPHCtx        = nullptr; // CudaSPHContext（grid + PCISPH + rigidBody）
         // CUDA event 计时（Ping-pong 双缓冲）
         CudaTimingHelper m_CudaTiming;
 #endif

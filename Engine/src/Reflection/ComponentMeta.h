@@ -15,15 +15,15 @@ namespace Engine
 
     struct ComponentMeta
     {
-        const char* TypeName;
-        const char* DisplayName;
+        const char*               TypeName;
+        const char*               DisplayName;
         std::vector<PropertyInfo> Properties;
 
         // 类型擦除的组件操作
-        std::function<bool(Scene&, uint32_t)> Has;
-        std::function<void(Scene&, uint32_t)> Add;
-        std::function<void*(Scene&, uint32_t)> Get;
-        std::function<void(Scene&, uint32_t)> Remove;
+        std::function<bool(Scene&, uint32_t)>                   Has;
+        std::function<void(Scene&, uint32_t)>                   Add;
+        std::function<void*(Scene&, uint32_t)>                  Get;
+        std::function<void(Scene&, uint32_t)>                   Remove;
         std::function<void(Scene&, uint32_t, Scene&, uint32_t)> Copy;
 
         // 策略标志（替代 ComponentPolicies.h）
@@ -36,7 +36,7 @@ namespace Engine
         uint32_t Flags = None;
 
         // 类型擦除的快照/恢复（用于 Undo 系统）
-        std::function<std::any(Scene&, uint32_t)> Snapshot;
+        std::function<std::any(Scene&, uint32_t)>              Snapshot;
         std::function<void(Scene&, uint32_t, const std::any&)> Restore;
     };
 
@@ -51,7 +51,7 @@ namespace Engine
         inline ::Engine::ComponentMeta& GetMeta()                                                                      \
         {                                                                                                              \
             static ::Engine::ComponentMeta s_Meta;                                                                     \
-            s_Meta.TypeName = #CompType;                                                                               \
+            s_Meta.TypeName    = #CompType;                                                                            \
             s_Meta.DisplayName = displayName;                                                                          \
             s_Meta.Properties.clear();                                                                                 \
             return s_Meta;                                                                                             \
@@ -67,11 +67,11 @@ namespace Engine
             inline void Register(::Engine::ComponentMeta& meta)                                                        \
             {                                                                                                          \
                 ::Engine::PropertyInfo info;                                                                           \
-                info.Name = #field;                                                                                    \
+                info.Name        = #field;                                                                             \
                 info.DisplayName = displayName;                                                                        \
-                info.Type = ::Engine::PropertyType::propType;                                                          \
-                info.Offset = offsetof(::Engine::CompType, field);                                                     \
-                info.Hints = {};                                                                                       \
+                info.Type        = ::Engine::PropertyType::propType;                                                   \
+                info.Offset      = offsetof(::Engine::CompType, field);                                                \
+                info.Hints       = {};                                                                                 \
                 meta.Properties.push_back(info);                                                                       \
             }                                                                                                          \
         }                                                                                                              \
@@ -86,10 +86,10 @@ namespace Engine
             inline void Register(::Engine::ComponentMeta& meta)                                                        \
             {                                                                                                          \
                 ::Engine::PropertyInfo info;                                                                           \
-                info.Name = #field;                                                                                    \
+                info.Name        = #field;                                                                             \
                 info.DisplayName = displayName;                                                                        \
-                info.Type = ::Engine::PropertyType::propType;                                                          \
-                info.Offset = offsetof(::Engine::CompType, field);                                                     \
+                info.Type        = ::Engine::PropertyType::propType;                                                   \
+                info.Offset      = offsetof(::Engine::CompType, field);                                                \
                 ::Engine::PropertyHints hints{};                                                                       \
                 hintsCode;                                                                                             \
                 info.Hints = hints;                                                                                    \

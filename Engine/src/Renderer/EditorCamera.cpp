@@ -28,23 +28,23 @@ namespace Engine
     void EditorCamera::UpdateProjection()
     {
         m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
-        m_Projection = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearClip, m_FarClip);
+        m_Projection  = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearClip, m_FarClip);
     }
 
     void EditorCamera::UpdateView()
     {
-        m_Position = m_FocalPoint - GetForwardDirection() * m_Distance;
+        m_Position            = m_FocalPoint - GetForwardDirection() * m_Distance;
         glm::quat orientation = GetOrientation();
-        m_ViewMatrix = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
-        m_ViewMatrix = glm::inverse(m_ViewMatrix);
+        m_ViewMatrix          = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
+        m_ViewMatrix          = glm::inverse(m_ViewMatrix);
     }
 
     glm::vec2 EditorCamera::PanSpeed() const
     {
-        float x = std::min(m_ViewportWidth / 1000.0f, 2.4f);
+        float x       = std::min(m_ViewportWidth / 1000.0f, 2.4f);
         float xFactor = 0.0366f * (x * x) - 0.1778f * x + 0.3021f;
 
-        float y = std::min(m_ViewportHeight / 1000.0f, 2.4f);
+        float y       = std::min(m_ViewportHeight / 1000.0f, 2.4f);
         float yFactor = 0.0366f * (y * y) - 0.1778f * y + 0.3021f;
 
         return {xFactor, yFactor};
@@ -58,9 +58,9 @@ namespace Engine
     float EditorCamera::ZoomSpeed() const
     {
         float distance = m_Distance * 0.2f;
-        distance = std::max(distance, 0.0f);
-        float speed = distance * distance;
-        speed = std::min(speed, 100.0f);
+        distance       = std::max(distance, 0.0f);
+        float speed    = distance * distance;
+        speed          = std::min(speed, 100.0f);
         return speed;
     }
 
@@ -68,9 +68,9 @@ namespace Engine
     {
         (void)ts;
 
-        Window& window = Application::Get().GetWindow();
-        bool altPressed = Input::IsKeyPressed(KeyCode::LeftAlt);
-        bool navigationButtonPressed = Input::IsMouseButtonPressed(MouseCode::ButtonMiddle) ||
+        Window& window                  = Application::Get().GetWindow();
+        bool    altPressed              = Input::IsKeyPressed(KeyCode::LeftAlt);
+        bool    navigationButtonPressed = Input::IsMouseButtonPressed(MouseCode::ButtonMiddle) ||
                                        Input::IsMouseButtonPressed(MouseCode::ButtonLeft) ||
                                        Input::IsMouseButtonPressed(MouseCode::ButtonRight);
         bool wantsNavigation = allowInput && altPressed && navigationButtonPressed;
@@ -83,11 +83,11 @@ namespace Engine
                 if (kEnableRawMouseNavigation && window.SupportsRawMouseInput())
                     window.SetRawMouseInput(true);
                 m_InitialMousePosition = Input::GetMousePosition();
-                m_MouseCaptured = true;
+                m_MouseCaptured        = true;
             }
 
-            glm::vec2 mouse = Input::GetMousePosition();
-            glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
+            glm::vec2 mouse        = Input::GetMousePosition();
+            glm::vec2 delta        = (mouse - m_InitialMousePosition) * 0.003f;
             m_InitialMousePosition = mouse;
 
             if (Input::IsMouseButtonPressed(MouseCode::ButtonMiddle))
@@ -155,7 +155,7 @@ namespace Engine
         if (width <= 0.0f || height <= 0.0f)
             return;
 
-        m_ViewportWidth = width;
+        m_ViewportWidth  = width;
         m_ViewportHeight = height;
         UpdateProjection();
     }
@@ -182,13 +182,13 @@ namespace Engine
 
     void EditorCamera::SetViewMatrix(const glm::mat4& viewMatrix)
     {
-        m_ViewMatrix = viewMatrix;
+        m_ViewMatrix      = viewMatrix;
         m_ViewMatrixDirty = true;
 
         glm::mat4 invView = glm::inverse(viewMatrix);
-        m_Position = glm::vec3(invView[3]);
+        m_Position        = glm::vec3(invView[3]);
         glm::vec3 forward = -glm::normalize(glm::vec3(invView[2]));
-        glm::vec3 up = glm::normalize(glm::vec3(invView[1]));
+        glm::vec3 up      = glm::normalize(glm::vec3(invView[1]));
 
         float sinPitch = glm::clamp(-forward.y, -1.0f, 1.0f);
         if (up.y >= 0.0f)
@@ -201,7 +201,7 @@ namespace Engine
                 (sinPitch >= 0.0f) ? glm::pi<float>() - std::asin(sinPitch) : -glm::pi<float>() - std::asin(sinPitch);
         }
 
-        m_Yaw = std::atan2(forward.x, -forward.z);
+        m_Yaw        = std::atan2(forward.x, -forward.z);
         m_FocalPoint = m_Position + forward * m_Distance;
     }
 

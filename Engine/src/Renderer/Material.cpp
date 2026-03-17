@@ -51,43 +51,43 @@ namespace Engine
     void Material::Set(const std::string& name, int value)
     {
         m_IntUniforms[name] = value;
-        m_Dirty = true;
+        m_Dirty             = true;
     }
 
     void Material::Set(const std::string& name, float value)
     {
         m_FloatUniforms[name] = value;
-        m_Dirty = true;
+        m_Dirty               = true;
     }
 
     void Material::Set(const std::string& name, const glm::vec2& value)
     {
         m_Vec2Uniforms[name] = value;
-        m_Dirty = true;
+        m_Dirty              = true;
     }
 
     void Material::Set(const std::string& name, const glm::vec3& value)
     {
         m_Vec3Uniforms[name] = value;
-        m_Dirty = true;
+        m_Dirty              = true;
     }
 
     void Material::Set(const std::string& name, const glm::vec4& value)
     {
         m_Vec4Uniforms[name] = value;
-        m_Dirty = true;
+        m_Dirty              = true;
     }
 
     void Material::Set(const std::string& name, const glm::mat4& value)
     {
         m_Mat4Uniforms[name] = value;
-        m_Dirty = true;
+        m_Dirty              = true;
     }
 
     void Material::SetTexture(uint32_t slot, const Ref<Texture2D>& texture)
     {
         m_Textures[slot] = texture;
-        m_TexturesDirty = true;
+        m_TexturesDirty  = true;
     }
 
 } // namespace Engine

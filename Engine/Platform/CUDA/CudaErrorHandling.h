@@ -11,78 +11,96 @@
 #include <cstdio>
 #include <cuda_runtime.h>
 
-namespace Engine { namespace CudaInterop {
-
-// ---- 通知回调（纯 C 函数指针，nvcc 安全）----
-
-using CudaPoisonNotifyFn = void(*)(const char* reason);
-
-inline CudaPoisonNotifyFn& PoisonNotifyCallback()
+namespace Engine
 {
-    static CudaPoisonNotifyFn s_Callback = nullptr;
-    return s_Callback;
-}
-
-inline void SetCudaPoisonNotify(CudaPoisonNotifyFn fn) { PoisonNotifyCallback() = fn; }
-
-// ---- 全局中毒标记 ----
-
-inline std::atomic<bool>& PoisonFlag()
-{
-    static std::atomic<bool> s_Poisoned{false};
-    return s_Poisoned;
-}
-
-inline const char*& PoisonReasonStorage()
-{
-    static const char* s_Reason = nullptr;
-    return s_Reason;
-}
-
-inline bool IsCudaPoisoned() { return PoisonFlag().load(std::memory_order_relaxed); }
-inline const char* GetCudaPoisonReason() { return PoisonReasonStorage() ? PoisonReasonStorage() : "unknown"; }
-
-inline void PoisonCuda(const char* reason)
-{
-    bool expected = false;
-    if (PoisonFlag().compare_exchange_strong(expected, true))
+    namespace CudaInterop
     {
-        PoisonReasonStorage() = reason;
-        fprintf(stderr, "[CUDA] Context poisoned, all subsequent CUDA calls will be skipped. Reason: %s\n", reason);
-        if (PoisonNotifyCallback())
-            PoisonNotifyCallback()(reason);
-    }
-}
 
-// ---- CUDA_CHECK: 包装 cudaMalloc / cudaMemcpy 等 Runtime API ----
-// 返回 true 表示成功，false 表示失败（同时中毒）
+        // ---- 通知回调（纯 C 函数指针，nvcc 安全）----
 
-#define CUDA_CHECK(call)                                                         \
-    ([&]() -> bool {                                                             \
-        if (::Engine::CudaInterop::IsCudaPoisoned()) return false;               \
-        cudaError_t err__ = (call);                                              \
-        if (err__ != cudaSuccess)                                                \
-        {                                                                        \
-            fprintf(stderr, "[CUDA] %s failed: %s (%s:%d)\n",                   \
-                    #call, cudaGetErrorString(err__), __FILE__, __LINE__);        \
-            ::Engine::CudaInterop::PoisonCuda(cudaGetErrorString(err__));         \
-            return false;                                                        \
-        }                                                                        \
-        return true;                                                             \
-    }())
+        using CudaPoisonNotifyFn = void (*)(const char* reason);
 
-// ---- CUDA_CHECK_KERNEL: 在 <<<>>> 之后调用 cudaGetLastError() ----
-// cudaGetLastError 是零开销调用（不触发同步），用于检测内核启动参数错误
+        inline CudaPoisonNotifyFn& PoisonNotifyCallback()
+        {
+            static CudaPoisonNotifyFn s_Callback = nullptr;
+            return s_Callback;
+        }
 
-#define CUDA_CHECK_KERNEL(name)                                                  \
-    do {                                                                         \
-        cudaError_t err__ = cudaGetLastError();                                  \
-        if (err__ != cudaSuccess)                                                \
-        {                                                                        \
-            fprintf(stderr, "[CUDA] Kernel '%s' launch failed: %s (%s:%d)\n",    \
-                    name, cudaGetErrorString(err__), __FILE__, __LINE__);         \
-            ::Engine::CudaInterop::PoisonCuda(cudaGetErrorString(err__));         \
-        }                                                                        \
+        inline void SetCudaPoisonNotify(CudaPoisonNotifyFn fn)
+        {
+            PoisonNotifyCallback() = fn;
+        }
+
+        // ---- 全局中毒标记 ----
+
+        inline std::atomic<bool>& PoisonFlag()
+        {
+            static std::atomic<bool> s_Poisoned{false};
+            return s_Poisoned;
+        }
+
+        inline const char*& PoisonReasonStorage()
+        {
+            static const char* s_Reason = nullptr;
+            return s_Reason;
+        }
+
+        inline bool IsCudaPoisoned()
+        {
+            return PoisonFlag().load(std::memory_order_relaxed);
+        }
+        inline const char* GetCudaPoisonReason()
+        {
+            return PoisonReasonStorage() ? PoisonReasonStorage() : "unknown";
+        }
+
+        inline void PoisonCuda(const char* reason)
+        {
+            bool expected = false;
+            if (PoisonFlag().compare_exchange_strong(expected, true))
+            {
+                PoisonReasonStorage() = reason;
+                fprintf(stderr, "[CUDA] Context poisoned, all subsequent CUDA calls will be skipped. Reason: %s\n",
+                        reason);
+                if (PoisonNotifyCallback())
+                    PoisonNotifyCallback()(reason);
+            }
+        }
+
+        // ---- CUDA_CHECK: 包装 cudaMalloc / cudaMemcpy 等 Runtime API ----
+        // 返回 true 表示成功，false 表示失败（同时中毒）
+
+#define CUDA_CHECK(call)                                                                                               \
+    (                                                                                                                  \
+        [&]() -> bool                                                                                                  \
+        {                                                                                                              \
+            if (::Engine::CudaInterop::IsCudaPoisoned())                                                               \
+                return false;                                                                                          \
+            cudaError_t err__ = (call);                                                                                \
+            if (err__ != cudaSuccess)                                                                                  \
+            {                                                                                                          \
+                fprintf(stderr, "[CUDA] %s failed: %s (%s:%d)\n", #call, cudaGetErrorString(err__), __FILE__,          \
+                        __LINE__);                                                                                     \
+                ::Engine::CudaInterop::PoisonCuda(cudaGetErrorString(err__));                                          \
+                return false;                                                                                          \
+            }                                                                                                          \
+            return true;                                                                                               \
+        }())
+
+        // ---- CUDA_CHECK_KERNEL: 在 <<<>>> 之后调用 cudaGetLastError() ----
+        // cudaGetLastError 是零开销调用（不触发同步），用于检测内核启动参数错误
+
+#define CUDA_CHECK_KERNEL(name)                                                                                        \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        cudaError_t err__ = cudaGetLastError();                                                                        \
+        if (err__ != cudaSuccess)                                                                                      \
+        {                                                                                                              \
+            fprintf(stderr, "[CUDA] Kernel '%s' launch failed: %s (%s:%d)\n", name, cudaGetErrorString(err__),         \
+                    __FILE__, __LINE__);                                                                               \
+            ::Engine::CudaInterop::PoisonCuda(cudaGetErrorString(err__));                                              \
+        }                                                                                                              \
     } while (0)
 
-}} // namespace Engine::CudaInterop
+    } // namespace CudaInterop
+} // namespace Engine

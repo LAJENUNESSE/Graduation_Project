@@ -24,7 +24,7 @@ namespace Engine
         // clang-format on
 
         m_QuadVAO = VertexArray::Create();
-        auto vb = VertexBuffer::Create(quadVertices, sizeof(quadVertices));
+        auto vb   = VertexBuffer::Create(quadVertices, sizeof(quadVertices));
         vb->SetLayout({
             {ShaderDataType::Float2, "a_Position"},
             {ShaderDataType::Float2, "a_TexCoord"},
@@ -46,14 +46,14 @@ namespace Engine
         if (m_Initialized)
             return;
 
-        m_Width = width;
+        m_Width  = width;
         m_Height = height;
 
         CreateFullscreenQuad();
 
         // Shaders
-        m_DepthShader = Shader::Create("assets/shaders/fluid_depth.glsl");
-        m_SmoothShader = Shader::Create("assets/shaders/fluid_smooth.glsl");
+        m_DepthShader     = Shader::Create("assets/shaders/fluid_depth.glsl");
+        m_SmoothShader    = Shader::Create("assets/shaders/fluid_smooth.glsl");
         m_ThicknessShader = Shader::Create("assets/shaders/fluid_thickness.glsl");
         m_CompositeShader = Shader::Create("assets/shaders/fluid_composite.glsl");
 
@@ -61,9 +61,9 @@ namespace Engine
         {
             FramebufferSpecification spec;
             spec.Attachments = {FramebufferTextureFormat::R32F, FramebufferTextureFormat::DEPTH24STENCIL8};
-            spec.Width = width;
-            spec.Height = height;
-            m_DepthFBO = Framebuffer::Create(spec);
+            spec.Width       = width;
+            spec.Height      = height;
+            m_DepthFBO       = Framebuffer::Create(spec);
         }
 
         // Smooth FBOs: R32F ping-pong pair
@@ -71,18 +71,18 @@ namespace Engine
         {
             FramebufferSpecification spec;
             spec.Attachments = {FramebufferTextureFormat::R32F};
-            spec.Width = width;
-            spec.Height = height;
-            m_SmoothFBO[i] = Framebuffer::Create(spec);
+            spec.Width       = width;
+            spec.Height      = height;
+            m_SmoothFBO[i]   = Framebuffer::Create(spec);
         }
 
         // Thickness FBO: R16F
         {
             FramebufferSpecification spec;
             spec.Attachments = {FramebufferTextureFormat::R16F};
-            spec.Width = width;
-            spec.Height = height;
-            m_ThicknessFBO = Framebuffer::Create(spec);
+            spec.Width       = width;
+            spec.Height      = height;
+            m_ThicknessFBO   = Framebuffer::Create(spec);
         }
 
         // Scene color copy texture (RGBA16F)
@@ -94,7 +94,7 @@ namespace Engine
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
-        m_SceneColorCopyWidth = width;
+        m_SceneColorCopyWidth  = width;
         m_SceneColorCopyHeight = height;
 
         m_Initialized = true;
@@ -107,7 +107,7 @@ namespace Engine
         if (width == 0 || height == 0)
             return;
 
-        m_Width = width;
+        m_Width  = width;
         m_Height = height;
 
         m_DepthFBO->Resize(width, height);
@@ -121,7 +121,7 @@ namespace Engine
             glBindTexture(GL_TEXTURE_2D, m_SceneColorCopyTex);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
             glBindTexture(GL_TEXTURE_2D, 0);
-            m_SceneColorCopyWidth = width;
+            m_SceneColorCopyWidth  = width;
             m_SceneColorCopyHeight = height;
         }
     }
@@ -136,16 +136,21 @@ namespace Engine
         m_Initialized = false;
     }
 
-    void FluidRenderer::Render(const Ref<ShaderStorageBuffer>& particleBuffer, const Ref<VertexArray>& emptyVAO,
-                               uint32_t particleCount, float particleRadius, const glm::mat4& view,
-                               const glm::mat4& projection, uint32_t sceneColorTexID, uint32_t sceneDepthTexID,
-                               const FluidEmitterComponent& emitter)
+    void FluidRenderer::Render(const Ref<ShaderStorageBuffer>& particleBuffer,
+                               const Ref<VertexArray>&         emptyVAO,
+                               uint32_t                        particleCount,
+                               float                           particleRadius,
+                               const glm::mat4&                view,
+                               const glm::mat4&                projection,
+                               uint32_t                        sceneColorTexID,
+                               uint32_t                        sceneDepthTexID,
+                               const FluidEmitterComponent&    emitter)
     {
         if (!m_Initialized || particleCount == 0)
             return;
 
         // Save caller's FBO and GL state
-        int callerFBO = RenderCommand::GetBoundFramebufferID();
+        int     callerFBO = RenderCommand::GetBoundFramebufferID();
         GLfloat savedClearColor[4];
         glGetFloatv(GL_COLOR_CLEAR_VALUE, savedClearColor);
 
@@ -153,7 +158,7 @@ namespace Engine
         particleBuffer->Bind(0);
 
         glm::mat4 invProjection = glm::inverse(projection);
-        glm::mat4 invView = glm::inverse(view);
+        glm::mat4 invView       = glm::inverse(view);
 
         // ================================================================
         // Pass 1: Depth — sphere impostor rendering to R32F

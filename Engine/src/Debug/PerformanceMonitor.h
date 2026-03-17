@@ -14,7 +14,7 @@ namespace Engine
     struct RenderStats
     {
         uint32_t DrawCalls = 0;
-        uint32_t Vertices = 0;
+        uint32_t Vertices  = 0;
         uint32_t Triangles = 0;
     };
 
@@ -52,14 +52,14 @@ namespace Engine
 
         // Fluid compute timing
         GPUTimerQuery& GetFluidComputeGPUTimer() { return m_FluidComputeGPU; }
-        void SetFluidComputeCudaMs(float ms) { m_FluidComputeCudaMs = ms; }
-        void SetFluidUsingCuda(bool v) { m_FluidUsingCuda = v; }
-        bool IsFluidUsingCuda() const { return m_FluidUsingCuda; }
-        void SetFluidActive(bool v) { m_FluidActive = v; }
-        bool IsFluidActive() const { return m_FluidActive; }
+        void           SetFluidComputeCudaMs(float ms) { m_FluidComputeCudaMs = ms; }
+        void           SetFluidUsingCuda(bool v) { m_FluidUsingCuda = v; }
+        bool           IsFluidUsingCuda() const { return m_FluidUsingCuda; }
+        void           SetFluidActive(bool v) { m_FluidActive = v; }
+        bool           IsFluidActive() const { return m_FluidActive; }
 
         // Render stats (modified by RenderCommand::DrawIndexed)
-        RenderStats& GetStats() { return m_Stats; }
+        RenderStats&       GetStats() { return m_Stats; }
         const RenderStats& GetStats() const { return m_Stats; }
 
         // Accessors for ImGui panel
@@ -83,51 +83,51 @@ namespace Engine
 
         // Frame time history (ring buffer for PlotLines)
         static constexpr int FrameHistorySize = 120;
-        const float* GetFrameTimeHistory() const { return m_FrameTimeHistory; }
-        int GetFrameTimeHistoryOffset() const { return m_FrameTimeHistoryOffset; }
+        const float*         GetFrameTimeHistory() const { return m_FrameTimeHistory; }
+        int                  GetFrameTimeHistoryOffset() const { return m_FrameTimeHistoryOffset; }
 
     private:
-        PerformanceMonitor() = default;
-        ~PerformanceMonitor() = default;
-        PerformanceMonitor(const PerformanceMonitor&) = delete;
+        PerformanceMonitor()                                     = default;
+        ~PerformanceMonitor()                                    = default;
+        PerformanceMonitor(const PerformanceMonitor&)            = delete;
         PerformanceMonitor& operator=(const PerformanceMonitor&) = delete;
 
         // CSV output
         std::ofstream m_CsvFile;
-        uint32_t m_FrameNumber = 0;
-        int m_FlushCounter = 0;
+        uint32_t      m_FrameNumber  = 0;
+        int           m_FlushCounter = 0;
 
         // Frame data
         float m_TimestampSeconds = 0.0f;
-        float m_FrameTimeMs = 0.0f;
-        float m_FPS = 0.0f;
+        float m_FrameTimeMs      = 0.0f;
+        float m_FPS              = 0.0f;
 
         // CPU timings
-        float m_ShadowPassCpuMs = 0.0f;
+        float m_ShadowPassCpuMs  = 0.0f;
         float m_SceneRenderCpuMs = 0.0f;
-        float m_ImGuiCpuMs = 0.0f;
-        float m_PollEventsCpuMs = 0.0f;
+        float m_ImGuiCpuMs       = 0.0f;
+        float m_PollEventsCpuMs  = 0.0f;
         float m_SwapBuffersCpuMs = 0.0f;
 
         // GPU timers
         GPUTimerQuery m_ShadowPassGPU;
         GPUTimerQuery m_SceneRenderGPU;
         GPUTimerQuery m_ParticleComputeGPU;
-        float m_ParticleComputeCudaMs = 0.0f;
-        bool m_ParticleUsingCuda = false;
+        float         m_ParticleComputeCudaMs = 0.0f;
+        bool          m_ParticleUsingCuda     = false;
 
         // Fluid GPU timers
         GPUTimerQuery m_FluidComputeGPU;
-        float m_FluidComputeCudaMs = 0.0f;
-        bool m_FluidUsingCuda = false;
-        bool m_FluidActive = false;
+        float         m_FluidComputeCudaMs = 0.0f;
+        bool          m_FluidUsingCuda     = false;
+        bool          m_FluidActive        = false;
 
         // Render stats
         RenderStats m_Stats;
 
         // Frame time history ring buffer
         float m_FrameTimeHistory[FrameHistorySize] = {};
-        int m_FrameTimeHistoryOffset = 0;
+        int   m_FrameTimeHistoryOffset             = 0;
 
         // High-resolution clock for accurate frame timing
         std::chrono::high_resolution_clock::time_point m_FrameStartClock;

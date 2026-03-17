@@ -26,8 +26,10 @@ namespace Engine
         ~ParticleSystemGPU();
 
         void Init();
-        void Update(float dt, const glm::vec3& emitterPos, const ParticleEmitterComponent& emitter,
-                    entt::registry* registry = nullptr);
+        void Update(float                           dt,
+                    const glm::vec3&                emitterPos,
+                    const ParticleEmitterComponent& emitter,
+                    entt::registry*                 registry = nullptr);
         void Render(const glm::mat4& viewMatrix, const glm::mat4& projection);
 
         uint32_t GetMaxParticles() const { return m_MaxParticles; }
@@ -57,47 +59,47 @@ namespace Engine
         // Empty VAO for indirect draw
         Ref<VertexArray> m_EmptyVAO;
 
-        bool m_Initialized = false;
+        bool m_Initialized    = false;
         bool m_SPHInitialized = false;
 
         // PCISPH
         Ref<ShaderStorageBuffer> m_PCISPHBuffer;    // binding 1 during SPH, 48B/particle
         Ref<ShaderStorageBuffer> m_RigidBodyBuffer; // binding 3 during SPH, 112B × MAX_RIGID_BODIES
-        bool m_PCISPHInitialized = false;
-        int m_PCISPHIterationIndex = 0; // 帧间分摊 PCISPH 迭代
+        bool                     m_PCISPHInitialized    = false;
+        int                      m_PCISPHIterationIndex = 0; // 帧间分摊 PCISPH 迭代
 
         void InitPCISPH();
         void InitRigidBodyBuffer();
 
         float m_EmitAccumulator = 0.0f;
-        float m_TotalTime = 0.0f;
+        float m_TotalTime       = 0.0f;
 
         // VMware/Mesa compatibility fallback:
         // use direct instanced draw instead of DrawArraysIndirect.
-        bool m_UseIndirectDraw = true;
-        bool m_VMwareCompatMode = false;
-        bool m_DisableSPHOnDriver = false;
-        bool m_SPHDisableLogged = false;
+        bool     m_UseIndirectDraw         = true;
+        bool     m_VMwareCompatMode        = false;
+        bool     m_DisableSPHOnDriver      = false;
+        bool     m_SPHDisableLogged        = false;
         uint32_t m_AliveCountForDirectDraw = 0;
 
         // 上一帧的活跃粒子数（用于 SPH dispatch）
         uint32_t m_LastAliveCount = 0;
 
         // 异步回读（避免 glGetBufferSubData 同步阻塞）
-        uint32_t m_ReadbackBuffer = 0;   // GL buffer for async copy
-        void* m_ReadbackFence = nullptr; // GLsync fence
-        bool m_ReadbackPending = false;
+        uint32_t m_ReadbackBuffer  = 0;       // GL buffer for async copy
+        void*    m_ReadbackFence   = nullptr; // GLsync fence
+        bool     m_ReadbackPending = false;
 
 #ifdef ENGINE_ENABLE_CUDA
         // CUDA compute sidecar（Phase 1: emit / simulate / render_args）
         Scope<CudaGLInteropContext> m_CudaInterop;
-        bool m_UseCudaPath = false;
-        bool m_CudaInitAttempted = false;
-        int m_CudaSlotParticle = -1;
-        int m_CudaSlotDeadList = -1;
-        int m_CudaSlotAliveList = -1;
-        int m_CudaSlotCounter = -1;
-        int m_CudaSlotIndirect = -1;
+        bool                        m_UseCudaPath       = false;
+        bool                        m_CudaInitAttempted = false;
+        int                         m_CudaSlotParticle  = -1;
+        int                         m_CudaSlotDeadList  = -1;
+        int                         m_CudaSlotAliveList = -1;
+        int                         m_CudaSlotCounter   = -1;
+        int                         m_CudaSlotIndirect  = -1;
 
         // CUDA event 计时（Ping-pong 双缓冲）
         CudaTimingHelper m_CudaTiming;

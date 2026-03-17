@@ -21,11 +21,11 @@ namespace Engine
     GPUTimerQuery::GPUTimerQuery()
     {
         const char* disableEnv = std::getenv("ENGINE_DISABLE_GPU_TIMER");
-        bool envDisable = disableEnv && disableEnv[0] == '1';
+        bool        envDisable = disableEnv && disableEnv[0] == '1';
 
-        const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-        const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-        bool vmwareDriver = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
+        const char* vendor       = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const char* renderer     = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        bool        vmwareDriver = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
 
         m_Disabled = envDisable || vmwareDriver;
         if (m_Disabled)
@@ -64,8 +64,8 @@ namespace Engine
         // Read previous frame's result (if available)
         if (m_FrameCount >= 2)
         {
-            int previousIndex = 1 - m_CurrentIndex;
-            GLuint available = 0;
+            int    previousIndex = 1 - m_CurrentIndex;
+            GLuint available     = 0;
             glGetQueryObjectuiv(m_QueryIDs[previousIndex], GL_QUERY_RESULT_AVAILABLE, &available);
             if (available == GL_TRUE)
             {
@@ -88,7 +88,7 @@ namespace Engine
         {
             glEndQuery(GL_TIME_ELAPSED);
             m_CurrentIndex = 1 - m_CurrentIndex; // Swap buffer
-            m_QueryActive = false;
+            m_QueryActive  = false;
             m_FrameCount++;
         }
     }

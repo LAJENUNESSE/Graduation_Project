@@ -30,11 +30,11 @@ namespace Engine
 
     struct BufferElement
     {
-        std::string Name;
+        std::string    Name;
         ShaderDataType Type;
-        uint32_t Size;
-        uint32_t Offset;
-        bool Normalized;
+        uint32_t       Size;
+        uint32_t       Offset;
+        bool           Normalized;
 
         BufferElement() = default;
 
@@ -70,7 +70,7 @@ namespace Engine
         void CalculateOffsetsAndStride()
         {
             uint32_t offset = 0;
-            m_Stride = 0;
+            m_Stride        = 0;
             for (auto& element : m_Elements)
             {
                 element.Offset = offset;
@@ -80,7 +80,7 @@ namespace Engine
         }
 
         std::vector<BufferElement> m_Elements;
-        uint32_t m_Stride = 0;
+        uint32_t                   m_Stride = 0;
     };
 
     class VertexBuffer
@@ -88,13 +88,13 @@ namespace Engine
     public:
         virtual ~VertexBuffer() = default;
 
-        virtual void Bind() const = 0;
+        virtual void Bind() const   = 0;
         virtual void Unbind() const = 0;
 
         virtual void SetData(const void* data, uint32_t size) = 0;
 
-        virtual const BufferLayout& GetLayout() const = 0;
-        virtual void SetLayout(const BufferLayout& layout) = 0;
+        virtual const BufferLayout& GetLayout() const                     = 0;
+        virtual void                SetLayout(const BufferLayout& layout) = 0;
 
         static Ref<VertexBuffer> Create(uint32_t size);
         static Ref<VertexBuffer> Create(float* vertices, uint32_t size);
@@ -105,7 +105,7 @@ namespace Engine
     public:
         virtual ~IndexBuffer() = default;
 
-        virtual void Bind() const = 0;
+        virtual void Bind() const   = 0;
         virtual void Unbind() const = 0;
 
         virtual uint32_t GetCount() const = 0;

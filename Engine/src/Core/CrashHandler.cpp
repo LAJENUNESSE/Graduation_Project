@@ -44,11 +44,17 @@ namespace Engine
                 // 紧急保存（best-effort，仅主线程执行以避免并发访问非线程安全对象）
                 if (s_EmergencySave && std::this_thread::get_id() == s_MainThreadId)
                 {
-                    try { s_EmergencySave(); } catch (...) {}
+                    try
+                    {
+                        s_EmergencySave();
+                    }
+                    catch (...)
+                    {
+                    }
                 }
 
                 std::error_code ec;
-                const auto dumpDirectory = PathUtils::GetLogsRoot() / "crash";
+                const auto      dumpDirectory = PathUtils::GetLogsRoot() / "crash";
                 std::filesystem::create_directories(dumpDirectory, ec);
 
                 SYSTEMTIME now{};
@@ -59,15 +65,15 @@ namespace Engine
                               now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
 
                 const auto dumpPath = dumpDirectory / dumpFileName;
-                HANDLE dumpFile = CreateFileA(dumpPath.string().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                                              FILE_ATTRIBUTE_NORMAL, nullptr);
+                HANDLE     dumpFile = CreateFileA(dumpPath.string().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                                  FILE_ATTRIBUTE_NORMAL, nullptr);
                 if (dumpFile == INVALID_HANDLE_VALUE)
                     return EXCEPTION_EXECUTE_HANDLER;
 
                 MINIDUMP_EXCEPTION_INFORMATION dumpInfo{};
-                dumpInfo.ThreadId = GetCurrentThreadId();
+                dumpInfo.ThreadId          = GetCurrentThreadId();
                 dumpInfo.ExceptionPointers = exceptionPointers;
-                dumpInfo.ClientPointers = FALSE;
+                dumpInfo.ClientPointers    = FALSE;
 
                 const BOOL dumpResult =
                     MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dumpFile,

@@ -12,9 +12,10 @@ namespace Engine
     class WorldTransformService
     {
     public:
-        static glm::mat4 ComputeWorldTransform(entt::registry& reg, entt::entity entity,
-                                                const SceneEntityIndex& index,
-                                                WorldTransformCache* cache = nullptr);
+        static glm::mat4 ComputeWorldTransform(entt::registry&         reg,
+                                               entt::entity            entity,
+                                               const SceneEntityIndex& index,
+                                               WorldTransformCache*    cache = nullptr);
     };
 
 } // namespace Engine

@@ -16,8 +16,8 @@ namespace Engine
         std::filesystem::create_directories("logs");
 
         // Generate filename: perf_YYYYMMDD_HHMMSS.csv
-        auto now = std::chrono::system_clock::now();
-        auto time = std::chrono::system_clock::to_time_t(now);
+        auto    now  = std::chrono::system_clock::now();
+        auto    time = std::chrono::system_clock::to_time_t(now);
         std::tm tm{};
 #ifdef _MSC_VER
         localtime_s(&tm, &time); // MSVC: 参数顺序相反
@@ -43,7 +43,7 @@ namespace Engine
             ENGINE_CORE_WARN("Failed to open performance CSV: {}", filename.str());
         }
 
-        m_FrameNumber = 0;
+        m_FrameNumber  = 0;
         m_FlushCounter = 0;
     }
 
@@ -66,11 +66,11 @@ namespace Engine
     void PerformanceMonitor::BeginFrame(float timestampSeconds)
     {
         m_TimestampSeconds = timestampSeconds;
-        m_FrameStartClock = std::chrono::high_resolution_clock::now();
+        m_FrameStartClock  = std::chrono::high_resolution_clock::now();
 
         // Reset render stats
         m_Stats.DrawCalls = 0;
-        m_Stats.Vertices = 0;
+        m_Stats.Vertices  = 0;
         m_Stats.Triangles = 0;
 
         // Reset per-frame flags (set to true by subsystems that run this frame)
@@ -80,13 +80,13 @@ namespace Engine
     void PerformanceMonitor::EndFrame()
     {
         // Compute frame time at END so it aligns with CPU sub-timers
-        auto now = std::chrono::high_resolution_clock::now();
+        auto now      = std::chrono::high_resolution_clock::now();
         m_FrameTimeMs = std::chrono::duration<float, std::milli>(now - m_FrameStartClock).count();
-        m_FPS = (m_FrameTimeMs > 0.0f) ? (1000.0f / m_FrameTimeMs) : 0.0f;
+        m_FPS         = (m_FrameTimeMs > 0.0f) ? (1000.0f / m_FrameTimeMs) : 0.0f;
 
         // Update frame time history ring buffer
         m_FrameTimeHistory[m_FrameTimeHistoryOffset] = m_FrameTimeMs;
-        m_FrameTimeHistoryOffset = (m_FrameTimeHistoryOffset + 1) % FrameHistorySize;
+        m_FrameTimeHistoryOffset                     = (m_FrameTimeHistoryOffset + 1) % FrameHistorySize;
 
         m_FrameNumber++;
 
@@ -100,9 +100,8 @@ namespace Engine
                       << "," << std::setprecision(3) << m_SwapBuffersCpuMs << "," << std::setprecision(3)
                       << m_ShadowPassGPU.GetElapsedMs() << "," << std::setprecision(3)
                       << m_SceneRenderGPU.GetElapsedMs() << "," << std::setprecision(3) << GetParticleComputeGpuMs()
-                      << "," << std::setprecision(3) << GetFluidComputeGpuMs()
-                      << "," << std::defaultfloat << m_Stats.DrawCalls << "," << m_Stats.Vertices << ","
-                      << m_Stats.Triangles << "\n";
+                      << "," << std::setprecision(3) << GetFluidComputeGpuMs() << "," << std::defaultfloat
+                      << m_Stats.DrawCalls << "," << m_Stats.Vertices << "," << m_Stats.Triangles << "\n";
 
             // Flush every 60 frames (~1 second at 60fps)
             m_FlushCounter++;

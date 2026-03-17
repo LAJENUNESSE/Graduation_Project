@@ -30,7 +30,7 @@ namespace Engine
         }
 
         // 1. Open input (with timeout for network streams)
-        AVDictionary* opts = nullptr;
+        AVDictionary* opts   = nullptr;
         bool isNetworkStream = url.find("rtsp://") == 0 || url.find("rtmp://") == 0 || url.find("rtp://") == 0 ||
                                url.find("udp://") == 0 || url.find("http://") == 0 || url.find("https://") == 0;
         const std::string sourcePath = isNetworkStream ? url : PathUtils::ResolvePathString(url);
@@ -79,8 +79,8 @@ namespace Engine
         // 4. Open video codec
         if (m_VideoStreamIdx >= 0)
         {
-            AVStream* stream = m_FormatCtx->streams[m_VideoStreamIdx];
-            const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+            AVStream*      stream = m_FormatCtx->streams[m_VideoStreamIdx];
+            const AVCodec* codec  = avcodec_find_decoder(stream->codecpar->codec_id);
             if (!codec)
             {
                 ENGINE_CORE_ERROR("FFmpegDecoder::Open — 未找到视频解码器: codec_id={}",
@@ -125,7 +125,7 @@ namespace Engine
         // 5. Setup video conversion (SwsContext + triple buffer)
         if (m_VideoStreamIdx >= 0 && m_VideoCodecCtx)
         {
-            m_VideoWidth = m_VideoCodecCtx->width;
+            m_VideoWidth  = m_VideoCodecCtx->width;
             m_VideoHeight = m_VideoCodecCtx->height;
 
             m_SwsCtx = sws_getContext(m_VideoWidth, m_VideoHeight, m_VideoCodecCtx->pix_fmt, m_VideoWidth,
@@ -136,8 +136,8 @@ namespace Engine
                 ENGINE_CORE_ERROR("FFmpegDecoder::Open — sws_getContext 失败");
                 avcodec_free_context(&m_VideoCodecCtx);
                 m_VideoStreamIdx = -1;
-                m_VideoWidth = 0;
-                m_VideoHeight = 0;
+                m_VideoWidth     = 0;
+                m_VideoHeight    = 0;
             }
             else
             {
@@ -153,8 +153,8 @@ namespace Engine
         // 6. Open audio codec
         if (m_AudioStreamIdx >= 0)
         {
-            AVStream* stream = m_FormatCtx->streams[m_AudioStreamIdx];
-            const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+            AVStream*      stream = m_FormatCtx->streams[m_AudioStreamIdx];
+            const AVCodec* codec  = avcodec_find_decoder(stream->codecpar->codec_id);
             if (!codec)
             {
                 ENGINE_CORE_ERROR("FFmpegDecoder::Open — 未找到音频解码器: codec_id={}",
@@ -209,7 +209,7 @@ namespace Engine
             else
             {
                 AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
-                AVChannelLayout inLayout = m_AudioCodecCtx->ch_layout;
+                AVChannelLayout inLayout  = m_AudioCodecCtx->ch_layout;
 
                 av_opt_set_chlayout(m_SwrCtx, "in_chlayout", &inLayout, 0);
                 av_opt_set_int(m_SwrCtx, "in_sample_rate", m_AudioCodecCtx->sample_rate, 0);
@@ -232,7 +232,7 @@ namespace Engine
                 else
                 {
                     m_AudioSampleRate = 44100;
-                    m_AudioChannels = 2;
+                    m_AudioChannels   = 2;
 
                     ENGINE_CORE_INFO("FFmpegDecoder::Open — 音频流: 输入 {}Hz {}ch → 输出 44100Hz 2ch S16",
                                      m_AudioCodecCtx->sample_rate, m_AudioCodecCtx->ch_layout.nb_channels);
@@ -297,12 +297,12 @@ namespace Engine
         }
 
         // 4. Reset state
-        m_VideoStreamIdx = -1;
-        m_AudioStreamIdx = -1;
-        m_VideoWidth = 0;
-        m_VideoHeight = 0;
+        m_VideoStreamIdx  = -1;
+        m_AudioStreamIdx  = -1;
+        m_VideoWidth      = 0;
+        m_VideoHeight     = 0;
         m_AudioSampleRate = 0;
-        m_AudioChannels = 0;
+        m_AudioChannels   = 0;
 
         for (auto& buf : m_FrameBuffers)
             buf.clear();
@@ -313,16 +313,16 @@ namespace Engine
         {
             std::lock_guard<std::mutex> lock(m_Mutex);
             m_AudioBuffer.clear();
-            m_HasNewAudio = false;
+            m_HasNewAudio      = false;
             m_AudioSampleCount = 0;
         }
     }
 
     void FFmpegDecoder::DecodeLoop()
     {
-        AVPacket* packet = av_packet_alloc();
-        AVFrame* frame = av_frame_alloc();
-        AVFrame* rgbaFrame = av_frame_alloc();
+        AVPacket* packet    = av_packet_alloc();
+        AVFrame*  frame     = av_frame_alloc();
+        AVFrame*  rgbaFrame = av_frame_alloc();
 
         if (!packet || !frame || !rgbaFrame)
         {
@@ -418,8 +418,8 @@ namespace Engine
 
                     // Resample to S16 stereo
                     std::vector<int16_t> tempBuf(static_cast<size_t>(outSamples) * 2); // stereo = 2 channels
-                    uint8_t* outPtr = reinterpret_cast<uint8_t*>(tempBuf.data());
-                    int converted =
+                    uint8_t*             outPtr = reinterpret_cast<uint8_t*>(tempBuf.data());
+                    int                  converted =
                         swr_convert(m_SwrCtx, &outPtr, outSamples, (const uint8_t**)frame->data, frame->nb_samples);
                     if (converted < 0)
                     {
@@ -434,7 +434,7 @@ namespace Engine
                         std::lock_guard<std::mutex> lock(m_Mutex);
                         m_AudioBuffer.assign(tempBuf.begin(), tempBuf.begin() + converted * 2);
                         m_AudioSampleCount = converted;
-                        m_HasNewAudio = true;
+                        m_HasNewAudio      = true;
                     }
                 }
             }
@@ -481,7 +481,7 @@ namespace Engine
             return nullptr;
         }
         m_HasNewAudio = false;
-        sampleCount = m_AudioSampleCount;
+        sampleCount   = m_AudioSampleCount;
         return m_AudioBuffer.data();
     }
 
