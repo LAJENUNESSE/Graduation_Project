@@ -144,17 +144,21 @@ namespace Engine
             std::any Data;
         };
 
+        // 单个实体的完整快照（包含核心组件 + 数据组件）
+        struct EntitySnapshot
+        {
+            UUID EntityUUID = 0;
+            std::string Name;
+            TransformComponent Transform;
+            RelationshipComponent Relationship;
+            std::vector<ComponentSnapshot> Components;
+        };
+
+        void CollectSubtree(Entity entity);
+
         Ref<Scene> m_Scene;
-        UUID m_EntityUUID;
-        std::string m_EntityName;
-
-        // 核心组件快照（始终存在）
-        TransformComponent m_TransformSnapshot;
-        bool m_HasRelationship = false;
-        RelationshipComponent m_RelationshipSnapshot;
-
-        // 数据驱动组件快照（通过 ComponentRegistry 自动收集）
-        std::vector<ComponentSnapshot> m_ComponentSnapshots;
+        UUID m_OriginalParentUUID = 0; // 根实体删除前的父节点（子树外部）
+        std::vector<EntitySnapshot> m_Snapshots; // DFS 先序（根在前）
     };
 
     // ========== 泛型属性修改命令 ==========

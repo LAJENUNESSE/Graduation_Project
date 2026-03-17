@@ -213,66 +213,108 @@ namespace Engine
     // ==================== EntityDeleteCommand ====================
 
     EntityDeleteCommand::EntityDeleteCommand(Ref<Scene> scene, Entity entity)
-        : m_Scene(scene), m_EntityUUID(entity.GetUUID())
+        : m_Scene(scene)
     {
-        // 保存快照
-        m_EntityName = entity.GetName();
-        m_TransformSnapshot = entity.GetComponent<TransformComponent>();
+        // 记录根实体的外部父节点
+        if (entity.HasComponent<RelationshipComponent>())
+            m_OriginalParentUUID = entity.GetComponent<RelationshipComponent>().ParentID;
 
-        m_HasRelationship = entity.HasComponent<RelationshipComponent>();
-        if (m_HasRelationship)
-            m_RelationshipSnapshot = entity.GetComponent<RelationshipComponent>();
+        // DFS 先序收集整棵子树
+        CollectSubtree(entity);
+    }
 
-        // 通过 ComponentRegistry 自动快照所有注册的组件
+    void EntityDeleteCommand::CollectSubtree(Entity entity)
+    {
+        EntitySnapshot snap;
+        snap.EntityUUID = entity.GetUUID();
+        snap.Name = entity.GetName();
+        snap.Transform = entity.GetComponent<TransformComponent>();
+
+        if (entity.HasComponent<RelationshipComponent>())
+            snap.Relationship = entity.GetComponent<RelationshipComponent>();
+
+        // 通过 ComponentRegistry 快照数据组件
         uint32_t eid = static_cast<uint32_t>(static_cast<entt::entity>(entity));
         for (auto& meta : ComponentRegistry::Instance().GetAll())
         {
             if (meta.Has(*m_Scene, eid) && meta.Snapshot)
-                m_ComponentSnapshots.push_back({meta.TypeName, meta.Snapshot(*m_Scene, eid)});
+                snap.Components.push_back({meta.TypeName, meta.Snapshot(*m_Scene, eid)});
+        }
+
+        m_Snapshots.push_back(std::move(snap));
+
+        // 递归子实体
+        if (entity.HasComponent<RelationshipComponent>())
+        {
+            auto children = entity.GetComponent<RelationshipComponent>().Children;
+            for (auto childUUID : children)
+            {
+                Entity child = m_Scene->FindEntityByUUID(childUUID);
+                if (child)
+                    CollectSubtree(child);
+            }
         }
     }
 
     void EntityDeleteCommand::Execute()
     {
-        Entity entity = m_Scene->FindEntityByUUID(m_EntityUUID);
+        // DestroyEntity 会递归销毁子树
+        Entity entity = m_Scene->FindEntityByUUID(m_Snapshots[0].EntityUUID);
         if (entity)
             m_Scene->DestroyEntity(entity);
     }
 
     void EntityDeleteCommand::Undo()
     {
-        // 重新创建实体并恢复组件（使用原始 UUID 以保持父子关系引用）
-        Entity entity = m_Scene->CreateEntityWithUUID(m_EntityUUID, m_EntityName);
-
-        // 通过快照恢复所有组件
-        uint32_t eid = static_cast<uint32_t>(static_cast<entt::entity>(entity));
-        for (auto& snap : m_ComponentSnapshots)
+        // 步骤 1：重建所有实体 + 恢复数据组件
+        // CreateEntityWithUUID 创建的实体自带默认 RelationshipComponent（ParentID=0, Children={}）
+        for (auto& snap : m_Snapshots)
         {
-            auto* meta = ComponentRegistry::Instance().Find(snap.TypeName.c_str());
-            if (meta && meta->Restore)
-                meta->Restore(*m_Scene, eid, snap.Data);
-        }
+            Entity entity = m_Scene->CreateEntityWithUUID(snap.EntityUUID, snap.Name);
 
-        if (m_HasRelationship)
-        {
-            auto& relationship = entity.GetComponent<RelationshipComponent>();
-            relationship.Children = m_RelationshipSnapshot.Children;
-
-            if (static_cast<uint64_t>(m_RelationshipSnapshot.ParentID) != 0)
+            uint32_t eid = static_cast<uint32_t>(static_cast<entt::entity>(entity));
+            for (auto& compSnap : snap.Components)
             {
-                Entity parent = m_Scene->FindEntityByUUID(m_RelationshipSnapshot.ParentID);
-                if (parent)
-                    m_Scene->SetParent(entity, parent);
+                auto* meta = ComponentRegistry::Instance().Find(compSnap.TypeName.c_str());
+                if (meta && meta->Restore)
+                    meta->Restore(*m_Scene, eid, compSnap.Data);
             }
         }
 
-        // SetParent 会重算本地变换，这里最后覆盖回删除前快照。
-        entity.GetComponent<TransformComponent>() = m_TransformSnapshot;
+        // 步骤 2：恢复子树内部父子关系（跳过根节点 m_Snapshots[0]）
+        for (size_t i = 1; i < m_Snapshots.size(); ++i)
+        {
+            auto& snap = m_Snapshots[i];
+            if (static_cast<uint64_t>(snap.Relationship.ParentID) != 0)
+            {
+                Entity child = m_Scene->FindEntityByUUID(snap.EntityUUID);
+                Entity parent = m_Scene->FindEntityByUUID(snap.Relationship.ParentID);
+                if (child && parent)
+                    m_Scene->SetParent(child, parent);
+            }
+        }
+
+        // 步骤 3：将根实体挂回子树外的原始父节点
+        if (static_cast<uint64_t>(m_OriginalParentUUID) != 0)
+        {
+            Entity root = m_Scene->FindEntityByUUID(m_Snapshots[0].EntityUUID);
+            Entity originalParent = m_Scene->FindEntityByUUID(m_OriginalParentUUID);
+            if (root && originalParent)
+                m_Scene->SetParent(root, originalParent);
+        }
+
+        // 步骤 4：覆盖所有 Transform 快照（SetParent 会重算本地变换，需要恢复原值）
+        for (auto& snap : m_Snapshots)
+        {
+            Entity entity = m_Scene->FindEntityByUUID(snap.EntityUUID);
+            if (entity)
+                entity.GetComponent<TransformComponent>() = snap.Transform;
+        }
     }
 
     std::string EntityDeleteCommand::GetDescription() const
     {
-        return "\xe5\x88\xa0\xe9\x99\xa4\xe5\xae\x9e\xe4\xbd\x93: " + m_EntityName; // 删除实体: xxx
+        return "\xe5\x88\xa0\xe9\x99\xa4\xe5\xae\x9e\xe4\xbd\x93: " + m_Snapshots[0].Name; // 删除实体: xxx
     }
 
     // ==================== PropertyChangeCommand ====================
