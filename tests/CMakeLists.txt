@@ -17,9 +17,40 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
+# ---------------------------------------------------------------------------
+# EngineTestCore — 轻量静态库，仅编译测试所需的少量 Engine 源文件
+# 避免链接完整 Engine 库（OpenGL/OpenAL/Bullet3 等重依赖）
+# ---------------------------------------------------------------------------
+set(ENGINE_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Engine/src)
+
+add_library(EngineTestCore STATIC
+    ${ENGINE_SRC_DIR}/Core/UUID.cpp
+)
+
+target_compile_features(EngineTestCore PUBLIC cxx_std_20)
+
+if(MSVC)
+    target_compile_options(EngineTestCore PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+endif()
+
+target_include_directories(EngineTestCore PUBLIC
+    ${ENGINE_SRC_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glm
+)
+
+target_precompile_headers(EngineTestCore PRIVATE ${ENGINE_SRC_DIR}/engpch.h)
+
+# ---------------------------------------------------------------------------
+# EngineTests — 主测试可执行文件
+# ---------------------------------------------------------------------------
 add_executable(EngineTests
     src/TestAssetHandle.cpp
     src/TestSlotMap.cpp
+    src/TestTimestep.cpp
+    src/TestUUID.cpp
+    src/TestEvents.cpp
+    src/TestCudaParticleTypes.cpp
 )
 
 target_compile_features(EngineTests PUBLIC cxx_std_20)
@@ -29,12 +60,16 @@ if(MSVC)
     target_compile_options(EngineTests PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
 endif()
 
-target_include_directories(EngineTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../Engine/src)
+target_include_directories(EngineTests PRIVATE
+    ${ENGINE_SRC_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Engine/Platform
+)
 
-# We link directly to gtest_main, and we don't necessarily need to link to Engine
-# if we only test header-only pure logic from Engine/src
 target_link_libraries(EngineTests PRIVATE
     gtest_main
+    EngineTestCore
 )
 
 # Enable CTest integration for this executable
