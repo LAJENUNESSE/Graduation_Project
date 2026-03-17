@@ -171,15 +171,17 @@ namespace Engine
 
     void EntityCreateCommand::Execute()
     {
-        if (m_CreatedHandle == entt::null)
+        if (static_cast<uint64_t>(m_EntityUUID) == 0)
         {
+            // 首次创建：分配新 UUID
             Entity entity = m_Scene->CreateEntity(m_Name);
             m_CreatedHandle = static_cast<entt::entity>(entity);
+            m_EntityUUID = entity.GetUUID();
         }
         else
         {
-            // Redo：重新创建（使用新实体）
-            Entity entity = m_Scene->CreateEntity(m_Name);
+            // Redo：使用相同 UUID 重建，保持引用一致性
+            Entity entity = m_Scene->CreateEntityWithUUID(m_EntityUUID, m_Name);
             m_CreatedHandle = static_cast<entt::entity>(entity);
         }
     }
@@ -192,6 +194,7 @@ namespace Engine
             if (entity)
                 m_Scene->DestroyEntity(entity);
             m_CreatedHandle = entt::null;
+            // 不清空 m_EntityUUID，Redo 时需要复用
         }
     }
 

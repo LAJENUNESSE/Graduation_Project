@@ -124,6 +124,7 @@ namespace Engine
         Ref<Scene> m_Scene;
         std::string m_Name;
         entt::entity m_CreatedHandle = entt::null;
+        UUID m_EntityUUID = 0; // 首次 Execute 记录，Redo 时复用
     };
 
     // ========== 实体删除命令 ==========
