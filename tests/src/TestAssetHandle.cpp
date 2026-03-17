@@ -19,8 +19,8 @@ TEST(AssetHandle, ValidHandle)
     EXPECT_TRUE(handle.IsValid());
     EXPECT_TRUE(static_cast<bool>(handle));
 
-    AssetHandle handle2{0, 1}; // valid if generation > 0
-    EXPECT_TRUE(handle2.IsValid());
+    AssetHandle handle2{0, 1}; // Index=0 is always invalid (slot 0 is reserved)
+    EXPECT_FALSE(handle2.IsValid());
 
     AssetHandle handle3{1, 0}; // valid if index > 0
     EXPECT_TRUE(handle3.IsValid());
