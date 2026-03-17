@@ -147,3 +147,7 @@ Always follow this workflow:
 4. Create git commit
 5. Build and verify
 6. Continue
+
+**频繁提交：** 每完成一个小步骤就立即 `git commit`，保存快照。不要攒一大堆改动再提交。
+
+**提交前格式化：** 提交代码之前，使用项目根目录的 `.clang-format` 对本次修改的 C/C++ 源文件（`.h`/`.cpp`）运行 `clang-format -i`，确保代码风格一致。不要格式化 `vendor/` 下的第三方代码。
