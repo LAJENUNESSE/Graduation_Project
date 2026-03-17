@@ -26,7 +26,7 @@
 namespace Engine
 {
 
-    static uint8_t s_GLFWWindowCount = 0;
+    static uint32_t s_GLFWWindowCount = 0;
 
 #ifdef __linux__
     static int X11ErrorHandler(Display*, XErrorEvent* event)

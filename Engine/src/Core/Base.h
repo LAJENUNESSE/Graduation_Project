@@ -2,7 +2,9 @@
 
 #include <memory>
 
+#ifndef BIT
 #define BIT(x) (1 << (x))
+#endif
 
 #define ENGINE_BIND_EVENT_FN(fn) [this](auto&&... args) { return this->fn(std::forward<decltype(args)>(args)...); }
 

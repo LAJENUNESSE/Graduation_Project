@@ -1,4 +1,5 @@
 #include "EditorAssetDescriptor.h"
+#include "Core/Log.h"
 
 namespace Engine
 {
@@ -26,6 +27,7 @@ namespace Engine
             if (entry.Type == type)
                 return entry.Descriptor;
         }
+        ENGINE_CORE_WARN("GetEditorAssetDescriptor: 未注册的 AssetType {0}", static_cast<int>(type));
         return s_NoneDescriptor;
     }
 

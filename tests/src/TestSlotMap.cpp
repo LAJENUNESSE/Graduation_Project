@@ -58,8 +58,9 @@ TEST(SlotMap, RemoveAndGenerationInvalidation)
     EXPECT_EQ(map.Size(), 1);
 
     map.Remove(handle);
-    // Note: Remove adds to freelist but doesn't shrink the vector, so Size() still returns max items created.
-    // The implementation of Size() does `m_Slots.size() - 1`.
+
+    // Size() now tracks active elements, so Remove decrements it
+    EXPECT_EQ(map.Size(), 0);
 
     DummyResource* afterRemove = map.Get(handle);
     EXPECT_EQ(afterRemove, nullptr);

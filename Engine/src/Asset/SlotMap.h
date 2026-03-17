@@ -34,6 +34,7 @@ namespace Engine
                 index = static_cast<uint32_t>(m_Slots.size());
                 m_Slots.push_back({std::move(resource), path, 1});
             }
+            ++m_ActiveCount;
             return {index, m_Slots[index].Generation};
         }
 
@@ -78,6 +79,7 @@ namespace Engine
             slot.Path.clear();
             slot.Generation++;
             m_FreeList.push_back(h.Index);
+            --m_ActiveCount;
         }
 
         const std::string& GetPath(AssetHandle h) const
@@ -91,12 +93,14 @@ namespace Engine
             return slot.Path;
         }
 
-        size_t Size() const { return m_Slots.size() - 1; } // exclude reserved slot 0
+        size_t Size() const { return m_ActiveCount; }
+        size_t Capacity() const { return m_Slots.size() - 1; } // total allocated slots (excl. reserved slot 0)
 
         void Clear()
         {
             m_Slots.clear();
             m_FreeList.clear();
+            m_ActiveCount = 0;
             // Re-reserve slot 0
             m_Slots.push_back({nullptr, "", 0});
         }
@@ -111,6 +115,7 @@ namespace Engine
 
         std::vector<Slot> m_Slots;
         std::vector<uint32_t> m_FreeList;
+        size_t m_ActiveCount = 0;
     };
 
 } // namespace Engine
