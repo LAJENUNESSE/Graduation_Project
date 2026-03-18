@@ -143,9 +143,9 @@
         {
           "name": "develop",
           "agent": "claude-code",
-          "status": "needs_rework",
+          "status": "completed",
           "output": {
-            "summary": "1) 修正 AssetHandle::IsValid() 和 SlotMap 的 contains/erase 逻辑；2) SceneSerializer 反序列化时若模型加载失败则回退 MeshType 为 Cube；3) 测试用例同步匹配新的 IsValid() 行为；4) EditorLayer 自动保存恢复失败时保留 .autosave 文件供用户手动恢复。",
+            "summary": "1) 修正 AssetHandle::IsValid() 和 SlotMap 的 contains/erase 逻辑；2) SceneSerializer 反序列化时若模型加载失败则回退 MeshType 为 Cube；3) 测试用例同步匹配新的 IsValid() 行为；4) EditorLayer 自动保存恢复失败时保留 .autosave 文件供用户手动恢复。5) [返工] SlotMap::Remove() 屏蔽保留槽 index=0，Insert() 加 assert 防御，补充 2 个单测。",
             "files": [
               "Engine/src/Asset/AssetHandle.h",
               "Engine/src/Asset/SlotMap.h",
@@ -213,6 +213,48 @@
           "output": {
             "notes": "审查通过：m_LastFrameTime 改为 double 后，glfwGetTime 的累积精度损失不再提前放大；向 Timestep 的 float 转换仅发生在每帧 delta（短时量）处，链路一致，未见对物理/动画步进的行为回归。"
           }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "task": "物理系统 8 Bug 修复",
+      "description": "Codex 审查发现的 8 个物理系统问题修复，涵盖手写物理、Bullet 后端、GPU/SPH 三大模块。",
+      "commits": [
+        "7dc27ef",
+        "a4aa1ad",
+        "bd59501",
+        "dd0b004",
+        "adbe4a8"
+      ],
+      "stages": [
+        {
+          "name": "develop",
+          "agent": "claude-code",
+          "status": "completed",
+          "output": {
+            "summary": "8 个修复分 4 Phase 实施：P1 Bullet 接触点死条件+外力清零时机+负缩放 abs；P2 Bullet collider offset 用 btCompoundShape 包装；P3 手写刚体惯性张量从标量升级为 mat3；P4 GPU 刚体上传 offset/速度修正+PCISPH 单帧迭代+自适应 grid 重建。",
+            "files": [
+              "Engine/src/Physics/BulletPhysicsWorld.h",
+              "Engine/src/Physics/BulletPhysicsWorld.cpp",
+              "Engine/src/Physics/PhysicsWorld.cpp",
+              "Engine/src/Renderer/SPHCommon.cpp",
+              "Engine/src/Renderer/FluidSystemGPU.cpp",
+              "Engine/src/Renderer/ParticleSystemGPU.cpp",
+              "Engine/src/Renderer/ParticleSystemGPU.h",
+              "Engine/src/Renderer/SpatialHashGrid.h",
+              "Engine/src/Renderer/SpatialHashGrid.cpp",
+              "Engine/Platform/CUDA/CudaSPHPipeline.h",
+              "Engine/Platform/CUDA/CudaSPHPipeline.cu",
+              "assets/shaders/grid_hash.glsl"
+            ],
+            "notes": "构建通过（RelWithDebInfo Editor）。运行时验证要点：Fix 1 长条 box 翻滚轴向差异；Fix 2 不同帧率持续力一致；Fix 3 带 offset collider 碰撞位置正确；Fix 4 trigger 碰撞法线非零；Fix 7 PCISPH 无呼吸振荡。"
+          }
+        },
+        {
+          "name": "review",
+          "agent": "codex",
+          "status": "pending"
         }
       ]
     }
