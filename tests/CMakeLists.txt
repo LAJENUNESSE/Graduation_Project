@@ -31,6 +31,7 @@ add_library(EngineTestCore STATIC
     ${ENGINE_SRC_DIR}/Scene/WorldTransformService.cpp
     ${ENGINE_SRC_DIR}/Scene/SceneCamera.cpp
     ${ENGINE_SRC_DIR}/Physics/CollisionMath.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Editor/src/CommandHistory.cpp
 )
 
 target_compile_features(EngineTestCore PUBLIC cxx_std_20)
@@ -41,6 +42,7 @@ endif()
 
 target_include_directories(EngineTestCore PUBLIC
     ${ENGINE_SRC_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Editor/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/single_include
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glm
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/spdlog/include
@@ -67,6 +69,7 @@ add_executable(EngineTests
     src/TestCudaPoisonState.cpp
     src/TestSPHKernel.cpp
     src/TestSDFMath.cpp
+    src/TestCommandHistory.cpp
 )
 
 target_compile_features(EngineTests PUBLIC cxx_std_20)

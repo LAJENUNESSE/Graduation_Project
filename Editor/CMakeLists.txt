@@ -19,6 +19,7 @@ set(EDITOR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/PlayerController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/RotateScript.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UndoSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/CommandHistory.cpp
 )
 
 add_executable(Editor ${EDITOR_SOURCES})
