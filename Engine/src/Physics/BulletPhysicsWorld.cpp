@@ -381,7 +381,7 @@ namespace Engine
             body->setUserIndex(static_cast<int>(entityId));
             m_DynamicsWorld->addRigidBody(body);
 
-            BodyInfo info{body, terrainShape, motionState, nullptr, false};
+            BodyInfo info{body, terrainShape, nullptr, motionState, nullptr, false};
             m_Bodies[entityId] = info;
         }
     }
