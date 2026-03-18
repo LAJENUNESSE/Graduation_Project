@@ -288,20 +288,33 @@ namespace Engine
         // ======================================================================
 
         // 步骤 1：计算每个粒子的 cell hash + 原子累计 cellCount
+        // usePredictedPos=true 时从 PCISPHData 读取预测位置（PCISPH 迭代 1+）
         __global__ static void HashKernel(GPUParticle* particles,
+                                          PCISPHData*  d_pcisph,
                                           uint32_t*    d_cellHash,
                                           uint32_t*    d_cellCount,
                                           uint32_t     aliveCount,
                                           int          gridSize,
-                                          float        cellSize)
+                                          float        cellSize,
+                                          int          usePredictedPos)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= aliveCount)
                 return;
 
-            float px = particles[i].posAndLife.x;
-            float py = particles[i].posAndLife.y;
-            float pz = particles[i].posAndLife.z;
+            float px, py, pz;
+            if (usePredictedPos && d_pcisph)
+            {
+                px = d_pcisph[i].predictedPosAndPressure.x;
+                py = d_pcisph[i].predictedPosAndPressure.y;
+                pz = d_pcisph[i].predictedPosAndPressure.z;
+            }
+            else
+            {
+                px = particles[i].posAndLife.x;
+                py = particles[i].posAndLife.y;
+                pz = particles[i].posAndLife.z;
+            }
 
             int gx, gy, gz;
             PosToCell(px, py, pz, cellSize, gx, gy, gz);
@@ -334,8 +347,13 @@ namespace Engine
             d_cellStart[i] = 0u;
         }
 
-        void LaunchSPHGridBuild(
-            void* ctxPtr, void* particles, uint32_t aliveCount, int gridSize, float cellSize, void* stream)
+        void LaunchSPHGridBuild(void*    ctxPtr,
+                                void*    particles,
+                                uint32_t aliveCount,
+                                int      gridSize,
+                                float    cellSize,
+                                void*    stream,
+                                bool     usePredictedPos)
         {
             if (IsCudaPoisoned())
                 return;
@@ -352,9 +370,9 @@ namespace Engine
             ClearGridKernel<<<blockCells, 256, 0, strm>>>(ctx->d_cellCount, ctx->d_cellStart, totalCells);
             CUDA_CHECK_KERNEL("ClearGridKernel");
 
-            // 步骤 1：Hash
-            HashKernel<<<blockParts, 256, 0, strm>>>(devP, ctx->d_cellHash, ctx->d_cellCount, aliveCount, gridSize,
-                                                     cellSize);
+            // 步骤 1：Hash（可选使用预测位置）
+            HashKernel<<<blockParts, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellHash, ctx->d_cellCount, aliveCount,
+                                                     gridSize, cellSize, usePredictedPos ? 1 : 0);
             CUDA_CHECK_KERNEL("HashKernel");
 
             // 步骤 2：CUB prefix sum（ExclusiveSum：cellCount → cellStart）

@@ -65,8 +65,7 @@ namespace Engine
         // PCISPH
         Ref<ShaderStorageBuffer> m_PCISPHBuffer;    // binding 1 during SPH, 48B/particle
         Ref<ShaderStorageBuffer> m_RigidBodyBuffer; // binding 3 during SPH, 112B × MAX_RIGID_BODIES
-        bool                     m_PCISPHInitialized    = false;
-        int                      m_PCISPHIterationIndex = 0; // 帧间分摊 PCISPH 迭代
+        bool                     m_PCISPHInitialized = false;
 
         void InitPCISPH();
         void InitRigidBodyBuffer();

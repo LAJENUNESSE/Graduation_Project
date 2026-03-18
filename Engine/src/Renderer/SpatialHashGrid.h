@@ -13,7 +13,7 @@ namespace Engine
     {
     public:
         void Init(uint32_t maxParticles, uint32_t gridSize, float cellSize);
-        void Build(uint32_t aliveCount);
+        void Build(uint32_t aliveCount, bool usePredictedPos = false);
 
         Ref<ShaderStorageBuffer> GetCellStart() const { return m_CellStart; }
         Ref<ShaderStorageBuffer> GetCellCount() const { return m_CellCount; }

@@ -243,17 +243,22 @@ namespace Engine
                             break;
                         auto&     tc     = boxView.get<TransformComponent>(entity);
                         auto&     bc     = boxView.get<BoxColliderComponent>(entity);
-                        glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
+                        glm::quat rot    = glm::quat(tc.Rotation);
+                        glm::mat4 rotMat = glm::toMat4(rot);
                         glm::vec3 absScale =
                             glm::vec3(std::abs(tc.Scale.x), std::abs(tc.Scale.y), std::abs(tc.Scale.z));
                         GPURigidBodyData body{};
-                        body.posAndType  = glm::vec4(tc.Translation + bc.Offset, 0.0f);
+                        body.posAndType  = glm::vec4(tc.Translation + rot * (bc.Offset * tc.Scale), 0.0f);
                         body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
                         body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
                         body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
                         body.halfExtents = glm::vec4(bc.HalfExtents * absScale, 0.0f);
-                        body.linearVel   = glm::vec4(0.0f);
-                        body.angularVel  = glm::vec4(0.0f);
+                        if (registry->all_of<RigidBodyComponent>(entity))
+                        {
+                            auto& rb        = registry->get<RigidBodyComponent>(entity);
+                            body.linearVel  = glm::vec4(rb.LinearVelocity, 0.0f);
+                            body.angularVel = glm::vec4(rb.AngularVelocity, 0.0f);
+                        }
                         bodies.push_back(body);
                     }
                     auto sphereView = registry->view<TransformComponent, SphereColliderComponent>();
@@ -263,16 +268,21 @@ namespace Engine
                             break;
                         auto&            tc     = sphereView.get<TransformComponent>(entity);
                         auto&            sc     = sphereView.get<SphereColliderComponent>(entity);
-                        glm::mat4        rotMat = glm::toMat4(glm::quat(tc.Rotation));
+                        glm::quat        rot    = glm::quat(tc.Rotation);
+                        glm::mat4        rotMat = glm::toMat4(rot);
                         GPURigidBodyData body{};
-                        body.posAndType  = glm::vec4(tc.Translation + sc.Offset, 1.0f);
+                        body.posAndType  = glm::vec4(tc.Translation + rot * (sc.Offset * tc.Scale), 1.0f);
                         body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
                         body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
                         body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
                         float maxScale   = std::max({std::abs(tc.Scale.x), std::abs(tc.Scale.y), std::abs(tc.Scale.z)});
                         body.halfExtents = glm::vec4(sc.Radius * maxScale, 0.0f, 0.0f, 0.0f);
-                        body.linearVel   = glm::vec4(0.0f);
-                        body.angularVel  = glm::vec4(0.0f);
+                        if (registry->all_of<RigidBodyComponent>(entity))
+                        {
+                            auto& rb        = registry->get<RigidBodyComponent>(entity);
+                            body.linearVel  = glm::vec4(rb.LinearVelocity, 0.0f);
+                            body.angularVel = glm::vec4(rb.AngularVelocity, 0.0f);
+                        }
                         bodies.push_back(body);
                     }
                     cudaRigidBodyCount = static_cast<uint32_t>(bodies.size());
@@ -296,6 +306,12 @@ namespace Engine
                     int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
                     for (int iter = 0; iter < iterations; ++iter)
                     {
+                        // 迭代 1+：用预测位置重建 grid
+                        if (iter > 0)
+                        {
+                            CudaInterop::LaunchSPHGridBuild(m_CudaSPHCtx, devParticles, m_ParticleCount, 64, cellSize,
+                                                            stream, true);
+                        }
                         CudaInterop::LaunchPCISPHPredict(m_CudaSPHCtx, devParticles, clampedDt,
                                                          static_cast<int>(m_ParticleCount), stream);
                         CudaInterop::LaunchPCISPHDensity(m_CudaSPHCtx, devParticles, p, ip, stream);
@@ -420,8 +436,22 @@ namespace Engine
                 int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
 
                 // 单帧内完成所有 PCISPH 迭代（Predict → Density → Force）
+                // 自适应 grid 策略：迭代 0 复用原始 grid，迭代 1+ 用预测位置重建
                 for (int iter = 0; iter < iterations; iter++)
                 {
+                    // 迭代 1+：用预测位置重建空间哈希 grid
+                    if (iter > 0)
+                    {
+                        m_PCISPHBuffer->Bind(9); // binding 9: PCISPHData for predicted pos
+                        m_Grid.Build(m_ParticleCount, true);
+                        // 重新绑定 PCISPH 使用的 buffer slots
+                        m_ParticleBuffer->Bind(0);
+                        m_AliveList->Bind(2);
+                        m_PCISPHBuffer->Bind(1);
+                        if (m_RigidBodyBuffer)
+                            m_RigidBodyBuffer->Bind(3);
+                    }
+
                     // Predict: x* = pos + dt * v*
                     m_SPHShaders.PCISPHPredict->Bind();
                     m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));

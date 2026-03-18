@@ -515,30 +515,41 @@ namespace Engine
                         m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
                         m_SPHShaders.PCISPHForce->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
 
-                        // 帧间分摊：每帧只做 1 次 predict→density→force 迭代
-                        m_SPHShaders.PCISPHPredict->Bind();
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                        m_SPHShaders.PCISPHDensity->Bind();
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                        m_SPHShaders.PCISPHForce->Bind();
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                        m_PCISPHIterationIndex++;
-                        if (m_PCISPHIterationIndex >= iterations)
+                        // 单帧内完成所有 PCISPH 迭代（与 FluidSystemGPU 一致）
+                        // 自适应 grid 策略：迭代 0 复用原始 grid，迭代 1+ 用预测位置重建
+                        for (int iter = 0; iter < iterations; iter++)
                         {
-                            // 最后一次迭代完成，apply v* → particle.vel
-                            m_SPHShaders.PCISPHApply->Bind();
-                            m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                            // 迭代 1+：用预测位置重建空间哈希 grid
+                            if (iter > 0)
+                            {
+                                m_PCISPHBuffer->Bind(9); // binding 9: PCISPHData for predicted pos
+                                m_Grid.Build(m_LastAliveCount, true);
+                                // 重新绑定 PCISPH 使用的 buffer slots
+                                m_ParticleBuffer->Bind(0);
+                                m_AliveList->Bind(2);
+                                m_PCISPHBuffer->Bind(1);
+                                if (m_RigidBodyBuffer)
+                                    m_RigidBodyBuffer->Bind(3);
+                            }
+
+                            m_SPHShaders.PCISPHPredict->Bind();
                             RenderCommand::DispatchCompute(sphGroups);
                             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-                            m_PCISPHIterationIndex = 0;
+                            m_SPHShaders.PCISPHDensity->Bind();
+                            RenderCommand::DispatchCompute(sphGroups);
+                            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                            m_SPHShaders.PCISPHForce->Bind();
+                            RenderCommand::DispatchCompute(sphGroups);
+                            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
                         }
+
+                        // 所有迭代完成，apply v* → particle.vel
+                        m_SPHShaders.PCISPHApply->Bind();
+                        m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                        RenderCommand::DispatchCompute(sphGroups);
+                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
                     }
                     else
                     {

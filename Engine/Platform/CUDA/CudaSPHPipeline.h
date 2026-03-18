@@ -60,8 +60,14 @@ namespace Engine
         void SPHUploadRigidBodies(void* ctx, const void* cpuData, uint32_t count);
 
         // ---- Grid Build（3 步合 1 调用，内部用 CUB prefix sum）----
-        void
-        LaunchSPHGridBuild(void* ctx, void* particles, uint32_t aliveCount, int gridSize, float cellSize, void* stream);
+        // usePredictedPos=true 时从 PCISPHData 读取预测位置（PCISPH 迭代 1+）
+        void LaunchSPHGridBuild(void*    ctx,
+                                void*    particles,
+                                uint32_t aliveCount,
+                                int      gridSize,
+                                float    cellSize,
+                                void*    stream,
+                                bool     usePredictedPos = false);
 
         // ---- WCSPH 路径 ----
         void LaunchSPHDensity(void* ctx, void* particles, const SPHParams& p, void* stream);

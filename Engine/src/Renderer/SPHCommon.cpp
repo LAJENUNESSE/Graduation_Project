@@ -61,17 +61,24 @@ namespace Engine
 
             auto&     tc       = boxView.get<TransformComponent>(entity);
             auto&     bc       = boxView.get<BoxColliderComponent>(entity);
-            glm::mat4 rotMat   = glm::toMat4(glm::quat(tc.Rotation));
+            glm::quat rot      = glm::quat(tc.Rotation);
+            glm::mat4 rotMat   = glm::toMat4(rot);
             glm::vec3 absScale = glm::vec3(std::abs(tc.Scale.x), std::abs(tc.Scale.y), std::abs(tc.Scale.z));
 
             GPURigidBodyData body{};
-            body.posAndType  = glm::vec4(tc.Translation + bc.Offset, 0.0f); // w=0 for box
+            // offset 变换：旋转 * (offset * scale)
+            body.posAndType  = glm::vec4(tc.Translation + rot * (bc.Offset * tc.Scale), 0.0f);
             body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
             body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
             body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
             body.halfExtents = glm::vec4(bc.HalfExtents * absScale, 0.0f);
-            body.linearVel   = glm::vec4(0.0f);
-            body.angularVel  = glm::vec4(0.0f);
+            // 从 RigidBodyComponent 读取真实速度
+            if (registry->all_of<RigidBodyComponent>(entity))
+            {
+                auto& rb        = registry->get<RigidBodyComponent>(entity);
+                body.linearVel  = glm::vec4(rb.LinearVelocity, 0.0f);
+                body.angularVel = glm::vec4(rb.AngularVelocity, 0.0f);
+            }
             bodies.push_back(body);
         }
 
@@ -86,17 +93,22 @@ namespace Engine
 
             auto&     tc     = sphereView.get<TransformComponent>(entity);
             auto&     sc     = sphereView.get<SphereColliderComponent>(entity);
-            glm::mat4 rotMat = glm::toMat4(glm::quat(tc.Rotation));
+            glm::quat rot    = glm::quat(tc.Rotation);
+            glm::mat4 rotMat = glm::toMat4(rot);
 
             GPURigidBodyData body{};
-            body.posAndType  = glm::vec4(tc.Translation + sc.Offset, 1.0f); // w=1 for sphere
+            body.posAndType  = glm::vec4(tc.Translation + rot * (sc.Offset * tc.Scale), 1.0f);
             body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
             body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
             body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
             float maxScale   = std::max({std::abs(tc.Scale.x), std::abs(tc.Scale.y), std::abs(tc.Scale.z)});
             body.halfExtents = glm::vec4(sc.Radius * maxScale, 0.0f, 0.0f, 0.0f);
-            body.linearVel   = glm::vec4(0.0f);
-            body.angularVel  = glm::vec4(0.0f);
+            if (registry->all_of<RigidBodyComponent>(entity))
+            {
+                auto& rb        = registry->get<RigidBodyComponent>(entity);
+                body.linearVel  = glm::vec4(rb.LinearVelocity, 0.0f);
+                body.angularVel = glm::vec4(rb.AngularVelocity, 0.0f);
+            }
             bodies.push_back(body);
         }
 

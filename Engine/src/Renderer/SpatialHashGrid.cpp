@@ -38,7 +38,7 @@ namespace Engine
         m_Initialized = true;
     }
 
-    void SpatialHashGrid::Build(uint32_t aliveCount)
+    void SpatialHashGrid::Build(uint32_t aliveCount, bool usePredictedPos)
     {
         if (!m_Initialized || aliveCount == 0)
             return;
@@ -61,6 +61,7 @@ namespace Engine
         m_HashShader->SetInt("u_AliveCount", static_cast<int>(aliveCount));
         m_HashShader->SetInt("u_GridSize", static_cast<int>(m_GridSize));
         m_HashShader->SetFloat("u_CellSize", m_CellSize);
+        m_HashShader->SetInt("u_UsePredictedPos", usePredictedPos ? 1 : 0);
 
         uint32_t hashGroups = (aliveCount + 255) / 256;
         RenderCommand::DispatchCompute(hashGroups);
