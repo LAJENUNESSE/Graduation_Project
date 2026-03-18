@@ -35,6 +35,11 @@ namespace Engine
         return glm::vec3(v.getX(), v.getY(), v.getZ());
     }
 
+    static glm::vec3 AbsVec3(const glm::vec3& v)
+    {
+        return {std::abs(v.x), std::abs(v.y), std::abs(v.z)};
+    }
+
     static btQuaternion EulerToBtQuat(const glm::vec3& euler)
     {
         glm::quat q(euler);
@@ -221,16 +226,17 @@ namespace Engine
             }
             else if (reg.all_of<SphereColliderComponent>(entity))
             {
-                auto& sphere   = reg.get<SphereColliderComponent>(entity);
-                isTrigger      = sphere.IsTrigger;
-                float maxScale = std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
-                shape          = new btSphereShape(sphere.Radius * maxScale);
+                auto& sphere = reg.get<SphereColliderComponent>(entity);
+                isTrigger    = sphere.IsTrigger;
+                float maxScale =
+                    std::max({std::abs(transform.Scale.x), std::abs(transform.Scale.y), std::abs(transform.Scale.z)});
+                shape = new btSphereShape(sphere.Radius * maxScale);
             }
             else if (reg.all_of<BoxColliderComponent>(entity))
             {
                 auto& box = reg.get<BoxColliderComponent>(entity);
                 isTrigger = box.IsTrigger;
-                shape     = new btBoxShape(ToBt(box.HalfExtents * transform.Scale));
+                shape     = new btBoxShape(ToBt(box.HalfExtents * AbsVec3(transform.Scale)));
             }
             else
             {
@@ -400,7 +406,8 @@ namespace Engine
             glm::vec3 bestContactPoint  = {0, 0, 0};
             glm::vec3 bestContactNormal = {0, 0, 0};
 
-            bool hasContact = false;
+            bool hasContact   = false;
+            bool hasBestPoint = false;
             for (int j = 0; j < numContacts; j++)
             {
                 btManifoldPoint& pt = manifold->getContactPoint(j);
@@ -409,8 +416,9 @@ namespace Engine
                 {
                     hasContact    = true;
                     float impulse = pt.getAppliedImpulse();
-                    if (impulse > maxImpulse || !hasContact)
+                    if (!hasBestPoint || impulse > maxImpulse)
                     {
+                        hasBestPoint      = true;
                         maxImpulse        = impulse;
                         bestContactPoint  = ToGlm(pt.getPositionWorldOnB());
                         bestContactNormal = ToGlm(pt.m_normalWorldOnB);

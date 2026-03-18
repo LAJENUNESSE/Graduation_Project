@@ -69,6 +69,17 @@ namespace Engine
             ++steps;
         }
 
+        // 统一清零外力（在所有子步完成后，避免多子步时外力被提前清除）
+        {
+            auto clearView = reg.view<RigidBodyComponent>();
+            for (auto e : clearView)
+            {
+                auto& rb  = clearView.get<RigidBodyComponent>(e);
+                rb.Force  = {0, 0, 0};
+                rb.Torque = {0, 0, 0};
+            }
+        }
+
         // 如果仍有剩余累积（超过最大子步数限制），丢弃避免无限累积
         if (m_Accumulator > FIXED_DT * 2)
             m_Accumulator = 0.0f;
@@ -109,10 +120,6 @@ namespace Engine
                 q                  = glm::normalize(q);
                 transform.Rotation = glm::eulerAngles(q);
             }
-
-            // 清除本帧外力
-            rb.Force  = {0, 0, 0};
-            rb.Torque = {0, 0, 0};
         }
     }
 
