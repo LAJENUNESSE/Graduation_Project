@@ -33,6 +33,56 @@ namespace Engine
                     std::abs(basis[0][2]) * localHalfExtents.x + std::abs(basis[1][2]) * localHalfExtents.y +
                         std::abs(basis[2][2]) * localHalfExtents.z};
         }
+
+        // 根据碰撞器形状计算世界空间逆惯性张量
+        glm::mat3 ComputeWorldInverseInertiaTensor(entt::registry&           reg,
+                                                   entt::entity              entity,
+                                                   const TransformComponent& transform,
+                                                   const RigidBodyComponent& rb)
+        {
+            if (rb.Mass <= 0.0f || rb.FixedRotation)
+                return glm::mat3(0.0f);
+
+            float     m = rb.Mass;
+            glm::mat3 I_local(0.0f); // 局部惯性张量
+
+            if (reg.all_of<BoxColliderComponent>(entity))
+            {
+                auto&     bc  = reg.get<BoxColliderComponent>(entity);
+                glm::vec3 abs = AbsVec3(transform.Scale);
+                glm::vec3 he  = bc.HalfExtents * abs;
+                float     w2  = (2.0f * he.x) * (2.0f * he.x);
+                float     h2  = (2.0f * he.y) * (2.0f * he.y);
+                float     d2  = (2.0f * he.z) * (2.0f * he.z);
+                I_local[0][0] = m / 12.0f * (h2 + d2);
+                I_local[1][1] = m / 12.0f * (w2 + d2);
+                I_local[2][2] = m / 12.0f * (w2 + h2);
+            }
+            else if (reg.all_of<SphereColliderComponent>(entity))
+            {
+                auto& sc = reg.get<SphereColliderComponent>(entity);
+                float maxScale =
+                    std::max({std::abs(transform.Scale.x), std::abs(transform.Scale.y), std::abs(transform.Scale.z)});
+                float r        = sc.Radius * maxScale;
+                float I_scalar = 0.4f * m * r * r; // 2/5 * m * r²
+                I_local        = glm::mat3(I_scalar);
+            }
+            else
+            {
+                // 无碰撞器：球近似 r=1
+                float I_scalar = 0.4f * m;
+                I_local        = glm::mat3(I_scalar);
+            }
+
+            // 逆惯性张量（局部空间，对角矩阵直接取倒数）
+            glm::mat3 I_local_inv(0.0f);
+            for (int i = 0; i < 3; i++)
+                I_local_inv[i][i] = (I_local[i][i] > 1e-8f) ? 1.0f / I_local[i][i] : 0.0f;
+
+            // 转世界空间: R * I_local_inv * R^T
+            glm::mat3 R = glm::mat3_cast(glm::quat(transform.Rotation));
+            return R * I_local_inv * glm::transpose(R);
+        }
     } // namespace
 
     void PhysicsWorld::Init(glm::vec3 gravity)
@@ -106,12 +156,11 @@ namespace Engine
             rb.LinearVelocity += acceleration * dt;
             transform.Translation += rb.LinearVelocity * dt;
 
-            // 角速度积分（简化版：不考虑惯性张量变化）
+            // 角速度积分
             if (!rb.FixedRotation)
             {
-                // 简化惯性张量为标量（球近似）：I = 2/5 * m * r^2，此处简化为 mass
-                float invI = (rb.Mass > 0.0f) ? 1.0f / rb.Mass : 0.0f;
-                rb.AngularVelocity += rb.Torque * invI * dt;
+                glm::mat3 invIWorld = ComputeWorldInverseInertiaTensor(reg, entity, transform, rb);
+                rb.AngularVelocity += invIWorld * rb.Torque * dt;
 
                 // 四元数积分避免万向节锁
                 glm::quat q = glm::quat(transform.Rotation);
@@ -320,9 +369,11 @@ namespace Engine
             float invMassA = (massA > 0.0f) ? 1.0f / massA : 0.0f;
             float invMassB = (massB > 0.0f) ? 1.0f / massB : 0.0f;
 
-            // 简化惯性张量（球近似）：I = 2/5 * m * r^2 ≈ m（简化）
-            float invIA = (rbA && aIsDynamic && !rbA->FixedRotation) ? 1.0f / massA : 0.0f;
-            float invIB = (rbB && bIsDynamic && !rbB->FixedRotation) ? 1.0f / massB : 0.0f;
+            // 世界空间逆惯性张量
+            glm::mat3 invIA = (rbA && aIsDynamic) ? ComputeWorldInverseInertiaTensor(reg, entityA, transformA, *rbA)
+                                                  : glm::mat3(0.0f);
+            glm::mat3 invIB = (rbB && bIsDynamic) ? ComputeWorldInverseInertiaTensor(reg, entityB, transformB, *rbB)
+                                                  : glm::mat3(0.0f);
 
             glm::vec3 n = contact.contactNormal;
 
@@ -375,8 +426,8 @@ namespace Engine
             glm::vec3 rAxN = glm::cross(rA, n);
             glm::vec3 rBxN = glm::cross(rB, n);
 
-            float angularTermA = glm::dot(glm::cross(rAxN * invIA, rA), n);
-            float angularTermB = glm::dot(glm::cross(rBxN * invIB, rB), n);
+            float angularTermA = glm::dot(glm::cross(invIA * rAxN, rA), n);
+            float angularTermB = glm::dot(glm::cross(invIB * rBxN, rB), n);
 
             float denominator = invMassA + invMassB + angularTermA + angularTermB;
             if (denominator < EPSILON)
@@ -393,13 +444,13 @@ namespace Engine
             {
                 rbA->LinearVelocity -= impulse * invMassA;
                 if (!rbA->FixedRotation)
-                    rbA->AngularVelocity -= glm::cross(rA, impulse) * invIA;
+                    rbA->AngularVelocity -= invIA * glm::cross(rA, impulse);
             }
             if (rbB && bIsDynamic)
             {
                 rbB->LinearVelocity += impulse * invMassB;
                 if (!rbB->FixedRotation)
-                    rbB->AngularVelocity += glm::cross(rB, impulse) * invIB;
+                    rbB->AngularVelocity += invIB * glm::cross(rB, impulse);
             }
 
             // ===== 库仑摩擦 =====
@@ -422,8 +473,8 @@ namespace Engine
                 // 切向冲量大小
                 glm::vec3 rAxT       = glm::cross(rA, t);
                 glm::vec3 rBxT       = glm::cross(rB, t);
-                float     angTermA_t = glm::dot(glm::cross(rAxT * invIA, rA), t);
-                float     angTermB_t = glm::dot(glm::cross(rBxT * invIB, rB), t);
+                float     angTermA_t = glm::dot(glm::cross(invIA * rAxT, rA), t);
+                float     angTermB_t = glm::dot(glm::cross(invIB * rBxT, rB), t);
                 float     denom_t    = invMassA + invMassB + angTermA_t + angTermB_t;
 
                 if (denom_t > EPSILON)
@@ -446,13 +497,13 @@ namespace Engine
                     {
                         rbA->LinearVelocity -= frictionImpulse * invMassA;
                         if (!rbA->FixedRotation)
-                            rbA->AngularVelocity -= glm::cross(rA, frictionImpulse) * invIA;
+                            rbA->AngularVelocity -= invIA * glm::cross(rA, frictionImpulse);
                     }
                     if (rbB && bIsDynamic)
                     {
                         rbB->LinearVelocity += frictionImpulse * invMassB;
                         if (!rbB->FixedRotation)
-                            rbB->AngularVelocity += glm::cross(rB, frictionImpulse) * invIB;
+                            rbB->AngularVelocity += invIB * glm::cross(rB, frictionImpulse);
                     }
                 }
             }
