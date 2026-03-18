@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Renderer/SPHCommon.h"
+#include "Renderer/SPHKernelMath.h"
 #include "Scene/Components.h"
 
 #include <cmath>
@@ -26,13 +27,14 @@ namespace Engine
 
     SPHKernelParams SPHKernelParams::Compute(float smoothingRadius)
     {
+        auto coeffs = SPHKernelMath::Compute(smoothingRadius);
         SPHKernelParams p;
-        p.h          = smoothingRadius;
-        p.h2         = p.h * p.h;
-        p.h6         = p.h2 * p.h2 * p.h2;
-        p.h9         = p.h6 * p.h2 * p.h;
-        p.poly6Coeff = 315.0f / (64.0f * glm::pi<float>() * p.h9);
-        p.spikyCoeff = -45.0f / (glm::pi<float>() * p.h6);
+        p.h          = coeffs.h;
+        p.h2         = coeffs.h2;
+        p.h6         = coeffs.h6;
+        p.h9         = coeffs.h9;
+        p.poly6Coeff = coeffs.poly6Coeff;
+        p.spikyCoeff = coeffs.spikyCoeff;
         return p;
     }
 

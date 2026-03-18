@@ -64,6 +64,9 @@ add_executable(EngineTests
     src/TestSceneHierarchy.cpp
     src/TestWorldTransform.cpp
     src/TestCollisionMath.cpp
+    src/TestCudaPoisonState.cpp
+    src/TestSPHKernel.cpp
+    src/TestSDFMath.cpp
 )
 
 target_compile_features(EngineTests PUBLIC cxx_std_20)
