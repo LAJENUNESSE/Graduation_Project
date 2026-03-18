@@ -28,6 +28,7 @@ namespace Engine
 
         std::vector<ConsoleLogEntry> CopyEntries();
         void                         ClearEntries();
+        uint64_t                     GetVersion() const;
 
     protected:
         void sink_it_(const spdlog::details::log_msg& msg) override;
@@ -35,6 +36,7 @@ namespace Engine
 
     private:
         std::vector<ConsoleLogEntry> m_Entries;
+        uint64_t                     m_Version = 0;
     };
 
     // ========== 控制台面板 ==========
@@ -63,6 +65,10 @@ namespace Engine
         char m_SearchBuffer[256] = {};
         bool m_AutoScroll        = true;
         bool m_ScrollToBottom    = false;
+
+        // 日志缓存：仅在版本变化时拷贝
+        std::vector<ConsoleLogEntry> m_CachedEntries;
+        uint64_t                     m_CachedVersion = 0;
     };
 
 } // namespace Engine

@@ -16,6 +16,7 @@ namespace Engine
         Ref<VertexArray> VAO;
         Ref<Material>    Mat;
         glm::mat4        Transform{1.0f};
+        glm::mat3        NormalMatrix{1.0f};
         int              EntityID = -1;
 
         // 排序键：基于 Shader 指针地址，用于按材质/shader 分组以减少状态切换

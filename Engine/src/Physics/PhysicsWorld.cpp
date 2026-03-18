@@ -305,15 +305,6 @@ namespace Engine
         return CollisionMath::SphereSphere(posA, radiusA, posB, radiusB, info);
     }
 
-    bool PhysicsWorld::AABBAABB(const glm::vec3& posA,
-                                const glm::vec3& halfA,
-                                const glm::vec3& posB,
-                                const glm::vec3& halfB,
-                                CollisionInfo&   info)
-    {
-        return CollisionMath::AABBAABB(posA, halfA, posB, halfB, info);
-    }
-
     bool PhysicsWorld::OBBOBB(const glm::vec3& posA,
                               const glm::vec3& halfA,
                               const glm::quat& rotA,

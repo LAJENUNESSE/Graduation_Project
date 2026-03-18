@@ -13,8 +13,10 @@ namespace Engine
     void RenderQueue::Submit(const RenderPacket& packet)
     {
         m_Packets.push_back(packet);
-        // 计算排序键：使用 Shader 裸指针地址，相同 shader 的 packet 会被分组到一起
         auto& p = m_Packets.back();
+        // 预计算法线矩阵，避免 Flush 时逐 draw call 求逆
+        p.NormalMatrix = glm::transpose(glm::inverse(glm::mat3(p.Transform)));
+        // 计算排序键：使用 Shader 裸指针地址，相同 shader 的 packet 会被分组到一起
         if (p.Mat && p.Mat->GetShader())
             p.SortKey = reinterpret_cast<uintptr_t>(p.Mat->GetShader().get());
     }
@@ -43,7 +45,7 @@ namespace Engine
                 const auto& shader = packet.Mat->GetShader();
                 shader->SetMat4("u_ViewProjection", viewProjection);
                 shader->SetMat4("u_Transform", packet.Transform);
-                shader->SetMat3("u_NormalMatrix", glm::transpose(glm::inverse(glm::mat3(packet.Transform))));
+                shader->SetMat3("u_NormalMatrix", packet.NormalMatrix);
             }
 
             packet.VAO->Bind();

@@ -32,7 +32,7 @@ namespace Engine
 
         // 限制历史条数
         if (m_UndoStack.size() > MaxHistory)
-            m_UndoStack.erase(m_UndoStack.begin());
+            m_UndoStack.pop_front();
 
         if (m_ModifiedCallback)
             m_ModifiedCallback();

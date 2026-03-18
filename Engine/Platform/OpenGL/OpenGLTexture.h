@@ -30,6 +30,8 @@ namespace Engine
         }
 
     private:
+        void InitStorage();
+
         std::string  m_Path;
         uint32_t     m_Width;
         uint32_t     m_Height;

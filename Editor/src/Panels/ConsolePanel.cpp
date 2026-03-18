@@ -21,6 +21,13 @@ namespace Engine
     {
         std::lock_guard<std::mutex> lock(mutex_);
         m_Entries.clear();
+        ++m_Version;
+    }
+
+    uint64_t ImGuiConsoleSink::GetVersion() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return m_Version;
     }
 
     void ImGuiConsoleSink::sink_it_(const spdlog::details::log_msg& msg)
@@ -47,6 +54,8 @@ namespace Engine
         // 环形缓冲区：超过最大条数时删除最早的
         if (m_Entries.size() > MaxEntries)
             m_Entries.erase(m_Entries.begin());
+
+        ++m_Version;
     }
 
     // ==================== ConsolePanel ====================
@@ -153,7 +162,15 @@ namespace Engine
         // 日志内容区域
         ImGui::BeginChild("ConsoleScrollRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 
-        const auto  entries = m_Sink->CopyEntries();
+        // 仅在日志有变化时拷贝
+        uint64_t currentVersion = m_Sink->GetVersion();
+        if (currentVersion != m_CachedVersion)
+        {
+            m_CachedEntries = m_Sink->CopyEntries();
+            m_CachedVersion = currentVersion;
+        }
+
+        const auto& entries = m_CachedEntries;
         std::string searchStr(m_SearchBuffer);
 
         for (const auto& entry : entries)

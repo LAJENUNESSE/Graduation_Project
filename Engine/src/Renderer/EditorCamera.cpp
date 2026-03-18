@@ -13,10 +13,6 @@
 
 namespace Engine
 {
-    namespace
-    {
-        constexpr bool kEnableRawMouseNavigation = false;
-    }
 
     EditorCamera::EditorCamera(float fov, float aspectRatio, float nearClip, float farClip)
         : m_FOV(fov), m_AspectRatio(aspectRatio), m_NearClip(nearClip), m_FarClip(farClip)
@@ -80,8 +76,6 @@ namespace Engine
             if (!m_MouseCaptured)
             {
                 window.SetCursorMode(Window::CursorMode::Disabled);
-                if (kEnableRawMouseNavigation && window.SupportsRawMouseInput())
-                    window.SetRawMouseInput(true);
                 m_InitialMousePosition = Input::GetMousePosition();
                 m_MouseCaptured        = true;
             }
@@ -117,16 +111,14 @@ namespace Engine
         {
             if (m_MouseCaptured)
             {
-                if (window.IsRawMouseInputEnabled())
-                    window.SetRawMouseInput(false);
                 window.SetCursorMode(Window::CursorMode::Normal);
                 m_MouseCaptured = false;
             }
             m_InitialMousePosition = Input::GetMousePosition();
         }
 
-        if (m_ViewMatrixDirty)
-            m_ViewMatrixDirty = false;
+        if (m_ViewMatrixOverridden)
+            m_ViewMatrixOverridden = false;
         else
             UpdateView();
     }
@@ -182,8 +174,8 @@ namespace Engine
 
     void EditorCamera::SetViewMatrix(const glm::mat4& viewMatrix)
     {
-        m_ViewMatrix      = viewMatrix;
-        m_ViewMatrixDirty = true;
+        m_ViewMatrix           = viewMatrix;
+        m_ViewMatrixOverridden = true;
 
         glm::mat4 invView = glm::inverse(viewMatrix);
         m_Position        = glm::vec3(invView[3]);

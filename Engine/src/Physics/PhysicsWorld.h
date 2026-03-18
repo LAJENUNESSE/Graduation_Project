@@ -28,12 +28,6 @@ namespace Engine
         bool
         SphereSphere(const glm::vec3& posA, float radiusA, const glm::vec3& posB, float radiusB, CollisionInfo& info);
 
-        bool AABBAABB(const glm::vec3& posA,
-                      const glm::vec3& halfA,
-                      const glm::vec3& posB,
-                      const glm::vec3& halfB,
-                      CollisionInfo&   info);
-
         bool OBBOBB(const glm::vec3& posA,
                     const glm::vec3& halfA,
                     const glm::quat& rotA,

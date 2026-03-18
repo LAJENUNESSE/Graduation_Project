@@ -67,10 +67,10 @@ namespace Engine
         glm::vec3 m_Position   = {0.0f, 0.0f, 5.0f};
         glm::vec3 m_FocalPoint = {0.0f, 0.0f, 0.0f};
 
-        float m_Distance        = 10.0f;
-        float m_Pitch           = 0.0f;
-        float m_Yaw             = 0.0f;
-        bool  m_ViewMatrixDirty = false;
+        float m_Distance             = 10.0f;
+        float m_Pitch                = 0.0f;
+        float m_Yaw                  = 0.0f;
+        bool  m_ViewMatrixOverridden = false;
 
         glm::vec2 m_InitialMousePosition = {0.0f, 0.0f};
         bool      m_MouseCaptured        = false;

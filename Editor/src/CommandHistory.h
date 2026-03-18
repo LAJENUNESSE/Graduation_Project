@@ -5,9 +5,9 @@
 
 #include "Core/Base.h"
 
+#include <deque>
 #include <functional>
 #include <string>
-#include <vector>
 
 namespace Engine
 {
@@ -54,10 +54,10 @@ namespace Engine
     private:
         void PushUndoEntry(Ref<ICommand> cmd);
 
-        std::vector<Ref<ICommand>> m_UndoStack;
-        std::vector<Ref<ICommand>> m_RedoStack;
-        bool                       m_Suspended = false;
-        ModifiedCallback           m_ModifiedCallback;
+        std::deque<Ref<ICommand>> m_UndoStack;
+        std::deque<Ref<ICommand>> m_RedoStack;
+        bool                      m_Suspended = false;
+        ModifiedCallback          m_ModifiedCallback;
     };
 
 } // namespace Engine
