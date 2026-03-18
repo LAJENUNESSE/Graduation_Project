@@ -58,12 +58,13 @@ namespace Engine
 
     void OpenGLStorageBuffer::Bind(uint32_t binding) const
     {
+        m_LastBinding = binding;
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, m_RendererID);
     }
 
     void OpenGLStorageBuffer::Unbind() const
     {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, m_LastBinding, 0);
     }
 
     void OpenGLStorageBuffer::SetData(const void* data, uint32_t size, uint32_t offset)

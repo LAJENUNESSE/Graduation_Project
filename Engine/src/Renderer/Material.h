@@ -39,10 +39,6 @@ namespace Engine
         std::unordered_map<std::string, glm::vec4>   m_Vec4Uniforms;
         std::unordered_map<std::string, glm::mat4>   m_Mat4Uniforms;
         std::unordered_map<uint32_t, Ref<Texture2D>> m_Textures;
-
-        // 脏标记：仅在 uniform/纹理变更后才重新上传，减少 GL 调用
-        mutable bool m_Dirty         = true;
-        mutable bool m_TexturesDirty = true;
     };
 
 } // namespace Engine

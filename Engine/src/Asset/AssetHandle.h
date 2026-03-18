@@ -11,7 +11,7 @@ namespace Engine
         uint32_t Index      = 0;
         uint32_t Generation = 0;
 
-        bool     IsValid() const { return Index != 0; }
+        bool     IsValid() const { return Index != 0 && Generation != 0; }
         bool     operator==(const AssetHandle& o) const { return Index == o.Index && Generation == o.Generation; }
         bool     operator!=(const AssetHandle& o) const { return !(*this == o); }
         explicit operator bool() const { return IsValid(); }

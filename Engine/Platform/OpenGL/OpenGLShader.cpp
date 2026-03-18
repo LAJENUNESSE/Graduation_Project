@@ -296,7 +296,14 @@ namespace Engine
 
         GLint location = glGetUniformLocation(m_RendererID, name.c_str());
         if (location == -1)
-            ENGINE_CORE_WARN("Uniform '{0}' not found in shader '{1}'", name, m_Name);
+        {
+            if (m_WarnedUniforms.find(name) == m_WarnedUniforms.end())
+            {
+                ENGINE_CORE_WARN("Uniform '{0}' not found in shader '{1}'", name, m_Name);
+                m_WarnedUniforms.insert(name);
+            }
+            return -1;
+        }
         m_UniformLocationCache[name] = location;
         return location;
     }

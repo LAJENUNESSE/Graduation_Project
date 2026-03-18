@@ -184,4 +184,9 @@ namespace Engine
         glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
     }
 
+    void OpenGLTextureCubemap::SetData(void* /*data*/, uint32_t /*size*/)
+    {
+        ENGINE_CORE_WARN("TextureCubemap::SetData not implemented");
+    }
+
 } // namespace Engine

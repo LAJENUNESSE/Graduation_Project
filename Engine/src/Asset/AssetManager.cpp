@@ -291,19 +291,20 @@ namespace Engine
 
     template <> Texture2D* AssetManager::Get<Texture2D>(AssetHandle h)
     {
-        ENGINE_CORE_ASSERT(!h.IsValid() || s_HandleTypes.count(h) == 0 || s_HandleTypes[h] == AssetType::Texture2D,
+        ENGINE_CORE_ASSERT(!h.IsValid() || (s_HandleTypes.count(h) != 0 && s_HandleTypes[h] == AssetType::Texture2D),
                            "AssetHandle type mismatch: expected Texture2D");
         return s_Textures.Get(h);
     }
     template <> Mesh* AssetManager::Get<Mesh>(AssetHandle h)
     {
-        ENGINE_CORE_ASSERT(!h.IsValid() || s_HandleTypes.count(h) == 0 || s_HandleTypes[h] == AssetType::Mesh,
+        ENGINE_CORE_ASSERT(!h.IsValid() || (s_HandleTypes.count(h) != 0 && s_HandleTypes[h] == AssetType::Mesh),
                            "AssetHandle type mismatch: expected Mesh");
         return s_Meshes.Get(h);
     }
     template <> TextureCubemap* AssetManager::Get<TextureCubemap>(AssetHandle h)
     {
-        ENGINE_CORE_ASSERT(!h.IsValid() || s_HandleTypes.count(h) == 0 || s_HandleTypes[h] == AssetType::TextureCubemap,
+        ENGINE_CORE_ASSERT(!h.IsValid() ||
+                               (s_HandleTypes.count(h) != 0 && s_HandleTypes[h] == AssetType::TextureCubemap),
                            "AssetHandle type mismatch: expected TextureCubemap");
         return s_Cubemaps.Get(h);
     }

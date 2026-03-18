@@ -2,6 +2,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <glm/glm.hpp>
 
@@ -50,6 +51,7 @@ namespace Engine
         std::string                                  m_Name;
         std::string                                  m_FilePath;
         mutable std::unordered_map<std::string, int> m_UniformLocationCache;
+        mutable std::unordered_set<std::string>      m_WarnedUniforms;
 
         int GetUniformLocation(const std::string& name) const;
     };
