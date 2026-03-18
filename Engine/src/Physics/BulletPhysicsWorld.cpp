@@ -9,6 +9,7 @@
 #include "Terrain/TerrainMeshGenerator.h"
 
 #include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
+#include <BulletCollision/CollisionShapes/btCompoundShape.h>
 #include <BulletCollision/CollisionShapes/btConvexHullShape.h>
 #include <BulletCollision/CollisionShapes/btHeightfieldTerrainShape.h>
 #include <BulletCollision/CollisionShapes/btTriangleMesh.h>
@@ -244,6 +245,27 @@ namespace Engine
                 shape = new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
             }
 
+            // 如果碰撞器有 offset，用 btCompoundShape 包装以偏移子形状
+            btCollisionShape* childShape = nullptr;
+            {
+                glm::vec3 offset(0.0f);
+                if (reg.all_of<BoxColliderComponent>(entity))
+                    offset = reg.get<BoxColliderComponent>(entity).Offset;
+                else if (reg.all_of<SphereColliderComponent>(entity))
+                    offset = reg.get<SphereColliderComponent>(entity).Offset;
+
+                if (glm::dot(offset, offset) > 1e-8f)
+                {
+                    auto*       compound = new btCompoundShape();
+                    btTransform childTf;
+                    childTf.setIdentity();
+                    childTf.setOrigin(ToBt(offset * AbsVec3(transform.Scale)));
+                    compound->addChildShape(childTf, shape);
+                    childShape = shape;
+                    shape      = compound;
+                }
+            }
+
             // 计算质量和惯性
             float mass = 0.0f;
             if (rb.Type == RigidBodyComponent::BodyType::Dynamic)
@@ -310,6 +332,7 @@ namespace Engine
             BodyInfo info;
             info.body          = body;
             info.shape         = shape;
+            info.childShape    = childShape;
             info.motionState   = motionState;
             info.triangleMesh  = triangleMesh;
             info.isTrigger     = isTrigger;
@@ -563,6 +586,7 @@ namespace Engine
             delete info.body;
         }
         delete info.shape;
+        delete info.childShape;
         delete info.motionState;
         delete info.triangleMesh;
         m_Bodies.erase(it);
@@ -581,6 +605,7 @@ namespace Engine
                 delete info.body;
             }
             delete info.shape;
+            delete info.childShape;
             delete info.motionState;
             delete info.triangleMesh;
         }

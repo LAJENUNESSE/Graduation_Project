@@ -17,6 +17,7 @@ class btRigidBody;
 class btCollisionShape;
 class btDefaultMotionState;
 class btTriangleMesh;
+class btCompoundShape;
 
 namespace Engine
 {
@@ -76,6 +77,7 @@ namespace Engine
         {
             btRigidBody*          body         = nullptr;
             btCollisionShape*     shape        = nullptr;
+            btCollisionShape*     childShape   = nullptr; // compound 包装时保存原始 shape
             btDefaultMotionState* motionState  = nullptr;
             btTriangleMesh*       triangleMesh = nullptr; // MeshCollider 静态网格数据
             bool                  isTrigger    = false;
