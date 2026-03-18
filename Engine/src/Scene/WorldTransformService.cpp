@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Scene/WorldTransformService.h"
+#include "Core/Log.h"
 #include "Scene/Components.h"
 #include "Scene/SceneEntityIndex.h"
 #include "Scene/WorldTransformCache.h"
@@ -12,6 +13,18 @@ namespace Engine
                                                            const SceneEntityIndex& index,
                                                            WorldTransformCache*    cache)
     {
+        return ComputeWorldTransformImpl(reg, entity, index, cache, 0);
+    }
+
+    glm::mat4 WorldTransformService::ComputeWorldTransformImpl(
+        entt::registry& reg, entt::entity entity, const SceneEntityIndex& index, WorldTransformCache* cache, int depth)
+    {
+        if (depth >= kMaxDepth)
+        {
+            ENGINE_CORE_WARN("WorldTransformService: max depth ({0}) exceeded, possible cycle in hierarchy", kMaxDepth);
+            return reg.get<TransformComponent>(entity).GetTransform();
+        }
+
         if (cache)
         {
             glm::mat4 cached;
@@ -29,7 +42,7 @@ namespace Engine
             {
                 entt::entity parent = index.Find(rel.ParentID);
                 if (parent != entt::null && reg.valid(parent))
-                    result = ComputeWorldTransform(reg, parent, index, cache) * result;
+                    result = ComputeWorldTransformImpl(reg, parent, index, cache, depth + 1) * result;
             }
         }
 

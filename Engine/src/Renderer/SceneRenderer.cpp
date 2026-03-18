@@ -23,7 +23,7 @@ namespace Engine
     static std::vector<glm::vec3> GenerateSSAOKernel(int kernelSize)
     {
         std::uniform_real_distribution<float> randomFloats(0.0f, 1.0f);
-        std::default_random_engine            generator;
+        std::default_random_engine            generator(std::random_device{}());
 
         std::vector<glm::vec3> ssaoKernel;
         for (int i = 0; i < kernelSize; ++i)
@@ -83,7 +83,7 @@ namespace Engine
         // SSAO 4x4 噪声纹理
         {
             std::uniform_real_distribution<float> randomFloats(0.0f, 1.0f);
-            std::default_random_engine            generator;
+            std::default_random_engine            generator(std::random_device{}());
             std::vector<glm::vec3>                ssaoNoise;
             for (int i = 0; i < 16; i++)
             {

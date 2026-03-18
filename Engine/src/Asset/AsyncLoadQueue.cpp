@@ -69,7 +69,7 @@ namespace Engine
             // CPU-side image decoding (no GL calls here)
             int               width, height, channels;
             const std::string resolvedPath = PathUtils::ResolvePathString(request.first);
-            stbi_set_flip_vertically_on_load(1);
+            stbi_set_flip_vertically_on_load_thread(1);
             stbi_uc* data = stbi_load(resolvedPath.c_str(), &width, &height, &channels, 4);
 
             TextureCPUData result;
