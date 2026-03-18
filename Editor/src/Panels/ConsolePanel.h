@@ -28,7 +28,7 @@ namespace Engine
 
         std::vector<ConsoleLogEntry> CopyEntries();
         void                         ClearEntries();
-        uint64_t                     GetVersion() const;
+        uint64_t                     GetVersion();
 
     protected:
         void sink_it_(const spdlog::details::log_msg& msg) override;

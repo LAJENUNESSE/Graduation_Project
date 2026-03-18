@@ -24,7 +24,7 @@ namespace Engine
         ++m_Version;
     }
 
-    uint64_t ImGuiConsoleSink::GetVersion() const
+    uint64_t ImGuiConsoleSink::GetVersion()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         return m_Version;
