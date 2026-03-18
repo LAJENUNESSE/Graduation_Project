@@ -162,6 +162,7 @@ namespace Engine
         glm::vec3 AngularVelocity = {0, 0, 0};
         glm::vec3 Force           = {0, 0, 0};
         glm::vec3 Torque          = {0, 0, 0};
+        glm::quat Orientation     = {1, 0, 0, 0}; // 持久四元数，避免 eulerAngles round-trip 万向节锁
 
         RigidBodyComponent()                          = default;
         RigidBodyComponent(const RigidBodyComponent&) = default;

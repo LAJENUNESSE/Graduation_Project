@@ -80,7 +80,7 @@ namespace Engine
                 I_local_inv[i][i] = (I_local[i][i] > 1e-8f) ? 1.0f / I_local[i][i] : 0.0f;
 
             // 转世界空间: R * I_local_inv * R^T
-            glm::mat3 R = glm::mat3_cast(glm::quat(transform.Rotation));
+            glm::mat3 R = glm::mat3_cast(rb.Orientation);
             return R * I_local_inv * glm::transpose(R);
         }
     } // namespace
@@ -162,12 +162,11 @@ namespace Engine
                 glm::mat3 invIWorld = ComputeWorldInverseInertiaTensor(reg, entity, transform, rb);
                 rb.AngularVelocity += invIWorld * rb.Torque * dt;
 
-                // 四元数积分避免万向节锁
-                glm::quat q = glm::quat(transform.Rotation);
+                // 使用持久四元数积分，避免 eulerAngles round-trip 万向节锁
                 glm::quat w(0.0f, rb.AngularVelocity.x, rb.AngularVelocity.y, rb.AngularVelocity.z);
-                q += 0.5f * dt * w * q;
-                q                  = glm::normalize(q);
-                transform.Rotation = glm::eulerAngles(q);
+                rb.Orientation += 0.5f * dt * w * rb.Orientation;
+                rb.Orientation     = glm::normalize(rb.Orientation);
+                transform.Rotation = glm::eulerAngles(rb.Orientation);
             }
         }
     }
@@ -377,19 +376,7 @@ namespace Engine
 
             glm::vec3 n = contact.contactNormal;
 
-            // ===== 位置修正（直接全量修正，先于冲量）=====
-            // 先修正位置，保证后续速度计算基于正确的几何状态
             float penetration = contact.penetrationDepth;
-            if (penetration > SLOP)
-            {
-                float     correctionMag = (penetration - SLOP) / (invMassA + invMassB + EPSILON);
-                glm::vec3 correction    = correctionMag * n;
-
-                if (rbA && aIsDynamic)
-                    transformA.Translation -= correction * invMassA;
-                if (rbB && bIsDynamic)
-                    transformB.Translation += correction * invMassB;
-            }
 
             // 接触点相对于质心的向量
             glm::vec3 rA = contact.contactPoint - transformA.Translation;

@@ -50,6 +50,17 @@ namespace Engine
         {
             m_PhysicsWorld = std::make_unique<PhysicsWorld>();
             m_PhysicsWorld->Init();
+
+            // 初始化刚体持久四元数（从 Transform 的欧拉角构建）
+            {
+                auto rbView = m_Registry.view<TransformComponent, RigidBodyComponent>();
+                for (auto entity : rbView)
+                {
+                    auto& transform = rbView.get<TransformComponent>(entity);
+                    auto& rb        = rbView.get<RigidBodyComponent>(entity);
+                    rb.Orientation  = glm::quat(transform.Rotation);
+                }
+            }
         }
         else
         {
