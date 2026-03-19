@@ -539,6 +539,7 @@ namespace Engine
             m_SimulateShader->SetFloat3("u_BoundaryMin", emitterPos + emitter.BoundaryMin);
             m_SimulateShader->SetFloat3("u_BoundaryMax", emitterPos + emitter.BoundaryMax);
             m_SimulateShader->SetInt("u_UseBoundary", emitter.UseBoundary ? 1 : 0);
+            m_SimulateShader->SetInt("u_PCISPHMode", emitter.PCISPHEnabled ? 1 : 0);
 
             uint32_t simGroups = (m_ParticleCount + 255) / 256;
             RenderCommand::DispatchCompute(simGroups);

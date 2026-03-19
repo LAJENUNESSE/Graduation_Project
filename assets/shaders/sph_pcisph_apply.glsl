@@ -35,6 +35,7 @@ void main()
 
     uint myParticleIdx = aliveIndices[gid];
 
-    // 将最终预测速度写回粒子
+    // 将最终预测速度和预测位置写回粒子
     particles[myParticleIdx].velAndMaxLife.xyz = pcisphData[gid].predictedVelAndDensity.xyz;
+    particles[myParticleIdx].posAndLife.xyz    = pcisphData[gid].predictedPosAndPressure.xyz;
 }

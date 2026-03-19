@@ -24,6 +24,7 @@ uniform int   u_ParticleCount;
 uniform vec3  u_BoundaryMin;
 uniform vec3  u_BoundaryMax;
 uniform int   u_UseBoundary;
+uniform int   u_PCISPHMode;  // 0=标准WCSPH, 1=PCISPH（位置已由 apply 写入）
 
 void main()
 {
@@ -32,14 +33,26 @@ void main()
 
     vec3 vel = particles[idx].velAndMaxLife.xyz;
 
-    // 叠加重力（PCISPH 模式下外部传入零重力）
-    vel += u_Gravity * u_DeltaTime;
-
-    // 速度阻尼
+    // 先阻尼现有速度（不影响重力）
     vel *= u_Damping;
 
-    // 积分位置
-    vec3 pos = particles[idx].posAndLife.xyz + vel * u_DeltaTime;
+    // 再叠加重力（PCISPH 模式下外部传入零重力）
+    if (u_PCISPHMode == 0)
+    {
+        vel += u_Gravity * u_DeltaTime;
+    }
+
+    vec3 pos;
+    if (u_PCISPHMode == 0)
+    {
+        // WCSPH：正常积分位置
+        pos = particles[idx].posAndLife.xyz + vel * u_DeltaTime;
+    }
+    else
+    {
+        // PCISPH：位置已由 pcisph_apply 写入，仅读取
+        pos = particles[idx].posAndLife.xyz;
+    }
 
     // 边界约束（位置 clamp + 速度反弹）
     if (u_UseBoundary != 0)
