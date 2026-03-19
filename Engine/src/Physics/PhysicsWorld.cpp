@@ -73,6 +73,18 @@ namespace Engine
                 I_local        = glm::mat3(I_scalar);
             }
 
+            // 平行轴定理修正：碰撞器 Offset 非零时调整惯性张量
+            // I_adjusted = I_cm + m * (d²·E - d⊗d)
+            glm::vec3 d(0.0f);
+            if (reg.all_of<BoxColliderComponent>(entity))
+                d = reg.get<BoxColliderComponent>(entity).Offset * AbsVec3(transform.Scale);
+            else if (reg.all_of<SphereColliderComponent>(entity))
+                d = reg.get<SphereColliderComponent>(entity).Offset * AbsVec3(transform.Scale);
+
+            float dSq = glm::dot(d, d);
+            if (dSq > 1e-8f)
+                I_local += m * (dSq * glm::mat3(1.0f) - glm::outerProduct(d, d));
+
             return I_local;
         }
 
@@ -87,10 +99,11 @@ namespace Engine
 
             glm::mat3 I_local = ComputeLocalInertiaTensor(reg, entity, transform, rb);
 
-            // 逆惯性张量（局部空间，对角矩阵直接取倒数）
+            // 逆惯性张量（通用 3x3 求逆，兼容平行轴修正后的非对角矩阵）
             glm::mat3 I_local_inv(0.0f);
-            for (int i = 0; i < 3; i++)
-                I_local_inv[i][i] = (I_local[i][i] > 1e-8f) ? 1.0f / I_local[i][i] : 0.0f;
+            float     det = glm::determinant(I_local);
+            if (std::abs(det) > 1e-8f)
+                I_local_inv = glm::inverse(I_local);
 
             // 转世界空间: R * I_local_inv * R^T
             glm::mat3 R = glm::mat3_cast(rb.Orientation);
