@@ -169,6 +169,19 @@ namespace Engine
                         if (otherEntity == selectedEntity || !otherEntity)
                             continue;
 
+                        // 跳过祖先已在选择集中的实体（避免双重位移）
+                        bool ancestorSelected = false;
+                        for (const auto& sel : selectedEntities)
+                        {
+                            if (sel != otherEntity && sel && activeScene->IsAncestorOf(sel, otherEntity))
+                            {
+                                ancestorSelected = true;
+                                break;
+                            }
+                        }
+                        if (ancestorSelected)
+                            continue;
+
                         auto  handle = static_cast<entt::entity>(otherEntity);
                         auto& reg    = activeScene->GetRegistry();
                         if (!reg.all_of<TransformComponent>(handle))
