@@ -22,8 +22,8 @@ TEST(AssetHandle, ValidHandle)
     AssetHandle handle2{0, 1}; // Index=0 is always invalid (slot 0 is reserved)
     EXPECT_FALSE(handle2.IsValid());
 
-    AssetHandle handle3{1, 0}; // valid if index > 0
-    EXPECT_TRUE(handle3.IsValid());
+    AssetHandle handle3{1, 0}; // Generation=0 表示未分配，仍然无效
+    EXPECT_FALSE(handle3.IsValid());
 }
 
 TEST(AssetHandle, Equality)
