@@ -12,16 +12,18 @@
 namespace Engine
 {
 
+    class SceneEntityIndex;
+
     class PhysicsWorld
     {
     public:
         void                              Init(glm::vec3 gravity = {0, -9.81f, 0});
-        void                              Step(float dt, entt::registry& reg);
+        void                              Step(float dt, entt::registry& reg, const SceneEntityIndex& index);
         const std::vector<CollisionInfo>& GetContacts() const { return m_Contacts; }
 
     private:
-        void Integrate(entt::registry& reg, float dt);
-        void DetectCollisions(entt::registry& reg);
+        void Integrate(entt::registry& reg, float dt, const SceneEntityIndex& index);
+        void DetectCollisions(entt::registry& reg, const SceneEntityIndex& index);
         void ResolveCollisions(entt::registry& reg);
 
         // 碰撞检测辅助

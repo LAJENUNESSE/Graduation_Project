@@ -204,7 +204,7 @@ namespace Engine
 
         // Physics step
         if (backend == PhysicsBackend::Custom && m_PhysicsWorld)
-            m_PhysicsWorld->Step(ts, m_Registry);
+            m_PhysicsWorld->Step(ts, m_Registry, m_EntityIndex);
         else if (backend == PhysicsBackend::Bullet && m_BulletPhysicsWorld)
         {
             m_BulletPhysicsWorld->Step(ts, m_Registry);

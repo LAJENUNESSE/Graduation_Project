@@ -3,6 +3,8 @@
 #include "Physics/CollisionMath.h"
 #include "Core/Log.h"
 #include "Scene/Components.h"
+#include "Scene/SceneEntityIndex.h"
+#include "Scene/WorldTransformService.h"
 
 #include <algorithm>
 #include <cmath>
@@ -103,7 +105,7 @@ namespace Engine
         m_Contacts.clear();
     }
 
-    void PhysicsWorld::Step(float dt, entt::registry& reg)
+    void PhysicsWorld::Step(float dt, entt::registry& reg, const SceneEntityIndex& index)
     {
         // 防止死亡螺旋：截断极端 dt
         if (dt > MAX_DT)
@@ -115,8 +117,8 @@ namespace Engine
         // 固定步长累加器模式，防止帧率波动影响物理
         while (m_Accumulator >= FIXED_DT && steps < MAX_SUBSTEPS)
         {
-            Integrate(reg, FIXED_DT);
-            DetectCollisions(reg);
+            Integrate(reg, FIXED_DT, index);
+            DetectCollisions(reg, index);
             // 多次迭代求解约束（类似 Bullet 的 sequential impulse solver）
             // 单次迭代在高速碰撞时穿透严重，多次迭代可渐进收敛
             for (int iter = 0; iter < SOLVER_ITERATIONS; ++iter)
@@ -124,7 +126,7 @@ namespace Engine
                 ResolveCollisions(reg);
                 // 重新检测以更新穿透深度（位置修正后碰撞状态变化）
                 if (iter < SOLVER_ITERATIONS - 1)
-                    DetectCollisions(reg);
+                    DetectCollisions(reg, index);
             }
             m_Accumulator -= FIXED_DT;
             ++steps;
@@ -147,7 +149,7 @@ namespace Engine
     }
 
     // 半隐式欧拉积分 (Semi-implicit Euler)
-    void PhysicsWorld::Integrate(entt::registry& reg, float dt)
+    void PhysicsWorld::Integrate(entt::registry& reg, float dt, const SceneEntityIndex& index)
     {
         auto view = reg.view<TransformComponent, RigidBodyComponent>();
         for (auto entity : view)
@@ -165,7 +167,26 @@ namespace Engine
 
             // 半隐式欧拉：先更新速度，再更新位置
             rb.LinearVelocity += acceleration * dt;
-            transform.Translation += rb.LinearVelocity * dt;
+
+            // 在世界空间积分位置，然后逆变换回本地空间
+            glm::mat4 worldTransform = WorldTransformService::ComputeWorldTransform(reg, entity, index);
+            glm::vec3 worldPos       = glm::vec3(worldTransform[3]);
+            worldPos += rb.LinearVelocity * dt;
+
+            // 计算父的世界变换以逆变换回本地空间
+            glm::mat4 parentWorld(1.0f);
+            if (reg.all_of<RelationshipComponent>(entity))
+            {
+                auto& rel = reg.get<RelationshipComponent>(entity);
+                if (static_cast<uint64_t>(rel.ParentID) != 0)
+                {
+                    entt::entity parentEntity = index.Find(rel.ParentID);
+                    if (parentEntity != entt::null && reg.valid(parentEntity))
+                        parentWorld = WorldTransformService::ComputeWorldTransform(reg, parentEntity, index);
+                }
+            }
+            glm::vec3 localPos    = glm::vec3(glm::inverse(parentWorld) * glm::vec4(worldPos, 1.0f));
+            transform.Translation = localPos;
 
             // 角速度积分（含陀螺力矩）
             if (!rb.FixedRotation)
@@ -190,7 +211,7 @@ namespace Engine
         }
     }
 
-    void PhysicsWorld::DetectCollisions(entt::registry& reg)
+    void PhysicsWorld::DetectCollisions(entt::registry& reg, const SceneEntityIndex& index)
     {
         m_Contacts.clear();
 
@@ -220,16 +241,26 @@ namespace Engine
                 auto& transform = view.get<TransformComponent>(entity);
                 auto& box       = view.get<BoxColliderComponent>(entity);
 
-                const glm::quat rotation(transform.Rotation);
-                const glm::vec3 absScale    = AbsVec3(transform.Scale);
+                // 使用世界变换计算碰撞位置（支持父子层级）
+                glm::mat4       worldMat         = WorldTransformService::ComputeWorldTransform(reg, entity, index);
+                const glm::vec3 worldTranslation = glm::vec3(worldMat[3]);
+                // 从世界变换矩阵提取旋转（忽略缩放）
+                glm::vec3 worldScale;
+                for (int i = 0; i < 3; i++)
+                    worldScale[i] = glm::length(glm::vec3(worldMat[i]));
+                const glm::vec3 absScale = AbsVec3(worldScale);
+                glm::mat3       rotMat;
+                for (int i = 0; i < 3; i++)
+                    rotMat[i] = glm::vec3(worldMat[i]) / worldScale[i];
+                const glm::quat rotation    = glm::quat_cast(rotMat);
                 const glm::vec3 halfExtents = box.HalfExtents * absScale;
 
                 ColliderInfo ci;
-                ci.entity      = entity;
-                ci.worldPos    = transform.Translation + RotateScaledOffset(rotation, box.Offset, transform.Scale);
-                ci.type        = ColliderInfo::Box;
-                ci.halfExtents = halfExtents;
-                ci.rotation    = rotation;
+                ci.entity               = entity;
+                ci.worldPos             = worldTranslation + RotateScaledOffset(rotation, box.Offset, worldScale);
+                ci.type                 = ColliderInfo::Box;
+                ci.halfExtents          = halfExtents;
+                ci.rotation             = rotation;
                 ci.worldAABBHalfExtents = ComputeWorldAABBHalfExtents(halfExtents, rotation);
                 ci.radius               = 0.0f;
                 colliders.push_back(ci);
@@ -244,15 +275,24 @@ namespace Engine
                 auto& transform = view.get<TransformComponent>(entity);
                 auto& sphere    = view.get<SphereColliderComponent>(entity);
 
-                const glm::quat rotation(transform.Rotation);
-                const glm::vec3 absScale = AbsVec3(transform.Scale);
+                // 使用世界变换计算碰撞位置（支持父子层级）
+                glm::mat4       worldMat         = WorldTransformService::ComputeWorldTransform(reg, entity, index);
+                const glm::vec3 worldTranslation = glm::vec3(worldMat[3]);
+                glm::vec3       worldScale;
+                for (int i = 0; i < 3; i++)
+                    worldScale[i] = glm::length(glm::vec3(worldMat[i]));
+                const glm::vec3 absScale = AbsVec3(worldScale);
+                glm::mat3       rotMat;
+                for (int i = 0; i < 3; i++)
+                    rotMat[i] = glm::vec3(worldMat[i]) / worldScale[i];
+                const glm::quat rotation = glm::quat_cast(rotMat);
 
                 ColliderInfo ci;
-                ci.entity      = entity;
-                ci.worldPos    = transform.Translation + RotateScaledOffset(rotation, sphere.Offset, transform.Scale);
-                ci.type        = ColliderInfo::Sphere;
-                ci.halfExtents = {0, 0, 0};
-                ci.rotation    = rotation;
+                ci.entity               = entity;
+                ci.worldPos             = worldTranslation + RotateScaledOffset(rotation, sphere.Offset, worldScale);
+                ci.type                 = ColliderInfo::Sphere;
+                ci.halfExtents          = {0, 0, 0};
+                ci.rotation             = rotation;
                 ci.worldAABBHalfExtents = {0, 0, 0};
                 // 取 Scale 最大分量作为球半径缩放
                 float maxScale = std::max({absScale.x, absScale.y, absScale.z});
