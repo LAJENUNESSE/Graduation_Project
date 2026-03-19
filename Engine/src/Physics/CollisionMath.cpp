@@ -11,8 +11,8 @@ namespace Engine
     namespace CollisionMath
     {
 
-        bool SphereSphere(
-            const glm::vec3& posA, float radiusA, const glm::vec3& posB, float radiusB, CollisionInfo& info)
+        bool
+        SphereSphere(const glm::vec3& posA, float radiusA, const glm::vec3& posB, float radiusB, CollisionInfo& info)
         {
             glm::vec3 diff = posB - posA;
             float     dist = glm::length(diff);
@@ -56,33 +56,48 @@ namespace Engine
             if (overlapZ <= 0)
                 return false;
 
+            int minAxis;
             if (overlapX <= overlapY && overlapX <= overlapZ)
             {
                 info.contactNormal    = (diff.x > 0) ? glm::vec3(1, 0, 0) : glm::vec3(-1, 0, 0);
                 info.penetrationDepth = overlapX;
+                minAxis               = 0;
             }
             else if (overlapY <= overlapX && overlapY <= overlapZ)
             {
                 info.contactNormal    = (diff.y > 0) ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
                 info.penetrationDepth = overlapY;
+                minAxis               = 1;
             }
             else
             {
                 info.contactNormal    = (diff.z > 0) ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
                 info.penetrationDepth = overlapZ;
+                minAxis               = 2;
             }
 
-            info.contactPoint = (posA + posB) * 0.5f;
+            // 接触点：沿最小穿透轴投影到 A 的接触面，其他轴取重叠中心
+            float sign        = (diff[minAxis] > 0) ? 1.0f : -1.0f;
+            info.contactPoint = posA;
+            info.contactPoint[minAxis] += sign * halfA[minAxis];
+            for (int i = 0; i < 3; i++)
+            {
+                if (i == minAxis)
+                    continue;
+                float lo             = std::max(posA[i] - halfA[i], posB[i] - halfB[i]);
+                float hi             = std::min(posA[i] + halfA[i], posB[i] + halfB[i]);
+                info.contactPoint[i] = (lo + hi) * 0.5f;
+            }
             return true;
         }
 
         bool OBBOBB(const glm::vec3& posA,
-                     const glm::vec3& halfA,
-                     const glm::quat& rotA,
-                     const glm::vec3& posB,
-                     const glm::vec3& halfB,
-                     const glm::quat& rotB,
-                     CollisionInfo&   info)
+                    const glm::vec3& halfA,
+                    const glm::quat& rotA,
+                    const glm::vec3& posB,
+                    const glm::vec3& halfB,
+                    const glm::quat& rotB,
+                    CollisionInfo&   info)
         {
             const glm::mat3 mA = glm::mat3_cast(rotA);
             const glm::mat3 mB = glm::mat3_cast(rotB);
@@ -141,16 +156,32 @@ namespace Engine
 
             info.contactNormal    = bestAxis;
             info.penetrationDepth = minOverlap;
-            info.contactPoint     = (posA + posB) * 0.5f;
+            // 接触点：沿分离轴方向，从两中心向接触面投影取中点
+            float projA   = glm::dot(posA, bestAxis);
+            float projB   = glm::dot(posB, bestAxis);
+            float rA_proj = 0.0f;
+            float rB_proj = 0.0f;
+            for (int i = 0; i < 3; i++)
+            {
+                rA_proj += halfA[i] * std::abs(glm::dot(axesA[i], bestAxis));
+                rB_proj += halfB[i] * std::abs(glm::dot(axesB[i], bestAxis));
+            }
+            // A 面在 bestAxis 方向的投影位置
+            float faceA = projA + rA_proj;
+            // B 面在 bestAxis 方向的投影位置
+            float faceB       = projB - rB_proj;
+            float contactProj = (faceA + faceB) * 0.5f;
+            // 从 A 中心沿 bestAxis 偏移到接触面
+            info.contactPoint = posA + bestAxis * (contactProj - projA);
             return true;
         }
 
         bool SphereOBB(const glm::vec3& spherePos,
-                        float            sphereRadius,
-                        const glm::vec3& boxPos,
-                        const glm::vec3& boxHalf,
-                        const glm::quat& boxRotation,
-                        CollisionInfo&   info)
+                       float            sphereRadius,
+                       const glm::vec3& boxPos,
+                       const glm::vec3& boxHalf,
+                       const glm::quat& boxRotation,
+                       CollisionInfo&   info)
         {
             const glm::quat inverseRotation = glm::inverse(boxRotation);
             const glm::vec3 localSphere     = inverseRotation * (spherePos - boxPos);
