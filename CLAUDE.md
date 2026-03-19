@@ -150,4 +150,16 @@ Always follow this workflow:
 
 **频繁提交：** 每完成一个小步骤就立即 `git commit`，保存快照。不要攒一大堆改动再提交。
 
-**提交前格式化：** 提交代码之前，使用项目根目录的 `.clang-format` 对本次修改的 C/C++ 源文件（`.h`/`.cpp`）运行 `clang-format -i`，确保代码风格一致。不要格式化 `vendor/` 下的第三方代码。
+**提交前格式化：** 提交代码之前，对本次修改的 C/C++ 源文件（`.h`/`.cpp`）运行 clang-format，确保代码风格一致。不要格式化 `vendor/` 下的第三方代码。
+
+**⚠️ clang-format 不在全局 PATH 中**，需使用 VS Build Tools 内置路径，规则同 cmake：
+
+```bash
+# 格式化单个文件
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe" -i path/to/file.cpp
+
+# 批量格式化本次 git 修改的 C/C++ 文件（排除 vendor/）
+git diff --name-only --diff-filter=d HEAD | grep -E '\.(h|cpp)$' | grep -v '^vendor/' | xargs -r "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe" -i
+```
+
+项目根目录的 `.clang-format` 会被自动识别，无需额外指定。
