@@ -96,8 +96,8 @@ void main()
         }
     }
 
-    // 状态方程: P = k * (ρ - ρ_0)
-    float pressure = u_GasConstant * (density - u_RestDensity);
+    // 状态方程: P = k * (ρ - ρ_0)，clamp 负压力防止粒子异常吸引
+    float pressure = max(0.0, u_GasConstant * (density - u_RestDensity));
 
     // 写入 params.zw (不影响 sizeStart/sizeEnd in params.xy)
     particles[myParticleIdx].params.z = density;
