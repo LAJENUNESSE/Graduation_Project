@@ -18,8 +18,17 @@ namespace Engine
             float     dist = glm::length(diff);
             float     sumR = radiusA + radiusB;
 
-            if (dist >= sumR || dist < 1e-6f)
+            if (dist >= sumR)
                 return false;
+
+            if (dist < 1e-6f)
+            {
+                // 两球完全重合：使用默认分离轴
+                info.contactNormal    = glm::vec3(0, 1, 0);
+                info.penetrationDepth = sumR;
+                info.contactPoint     = posA;
+                return true;
+            }
 
             info.contactNormal    = diff / dist; // A→B
             info.penetrationDepth = sumR - dist;
