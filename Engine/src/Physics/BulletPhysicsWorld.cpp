@@ -6,6 +6,8 @@
 #include "Renderer/Mesh.h"
 #include "Scene/Components.h"
 #include "Scene/Runtime/RuntimeComponents.h"
+#include "Scene/SceneEntityIndex.h"
+#include "Scene/WorldTransformService.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
 #include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
@@ -51,6 +53,19 @@ namespace Engine
     {
         glm::quat gq(q.getW(), q.getX(), q.getY(), q.getZ());
         return glm::eulerAngles(gq);
+    }
+
+    // 从世界变换矩阵提取位置、旋转、缩放
+    static void
+    DecomposeWorldTransform(const glm::mat4& worldMat, glm::vec3& outPos, glm::quat& outRot, glm::vec3& outScale)
+    {
+        outPos = glm::vec3(worldMat[3]);
+        for (int i = 0; i < 3; i++)
+            outScale[i] = glm::length(glm::vec3(worldMat[i]));
+        glm::mat3 rotMat;
+        for (int i = 0; i < 3; i++)
+            rotMat[i] = glm::vec3(worldMat[i]) / outScale[i];
+        outRot = glm::quat_cast(rotMat);
     }
 
     // 从模型文件加载顶点和索引数据（用于 MeshCollider）
@@ -144,7 +159,7 @@ namespace Engine
         return false;
     }
 
-    void BulletPhysicsWorld::CreateBodies(entt::registry& reg)
+    void BulletPhysicsWorld::CreateBodies(entt::registry& reg, const SceneEntityIndex& index)
     {
         if (!m_DynamicsWorld)
             return;
@@ -287,11 +302,18 @@ namespace Engine
             if (mass > 0.0f)
                 shape->calculateLocalInertia(mass, localInertia);
 
-            // Motion State（桥接 Transform ↔ Bullet）
+            // Motion State（桥接 Transform ↔ Bullet，使用世界坐标）
             btTransform startTransform;
             startTransform.setIdentity();
-            startTransform.setOrigin(ToBt(transform.Translation));
-            startTransform.setRotation(EulerToBtQuat(transform.Rotation));
+
+            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(reg, entity, index);
+            glm::vec3 worldPos;
+            glm::quat worldRot;
+            glm::vec3 worldScale;
+            DecomposeWorldTransform(worldMat, worldPos, worldRot, worldScale);
+
+            startTransform.setOrigin(ToBt(worldPos));
+            startTransform.setRotation(btQuaternion(worldRot.x, worldRot.y, worldRot.z, worldRot.w));
 
             auto* motionState = new btDefaultMotionState(startTransform);
 
@@ -386,14 +408,14 @@ namespace Engine
         }
     }
 
-    void BulletPhysicsWorld::Step(float dt, entt::registry& reg)
+    void BulletPhysicsWorld::Step(float dt, entt::registry& reg, const SceneEntityIndex& index)
     {
         if (!m_DynamicsWorld)
             return;
 
-        SyncFromECS(reg); // Kinematic: ECS → Bullet（stepSimulation 前）
+        SyncFromECS(reg, index); // Kinematic: ECS → Bullet（stepSimulation 前）
         m_DynamicsWorld->stepSimulation(dt, 10, 1.0f / 60.0f);
-        SyncToECS(reg);
+        SyncToECS(reg, index);
         CollectCollisionEvents(reg);
     }
 
@@ -515,7 +537,7 @@ namespace Engine
         m_PreviousFrameContacts = m_CurrentFrameContacts;
     }
 
-    void BulletPhysicsWorld::SyncFromECS(entt::registry& reg)
+    void BulletPhysicsWorld::SyncFromECS(entt::registry& reg, const SceneEntityIndex& index)
     {
         for (auto& [entityId, info] : m_Bodies)
         {
@@ -530,16 +552,22 @@ namespace Engine
             if (rb.Type != RigidBodyComponent::BodyType::Kinematic)
                 continue;
 
-            auto&       transform = reg.get<TransformComponent>(entity);
+            // 使用世界坐标同步到 Bullet
+            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(reg, entity, index);
+            glm::vec3 worldPos;
+            glm::quat worldRot;
+            glm::vec3 worldScale;
+            DecomposeWorldTransform(worldMat, worldPos, worldRot, worldScale);
+
             btTransform btTrans;
             btTrans.setIdentity();
-            btTrans.setOrigin(ToBt(transform.Translation));
-            btTrans.setRotation(EulerToBtQuat(transform.Rotation));
+            btTrans.setOrigin(ToBt(worldPos));
+            btTrans.setRotation(btQuaternion(worldRot.x, worldRot.y, worldRot.z, worldRot.w));
             info.motionState->setWorldTransform(btTrans);
         }
     }
 
-    void BulletPhysicsWorld::SyncToECS(entt::registry& reg)
+    void BulletPhysicsWorld::SyncToECS(entt::registry& reg, const SceneEntityIndex& index)
     {
         for (auto& [entityId, info] : m_Bodies)
         {
@@ -559,9 +587,36 @@ namespace Engine
             btTransform btTrans;
             info.motionState->getWorldTransform(btTrans);
 
-            transform.Translation = ToGlm(btTrans.getOrigin());
+            glm::vec3 worldPos = ToGlm(btTrans.getOrigin());
+
+            // 将 Bullet 世界坐标逆变换回本地坐标
+            glm::mat4 parentWorld(1.0f);
+            if (reg.all_of<RelationshipComponent>(entity))
+            {
+                auto& rel = reg.get<RelationshipComponent>(entity);
+                if (static_cast<uint64_t>(rel.ParentID) != 0)
+                {
+                    entt::entity parentEntity = index.Find(rel.ParentID);
+                    if (parentEntity != entt::null && reg.valid(parentEntity))
+                        parentWorld = WorldTransformService::ComputeWorldTransform(reg, parentEntity, index);
+                }
+            }
+
+            glm::mat4 invParent   = glm::inverse(parentWorld);
+            transform.Translation = glm::vec3(invParent * glm::vec4(worldPos, 1.0f));
+
             if (!rb.FixedRotation)
-                transform.Rotation = BtQuatToEuler(btTrans.getRotation());
+            {
+                btQuaternion btRot = btTrans.getRotation();
+                glm::quat    worldRot(btRot.getW(), btRot.getX(), btRot.getY(), btRot.getZ());
+
+                // 提取父旋转并逆变换回本地旋转
+                glm::vec3 pPos, pScale;
+                glm::quat parentRot;
+                DecomposeWorldTransform(parentWorld, pPos, parentRot, pScale);
+                glm::quat localRot = glm::inverse(parentRot) * worldRot;
+                transform.Rotation = glm::eulerAngles(localRot);
+            }
 
             // 同步速度到 ECS 组件
             rb.LinearVelocity  = ToGlm(info.body->getLinearVelocity());

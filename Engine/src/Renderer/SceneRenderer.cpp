@@ -296,6 +296,8 @@ namespace Engine
                          // 级联阴影纹理绑定到 unit 10~13
                          RenderCommand::BindTextureUnit(10 + i, m_ShadowData.CascadeShadowMapTexIDs[i]);
                          m_PBRShader->SetInt("u_CascadeShadowMaps[" + std::to_string(i) + "]", 10 + i);
+                         m_PBRShader->SetFloat("u_CascadeTexelWorldSize[" + std::to_string(i) + "]",
+                                               m_ShadowData.CascadeTexelWorldSizes[i]);
                      }
                  }
 

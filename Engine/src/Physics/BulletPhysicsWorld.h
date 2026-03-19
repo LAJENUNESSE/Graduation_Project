@@ -23,6 +23,7 @@ namespace Engine
 {
 
     class Scene;
+    class SceneEntityIndex;
 
     // 碰撞事件类型
     enum class CollisionEventType
@@ -52,16 +53,16 @@ namespace Engine
 
         void Init(glm::vec3 gravity = {0, -9.81f, 0});
         void Shutdown();
-        void Step(float dt, entt::registry& reg);
+        void Step(float dt, entt::registry& reg, const SceneEntityIndex& index);
 
         // 从 ECS 组件创建 Bullet 刚体
-        void CreateBodies(entt::registry& reg);
+        void CreateBodies(entt::registry& reg, const SceneEntityIndex& index);
         // 销毁单个实体的 Bullet 刚体（运行时删除实体时调用）
         void DestroyBody(entt::entity entity);
         // 将 Bullet 状态同步回 ECS
-        void SyncToECS(entt::registry& reg);
+        void SyncToECS(entt::registry& reg, const SceneEntityIndex& index);
         // Kinematic 体：从 ECS Transform 同步到 Bullet
-        void SyncFromECS(entt::registry& reg);
+        void SyncFromECS(entt::registry& reg, const SceneEntityIndex& index);
 
         // 获取本帧碰撞事件（Step 后有效），包含 Enter/Stay/Exit
         const std::vector<CollisionEvent>& GetCollisionEvents() const { return m_CollisionEvents; }

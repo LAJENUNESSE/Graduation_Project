@@ -123,7 +123,7 @@ namespace Engine
             // 单次迭代在高速碰撞时穿透严重，多次迭代可渐进收敛
             for (int iter = 0; iter < SOLVER_ITERATIONS; ++iter)
             {
-                ResolveCollisions(reg);
+                ResolveCollisions(reg, index);
                 // 重新检测以更新穿透深度（位置修正后碰撞状态变化）
                 if (iter < SOLVER_ITERATIONS - 1)
                     DetectCollisions(reg, index);
@@ -386,7 +386,7 @@ namespace Engine
     }
     // ===== Phase 9c: 冲量碰撞响应（论文核心亮点）=====
 
-    void PhysicsWorld::ResolveCollisions(entt::registry& reg)
+    void PhysicsWorld::ResolveCollisions(entt::registry& reg, const SceneEntityIndex& index)
     {
         constexpr float SLOP           = 0.005f; // 允许的微小穿透量（防抖动）
         constexpr float BAUMGARTE      = 0.2f;   // 速度级 Baumgarte 偏置系数
@@ -428,9 +428,11 @@ namespace Engine
 
             float penetration = contact.penetrationDepth;
 
-            // 接触点相对于质心的向量
-            glm::vec3 rA = contact.contactPoint - transformA.Translation;
-            glm::vec3 rB = contact.contactPoint - transformB.Translation;
+            // 接触点相对于质心的向量（使用世界坐标）
+            glm::vec3 worldPosA = glm::vec3(WorldTransformService::ComputeWorldTransform(reg, entityA, index)[3]);
+            glm::vec3 worldPosB = glm::vec3(WorldTransformService::ComputeWorldTransform(reg, entityB, index)[3]);
+            glm::vec3 rA        = contact.contactPoint - worldPosA;
+            glm::vec3 rB        = contact.contactPoint - worldPosB;
 
             // 接触点速度（线速度 + 角速度×r）
             glm::vec3 vA = (rbA ? rbA->LinearVelocity : glm::vec3(0)) +

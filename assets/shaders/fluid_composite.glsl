@@ -38,30 +38,36 @@ uniform float u_Reflectivity;
 
 layout(location = 0) out vec4 FragColor;
 
+// 从线性深度 + 逆投影矩阵重建 view-space 位置
+vec3 viewPosFromDepth(vec2 uv, float linearDepth)
+{
+    vec2 ndc = uv * 2.0 - 1.0;
+    vec4 viewRay = u_InvProjection * vec4(ndc, 0.0, 1.0);
+    viewRay.xyz /= viewRay.w;
+    // view-space Z 为负（相机看 -Z），linearDepth 为正
+    return vec3(viewRay.xy / (-viewRay.z) * linearDepth, -linearDepth);
+}
+
 // 从平滑深度图用有限差分重建 view-space 法线
 vec3 reconstructNormal(vec2 uv)
 {
     vec2 texelSize = 1.0 / u_ScreenSize;
 
-    float dL = texture(u_FluidDepth, uv - vec2(texelSize.x, 0.0)).r;
-    float dR = texture(u_FluidDepth, uv + vec2(texelSize.x, 0.0)).r;
-    float dT = texture(u_FluidDepth, uv + vec2(0.0, texelSize.y)).r;
-    float dB = texture(u_FluidDepth, uv - vec2(0.0, texelSize.y)).r;
+    float depthC = texture(u_FluidDepth, uv).r;
+    float depthR = texture(u_FluidDepth, uv + vec2(texelSize.x, 0.0)).r;
+    float depthU = texture(u_FluidDepth, uv + vec2(0.0, texelSize.y)).r;
 
-    // 跳过背景采样
-    float center = texture(u_FluidDepth, uv).r;
-    if (dL > 1e9) dL = center;
-    if (dR > 1e9) dR = center;
-    if (dT > 1e9) dT = center;
-    if (dB > 1e9) dB = center;
+    // 背景回退
+    if (depthR > 1e9) depthR = depthC;
+    if (depthU > 1e9) depthU = depthC;
 
-    float dx = (dR - dL) * 0.5;
-    float dy = (dT - dB) * 0.5;
+    vec3 posC = viewPosFromDepth(uv, depthC);
+    vec3 posR = viewPosFromDepth(uv + vec2(texelSize.x, 0.0), depthR);
+    vec3 posU = viewPosFromDepth(uv + vec2(0.0, texelSize.y), depthU);
 
-    // view-space 法线（Z 轴指向相机）
-    return normalize(vec3(-dx * u_ScreenSize.x * 0.02,
-                          -dy * u_ScreenSize.y * 0.02,
-                          1.0));
+    vec3 n = normalize(cross(posR - posC, posU - posC));
+    // 确保法线朝向相机（view-space Z 正方向）
+    return (n.z < 0.0) ? -n : n;
 }
 
 void main()

@@ -24,7 +24,7 @@ namespace Engine
     private:
         void Integrate(entt::registry& reg, float dt, const SceneEntityIndex& index);
         void DetectCollisions(entt::registry& reg, const SceneEntityIndex& index);
-        void ResolveCollisions(entt::registry& reg);
+        void ResolveCollisions(entt::registry& reg, const SceneEntityIndex& index);
 
         // 碰撞检测辅助
         bool

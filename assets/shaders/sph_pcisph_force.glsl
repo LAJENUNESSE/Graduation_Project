@@ -51,6 +51,7 @@ uniform float u_BoundaryStiffness;
 uniform float u_BoundaryDamping;
 uniform float u_SpikyCoeff;         // -45 / (π * h^6), CPU 预计算
 uniform float u_WarmupTime;         // SPH warm-up 时间 (秒), 新粒子逐步受 SPH 约束
+uniform int   u_UsePredictedPos;   // 0=原始位置，1=预测位置（与 grid 构建策略一致）
 
 // Spiky kernel gradient: ∇W_spiky = u_SpikyCoeff * (h - |r|)² * (r/|r|)
 vec3 spikyGrad(vec3 diff, float dist, float h)
@@ -76,8 +77,10 @@ void main()
     uint myAliveIdx = gid;
     uint myParticleIdx = aliveIndices[myAliveIdx];
 
-    // 用原始位置进行 cell 查找和压力力计算（grid 一致性）
-    vec3 posI = particles[myParticleIdx].posAndLife.xyz;
+    // cell 查找位置与 grid 构建策略一致
+    vec3 posI = (u_UsePredictedPos != 0)
+        ? pcisphData[gid].predictedPosAndPressure.xyz
+        : particles[myParticleIdx].posAndLife.xyz;
     float pressureI = pcisphData[gid].predictedPosAndPressure.w;
     float densityI  = pcisphData[gid].predictedVelAndDensity.w;
     float h = u_SmoothingRadius;
@@ -110,7 +113,9 @@ void main()
 
             if (neighborParticleIdx == myParticleIdx) continue;
 
-            vec3 posJ = particles[neighborParticleIdx].posAndLife.xyz;
+            vec3 posJ = (u_UsePredictedPos != 0)
+                ? pcisphData[neighborAliveIdx].predictedPosAndPressure.xyz
+                : particles[neighborParticleIdx].posAndLife.xyz;
             float pressureJ = pcisphData[neighborAliveIdx].predictedPosAndPressure.w;
             float densityJ  = pcisphData[neighborAliveIdx].predictedVelAndDensity.w;
 

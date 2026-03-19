@@ -469,6 +469,7 @@ namespace Engine
                     m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
                     m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
                     m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
+                    m_SPHShaders.PCISPHDensity->SetInt("u_UsePredictedPos", (iter > 0) ? 1 : 0);
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
@@ -484,6 +485,7 @@ namespace Engine
                     m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
                     m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
                     m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
+                    m_SPHShaders.PCISPHForce->SetInt("u_UsePredictedPos", (iter > 0) ? 1 : 0);
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
                 }

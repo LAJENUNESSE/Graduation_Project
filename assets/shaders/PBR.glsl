@@ -117,6 +117,7 @@ uniform int u_CascadeCount;
 uniform mat4 u_CascadeLightSpaceMatrices[CSM_MAX_CASCADES];
 uniform float u_CascadeSplitDepths[CSM_MAX_CASCADES];
 uniform sampler2D u_CascadeShadowMaps[CSM_MAX_CASCADES];  // unit 10~13
+uniform float u_CascadeTexelWorldSize[CSM_MAX_CASCADES];
 
 // Normal mapping
 uniform sampler2D u_NormalMap;        // unit 2
@@ -218,8 +219,11 @@ float CalcCSMShadowForCascade(int cascadeIdx, vec3 fragPos, vec3 normal, vec3 li
 
     float slopeFactor = 1.0 - dot(normal, lightDir);
     float bias = u_ShadowBias + u_ShadowBias * 10.0 * slopeFactor;
-    // 远级联使用更大的 bias 以避免 acne
-    bias *= float(cascadeIdx + 1);
+    // 远级联使用更大的 bias —— 按 texel 世界尺寸比例缩放
+    float texelScale = (u_CascadeTexelWorldSize[0] > 0.0)
+        ? u_CascadeTexelWorldSize[cascadeIdx] / u_CascadeTexelWorldSize[0]
+        : float(cascadeIdx + 1);
+    bias *= max(texelScale, 1.0);
 
     // 3x3 PCF
     float shadow = 0.0;

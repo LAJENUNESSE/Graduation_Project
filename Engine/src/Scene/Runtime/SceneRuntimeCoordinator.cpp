@@ -86,7 +86,7 @@ namespace Engine
                 }
             }
 
-            m_BulletPhysicsWorld->CreateBodies(m_Registry);
+            m_BulletPhysicsWorld->CreateBodies(m_Registry, m_EntityIndex);
         }
 
         // NativeScript OnCreate
@@ -207,7 +207,7 @@ namespace Engine
             m_PhysicsWorld->Step(ts, m_Registry, m_EntityIndex);
         else if (backend == PhysicsBackend::Bullet && m_BulletPhysicsWorld)
         {
-            m_BulletPhysicsWorld->Step(ts, m_Registry);
+            m_BulletPhysicsWorld->Step(ts, m_Registry, m_EntityIndex);
 
             const auto&                             events = m_BulletPhysicsWorld->GetCollisionEvents();
             std::set<std::pair<uint32_t, uint32_t>> processedParticlePairs;

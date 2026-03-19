@@ -96,7 +96,8 @@ namespace Engine
     glm::mat4 ShadowSystem::ComputeCascadeLightSpaceMatrix(const glm::vec3& lightDir,
                                                            const glm::mat4& invViewProj,
                                                            float            nearSplit,
-                                                           float            farSplit) const
+                                                           float            farSplit,
+                                                           float*           outTexelWorldSize) const
     {
         // 计算此分割的子视锥角点（NDC -> world）
         // 将 nearSplit/farSplit 映射到 NDC Z
@@ -169,6 +170,13 @@ namespace Engine
         // 适当扩展 Z 范围以包含在视锥外但能投射阴影的物体
         float zExtend = (maxZ - minZ) * 1.5f;
         minZ -= zExtend;
+
+        // 输出每 texel 覆盖的世界空间尺寸（用于着色器 bias 缩放）
+        if (outTexelWorldSize)
+        {
+            float orthoExtent  = std::max(maxX - minX, maxY - minY);
+            *outTexelWorldSize = orthoExtent / static_cast<float>(m_Settings.MapResolution);
+        }
 
         glm::mat4 lightProj = glm::ortho(minX, maxX, minY, maxY, minZ, maxZ);
         return lightProj * lightView;
@@ -329,8 +337,8 @@ namespace Engine
             float cascadeNear = (splits[i] - nearClip) / (farClip - nearClip);
             float cascadeFar  = (splits[i + 1] - nearClip) / (farClip - nearClip);
 
-            data.CascadeLightSpaceMatrices[i] =
-                ComputeCascadeLightSpaceMatrix(lightDir, invViewProj, cascadeNear, cascadeFar);
+            data.CascadeLightSpaceMatrices[i] = ComputeCascadeLightSpaceMatrix(
+                lightDir, invViewProj, cascadeNear, cascadeFar, &data.CascadeTexelWorldSizes[i]);
             data.CascadeSplitDepths[i] = splits[i + 1]; // view-space 远裁切
 
             // 检查 FBO 分辨率
