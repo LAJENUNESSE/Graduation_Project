@@ -34,17 +34,14 @@ namespace Engine
                         std::abs(basis[2][2]) * localHalfExtents.z};
         }
 
-        // 根据碰撞器形状计算世界空间逆惯性张量
-        glm::mat3 ComputeWorldInverseInertiaTensor(entt::registry&           reg,
-                                                   entt::entity              entity,
-                                                   const TransformComponent& transform,
-                                                   const RigidBodyComponent& rb)
+        // 根据碰撞器形状计算局部惯性张量
+        glm::mat3 ComputeLocalInertiaTensor(entt::registry&           reg,
+                                            entt::entity              entity,
+                                            const TransformComponent& transform,
+                                            const RigidBodyComponent& rb)
         {
-            if (rb.Mass <= 0.0f || rb.FixedRotation)
-                return glm::mat3(0.0f);
-
             float     m = rb.Mass;
-            glm::mat3 I_local(0.0f); // 局部惯性张量
+            glm::mat3 I_local(0.0f);
 
             if (reg.all_of<BoxColliderComponent>(entity))
             {
@@ -73,6 +70,20 @@ namespace Engine
                 float I_scalar = 0.4f * m;
                 I_local        = glm::mat3(I_scalar);
             }
+
+            return I_local;
+        }
+
+        // 根据碰撞器形状计算世界空间逆惯性张量
+        glm::mat3 ComputeWorldInverseInertiaTensor(entt::registry&           reg,
+                                                   entt::entity              entity,
+                                                   const TransformComponent& transform,
+                                                   const RigidBodyComponent& rb)
+        {
+            if (rb.Mass <= 0.0f || rb.FixedRotation)
+                return glm::mat3(0.0f);
+
+            glm::mat3 I_local = ComputeLocalInertiaTensor(reg, entity, transform, rb);
 
             // 逆惯性张量（局部空间，对角矩阵直接取倒数）
             glm::mat3 I_local_inv(0.0f);
@@ -156,11 +167,19 @@ namespace Engine
             rb.LinearVelocity += acceleration * dt;
             transform.Translation += rb.LinearVelocity * dt;
 
-            // 角速度积分
+            // 角速度积分（含陀螺力矩）
             if (!rb.FixedRotation)
             {
                 glm::mat3 invIWorld = ComputeWorldInverseInertiaTensor(reg, entity, transform, rb);
-                rb.AngularVelocity += invIWorld * rb.Torque * dt;
+
+                // 计算世界空间惯性张量用于陀螺项
+                glm::mat3 I_local = ComputeLocalInertiaTensor(reg, entity, transform, rb);
+                glm::mat3 R       = glm::mat3_cast(rb.Orientation);
+                glm::mat3 I_world = R * I_local * glm::transpose(R);
+
+                // 陀螺力矩: τ_gyro = ω × (I·ω)，非球对称惯量快速旋转时不可忽略
+                glm::vec3 gyroscopic = glm::cross(rb.AngularVelocity, I_world * rb.AngularVelocity);
+                rb.AngularVelocity += invIWorld * (rb.Torque - gyroscopic) * dt;
 
                 // 使用持久四元数积分，避免 eulerAngles round-trip 万向节锁
                 glm::quat w(0.0f, rb.AngularVelocity.x, rb.AngularVelocity.y, rb.AngularVelocity.z);
