@@ -49,7 +49,8 @@ namespace Engine
         // 递归销毁所有子实体
         if (entity.HasComponent<RelationshipComponent>())
         {
-            auto children = entity.GetComponent<RelationshipComponent>().Children;
+            // move 取出子列表后原容器为空，子实体递归删除时无需再从父中移除自身
+            auto children = std::move(entity.GetComponent<RelationshipComponent>().Children);
             for (auto childUUID : children)
             {
                 Entity child = FindEntityByUUID(childUUID);
