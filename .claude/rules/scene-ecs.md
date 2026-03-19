@@ -19,7 +19,7 @@ Scene (façade)
 │   └── VideoRuntimeStore     — FFmpegDecoder/Texture 容器
 └── Services (static)
     ├── SceneHierarchyService — 父子关系管理
-    └── WorldTransformService — 世界坐标计算
+    └── WorldTransformService — 世界坐标计算（含线程安全检查）
 ```
 
 ## 核心类
@@ -30,7 +30,8 @@ Scene (façade)
 - **SceneRuntimeCoordinator** — 隔离运行时逻辑（物理、脚本），持有 PhysicsWorld/BulletPhysicsWorld
 - **ResourceLifecycleCoordinator** — 三类清理回调：EntityCleanup / RuntimeStopCleanup / SceneDestroyCleanup
 - **SceneHierarchyService** — 静态工具类，SetParent/RemoveParent/GetChildren/IsAncestorOf/GetRootEntities
-- **WorldTransformService** — 静态工具类，ComputeWorldTransform（遍历父子链）
+- **WorldTransformService** — 静态工具类，ComputeWorldTransform（遍历父子链），含防御性线程安全检查
+- **WorldTransformCache** — 变换缓存辅助
 
 ## 渲染系统（Systems/）
 
@@ -51,6 +52,7 @@ Scene (façade)
 
 - 每个组件结构体必须有默认构造函数和拷贝构造函数
 - `Scene::OnRuntimeStart/Stop` 委托给 SceneRuntimeCoordinator
-- `Scene::DestroyEntity()` 会触发 ResourceLifecycleCoordinator 的 EntityCleanup 回调
+- `Scene::DestroyEntity()` 递归销毁子实体（先收集再删除，避免 O(N²) 扫描），触发 ResourceLifecycleCoordinator 的 EntityCleanup 回调
 - 物理后端可选（Bullet 或自研），不能混用
 - Scene 是 façade — 新功能应考虑提取为 Service 或 Coordinator，不要直接膨胀 Scene 类
+- SceneHierarchyService / WorldTransformService 已有单元测试覆盖，修改时需确保测试通过

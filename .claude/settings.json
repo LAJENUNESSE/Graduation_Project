@@ -21,7 +21,8 @@
       "Bash(sort *)",
       "Bash(grep *)",
       "Bash(tr *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(\"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe\":*)"
     ],
     "deny": [
       "Read(.env)",

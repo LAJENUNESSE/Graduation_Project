@@ -34,3 +34,5 @@ AssetHandle h = AssetManager::LoadAsync<Texture2D>("assets/textures/albedo.png")
 - 异步加载仅支持纹理，Mesh 始终同步
 - 路径相对于项目根目录，由 `EntryPoint.h` 自动设定工作目录
 - 维护 `s_TexturePathIndex` / `s_MeshPathIndex` 做路径去重，避免重复加载
+- SlotMap `Remove()` 会屏蔽保留槽 index=0，避免误删
+- `AssetHandle::IsValid()` 检查 index + generation 双重验证
