@@ -63,3 +63,6 @@ temp/
 
 # Autosave
 .autosave/
+
+# patch
+patches/
