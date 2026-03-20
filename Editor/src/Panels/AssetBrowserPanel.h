@@ -3,9 +3,11 @@
 #include "Core/Base.h"
 #include "Scene/Scene.h"
 
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Engine
@@ -62,6 +64,14 @@ namespace Engine
         Ref<Scene>        m_Scene;
         SceneOpenCallback m_OnSceneOpen;
         std::string       m_LastFilesystemError;
+
+        // 目录缓存（按路径键值，1 秒过期）
+        std::unordered_map<std::string, std::vector<std::filesystem::directory_entry>> m_DirectoryCache;
+        std::chrono::steady_clock::time_point                                          m_CacheTimestamp;
+
+        void InvalidateDirectoryCache();
+        bool TryEnumerateDirectoryCached(const std::filesystem::path&                   directory,
+                                         std::vector<std::filesystem::directory_entry>& outEntries);
 
         // 图片预览
         bool           m_ShowImagePreview = false;

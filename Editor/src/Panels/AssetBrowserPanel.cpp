@@ -220,6 +220,38 @@ namespace Engine
         return "[F]";
     }
 
+    void AssetBrowserPanel::InvalidateDirectoryCache()
+    {
+        m_DirectoryCache.clear();
+    }
+
+    bool AssetBrowserPanel::TryEnumerateDirectoryCached(const std::filesystem::path&                   directory,
+                                                        std::vector<std::filesystem::directory_entry>& outEntries)
+    {
+        // 每秒过期一次，刷新全部缓存
+        auto  now     = std::chrono::steady_clock::now();
+        float elapsed = std::chrono::duration<float>(now - m_CacheTimestamp).count();
+        if (elapsed > 1.0f)
+        {
+            m_DirectoryCache.clear();
+            m_CacheTimestamp = now;
+        }
+
+        std::string key = directory.string();
+        auto        it  = m_DirectoryCache.find(key);
+        if (it != m_DirectoryCache.end())
+        {
+            outEntries = it->second;
+            return true;
+        }
+
+        if (!TryEnumerateDirectory(directory, outEntries))
+            return false;
+
+        m_DirectoryCache[key] = outEntries;
+        return true;
+    }
+
     void AssetBrowserPanel::OnImGuiRender()
     {
         m_LastFilesystemError.clear();
@@ -332,7 +364,7 @@ namespace Engine
 
         std::vector<std::filesystem::directory_entry> entries;
         bool                                          hasSubDirs = false;
-        if (TryEnumerateDirectory(directory, entries))
+        if (TryEnumerateDirectoryCached(directory, entries))
         {
             for (const auto& entry : entries)
             {
@@ -393,7 +425,8 @@ namespace Engine
         if (ImGui::BeginPopupContextWindow("AssetBrowserContextMenu",
                                            ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
         {
-            ImGui::MenuItem("刷新");
+            if (ImGui::MenuItem("刷新"))
+                InvalidateDirectoryCache();
 #ifdef _WIN32
             if (ImGui::MenuItem("在文件管理器中打开"))
             {
@@ -404,7 +437,7 @@ namespace Engine
         }
 
         std::vector<std::filesystem::directory_entry> entries;
-        if (!TryEnumerateDirectory(m_CurrentDirectory, entries))
+        if (!TryEnumerateDirectoryCached(m_CurrentDirectory, entries))
             return;
 
         std::sort(entries.begin(), entries.end(),
