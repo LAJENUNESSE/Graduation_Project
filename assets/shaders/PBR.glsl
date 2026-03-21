@@ -336,7 +336,7 @@ void main() {
     for (int i = 1; i < u_NumDirLights; i++) {
         vec3 L = normalize(-u_DirLights[i].direction);
         vec3 radiance = u_DirLights[i].color * u_DirLights[i].intensity;
-        Lo += CalcPBRLight(L, radiance, N, V, albedo, metallic, roughness, F0);
+        Lo += (1.0 - shadow) * CalcPBRLight(L, radiance, N, V, albedo, metallic, roughness, F0);
     }
 
     // Point lights
