@@ -1,6 +1,6 @@
 [submodule "vendor/glfw"]
 	path = vendor/glfw
-	url = https://github.com/glfw/glfw.git
+	url = https://github.com/LAJENUNESSE/glfw.git
 	shallow = true
 [submodule "vendor/glm"]
 	path = vendor/glm
