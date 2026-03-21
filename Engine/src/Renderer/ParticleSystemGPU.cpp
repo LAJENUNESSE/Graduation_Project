@@ -115,6 +115,7 @@ namespace Engine
         // Load compute shaders
         m_EmitShader       = Shader::Create("assets/shaders/particle_emit.glsl");
         m_SimulateShader   = Shader::Create("assets/shaders/particle_simulate.glsl");
+        m_CompactShader    = Shader::Create("assets/shaders/particle_compact.glsl");
         m_RenderArgsShader = Shader::Create("assets/shaders/particle_render_args.glsl");
         m_BillboardShader  = Shader::Create("assets/shaders/particle_billboard.glsl");
 
@@ -418,6 +419,26 @@ namespace Engine
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
             }
 
+            // ---- Pass 1.5: Compact alive/dead lists (fresh for SPH) ----
+            // emit 后立即重建 alive list，确保 SPH 看到新生粒子
+            if (sphEnabled)
+            {
+                CounterData zero{};
+                m_CounterBuffer->SetData(&zero, sizeof(CounterData), 0);
+                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                m_CompactShader->Bind();
+                m_CompactShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
+                uint32_t compactGroups = (m_MaxParticles + 255) / 256;
+                RenderCommand::DispatchCompute(compactGroups);
+                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+                // 同步回读 aliveCount（SPH 需要精确值，每帧一次开销可接受）
+                CounterData counters{};
+                m_CounterBuffer->GetData(&counters, sizeof(CounterData), 0);
+                m_LastAliveCount = counters.aliveCount;
+            }
+
             // ---- SPH passes (only when SPHEnabled) ----
             if (sphEnabled)
             {
@@ -425,8 +446,7 @@ namespace Engine
                 if (!m_SPHInitialized)
                     InitSPH(emitter.SPH.SmoothingRadius);
 
-                // 用上一帧的活跃粒子数做 SPH dispatch（本帧 aliveCount 还没建好）
-                // 首帧 m_LastAliveCount=0 会跳过 SPH，第二帧开始正常
+                // compact 已重建 alive list，m_LastAliveCount 是当前帧精确值
                 if (m_LastAliveCount > 0)
                 {
                     float cellSize = m_Grid.GetCellSize();
@@ -597,9 +617,8 @@ namespace Engine
             }
 
             // ---- Pass 3: Simulate (gravity + damping + alive/dead management) ----
-            // 使用上一帧回读的存活数来优化 dispatch，避免在粒子很少时仍调度全部 workgroup
-            uint32_t aliveEstimate = m_LastAliveCount + emitCount;
-            if (aliveEstimate > 0)
+            // simulate 遍历全池处理 lifetime，dispatch 全部 workgroup
+            if (m_LastAliveCount > 0 || emitCount > 0)
             {
                 // PCISPH handles gravity internally, so pass zero gravity to simulate pass
                 glm::vec3 simGravity = (sphEnabled && emitter.SPH.PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;

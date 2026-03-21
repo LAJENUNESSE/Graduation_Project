@@ -47,6 +47,7 @@ namespace Engine
         // Shaders
         Ref<Shader> m_EmitShader;
         Ref<Shader> m_SimulateShader;
+        Ref<Shader> m_CompactShader;
         Ref<Shader> m_RenderArgsShader;
         Ref<Shader> m_BillboardShader;
 
