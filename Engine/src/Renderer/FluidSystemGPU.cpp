@@ -141,6 +141,10 @@ namespace Engine
         float    cellSize = 2.0f * smoothingRadius;
         uint32_t gridSize = 64;
         m_Grid.Init(m_ParticleCount, gridSize, cellSize);
+
+        // Akinci 表面法线 SSBO: vec4 per particle, binding 8
+        m_SurfaceNormalBuffer = ShaderStorageBuffer::CreateGPUOnly(m_ParticleCount * sizeof(glm::vec4), 8);
+
         m_SPHInitialized = true;
     }
 
@@ -387,6 +391,7 @@ namespace Engine
             m_Grid.Build(m_ParticleCount);
 
             // SPH Density
+            m_SurfaceNormalBuffer->Bind(8);
             m_SPHShaders.DensityShader->Bind();
             m_SPHShaders.DensityShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
             m_SPHShaders.DensityShader->SetFloat("u_SmoothingRadius", kp.h);
@@ -396,6 +401,8 @@ namespace Engine
             m_SPHShaders.DensityShader->SetInt("u_GridSize", gridSize);
             m_SPHShaders.DensityShader->SetFloat("u_CellSize", cellSize);
             m_SPHShaders.DensityShader->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
+            m_SPHShaders.DensityShader->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
+            m_SPHShaders.DensityShader->SetFloat("u_SurfaceTension", emitter.SurfaceTension);
 
             uint32_t sphGroups = (m_ParticleCount + 255) / 256;
             RenderCommand::DispatchCompute(sphGroups);
@@ -417,6 +424,7 @@ namespace Engine
                 m_PCISPHBuffer->Bind(1);
                 if (m_RigidBodyBuffer)
                     m_RigidBodyBuffer->Bind(3);
+                m_SurfaceNormalBuffer->Bind(8); // Akinci 表面法线（density pass 已写入）
 
                 // PCISPH Init
                 m_SPHShaders.PCISPHInit->Bind();
@@ -499,6 +507,7 @@ namespace Engine
             else
             {
                 // --- WCSPH path ---
+                m_SurfaceNormalBuffer->Bind(8); // Akinci 表面法线（density pass 已写入）
                 m_SPHShaders.ForceShader->Bind();
                 m_SPHShaders.ForceShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
                 m_SPHShaders.ForceShader->SetFloat("u_SmoothingRadius", kp.h);

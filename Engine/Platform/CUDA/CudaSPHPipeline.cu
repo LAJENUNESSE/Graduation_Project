@@ -29,6 +29,7 @@ namespace Engine
             uint32_t*      d_sortedIndices; // N × uint32
             PCISPHData*    d_pcisph;        // N × 48B
             RigidBodyData* d_rigidBody;     // maxRB × 112B
+            float4*        d_surfaceNormals; // N × float4 (Akinci 表面法线)
             void*          d_cubTemp;       // CUB 临时存储
             size_t         cubTempBytes;
             uint32_t       maxParticles;
@@ -55,6 +56,7 @@ namespace Engine
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_sortedIndices, maxParticles * sizeof(uint32_t)));
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_pcisph, maxParticles * sizeof(PCISPHData)));
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_rigidBody, maxRigidBodies * sizeof(RigidBodyData)));
+            ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_surfaceNormals, maxParticles * sizeof(float4)));
 
             if (ok)
             {
@@ -85,6 +87,7 @@ namespace Engine
             cudaFree(ctx->d_sortedIndices);
             cudaFree(ctx->d_pcisph);
             cudaFree(ctx->d_rigidBody);
+            cudaFree(ctx->d_surfaceNormals);
             cudaFree(ctx->d_cubTemp);
             delete ctx;
         }
@@ -407,6 +410,7 @@ namespace Engine
                                              uint32_t*    d_cellStart,
                                              uint32_t*    d_cellCount,
                                              uint32_t*    d_sortedIndices,
+                                             float4*      d_surfaceNormals,
                                              SPHParams    p)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -421,6 +425,9 @@ namespace Engine
             float h2 = h * h;
 
             float density = 0.0f;
+
+            // Akinci 表面法线累加器
+            float snx = 0.0f, sny = 0.0f, snz = 0.0f;
 
             int gx0, gy0, gz0;
             PosToCell(px, py, pz, p.cellSize, gx0, gy0, gz0);
@@ -442,10 +449,27 @@ namespace Engine
                             float    dz2 = pz - particles[j].posAndLife.z;
                             float    r2  = dx2 * dx2 + dy2 * dy2 + dz2 * dz2;
                             density += p.particleMass * Poly6(r2, h2, p.poly6Coeff);
+
+                            // Akinci 表面法线: n += (m / ρ_j) * ∇W_spiky
+                            if (p.surfaceTension > 0.0f && r2 > 1e-12f && r2 < h2)
+                            {
+                                float r       = sqrtf(r2);
+                                float densJ   = particles[j].params.z;
+                                if (densJ < 0.0001f) densJ = 0.0001f;
+                                float spikyG  = SpikyGrad(r, h, p.spikyCoeff);
+                                float invR    = 1.0f / r;
+                                float coeff   = (p.particleMass / densJ) * spikyG * invR;
+                                snx += coeff * dx2;
+                                sny += coeff * dy2;
+                                snz += coeff * dz2;
+                            }
                         }
                     }
 
             particles[i].params.z = density; // z=density
+
+            // 写出 Akinci 表面法线 (乘以 h)
+            d_surfaceNormals[i] = make_float4(h * snx, h * sny, h * snz, 0.0f);
         }
 
         void LaunchSPHDensity(void* ctxPtr, void* particles, const SPHParams& p, void* stream)
@@ -458,7 +482,7 @@ namespace Engine
             GPUParticle*    devP = static_cast<GPUParticle*>(particles);
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
-            DensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount, ctx->d_sortedIndices, p);
+            DensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount, ctx->d_sortedIndices, ctx->d_surfaceNormals, p);
             CUDA_CHECK_KERNEL("DensityKernel");
         }
 
@@ -471,6 +495,7 @@ namespace Engine
                                            uint32_t*        d_cellCount,
                                            uint32_t*        d_sortedIndices,
                                            RigidBodyData*   d_rigidBody,
+                                           const float4*    d_surfaceNormals,
                                            SPHParams        p,
                                            PCISPHIterParams ip)
         {
@@ -497,6 +522,9 @@ namespace Engine
             float fpx = 0.0f, fpy = 0.0f, fpz = 0.0f; // 压力
             float fvx = 0.0f, fvy = 0.0f, fvz = 0.0f; // 粘性
             float fsx = 0.0f, fsy = 0.0f, fsz = 0.0f; // 表面张力
+
+            // Akinci 表面法线（从 DensityKernel 预计算）
+            float4 normalI = d_surfaceNormals[i];
 
             int gx0, gy0, gz0;
             PosToCell(px, py, pz, p.cellSize, gx0, gy0, gz0);
@@ -544,14 +572,21 @@ namespace Engine
                             fvy += viscMul * (particles[j].velAndMaxLife.y - vy_i);
                             fvz += viscMul * (particles[j].velAndMaxLife.z - vz_i);
 
-                            // 表面张力
+                            // Akinci 2013 表面张力: cohesion + curvature
                             if (p.surfaceTension > 0.0f && r > 0.001f)
                             {
+                                // 内聚力
                                 float cspline = CSpline(r, h);
                                 float stMul   = -p.surfaceTension * p.particleMass * cspline;
                                 fsx += stMul * rx * invR;
                                 fsy += stMul * ry * invR;
                                 fsz += stMul * rz * invR;
+                                // 曲率修正: f_curvature = -γ * m_j * (n_i - n_j)
+                                float4 normalJ = d_surfaceNormals[j];
+                                float  curvMul = -p.surfaceTension * p.particleMass;
+                                fsx += curvMul * (normalI.x - normalJ.x);
+                                fsy += curvMul * (normalI.y - normalJ.y);
+                                fsz += curvMul * (normalI.z - normalJ.z);
                             }
                         }
                     }
@@ -599,7 +634,7 @@ namespace Engine
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
             ForceKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount, ctx->d_sortedIndices,
-                                                  ctx->d_rigidBody, p, ip);
+                                                  ctx->d_rigidBody, ctx->d_surfaceNormals, p, ip);
             CUDA_CHECK_KERNEL("ForceKernel");
         }
 
@@ -607,12 +642,13 @@ namespace Engine
         // PCISPH Init 内核（移植自 sph_pcisph_init.glsl）
         // ======================================================================
 
-        __global__ static void PCISPHInitKernel(GPUParticle* particles,
-                                                PCISPHData*  pcisph,
-                                                uint32_t*    d_cellStart,
-                                                uint32_t*    d_cellCount,
-                                                uint32_t*    d_sortedIndices,
-                                                SPHParams    p)
+        __global__ static void PCISPHInitKernel(GPUParticle*   particles,
+                                                PCISPHData*    pcisph,
+                                                uint32_t*      d_cellStart,
+                                                uint32_t*      d_cellCount,
+                                                uint32_t*      d_sortedIndices,
+                                                const float4*  d_surfaceNormals,
+                                                SPHParams      p)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= (uint32_t)p.aliveCount)
@@ -635,6 +671,9 @@ namespace Engine
             // 力累加（不是加速度）
             float fvx = 0.0f, fvy = 0.0f, fvz = 0.0f; // 粘性
             float fsx = 0.0f, fsy = 0.0f, fsz = 0.0f; // 表面张力
+
+            // Akinci 表面法线（从 DensityKernel 预计算）
+            float4 normalI = d_surfaceNormals[i];
 
             int gx0, gy0, gz0;
             PosToCell(px, py, pz, p.cellSize, gx0, gy0, gz0);
@@ -673,15 +712,22 @@ namespace Engine
                             fvy += viscMul * (particles[j].velAndMaxLife.y - vy_i);
                             fvz += viscMul * (particles[j].velAndMaxLife.z - vz_i);
 
-                            // 表面张力
+                            // Akinci 2013 表面张力: cohesion + curvature
                             if (p.surfaceTension > 0.0f && r > 0.001f)
                             {
+                                // 内聚力
                                 float cspline = CSpline(r, h);
-                                float stMul   = -p.surfaceTension * p.particleMass * cspline;
                                 float invR    = 1.0f / r;
+                                float stMul   = -p.surfaceTension * p.particleMass * cspline;
                                 fsx += stMul * rx * invR;
                                 fsy += stMul * ry * invR;
                                 fsz += stMul * rz * invR;
+                                // 曲率修正: f_curvature = -γ * m_j * (n_i - n_j)
+                                float4 normalJ = d_surfaceNormals[j];
+                                float  curvMul = -p.surfaceTension * p.particleMass;
+                                fsx += curvMul * (normalI.x - normalJ.x);
+                                fsy += curvMul * (normalI.y - normalJ.y);
+                                fsz += curvMul * (normalI.z - normalJ.z);
                             }
                         }
                     }
@@ -730,7 +776,7 @@ namespace Engine
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
             PCISPHInitKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellStart, ctx->d_cellCount,
-                                                       ctx->d_sortedIndices, p);
+                                                       ctx->d_sortedIndices, ctx->d_surfaceNormals, p);
             CUDA_CHECK_KERNEL("PCISPHInitKernel");
         }
 

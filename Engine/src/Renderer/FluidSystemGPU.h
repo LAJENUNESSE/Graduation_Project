@@ -61,8 +61,9 @@ namespace Engine
         float m_TotalTime      = 0.0f;
 
         // PCISPH
-        Ref<ShaderStorageBuffer> m_PCISPHBuffer;    // 48B/particle
-        Ref<ShaderStorageBuffer> m_RigidBodyBuffer; // 112B × MAX_RIGID_BODIES
+        Ref<ShaderStorageBuffer> m_PCISPHBuffer;        // 48B/particle
+        Ref<ShaderStorageBuffer> m_RigidBodyBuffer;     // 112B × MAX_RIGID_BODIES
+        Ref<ShaderStorageBuffer> m_SurfaceNormalBuffer; // vec4/particle, binding 8 (Akinci 表面法线)
         bool                     m_PCISPHInitialized = false;
 
         void InitSPH(float smoothingRadius);

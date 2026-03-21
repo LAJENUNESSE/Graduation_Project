@@ -21,6 +21,7 @@ layout(std430, binding = 2) readonly buffer AliveList    { uint aliveIndices[]; 
 layout(std430, binding = 5) readonly buffer CellStart    { uint cellStart[];        };
 layout(std430, binding = 6) readonly buffer CellCount    { uint cellCount[];        };
 layout(std430, binding = 7) readonly buffer SortedIndices { uint sortedIndices[];   };
+layout(std430, binding = 8) writeonly buffer SurfaceNormals { vec4 surfaceNormals[]; };
 
 uniform int   u_AliveCount;
 uniform float u_SmoothingRadius;   // h
@@ -30,6 +31,8 @@ uniform float u_GasConstant;       // k
 uniform int   u_GridSize;
 uniform float u_CellSize;
 uniform float u_Poly6Coeff;        // 315 / (64 * π * h^9), CPU 预计算
+uniform float u_SpikyCoeff;        // -45 / (π * h^6), CPU 预计算（表面法线需要）
+uniform float u_SurfaceTension;    // γ, 0=关闭（控制是否计算表面法线）
 
 // Poly6 kernel: W(r, h) = u_Poly6Coeff * (h² - r²)³
 float poly6(float r2, float h)
@@ -38,6 +41,15 @@ float poly6(float r2, float h)
     if (r2 >= h2) return 0.0;
     float diff = h2 - r2;
     return u_Poly6Coeff * diff * diff * diff;
+}
+
+// Spiky kernel gradient: ∇W_spiky = u_SpikyCoeff * (h - |r|)² * (r/|r|)
+// 用于计算 Akinci 表面法线 n_i = h * Σ (m_j / ρ_j) * ∇W(r_ij)
+vec3 spikyGrad(vec3 diff, float dist, float h)
+{
+    if (dist <= 0.0 || dist >= h) return vec3(0.0);
+    float hd = h - dist;
+    return u_SpikyCoeff * hd * hd * (diff / dist);
 }
 
 // 空间哈希：将 3D 坐标映射到 1D cell index
@@ -61,6 +73,9 @@ void main()
 
     // 自身贡献
     float density = u_ParticleMass * poly6(0.0, h);
+
+    // Akinci 表面法线: n_i = h * Σ (m_j / ρ_j) * ∇W_spiky(r_ij)
+    vec3 surfaceNormal = vec3(0.0);
 
     // 遍历 3x3x3 邻域 cells
     ivec3 myCell = ivec3(floor(posI / u_CellSize));
@@ -93,6 +108,15 @@ void main()
             float r2 = dot(diff, diff);
 
             density += u_ParticleMass * poly6(r2, h);
+
+            // 表面法线累加: n += (m_j / ρ_j) * ∇W_spiky
+            if (u_SurfaceTension > 0.0)
+            {
+                float dist = sqrt(r2);
+                float densityJ = particles[neighborParticleIdx].params.z;
+                if (densityJ < 0.0001) densityJ = 0.0001;
+                surfaceNormal += (u_ParticleMass / densityJ) * spikyGrad(diff, dist, h);
+            }
         }
     }
 
@@ -102,4 +126,7 @@ void main()
     // 写入 params.zw (不影响 sizeStart/sizeEnd in params.xy)
     particles[myParticleIdx].params.z = density;
     particles[myParticleIdx].params.w = pressure;
+
+    // 写出 Akinci 表面法线 (乘以 h 得到最终 n_i)
+    surfaceNormals[gid] = (u_SurfaceTension > 0.0) ? vec4(h * surfaceNormal, 0.0) : vec4(0.0);
 }

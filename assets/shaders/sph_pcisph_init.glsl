@@ -28,6 +28,7 @@ layout(std430, binding = 2) readonly buffer AliveList     { uint aliveIndices[];
 layout(std430, binding = 5) readonly buffer CellStart     { uint cellStart[];        };
 layout(std430, binding = 6) readonly buffer CellCount     { uint cellCount[];        };
 layout(std430, binding = 7) readonly buffer SortedIndices  { uint sortedIndices[];   };
+layout(std430, binding = 8) readonly buffer SurfaceNormals { vec4 surfaceNormals[]; };
 
 uniform int   u_AliveCount;
 uniform float u_SmoothingRadius;   // h
@@ -96,6 +97,9 @@ void main()
     vec3 fViscosity = vec3(0.0);
     vec3 fSurfTension = vec3(0.0);
 
+    // Akinci 表面法线（从 density pass 预计算）
+    vec3 normalI = surfaceNormals[gid].xyz;
+
     // 遍历 3x3x3 邻域 cells
     ivec3 myCell = ivec3(floor(posI / u_CellSize));
 
@@ -133,11 +137,15 @@ void main()
             fViscosity += u_Viscosity * u_ParticleMass * (velJ - velI) / densityJ
                           * viscLaplacian(dist, h);
 
-            // 表面张力 (Akinci): f_st = -γ * m_j * C_spline(r, h) * (r_ij / |r_ij|)
+            // Akinci 2013 表面张力: cohesion + curvature
             if (u_SurfaceTension > 0.0 && dist > 0.001)
             {
+                // 内聚力
                 fSurfTension += -u_SurfaceTension * u_ParticleMass
                                 * C_spline(dist, h) * (diff / dist);
+                // 曲率修正: f_curvature = -γ * m_j * (n_i - n_j)
+                vec3 normalJ = surfaceNormals[neighborAliveIdx].xyz;
+                fSurfTension += -u_SurfaceTension * u_ParticleMass * (normalI - normalJ);
             }
         }
     }
