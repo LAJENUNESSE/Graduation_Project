@@ -33,14 +33,14 @@ void main()
 
     vec3 vel = particles[idx].velAndMaxLife.xyz;
 
-    // 先阻尼现有速度（不影响重力）
-    vel *= u_Damping;
-
-    // 再叠加重力（PCISPH 模式下外部传入零重力）
+    // 先叠加重力（PCISPH 模式下外部传入零重力）
     if (u_PCISPHMode == 0)
     {
         vel += u_Gravity * u_DeltaTime;
     }
+
+    // 再阻尼（统一与 CUDA FluidSimulateKernel 顺序：先力后阻尼）
+    vel *= u_Damping;
 
     vec3 pos;
     if (u_PCISPHMode == 0)

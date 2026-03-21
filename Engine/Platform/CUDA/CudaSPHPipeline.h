@@ -31,6 +31,7 @@ namespace Engine
             float pcisphDelta;
             float boundaryStiffness, boundaryDamping;
             int   rigidBodyCount;
+            int   usePredictedPos; // 迭代 1+ 使用预测位置（与 GLSL u_UsePredictedPos 一致）
         };
 
         // 流体积分参数

@@ -302,6 +302,7 @@ namespace Engine
                 ip.boundaryStiffness = emitter.BoundaryStiffness;
                 ip.boundaryDamping   = emitter.BoundaryDamping;
                 ip.rigidBodyCount    = static_cast<int>(cudaRigidBodyCount);
+                ip.usePredictedPos   = 0;
 
                 if (emitter.PCISPHEnabled)
                 {
@@ -318,6 +319,7 @@ namespace Engine
                         }
                         CudaInterop::LaunchPCISPHPredict(m_CudaSPHCtx, devParticles, clampedDt,
                                                          static_cast<int>(m_ParticleCount), stream);
+                        ip.usePredictedPos = (iter > 0) ? 1 : 0;
                         CudaInterop::LaunchPCISPHDensity(m_CudaSPHCtx, devParticles, p, ip, stream);
                         CudaInterop::LaunchPCISPHForce(m_CudaSPHCtx, devParticles, p, ip, stream);
                     }

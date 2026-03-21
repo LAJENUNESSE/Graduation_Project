@@ -424,7 +424,7 @@ namespace Engine
             float h  = p.smoothingRadius;
             float h2 = h * h;
 
-            float density = 0.0f;
+            float density = p.particleMass * Poly6(0.0f, h2, p.poly6Coeff);
 
             // Akinci 表面法线累加器
             float snx = 0.0f, sny = 0.0f, snz = 0.0f;
@@ -912,9 +912,20 @@ namespace Engine
                 return;
 
             // 用原始位置进行 cell 查找（grid 基于原始位置构建）
-            float px        = particles[i].posAndLife.x;
-            float py        = particles[i].posAndLife.y;
-            float pz        = particles[i].posAndLife.z;
+            // 距离计算：迭代 1+ 使用预测位置（与 GLSL u_UsePredictedPos 一致）
+            float px, py, pz;
+            if (ip.usePredictedPos)
+            {
+                px = pcisph[i].predictedPosAndPressure.x;
+                py = pcisph[i].predictedPosAndPressure.y;
+                pz = pcisph[i].predictedPosAndPressure.z;
+            }
+            else
+            {
+                px = particles[i].posAndLife.x;
+                py = particles[i].posAndLife.y;
+                pz = particles[i].posAndLife.z;
+            }
             float pressureI = pcisph[i].predictedPosAndPressure.w;
             float densityI  = pcisph[i].predictedVelAndDensity.w;
             float h         = p.smoothingRadius;
@@ -926,7 +937,11 @@ namespace Engine
             float fpx = 0.0f, fpy = 0.0f, fpz = 0.0f; // 压力力
 
             int gx0, gy0, gz0;
-            PosToCell(px, py, pz, p.cellSize, gx0, gy0, gz0);
+            // grid cell 查找仍用原始位置（grid 基于原始位置构建）
+            float origPx = particles[i].posAndLife.x;
+            float origPy = particles[i].posAndLife.y;
+            float origPz = particles[i].posAndLife.z;
+            PosToCell(origPx, origPy, origPz, p.cellSize, gx0, gy0, gz0);
 
             for (int dz = -1; dz <= 1; dz++)
                 for (int dy = -1; dy <= 1; dy++)
@@ -943,10 +958,16 @@ namespace Engine
                             if (j == i)
                                 continue;
 
-                            // 用原始位置计算距离（与 GLSL 一致）
-                            float rx = px - particles[j].posAndLife.x;
-                            float ry = py - particles[j].posAndLife.y;
-                            float rz = pz - particles[j].posAndLife.z;
+                            // 用预测位置或原始位置计算距离（与 PCISPHDensityKernel 策略一致）
+                            float njx = ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.x
+                                                           : particles[j].posAndLife.x;
+                            float njy = ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.y
+                                                           : particles[j].posAndLife.y;
+                            float njz = ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.z
+                                                           : particles[j].posAndLife.z;
+                            float rx = px - njx;
+                            float ry = py - njy;
+                            float rz = pz - njz;
                             float r2 = rx * rx + ry * ry + rz * rz;
                             if (r2 >= h2 || r2 < 1e-12f)
                                 continue;
