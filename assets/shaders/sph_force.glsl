@@ -177,7 +177,11 @@ void main()
             vec3 d = abs(localPos) - he;
             sdf = length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
             vec3 s = sign(localPos);
-            if (d.x > d.y && d.x > d.z)
+            vec3 outside = max(d, 0.0);
+            float outsideLen = length(outside);
+            if (outsideLen > 1e-6)
+                localNormal = s * outside / outsideLen;
+            else if (d.x > d.y && d.x > d.z)
                 localNormal = vec3(s.x, 0.0, 0.0);
             else if (d.y > d.z)
                 localNormal = vec3(0.0, s.y, 0.0);

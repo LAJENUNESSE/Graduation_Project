@@ -219,7 +219,15 @@ namespace Engine
                     float sx = (lx >= 0.0f) ? 1.0f : -1.0f;
                     float sy = (ly >= 0.0f) ? 1.0f : -1.0f;
                     float sz = (lz >= 0.0f) ? 1.0f : -1.0f;
-                    if (ddx > ddy && ddx > ddz)
+                    float outsideLen = sqrtf(ox * ox + oy * oy + oz * oz);
+                    if (outsideLen > 1e-6f)
+                    {
+                        float invOL = 1.0f / outsideLen;
+                        lnx = sx * ox * invOL;
+                        lny = sy * oy * invOL;
+                        lnz = sz * oz * invOL;
+                    }
+                    else if (ddx > ddy && ddx > ddz)
                     {
                         lnx = sx;
                         lny = 0.0f;
@@ -903,10 +911,10 @@ namespace Engine
                             if (densityJ < 0.0001f)
                                 densityJ = 0.0001f;
 
-                            // 压力力: f_press = -m * (P_i + P_j) / (2 * ρ_j) * ∇W_spiky
+                            // 压力加速度 (Solenthaler 2009): -m * (P_i/ρ_i² + P_j/ρ_j²) * ∇W_spiky
                             float spikyG    = SpikyGrad(r, h, p.spikyCoeff);
                             float invR      = 1.0f / r;
-                            float pressTerm = -p.particleMass * (pressureI + pressureJ) / (2.0f * densityJ);
+                            float pressTerm = -p.particleMass * (pressureI / (densityI * densityI) + pressureJ / (densityJ * densityJ));
                             fpx += pressTerm * spikyG * rx * invR;
                             fpy += pressTerm * spikyG * ry * invR;
                             fpz += pressTerm * spikyG * rz * invR;
@@ -927,10 +935,10 @@ namespace Engine
             float age     = maxLife - life;
             float warmup  = (p.warmupTime > 0.0f) ? fminf(fmaxf(age / p.warmupTime, 0.0f), 1.0f) : 1.0f;
 
-            // 压力加速度 = (fPressure * warmup + fBoundary) / ρ_i
-            float ax = (fpx * warmup + fbx) / densityI;
-            float ay = (fpy * warmup + fby) / densityI;
-            float az = (fpz * warmup + fbz) / densityI;
+            // 压力加速度（fPressure 已是加速度量级，fBoundary 仍需除密度）
+            float ax = fpx * warmup + fbx / densityI;
+            float ay = fpy * warmup + fby / densityI;
+            float az = fpz * warmup + fbz / densityI;
 
             // 安全限幅
             float accelMag = sqrtf(ax * ax + ay * ay + az * az);

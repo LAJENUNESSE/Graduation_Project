@@ -124,8 +124,9 @@ void main()
             vec3 diff = posI - posJ;
             float dist = length(diff);
 
-            // 压力力: f_press = -Σ m_j * (P_i + P_j) / (2 * ρ_j) * ∇W_spiky
-            fPressure += -u_ParticleMass * (pressureI + pressureJ) / (2.0 * densityJ)
+            // 压力加速度 (Solenthaler 2009): a_press = -Σ m_j * (P_i/ρ_i² + P_j/ρ_j²) * ∇W_spiky
+            fPressure += -u_ParticleMass
+                         * (pressureI / (densityI * densityI) + pressureJ / (densityJ * densityJ))
                          * spikyGrad(diff, dist, h);
         }
     }
@@ -150,7 +151,11 @@ void main()
             vec3 d = abs(localPos) - he;
             sdf = length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
             vec3 s = sign(localPos);
-            if (d.x > d.y && d.x > d.z)
+            vec3 outside = max(d, 0.0);
+            float outsideLen = length(outside);
+            if (outsideLen > 1e-6)
+                localNormal = s * outside / outsideLen;
+            else if (d.x > d.y && d.x > d.z)
                 localNormal = vec3(s.x, 0, 0);
             else if (d.y > d.z)
                 localNormal = vec3(0, s.y, 0);
@@ -182,8 +187,8 @@ void main()
     float age     = maxLife - life;
     float warmup  = (u_WarmupTime > 0.0) ? clamp(age / u_WarmupTime, 0.0, 1.0) : 1.0;
 
-    // 压力加速度（仅对压力施加 warmup，边界力保持全强度防止穿透）
-    vec3 a_pressure = (fPressure * warmup + fBoundary) / densityI;
+    // 压力加速度（fPressure 已是加速度量级，fBoundary 仍需除密度）
+    vec3 a_pressure = fPressure * warmup + fBoundary / densityI;
 
     // 安全限幅
     float maxAccel = 500.0;

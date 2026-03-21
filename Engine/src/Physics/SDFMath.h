@@ -47,28 +47,41 @@ namespace Engine
 
             r.sdf = std::sqrt(ox * ox + oy * oy + oz * oz) + inner;
 
-            // 法线：沿穿透最深轴
+            // 法线：外部用 SDF 梯度 normalize(max(d,0))，内部沿最近面轴
             float sx = (lx >= 0.0f) ? 1.0f : -1.0f;
             float sy = (ly >= 0.0f) ? 1.0f : -1.0f;
             float sz = (lz >= 0.0f) ? 1.0f : -1.0f;
 
-            if (ddx > ddy && ddx > ddz)
+            float outsideLen = std::sqrt(ox * ox + oy * oy + oz * oz);
+            if (outsideLen > 1e-6f)
             {
-                r.normalX = sx;
-                r.normalY = 0.0f;
-                r.normalZ = 0.0f;
-            }
-            else if (ddy > ddz)
-            {
-                r.normalX = 0.0f;
-                r.normalY = sy;
-                r.normalZ = 0.0f;
+                // 外部（含 edge/corner）：梯度方向
+                float invOL = 1.0f / outsideLen;
+                r.normalX   = sx * ox * invOL;
+                r.normalY   = sy * oy * invOL;
+                r.normalZ   = sz * oz * invOL;
             }
             else
             {
-                r.normalX = 0.0f;
-                r.normalY = 0.0f;
-                r.normalZ = sz;
+                // 内部：最近面法线
+                if (ddx > ddy && ddx > ddz)
+                {
+                    r.normalX = sx;
+                    r.normalY = 0.0f;
+                    r.normalZ = 0.0f;
+                }
+                else if (ddy > ddz)
+                {
+                    r.normalX = 0.0f;
+                    r.normalY = sy;
+                    r.normalZ = 0.0f;
+                }
+                else
+                {
+                    r.normalX = 0.0f;
+                    r.normalY = 0.0f;
+                    r.normalZ = sz;
+                }
             }
 
             return r;
