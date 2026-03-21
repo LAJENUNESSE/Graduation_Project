@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Renderer/FluidSystemGPU.h"
 #include "Renderer/SPHCommon.h"
+#include "Renderer/SPHKernelMath.h"
 #include "Core/Log.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
@@ -298,7 +299,8 @@ namespace Engine
                 CudaInterop::LaunchSPHDensity(m_CudaSPHCtx, devParticles, p, stream);
 
                 CudaInterop::PCISPHIterParams ip{};
-                ip.pcisphDelta       = emitter.PCISPHDelta;
+                ip.pcisphDelta       = SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
+                                                                         emitter.RestDensity, clampedDt);
                 ip.boundaryStiffness = emitter.BoundaryStiffness;
                 ip.boundaryDamping   = emitter.BoundaryDamping;
                 ip.rigidBodyCount    = static_cast<int>(cudaRigidBodyCount);
@@ -475,7 +477,10 @@ namespace Engine
                     m_SPHShaders.PCISPHDensity->SetFloat("u_SmoothingRadius", kp.h);
                     m_SPHShaders.PCISPHDensity->SetFloat("u_ParticleMass", emitter.ParticleMass);
                     m_SPHShaders.PCISPHDensity->SetFloat("u_RestDensity", emitter.RestDensity);
-                    m_SPHShaders.PCISPHDensity->SetFloat("u_PCISPHDelta", emitter.PCISPHDelta);
+                    m_SPHShaders.PCISPHDensity->SetFloat(
+                        "u_PCISPHDelta",
+                        SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
+                                                          emitter.RestDensity, clampedDt));
                     m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
                     m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
                     m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);

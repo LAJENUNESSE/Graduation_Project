@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Renderer/ParticleSystemGPU.h"
 #include "Renderer/SPHCommon.h"
+#include "Renderer/SPHKernelMath.h"
 #include "Core/Log.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
@@ -497,7 +498,10 @@ namespace Engine
                         m_SPHShaders.PCISPHDensity->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
                         m_SPHShaders.PCISPHDensity->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
                         m_SPHShaders.PCISPHDensity->SetFloat("u_RestDensity", emitter.SPH.RestDensity);
-                        m_SPHShaders.PCISPHDensity->SetFloat("u_PCISPHDelta", emitter.SPH.PCISPHDelta);
+                        m_SPHShaders.PCISPHDensity->SetFloat(
+                            "u_PCISPHDelta",
+                            SPHKernelMath::ComputePCISPHDelta(emitter.SPH.SmoothingRadius, emitter.SPH.ParticleMass,
+                                                              emitter.SPH.RestDensity, clampedDt));
                         m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
                         m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
                         m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
