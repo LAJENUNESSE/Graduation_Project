@@ -32,5 +32,19 @@
       "Read(**/*.pem)",
       "Read(**/*.key)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit *)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"C:/Dev/Workspace/C++/Graduation_Project\" && git diff --cached --name-only --diff-filter=d | grep -E \"\\.(h|cpp)$\" | grep -v \"^vendor/\" | xargs -r \"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe\" -i && git diff --cached --name-only --diff-filter=d | grep -E \"\\.(h|cpp)$\" | grep -v \"^vendor/\" | xargs -r git add'",
+            "statusMessage": "提交前自动格式化 C/C++ 文件..."
+          }
+        ]
+      }
+    ]
   }
 }
