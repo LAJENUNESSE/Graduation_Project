@@ -1096,38 +1096,44 @@ namespace Engine
             float py = particles[i].posAndLife.y + vy * p.deltaTime;
             float pz = particles[i].posAndLife.z + vz * p.deltaTime;
 
-            // 边界碰撞（弹性反射，使用 abs 确保方向正确）
+            // 边界碰撞（穿透深度反射，与 GLSL fluid_simulate 一致）
             if (p.useBoundary)
             {
                 if (px < p.boundaryMin[0])
                 {
-                    px = p.boundaryMin[0];
-                    vx = fabsf(vx) * 0.3f;
+                    float pen = p.boundaryMin[0] - px;
+                    px        = p.boundaryMin[0] + pen * 0.3f;
+                    vx        = fabsf(vx) * 0.3f;
                 }
                 if (px > p.boundaryMax[0])
                 {
-                    px = p.boundaryMax[0];
-                    vx = -fabsf(vx) * 0.3f;
+                    float pen = px - p.boundaryMax[0];
+                    px        = p.boundaryMax[0] - pen * 0.3f;
+                    vx        = -fabsf(vx) * 0.3f;
                 }
                 if (py < p.boundaryMin[1])
                 {
-                    py = p.boundaryMin[1];
-                    vy = fabsf(vy) * 0.3f;
+                    float pen = p.boundaryMin[1] - py;
+                    py        = p.boundaryMin[1] + pen * 0.3f;
+                    vy        = fabsf(vy) * 0.3f;
                 }
                 if (py > p.boundaryMax[1])
                 {
-                    py = p.boundaryMax[1];
-                    vy = -fabsf(vy) * 0.3f;
+                    float pen = py - p.boundaryMax[1];
+                    py        = p.boundaryMax[1] - pen * 0.3f;
+                    vy        = -fabsf(vy) * 0.3f;
                 }
                 if (pz < p.boundaryMin[2])
                 {
-                    pz = p.boundaryMin[2];
-                    vz = fabsf(vz) * 0.3f;
+                    float pen = p.boundaryMin[2] - pz;
+                    pz        = p.boundaryMin[2] + pen * 0.3f;
+                    vz        = fabsf(vz) * 0.3f;
                 }
                 if (pz > p.boundaryMax[2])
                 {
-                    pz = p.boundaryMax[2];
-                    vz = -fabsf(vz) * 0.3f;
+                    float pen = pz - p.boundaryMax[2];
+                    pz        = p.boundaryMax[2] - pen * 0.3f;
+                    vz        = -fabsf(vz) * 0.3f;
                 }
             }
 

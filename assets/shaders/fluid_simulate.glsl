@@ -54,7 +54,7 @@ void main()
         pos = particles[idx].posAndLife.xyz;
     }
 
-    // 边界约束（位置 clamp + 速度反弹）
+    // 边界约束（穿透深度反射 + 速度反弹）
     if (u_UseBoundary != 0)
     {
         float restitution = 0.3;
@@ -62,12 +62,14 @@ void main()
         {
             if (pos[i] < u_BoundaryMin[i])
             {
-                pos[i] = u_BoundaryMin[i];
+                float penetration = u_BoundaryMin[i] - pos[i];
+                pos[i] = u_BoundaryMin[i] + penetration * restitution;
                 vel[i] = abs(vel[i]) * restitution;
             }
             else if (pos[i] > u_BoundaryMax[i])
             {
-                pos[i] = u_BoundaryMax[i];
+                float penetration = pos[i] - u_BoundaryMax[i];
+                pos[i] = u_BoundaryMax[i] - penetration * restitution;
                 vel[i] = -abs(vel[i]) * restitution;
             }
         }
