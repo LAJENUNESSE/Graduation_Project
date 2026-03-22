@@ -130,6 +130,15 @@ cmake --build build --target Editor
 
 编辑器可从任意目录启动，会自动检测项目根目录。
 
+### CUDA 加速（可选）
+
+启用 CUDA 加速需要：
+
+1. **NVIDIA CUDA Toolkit** — 安装后使用 `--preset vs2022-cuda`（Windows）或 `--preset linux-cuda`（Linux）配置
+2. **NVIDIA 驱动版本须与 CUDA Toolkit 兼容** — 若运行时日志出现 `the provided PTX was compiled with an unsupported toolchain`，说明驱动版本过旧，无法执行当前 Toolkit 编译的 PTX 代码。此时引擎会自动回退到 OpenGL Compute 路径，更新驱动到最新版本即可恢复 CUDA 加速
+
+> CUDA Toolkit 与驱动的版本对应关系见 [NVIDIA 官方文档](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-toolkit-major-component-versions)。
+
 ## Dependencies
 
 | Library | Purpose |
