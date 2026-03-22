@@ -65,6 +65,9 @@ namespace Engine
 #ifdef _WIN32
         timeEndPeriod(1);
 #endif
+        // 先 detach 所有层——OnDetach 可能需要 Application::Get()（如清除 CloseInterceptor）
+        m_LayerStack.Shutdown();
+
         if (m_Initialized)
         {
             PerformanceMonitor::Get().Shutdown();

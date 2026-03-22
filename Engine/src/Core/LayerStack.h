@@ -14,6 +14,9 @@ namespace Engine
         LayerStack() = default;
         ~LayerStack();
 
+        // 显式 detach 并清空所有层（析构前需要 Application 仍有效时调用）
+        void Shutdown();
+
         void PushLayer(Scope<Layer> layer);
         void PushOverlay(Scope<Layer> overlay);
         void PopLayer(Layer* layer);

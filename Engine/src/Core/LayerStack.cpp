@@ -6,8 +6,15 @@ namespace Engine
 
     LayerStack::~LayerStack()
     {
+        Shutdown();
+    }
+
+    void LayerStack::Shutdown()
+    {
         for (const auto& layer : m_Layers)
             layer->OnDetach();
+        m_Layers.clear();
+        m_LayerInsertIndex = 0;
     }
 
     void LayerStack::PushLayer(Scope<Layer> layer)
