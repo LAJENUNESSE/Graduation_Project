@@ -103,6 +103,9 @@ namespace Engine
 
         // CUDA event 计时（Ping-pong 双缓冲）
         CudaTimingHelper m_CudaTiming;
+
+        // CUDA SPH context（grid + PCISPH + rigidBody 缓冲区）
+        void* m_CudaSPHCtx = nullptr;
 #endif
 
         void InitSPH(float smoothingRadius);

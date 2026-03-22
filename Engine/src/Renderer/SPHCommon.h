@@ -6,6 +6,7 @@
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <vector>
 
 namespace Engine
 {
@@ -60,6 +61,13 @@ namespace Engine
     // 返回实际上传的刚体数量
     static constexpr uint32_t MAX_RIGID_BODIES = 64;
 
+    // 从 registry 收集刚体数据（纯 CPU 侧，供 GL 和 CUDA 路径共用）
+    std::vector<GPURigidBodyData>
+    CollectRigidBodies(entt::registry*       registry,
+                       uint32_t              maxRigidBodies,
+                       RigidBodyUploadFilter filter = RigidBodyUploadFilter::AllColliders);
+
+    // 收集 + 上传到 GL SSBO（GL 路径专用便捷函数）
     uint32_t UploadRigidBodiesToBuffer(entt::registry*                 registry,
                                        const Ref<ShaderStorageBuffer>& buffer,
                                        uint32_t                        maxRigidBodies,

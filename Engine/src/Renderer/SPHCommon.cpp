@@ -38,16 +38,14 @@ namespace Engine
         return p;
     }
 
-    uint32_t UploadRigidBodiesToBuffer(entt::registry*                 registry,
-                                       const Ref<ShaderStorageBuffer>& buffer,
-                                       uint32_t                        maxRigidBodies,
-                                       RigidBodyUploadFilter           filter)
+    std::vector<GPURigidBodyData>
+    CollectRigidBodies(entt::registry* registry, uint32_t maxRigidBodies, RigidBodyUploadFilter filter)
     {
-        if (!registry || !buffer)
-            return 0;
-
-        const bool                    requireRigidBody = (filter == RigidBodyUploadFilter::RequireRigidBodyComponent);
         std::vector<GPURigidBodyData> bodies;
+        if (!registry)
+            return bodies;
+
+        const bool requireRigidBody = (filter == RigidBodyUploadFilter::RequireRigidBodyComponent);
         bodies.reserve(maxRigidBodies);
 
         // 收集 box collider
@@ -66,13 +64,11 @@ namespace Engine
             glm::vec3 absScale = glm::vec3(std::abs(tc.Scale.x), std::abs(tc.Scale.y), std::abs(tc.Scale.z));
 
             GPURigidBodyData body{};
-            // offset 变换：旋转 * (offset * scale)
             body.posAndType  = glm::vec4(tc.Translation + rot * (bc.Offset * tc.Scale), 0.0f);
             body.rotCol0     = glm::vec4(rotMat[0][0], rotMat[0][1], rotMat[0][2], 0.0f);
             body.rotCol1     = glm::vec4(rotMat[1][0], rotMat[1][1], rotMat[1][2], 0.0f);
             body.rotCol2     = glm::vec4(rotMat[2][0], rotMat[2][1], rotMat[2][2], 0.0f);
             body.halfExtents = glm::vec4(bc.HalfExtents * absScale, 0.0f);
-            // 从 RigidBodyComponent 读取真实速度
             if (registry->all_of<RigidBodyComponent>(entity))
             {
                 auto& rb        = registry->get<RigidBodyComponent>(entity);
@@ -112,6 +108,18 @@ namespace Engine
             bodies.push_back(body);
         }
 
+        return bodies;
+    }
+
+    uint32_t UploadRigidBodiesToBuffer(entt::registry*                 registry,
+                                       const Ref<ShaderStorageBuffer>& buffer,
+                                       uint32_t                        maxRigidBodies,
+                                       RigidBodyUploadFilter           filter)
+    {
+        if (!registry || !buffer)
+            return 0;
+
+        auto bodies = CollectRigidBodies(registry, maxRigidBodies, filter);
         if (!bodies.empty())
             buffer->SetData(bodies.data(), static_cast<uint32_t>(bodies.size() * sizeof(GPURigidBodyData)));
 
