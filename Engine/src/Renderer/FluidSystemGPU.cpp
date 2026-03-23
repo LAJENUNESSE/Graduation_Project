@@ -84,13 +84,13 @@ namespace Engine
         // Particle buffer: zero-initialized, 80 bytes per particle
         uint32_t             totalBytes = m_ParticleCount * sizeof(FluidGPUParticle);
         std::vector<uint8_t> zeroData(totalBytes, 0);
-        m_ParticleBuffer = ShaderStorageBuffer::CreateGPUOnly(zeroData.data(), totalBytes, 0);
+        m_ParticleBuffer = ShaderStorageBuffer::CreateGPUDynamic(zeroData.data(), totalBytes, 0);
 
         // Identity alive list: [0, 1, 2, ..., N-1]
         std::vector<uint32_t> aliveIndices(m_ParticleCount);
         for (uint32_t i = 0; i < m_ParticleCount; i++)
             aliveIndices[i] = i;
-        m_AliveList = ShaderStorageBuffer::CreateGPUOnly(aliveIndices.data(), m_ParticleCount * sizeof(uint32_t), 2);
+        m_AliveList = ShaderStorageBuffer::CreateGPUDynamic(aliveIndices.data(), m_ParticleCount * sizeof(uint32_t), 2);
 
         // Empty VAO for instanced draw
         m_EmptyVAO = VertexArray::Create();

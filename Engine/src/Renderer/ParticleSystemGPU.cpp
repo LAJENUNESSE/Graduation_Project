@@ -133,16 +133,16 @@ namespace Engine
         uint32_t             particleSize = sizeof(GPUParticleData); // 80 bytes
         uint32_t             totalBytes   = m_MaxParticles * particleSize;
         std::vector<uint8_t> zeroData(totalBytes, 0);
-        m_ParticleBuffer = ShaderStorageBuffer::CreateGPUOnly(zeroData.data(), totalBytes, 0);
+        m_ParticleBuffer = ShaderStorageBuffer::CreateGPUDynamic(zeroData.data(), totalBytes, 0);
 
         // Fill dead list with indices [0, 1, 2, ..., MAX-1]
         std::vector<uint32_t> deadIndices(m_MaxParticles);
         for (uint32_t i = 0; i < m_MaxParticles; i++)
             deadIndices[i] = i;
-        m_DeadList = ShaderStorageBuffer::CreateGPUOnly(deadIndices.data(), m_MaxParticles * sizeof(uint32_t), 1);
+        m_DeadList = ShaderStorageBuffer::CreateGPUDynamic(deadIndices.data(), m_MaxParticles * sizeof(uint32_t), 1);
 
         // Alive list (empty at start)
-        m_AliveList = ShaderStorageBuffer::CreateGPUOnly(m_MaxParticles * sizeof(uint32_t), 2);
+        m_AliveList = ShaderStorageBuffer::CreateGPUDynamic(m_MaxParticles * sizeof(uint32_t), 2);
 
         // Counter buffer: deadCount=MAX, aliveCount=0, emitCount=0, pad=0
         // Kept as DYNAMIC — CPU writes aliveCount/emitCount every frame
@@ -151,7 +151,7 @@ namespace Engine
 
         // Indirect draw args: count=6, instanceCount=0, first=0, baseInstance=0
         IndirectDrawCommand cmd{6, 0, 0, 0};
-        m_IndirectArgs = ShaderStorageBuffer::CreateGPUOnly(&cmd, sizeof(IndirectDrawCommand), 4);
+        m_IndirectArgs = ShaderStorageBuffer::CreateGPUDynamic(&cmd, sizeof(IndirectDrawCommand), 4);
 
         // Empty VAO for billboard rendering
         m_EmptyVAO = VertexArray::Create();
@@ -444,6 +444,18 @@ namespace Engine
                         sp.particleCount = static_cast<int>(m_LastAliveCount);
                         CudaInterop::LaunchSPHSimulate(devParticles, sp, stream);
 
+                        // Life 管理：递减 life + 重建 alive/dead lists
+                        // SPH 的 FluidSimulateKernel 不处理 life，需要单独处理
+                        {
+                            CudaInterop::LaunchLifeUpdate(
+                                devParticles, m_CudaInterop->GetMappedPointer(m_CudaSlotDeadList),
+                                m_CudaInterop->GetMappedPointer(m_CudaSlotAliveList),
+                                m_CudaInterop->GetMappedPointer(m_CudaSlotCounter), clampedDt, m_MaxParticles, stream);
+                            // RenderArgs 也在 CUDA 侧完成
+                            CudaInterop::LaunchRenderArgs(m_CudaInterop->GetMappedPointer(m_CudaSlotCounter),
+                                                          m_CudaInterop->GetMappedPointer(m_CudaSlotIndirect), stream);
+                        }
+
                         CudaInterop::RecordCudaEvent(m_CudaTiming.EventStop, stream);
                         m_CudaInterop->UnmapAll();
 
@@ -473,16 +485,8 @@ namespace Engine
                     }
                 }
 
-                // ---- Phase 3 (GL): Render Args ----
-                m_ParticleBuffer->Bind(0);
-                m_AliveList->Bind(2);
-                m_CounterBuffer->Bind(3);
-                m_IndirectArgs->Bind(4);
-
-                m_RenderArgsShader->Bind();
-                RenderCommand::DispatchCompute(1);
-                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
-
+                // ---- Phase 3: 计时结束 ----
+                // RenderArgs 已在 CUDA 侧的 LifeUpdate 后完成
                 PerformanceMonitor::Get().GetParticleComputeGPUTimer().End();
                 cudaSucceeded = true;
             }

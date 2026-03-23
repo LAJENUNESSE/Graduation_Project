@@ -51,6 +51,26 @@ namespace Engine
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 
+    OpenGLStorageBuffer::OpenGLStorageBuffer(uint32_t size, uint32_t binding, DynamicStorageTag)
+        : m_Size(size), m_Immutable(true)
+    {
+        glGenBuffers(1, &m_RendererID);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RendererID);
+        glBufferStorage(GL_SHADER_STORAGE_BUFFER, size, nullptr, GL_DYNAMIC_STORAGE_BIT);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, m_RendererID);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+
+    OpenGLStorageBuffer::OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding, DynamicStorageTag)
+        : m_Size(size), m_Immutable(true)
+    {
+        glGenBuffers(1, &m_RendererID);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RendererID);
+        glBufferStorage(GL_SHADER_STORAGE_BUFFER, size, data, GL_DYNAMIC_STORAGE_BIT);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, m_RendererID);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+
     OpenGLStorageBuffer::~OpenGLStorageBuffer()
     {
         glDeleteBuffers(1, &m_RendererID);

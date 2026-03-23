@@ -50,4 +50,26 @@ namespace Engine
         }
     }
 
+    Ref<ShaderStorageBuffer> ShaderStorageBuffer::CreateGPUDynamic(uint32_t size, uint32_t binding)
+    {
+        switch (RendererAPI::GetAPI())
+        {
+        case RendererAPI::API::OpenGL:
+            return CreateRef<OpenGLStorageBuffer>(size, binding, OpenGLStorageBuffer::DynamicStorageTag{});
+        default:
+            return nullptr;
+        }
+    }
+
+    Ref<ShaderStorageBuffer> ShaderStorageBuffer::CreateGPUDynamic(const void* data, uint32_t size, uint32_t binding)
+    {
+        switch (RendererAPI::GetAPI())
+        {
+        case RendererAPI::API::OpenGL:
+            return CreateRef<OpenGLStorageBuffer>(data, size, binding, OpenGLStorageBuffer::DynamicStorageTag{});
+        default:
+            return nullptr;
+        }
+    }
+
 } // namespace Engine

@@ -8,11 +8,19 @@ namespace Engine
     class OpenGLStorageBuffer : public ShaderStorageBuffer
     {
     public:
+        // Tag type for GPU dynamic storage (glBufferStorage + GL_DYNAMIC_STORAGE_BIT)
+        struct DynamicStorageTag
+        {
+        };
+
         OpenGLStorageBuffer(uint32_t size, uint32_t binding);
         OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding);
         // GPU-only immutable storage
         OpenGLStorageBuffer(uint32_t size, uint32_t binding, bool gpuOnly);
         OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding, bool gpuOnly);
+        // GPU dynamic storage (CUDA interop compatible)
+        OpenGLStorageBuffer(uint32_t size, uint32_t binding, DynamicStorageTag);
+        OpenGLStorageBuffer(const void* data, uint32_t size, uint32_t binding, DynamicStorageTag);
         ~OpenGLStorageBuffer() override;
 
         void Bind(uint32_t binding) const override;

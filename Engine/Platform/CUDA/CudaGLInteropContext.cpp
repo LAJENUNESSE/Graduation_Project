@@ -186,16 +186,6 @@ namespace Engine
         if (!m_Impl->mapped)
             return;
 
-        // 调试同步——仅当 ENGINE_CUDA_DEBUG_SYNC=1 时。
-        // 发布路径依赖 cudaGraphicsUnmapResources 的隐式同步。
-        static const bool sDebugSync = []
-        {
-            const char* e = std::getenv("ENGINE_CUDA_DEBUG_SYNC");
-            return e && e[0] == '1';
-        }();
-        if (sDebugSync && m_Impl->stream)
-            cudaStreamSynchronize(m_Impl->stream);
-
         int                                 n = static_cast<int>(m_Impl->slots.size());
         std::vector<cudaGraphicsResource_t> res(n);
         for (int i = 0; i < n; i++)
