@@ -182,6 +182,52 @@ namespace Engine
         }
 
         // ======================================================================
+        // Life 管理内核——仅递减 life + 重建 alive/dead lists，不做物理
+        // 用于 CUDA SPH 路径（SPH 已处理物理，这里只管生命周期）
+        // ======================================================================
+
+        __global__ static void LifeUpdateKernel(GPUParticle* particles,
+                                                uint32_t*    deadList,
+                                                uint32_t*    aliveList,
+                                                CounterData* counter,
+                                                float        deltaTime,
+                                                uint32_t     maxParticles)
+        {
+            uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+            if (idx >= maxParticles)
+                return;
+
+            float life = particles[idx].posAndLife.w;
+            if (life <= 0.0f)
+            {
+                // 已死粒子：推入 dead list
+                uint32_t slot = atomicAdd(&counter->deadCount, 1u);
+                if (slot < maxParticles)
+                    deadList[slot] = idx;
+                return;
+            }
+
+            life -= deltaTime;
+
+            if (life <= 0.0f)
+            {
+                // 刚死亡：标记 + 推入 dead list
+                particles[idx].posAndLife.w = 0.0f;
+                uint32_t slot               = atomicAdd(&counter->deadCount, 1u);
+                if (slot < maxParticles)
+                    deadList[slot] = idx;
+            }
+            else
+            {
+                // 仍活着：更新 life + 推入 alive list
+                particles[idx].posAndLife.w = life;
+                uint32_t slot               = atomicAdd(&counter->aliveCount, 1u);
+                if (slot < maxParticles)
+                    aliveList[slot] = idx;
+            }
+        }
+
+        // ======================================================================
         // 渲染参数内核——1 个线程
         // ======================================================================
 
@@ -227,6 +273,29 @@ namespace Engine
             RenderArgsKernel<<<1, 1, 0, static_cast<cudaStream_t>(stream)>>>(
                 static_cast<CounterData*>(counter), static_cast<IndirectDrawCommand*>(indirectArgs));
             CUDA_CHECK_KERNEL("RenderArgsKernel");
+        }
+
+        void LaunchLifeUpdate(void*    particles,
+                              void*    deadList,
+                              void*    aliveList,
+                              void*    counter,
+                              float    deltaTime,
+                              uint32_t maxParticles,
+                              void*    stream)
+        {
+            if (IsCudaPoisoned() || maxParticles == 0)
+                return;
+
+            cudaStream_t strm = static_cast<cudaStream_t>(stream);
+
+            // 清零 counter（deadCount=0, aliveCount=0, emitCount=0, pad=0）
+            cudaMemsetAsync(counter, 0, sizeof(CounterData), strm);
+
+            uint32_t blocks = (maxParticles + 255) / 256;
+            LifeUpdateKernel<<<blocks, 256, 0, strm>>>(
+                static_cast<GPUParticle*>(particles), static_cast<uint32_t*>(deadList),
+                static_cast<uint32_t*>(aliveList), static_cast<CounterData*>(counter), deltaTime, maxParticles);
+            CUDA_CHECK_KERNEL("LifeUpdateKernel");
         }
 
         // ======================================================================

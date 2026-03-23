@@ -50,6 +50,17 @@ namespace Engine
         // 启动渲染参数内核。1 个线程：aliveCount -> instanceCount。
         void LaunchRenderArgs(void* counter, void* indirectArgs, void* stream);
 
+        // 启动 life 管理内核（仅递减 life + 重建 alive/dead lists，不做物理）。
+        // 用于 CUDA SPH 路径——SPH 已完成物理，只需处理生命周期。
+        // 内部先清零 counter 再扫描全池。
+        void LaunchLifeUpdate(void*    particles,
+                              void*    deadList,
+                              void*    aliveList,
+                              void*    counter,
+                              float    deltaTime,
+                              uint32_t maxParticles,
+                              void*    stream);
+
         // ---- CUDA event 计时辅助（void* = cudaEvent_t）----
         void* CreateCudaEvent();
         void  DestroyCudaEvent(void* event);
