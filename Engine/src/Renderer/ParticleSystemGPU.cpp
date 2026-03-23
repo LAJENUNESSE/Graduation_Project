@@ -344,15 +344,16 @@ namespace Engine
                     RenderCommand::DispatchCompute(compactGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-                    CounterData counters{};
-                    m_CounterBuffer->GetData(&counters, sizeof(CounterData), 0);
-                    m_LastAliveCount = counters.aliveCount;
+                    // 不做同步回读（glGetBufferSubData 会导致 ~28ms GPU pipeline stall）。
+                    // 使用上一帧异步回读的 m_LastAliveCount，1 帧延迟对 SPH dispatch 可接受。
                 }
 
                 // ---- Phase 2 (CUDA): SPH 核心计算 ----
                 if (m_LastAliveCount > 0)
                 {
-                    glFinish(); // 确保 GL 写入对 CUDA 可见
+                    // glFlush 确保 GL 命令提交到驱动队列，
+                    // cudaGraphicsMapResources 负责跨 API 同步。
+                    glFlush();
 
                     if (m_CudaInterop->MapAll())
                     {
@@ -636,10 +637,8 @@ namespace Engine
                 RenderCommand::DispatchCompute(compactGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-                // 同步回读 aliveCount（SPH 需要精确值，每帧一次开销可接受）
-                CounterData counters{};
-                m_CounterBuffer->GetData(&counters, sizeof(CounterData), 0);
-                m_LastAliveCount = counters.aliveCount;
+                // 不做同步回读（glGetBufferSubData 会导致 ~28ms GPU pipeline stall）。
+                // 使用上一帧异步回读的 m_LastAliveCount，1 帧延迟对 SPH dispatch 可接受。
             }
 
             // ---- SPH passes (only when SPHEnabled) ----
