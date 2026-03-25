@@ -66,3 +66,7 @@ temp/
 
 # patch
 patches/
+
+# Obsidian / local knowledge base
+Game_Engine/
+.obsidian/

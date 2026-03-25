@@ -13,13 +13,21 @@
 ## 2. 构建约定
 
 - 首次拉取或三方缺失时先执行：`git submodule update --init --recursive`。
-- 常用构建（Ninja）：
+- Linux / VM（Ninja）：
   - 配置：`cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo`
-  - 构建 Editor：`cmake --build build --target Editor`
+  - 构建：`cmake --build build --target Editor`
+  - 运行：`./build/Editor/Editor.exe`
+- Windows（VS 2022 Build Tools + vcpkg）统一使用以下 `cmake.exe` 固定路径，不要在脚本里搜索路径：
+  - `C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe`
+  - 配置（无 CUDA）：`"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset default`
+  - 配置（CUDA）：`"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-cuda`
+  - 构建：`"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config RelWithDebInfo --target Editor`
+  - 运行：`./build/Editor/RelWithDebInfo/Editor.exe`
+- Windows 的 Visual Studio 生成器必须带 `--config RelWithDebInfo`；Linux/Ninja 无配置子目录。
 - 已于 `2026-03-10` 验证当前 Windows 环境：Visual Studio Build Tools 2022 17.14、MSVC 14.44.35207、VS 自带 `CMake 3.31.6`、`Ninja 1.12.1`、`vcpkg` 工具链、`CUDA Toolkit 13.1`（`nvcc` 可用）。
 - 当前普通 PowerShell 未将 `cmake`、`ninja`、`cl` 加入 `PATH`；命令行构建优先使用 Developer PowerShell，或显式调用 VS Build Tools 自带工具。
-- 已验证现有 `build/` 目录可成功执行：`cmake --build build --target Editor --config RelWithDebInfo`。
-- 仓库当前未在顶层 CMake 启用 `CUDA` 语言，也未发现 `.cu` / `.cuh` / `find_package(CUDAToolkit)` 现有接入；不要假定项目已默认支持 CUDA。
+- `default` 与 `vs2022-cuda` 两个 preset 均输出到 `build/`，切换 preset 后需重新配置。
+- 不要假定 CUDA 始终开启；按当前 preset 与 CMake 选项判断。
 - Windows + MSVC 保持 `/utf-8` 生效（如 CMake 已统一处理，不重复改动）。
 - `engpch.h` 由构建系统注入，除非必要不要手动补 include。
 

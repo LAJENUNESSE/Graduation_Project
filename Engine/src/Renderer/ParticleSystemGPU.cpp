@@ -9,9 +9,12 @@
 
 #include <glad/gl.h>
 
+#include <chrono>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 #ifdef ENGINE_ENABLE_CUDA
 #include "Platform/CUDA/CudaGLInteropContext.h"
@@ -35,6 +38,179 @@ namespace Engine
         bool ContainsToken(const char* str, const char* token)
         {
             return str && token && std::strstr(str, token) != nullptr;
+        }
+
+        struct ParticleABRuntimeState
+        {
+            bool Initialized = false;
+
+            bool EnvForceGLValid          = false;
+            bool EnvForceGLValue          = false;
+            bool EnvDisableReadbackValid  = false;
+            bool EnvDisableReadbackValue  = false;
+
+            bool UIForceGLValue          = false;
+            bool UIDisableReadbackValue  = false;
+            bool UIForceGLTouched        = false;
+            bool UIDisableReadbackTouched = false;
+
+            bool LastLogValid                     = false;
+            bool LastForceGL                      = false;
+            bool LastDisableReadback              = false;
+            ParticleSystemGPU::ABConfigSource LastForceSource = ParticleSystemGPU::ABConfigSource::Default;
+            ParticleSystemGPU::ABConfigSource LastDisableSource = ParticleSystemGPU::ABConfigSource::Default;
+        };
+
+        ParticleABRuntimeState& GetParticleABRuntimeState()
+        {
+            static ParticleABRuntimeState state;
+            return state;
+        }
+
+        std::string NormalizeBoolToken(const char* raw)
+        {
+            if (!raw)
+                return {};
+
+            std::string token(raw);
+            const size_t begin = token.find_first_not_of(" \t\r\n");
+            if (begin == std::string::npos)
+                return {};
+            const size_t end = token.find_last_not_of(" \t\r\n");
+            token            = token.substr(begin, end - begin + 1);
+            for (char& ch : token)
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            return token;
+        }
+
+        bool TryParseBoolEnv(const char* raw, bool& outValue)
+        {
+            const std::string token = NormalizeBoolToken(raw);
+            if (token == "1" || token == "true" || token == "on")
+            {
+                outValue = true;
+                return true;
+            }
+            if (token == "0" || token == "false" || token == "off")
+            {
+                outValue = false;
+                return true;
+            }
+            return false;
+        }
+
+        const char* ABSourceToString(ParticleSystemGPU::ABConfigSource source)
+        {
+            switch (source)
+            {
+            case ParticleSystemGPU::ABConfigSource::Env:
+                return "ENV";
+            case ParticleSystemGPU::ABConfigSource::UI:
+                return "UI";
+            case ParticleSystemGPU::ABConfigSource::Default:
+            default:
+                return "Default";
+            }
+        }
+
+        ParticleSystemGPU::ABConfigSnapshot ResolveParticleABConfigSnapshot()
+        {
+            auto& state = GetParticleABRuntimeState();
+
+            ParticleSystemGPU::ABConfigSnapshot snapshot{};
+            snapshot.ForceGLLockedByEnv        = state.EnvForceGLValid;
+            snapshot.DisableReadbackLockedByEnv = state.EnvDisableReadbackValid;
+
+            if (state.EnvForceGLValid)
+            {
+                snapshot.ForceGL       = state.EnvForceGLValue;
+                snapshot.ForceGLSource = ParticleSystemGPU::ABConfigSource::Env;
+            }
+            else
+            {
+                snapshot.ForceGL       = state.UIForceGLValue;
+                snapshot.ForceGLSource = state.UIForceGLTouched ? ParticleSystemGPU::ABConfigSource::UI
+                                                                : ParticleSystemGPU::ABConfigSource::Default;
+            }
+
+            if (state.EnvDisableReadbackValid)
+            {
+                snapshot.DisableCounterReadback = state.EnvDisableReadbackValue;
+                snapshot.DisableReadbackSource  = ParticleSystemGPU::ABConfigSource::Env;
+            }
+            else
+            {
+                snapshot.DisableCounterReadback = state.UIDisableReadbackValue;
+                snapshot.DisableReadbackSource  = state.UIDisableReadbackTouched ? ParticleSystemGPU::ABConfigSource::UI
+                                                                                  : ParticleSystemGPU::ABConfigSource::Default;
+            }
+
+            return snapshot;
+        }
+
+        void LogParticleABSummaryIfChanged(const char* reason)
+        {
+            auto& state    = GetParticleABRuntimeState();
+            auto  snapshot = ResolveParticleABConfigSnapshot();
+
+            if (state.LastLogValid && state.LastForceGL == snapshot.ForceGL &&
+                state.LastDisableReadback == snapshot.DisableCounterReadback &&
+                state.LastForceSource == snapshot.ForceGLSource &&
+                state.LastDisableSource == snapshot.DisableReadbackSource)
+            {
+                return;
+            }
+
+            ENGINE_CORE_INFO("[Particle][AB] {} forceGL={} ({}) disableReadback={} ({})", reason,
+                             snapshot.ForceGL ? 1 : 0, ABSourceToString(snapshot.ForceGLSource),
+                             snapshot.DisableCounterReadback ? 1 : 0,
+                             ABSourceToString(snapshot.DisableReadbackSource));
+
+            state.LastLogValid         = true;
+            state.LastForceGL          = snapshot.ForceGL;
+            state.LastDisableReadback  = snapshot.DisableCounterReadback;
+            state.LastForceSource      = snapshot.ForceGLSource;
+            state.LastDisableSource    = snapshot.DisableReadbackSource;
+        }
+
+        void InitParticleABFromEnvIfNeeded()
+        {
+            auto& state = GetParticleABRuntimeState();
+            if (state.Initialized)
+                return;
+            state.Initialized = true;
+
+            if (const char* rawForceGL = std::getenv("ENGINE_PARTICLE_AB_FORCE_GL"))
+            {
+                bool value = false;
+                if (TryParseBoolEnv(rawForceGL, value))
+                {
+                    state.EnvForceGLValid = true;
+                    state.EnvForceGLValue = value;
+                }
+                else
+                {
+                    ENGINE_CORE_WARN("[Particle][AB] Invalid ENGINE_PARTICLE_AB_FORCE_GL='{}', ignored.", rawForceGL);
+                }
+            }
+
+            if (const char* rawDisableReadback = std::getenv("ENGINE_PARTICLE_AB_DISABLE_READBACK"))
+            {
+                bool value = false;
+                if (TryParseBoolEnv(rawDisableReadback, value))
+                {
+                    state.EnvDisableReadbackValid = true;
+                    state.EnvDisableReadbackValue = value;
+                }
+                else
+                {
+                    ENGINE_CORE_WARN(
+                        "[Particle][AB] Invalid ENGINE_PARTICLE_AB_DISABLE_READBACK='{}', ignored.",
+                        rawDisableReadback);
+                }
+            }
+
+            LogParticleABSummaryIfChanged("Init");
         }
     } // namespace
 
@@ -110,10 +286,63 @@ namespace Engine
             glDeleteBuffers(1, &m_ReadbackBuffer);
     }
 
+    ParticleSystemGPU::ABConfigSnapshot ParticleSystemGPU::GetABConfigSnapshot()
+    {
+        InitParticleABFromEnvIfNeeded();
+        return ResolveParticleABConfigSnapshot();
+    }
+
+    void ParticleSystemGPU::SetABConfigFromUI(bool forceGL, bool disableCounterReadback)
+    {
+        InitParticleABFromEnvIfNeeded();
+        auto& state = GetParticleABRuntimeState();
+
+        bool changed = false;
+
+        if (!state.EnvForceGLValid)
+        {
+            if (!state.UIForceGLTouched)
+            {
+                state.UIForceGLTouched = true;
+                changed                = true;
+            }
+            if (state.UIForceGLValue != forceGL)
+            {
+                state.UIForceGLValue = forceGL;
+                changed              = true;
+            }
+        }
+
+        if (!state.EnvDisableReadbackValid)
+        {
+            if (!state.UIDisableReadbackTouched)
+            {
+                state.UIDisableReadbackTouched = true;
+                changed                        = true;
+            }
+            if (state.UIDisableReadbackValue != disableCounterReadback)
+            {
+                state.UIDisableReadbackValue = disableCounterReadback;
+                changed                      = true;
+            }
+        }
+
+        if (changed)
+            LogParticleABSummaryIfChanged("UI update");
+    }
+
+    const char* ParticleSystemGPU::ABConfigSourceLabel(ABConfigSource source)
+    {
+        return ABSourceToString(source);
+    }
+
     void ParticleSystemGPU::Init()
     {
         if (m_Initialized)
             return;
+
+        // 初始化并打印一次 AB 开关摘要（环境变量/默认值）
+        (void)GetABConfigSnapshot();
 
         // Load compute shaders
         m_EmitShader       = Shader::Create("assets/shaders/particle_emit.glsl");
@@ -265,6 +494,14 @@ namespace Engine
         if (!m_Initialized)
             return;
 
+        const ABConfigSnapshot abConfig = GetABConfigSnapshot();
+        auto&                  perf     = PerformanceMonitor::Get();
+        perf.SetParticleABDiagnostics(abConfig.ForceGL, abConfig.DisableCounterReadback);
+
+        float cudaMapAllCpuMs        = 0.0f;
+        float cudaUnmapAllCpuMs      = 0.0f;
+        float counterReadbackCpuMs   = 0.0f;
+
         const bool sphEnabled = emitter.SPH.Enabled && !m_DisableSPHOnDriver;
         if (emitter.SPH.Enabled && m_DisableSPHOnDriver && !m_SPHDisableLogged)
         {
@@ -295,7 +532,7 @@ namespace Engine
 #ifdef ENGINE_ENABLE_CUDA
         // ---- CUDA compute sidecar path ----
         bool cudaSucceeded = false;
-        if (m_UseCudaPath && !CudaInterop::IsCudaPoisoned())
+        if (!abConfig.ForceGL && m_UseCudaPath && !CudaInterop::IsCudaPoisoned())
         {
             if (sphEnabled && m_CudaSPHCtx)
             {
@@ -355,7 +592,12 @@ namespace Engine
                     // cudaGraphicsMapResources 负责跨 API 同步。
                     glFlush();
 
-                    if (m_CudaInterop->MapAll())
+                    const auto mapStart = std::chrono::high_resolution_clock::now();
+                    const bool mapOk    = m_CudaInterop->MapAll();
+                    cudaMapAllCpuMs +=
+                        std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - mapStart)
+                            .count();
+                    if (mapOk)
                     {
                         void* stream       = m_CudaInterop->GetStream();
                         void* devParticles = m_CudaInterop->GetMappedPointer(m_CudaSlotParticle);
@@ -458,7 +700,11 @@ namespace Engine
                         }
 
                         CudaInterop::RecordCudaEvent(m_CudaTiming.EventStop, stream);
+                        const auto unmapStart = std::chrono::high_resolution_clock::now();
                         m_CudaInterop->UnmapAll();
+                        cudaUnmapAllCpuMs += std::chrono::duration<float, std::milli>(
+                                                 std::chrono::high_resolution_clock::now() - unmapStart)
+                                                 .count();
 
                         if (CudaInterop::IsCudaPoisoned())
                         {
@@ -493,7 +739,12 @@ namespace Engine
             }
             else if (!sphEnabled)
             {
-                if (m_CudaInterop->MapAll())
+                const auto mapStart = std::chrono::high_resolution_clock::now();
+                const bool mapOk    = m_CudaInterop->MapAll();
+                cudaMapAllCpuMs +=
+                    std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - mapStart)
+                        .count();
+                if (mapOk)
                 {
                     void* stream = m_CudaInterop->GetStream();
                     CudaInterop::RecordCudaEvent(m_CudaTiming.EventStart, stream);
@@ -554,7 +805,11 @@ namespace Engine
                                                   m_CudaInterop->GetMappedPointer(m_CudaSlotIndirect), stream);
 
                     CudaInterop::RecordCudaEvent(m_CudaTiming.EventStop, stream);
+                    const auto unmapStart = std::chrono::high_resolution_clock::now();
                     m_CudaInterop->UnmapAll();
+                    cudaUnmapAllCpuMs += std::chrono::duration<float, std::milli>(
+                                             std::chrono::high_resolution_clock::now() - unmapStart)
+                                             .count();
 
                     if (CudaInterop::IsCudaPoisoned())
                     {
@@ -845,75 +1100,99 @@ namespace Engine
         } // GL Compute path
 
 #ifdef ENGINE_ENABLE_CUDA
-        PerformanceMonitor::Get().SetParticleUsingCuda(cudaSucceeded);
+        perf.SetParticleUsingCuda(cudaSucceeded);
 #endif
 
-        // ---- 异步回读：始终执行，用于 simulate 按存活数 dispatch + SPH + direct-draw ----
+        // ---- 异步回读：用于 simulate 按存活数 dispatch + SPH + direct-draw ----
         {
-            // ---- 先收上一帧的结果（零等待） ----
-            if (m_ReadbackPending && m_ReadbackFence)
+            if (abConfig.DisableCounterReadback)
             {
-                GLenum result = glClientWaitSync(static_cast<GLsync>(m_ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
-
-                if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED)
+                // AB: 关闭回读时，确保清理历史 fence/pending，避免资源泄漏与隐性等待
+                if (m_ReadbackFence)
                 {
-                    // GPU 已完成，无阻塞读取回读缓冲
-                    CounterData counters{};
-                    glBindBuffer(GL_COPY_READ_BUFFER, m_ReadbackBuffer);
-                    glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(CounterData), &counters);
-                    glBindBuffer(GL_COPY_READ_BUFFER, 0);
-
-                    CounterData sanitized = counters;
-                    bool        corrected = false;
-
-                    if (sanitized.deadCount > m_MaxParticles)
-                    {
-                        sanitized.deadCount = m_MaxParticles;
-                        corrected           = true;
-                    }
-                    if (sanitized.aliveCount > m_MaxParticles)
-                    {
-                        sanitized.aliveCount = m_MaxParticles;
-                        corrected            = true;
-                    }
-
-                    if (corrected)
-                    {
-                        ENGINE_WARN("[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); clamping to "
-                                    "safe range.",
-                                    counters.deadCount, counters.aliveCount, m_MaxParticles);
-                        m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
-                    }
-
-                    // 始终更新存活数，用于下一帧 simulate dispatch 和 SPH
-                    m_LastAliveCount = sanitized.aliveCount;
-
-                    if (!m_UseIndirectDraw)
-                        m_AliveCountForDirectDraw = sanitized.aliveCount;
-
-                    m_ReadbackPending = false;
+                    glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
+                    m_ReadbackFence = nullptr;
                 }
-                // GL_TIMEOUT_EXPIRED: GPU 还没完成，跳过本帧回读，用旧值
+                m_ReadbackPending = false;
+                counterReadbackCpuMs = 0.0f;
             }
-
-            // ---- 发起本帧的异步拷贝 ----
-            if (m_ReadbackFence)
+            else
             {
-                glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
-                m_ReadbackFence = nullptr;
+                const auto readbackStart = std::chrono::high_resolution_clock::now();
+
+                // ---- 先收上一帧的结果（零等待） ----
+                if (m_ReadbackPending && m_ReadbackFence)
+                {
+                    GLenum result =
+                        glClientWaitSync(static_cast<GLsync>(m_ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+
+                    if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED)
+                    {
+                        // GPU 已完成，无阻塞读取回读缓冲
+                        CounterData counters{};
+                        glBindBuffer(GL_COPY_READ_BUFFER, m_ReadbackBuffer);
+                        glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(CounterData), &counters);
+                        glBindBuffer(GL_COPY_READ_BUFFER, 0);
+
+                        CounterData sanitized = counters;
+                        bool        corrected = false;
+
+                        if (sanitized.deadCount > m_MaxParticles)
+                        {
+                            sanitized.deadCount = m_MaxParticles;
+                            corrected           = true;
+                        }
+                        if (sanitized.aliveCount > m_MaxParticles)
+                        {
+                            sanitized.aliveCount = m_MaxParticles;
+                            corrected            = true;
+                        }
+
+                        if (corrected)
+                        {
+                            ENGINE_WARN(
+                                "[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); clamping to "
+                                "safe range.",
+                                counters.deadCount, counters.aliveCount, m_MaxParticles);
+                            m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
+                        }
+
+                        // 始终更新存活数，用于下一帧 simulate dispatch 和 SPH
+                        m_LastAliveCount = sanitized.aliveCount;
+
+                        if (!m_UseIndirectDraw)
+                            m_AliveCountForDirectDraw = sanitized.aliveCount;
+
+                        m_ReadbackPending = false;
+                    }
+                    // GL_TIMEOUT_EXPIRED: GPU 还没完成，跳过本帧回读，用旧值
+                }
+
+                // ---- 发起本帧的异步拷贝 ----
+                if (m_ReadbackFence)
+                {
+                    glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
+                    m_ReadbackFence = nullptr;
+                }
+
+                // 将 Counter SSBO 拷贝到回读缓冲
+                glBindBuffer(GL_COPY_READ_BUFFER, m_CounterBuffer->GetRendererID());
+                glBindBuffer(GL_COPY_WRITE_BUFFER, m_ReadbackBuffer);
+                glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(CounterData));
+                glBindBuffer(GL_COPY_READ_BUFFER, 0);
+                glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+
+                // 插入栅栏：下一帧检查时拷贝已完成
+                m_ReadbackFence   = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                m_ReadbackPending = true;
+
+                counterReadbackCpuMs = std::chrono::duration<float, std::milli>(
+                                           std::chrono::high_resolution_clock::now() - readbackStart)
+                                           .count();
             }
-
-            // 将 Counter SSBO 拷贝到回读缓冲
-            glBindBuffer(GL_COPY_READ_BUFFER, m_CounterBuffer->GetRendererID());
-            glBindBuffer(GL_COPY_WRITE_BUFFER, m_ReadbackBuffer);
-            glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(CounterData));
-            glBindBuffer(GL_COPY_READ_BUFFER, 0);
-            glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-
-            // 插入栅栏：下一帧检查时拷贝已完成
-            m_ReadbackFence   = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-            m_ReadbackPending = true;
         }
+
+        perf.AddParticleInteropCpuTimings(cudaMapAllCpuMs, cudaUnmapAllCpuMs, counterReadbackCpuMs);
     }
 
     void ParticleSystemGPU::Render(const glm::mat4& viewMatrix, const glm::mat4& projection)

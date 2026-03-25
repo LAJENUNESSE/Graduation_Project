@@ -7,6 +7,7 @@
 #include "Panels/RenderSettingsPanel.h"
 #include "Panels/SceneHierarchyPanel.h"
 #include "Renderer/Framebuffer.h"
+#include "Renderer/ParticleSystemGPU.h"
 #include "Scene/Entity.h"
 #include "UndoSystem.h"
 
@@ -14,6 +15,13 @@
 
 namespace Engine
 {
+    namespace
+    {
+        const char* ABSourceLabel(ParticleSystemGPU::ABConfigSource source)
+        {
+            return ParticleSystemGPU::ABConfigSourceLabel(source);
+        }
+    } // namespace
 
     void EditorPanelCoordinator::Initialize(SceneHierarchyPanel* hierarchyPanel,
                                             PropertiesPanel*     propertiesPanel,
@@ -129,6 +137,18 @@ namespace Engine
         ImGui::Text("  ImGui:     %.3f ms", pm.GetImGuiCpuMs());
         ImGui::Text("  PollEvents:  %.3f ms", pm.GetPollEventsCpuMs());
         ImGui::Text("  SwapBuffers: %.3f ms", pm.GetSwapBuffersCpuMs());
+        ImGui::Text("  主导阶段: %s", pm.GetFrameDominantStageLabel());
+        ImGui::Text("  刷新率: %.1f Hz (%.3f ms)", pm.GetRefreshHz(), pm.GetRefreshPeriodMs());
+        if (pm.GetSwapBurstId() > 0)
+        {
+            ImGui::Text("  Swap诊断: #%u%s, len=%u, max=%.3f ms, miss=%u", pm.GetSwapBurstId(),
+                        pm.IsSwapBurstActive() ? "(活跃)" : "", pm.GetSwapBurstLen(), pm.GetSwapBurstMaxMs(),
+                        pm.GetSwapBurstMissedVBlank());
+        }
+        else
+        {
+            ImGui::Text("  Swap诊断: 暂无异常段");
+        }
 
         ImGui::Separator();
         ImGui::Text("GPU 耗时 (上一帧):");
@@ -136,6 +156,14 @@ namespace Engine
         ImGui::Text("  场景渲染:  %.3f ms", pm.GetSceneRenderGpuMs());
         ImGui::Text("  粒子Compute: %.3f ms [%s]", pm.GetParticleComputeGpuMs(),
                     pm.IsParticleUsingCuda() ? "CUDA" : "GL");
+        ImGui::Text("  粒子CPU分段: Map=%.3f ms, Unmap=%.3f ms, Readback=%.3f ms", pm.GetParticleCudaMapAllCpuMs(),
+                    pm.GetParticleCudaUnmapAllCpuMs(), pm.GetParticleCounterReadbackCpuMs());
+        {
+            const auto ab = ParticleSystemGPU::GetABConfigSnapshot();
+            ImGui::Text("  粒子AB: ForceGL=%d (%s), DisableReadback=%d (%s)", ab.ForceGL ? 1 : 0,
+                        ABSourceLabel(ab.ForceGLSource), ab.DisableCounterReadback ? 1 : 0,
+                        ABSourceLabel(ab.DisableReadbackSource));
+        }
         if (pm.IsFluidActive())
             ImGui::Text("  流体Compute: %.3f ms [%s]", pm.GetFluidComputeGpuMs(),
                         pm.IsFluidUsingCuda() ? "CUDA" : "GL");

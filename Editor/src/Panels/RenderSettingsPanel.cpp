@@ -3,6 +3,7 @@
 #include "Core/Application.h"
 #include "Core/FileDialogs.h"
 #include "Core/Log.h"
+#include "Renderer/ParticleSystemGPU.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneSerializer.h"
@@ -14,6 +15,11 @@ namespace Engine
 {
     namespace
     {
+        const char* ABSourceLabel(ParticleSystemGPU::ABConfigSource source)
+        {
+            return ParticleSystemGPU::ABConfigSourceLabel(source);
+        }
+
         template <typename T, size_t N> int FindSelectedIndex(const std::array<T, N>& values, const T& currentValue)
         {
             for (size_t i = 0; i < values.size(); ++i)
@@ -209,6 +215,52 @@ namespace Engine
             float targetFps = app.GetTargetFrameRate();
             if (ImGui::DragFloat("目标 FPS", &targetFps, 1.0f, 15.0f, 300.0f, "%.0f"))
                 app.SetTargetFrameRate(targetFps);
+        }
+
+        // 粒子 AB 诊断开关（仅用于定位）
+        ImGui::Separator();
+        ImGui::Text("粒子 AB 诊断");
+        {
+            auto ab = ParticleSystemGPU::GetABConfigSnapshot();
+
+            bool forceGL          = ab.ForceGL;
+            bool disableReadback  = ab.DisableCounterReadback;
+            bool changed          = false;
+
+            if (ab.ForceGLLockedByEnv)
+            {
+                ImGui::BeginDisabled();
+                ImGui::Checkbox("强制GL Compute", &forceGL);
+                ImGui::EndDisabled();
+                ImGui::SameLine();
+                ImGui::TextDisabled("ENV锁定");
+            }
+            else if (ImGui::Checkbox("强制GL Compute", &forceGL))
+            {
+                changed = true;
+            }
+
+            if (ab.DisableReadbackLockedByEnv)
+            {
+                ImGui::BeginDisabled();
+                ImGui::Checkbox("关闭Counter回读", &disableReadback);
+                ImGui::EndDisabled();
+                ImGui::SameLine();
+                ImGui::TextDisabled("ENV锁定");
+            }
+            else if (ImGui::Checkbox("关闭Counter回读", &disableReadback))
+            {
+                changed = true;
+            }
+
+            if (changed)
+            {
+                ParticleSystemGPU::SetABConfigFromUI(forceGL, disableReadback);
+                ab = ParticleSystemGPU::GetABConfigSnapshot();
+            }
+
+            ImGui::TextDisabled("来源: ForceGL=%s, DisableReadback=%s", ABSourceLabel(ab.ForceGLSource),
+                                ABSourceLabel(ab.DisableReadbackSource));
         }
 
         // 物理设置

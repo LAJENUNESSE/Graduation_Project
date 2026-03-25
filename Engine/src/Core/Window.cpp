@@ -19,6 +19,9 @@
 // clang-format on
 #include <imgui_impl_glfw.h>
 
+#include <algorithm>
+#include <cmath>
+
 #ifdef __linux__
 #include <X11/Xlib.h>
 #endif
@@ -40,6 +43,88 @@ namespace Engine
     static void GLFWErrorCallback(int error, const char* description)
     {
         ENGINE_CORE_ERROR("GLFW Error ({0}): {1}", error, description);
+    }
+
+    static int ComputeRectOverlapArea(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh)
+    {
+        int left   = std::max(ax, bx);
+        int top    = std::max(ay, by);
+        int right  = std::min(ax + aw, bx + bw);
+        int bottom = std::min(ay + ah, by + bh);
+        int w      = right - left;
+        int h      = bottom - top;
+        if (w <= 0 || h <= 0)
+            return 0;
+        return w * h;
+    }
+
+    // 在窗口模式下估算当前窗口所在显示器刷新率（优先最大重叠显示器）
+    static float GetWindowRefreshHz(GLFWwindow* window)
+    {
+        if (!window)
+            return 60.0f;
+
+        if (GLFWmonitor* fullscreenMonitor = glfwGetWindowMonitor(window))
+        {
+            const GLFWvidmode* mode = glfwGetVideoMode(fullscreenMonitor);
+            if (mode && mode->refreshRate > 0)
+                return static_cast<float>(mode->refreshRate);
+        }
+
+        int monitorCount = 0;
+        GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+        if (!monitors || monitorCount <= 0)
+            return 60.0f;
+
+        int wx = 0, wy = 0, ww = 0, wh = 0;
+        glfwGetWindowPos(window, &wx, &wy);
+        glfwGetWindowSize(window, &ww, &wh);
+
+        GLFWmonitor* bestMonitor = nullptr;
+        int          bestOverlap = -1;
+        for (int i = 0; i < monitorCount; ++i)
+        {
+            int mx = 0, my = 0;
+            glfwGetMonitorPos(monitors[i], &mx, &my);
+            const GLFWvidmode* mode = glfwGetVideoMode(monitors[i]);
+            if (!mode)
+                continue;
+
+            int overlap = ComputeRectOverlapArea(wx, wy, ww, wh, mx, my, mode->width, mode->height);
+            if (overlap > bestOverlap)
+            {
+                bestOverlap = overlap;
+                bestMonitor = monitors[i];
+            }
+        }
+
+        if (!bestMonitor)
+            bestMonitor = glfwGetPrimaryMonitor();
+
+        const GLFWvidmode* bestMode = bestMonitor ? glfwGetVideoMode(bestMonitor) : nullptr;
+        if (!bestMode || bestMode->refreshRate <= 0)
+            return 60.0f;
+        return static_cast<float>(bestMode->refreshRate);
+    }
+
+    static uint32_t EstimateMissedVBlank(float swapMs, float refreshPeriodMs, bool vsyncEnabled)
+    {
+        if (swapMs <= 0.0f || refreshPeriodMs <= 0.0f)
+            return 0;
+
+        const int intervals = static_cast<int>(std::lround(swapMs / refreshPeriodMs));
+        const int expected  = vsyncEnabled ? 1 : 0;
+        if (intervals <= expected)
+            return 0;
+        return static_cast<uint32_t>(intervals - expected);
+    }
+
+    static float GetSwapBurstThresholdMs(float refreshPeriodMs)
+    {
+        if (refreshPeriodMs <= 0.0f)
+            return 16.0f;
+        // 以“至少 2 个刷新周期”为异常阈值，且不低于 8ms
+        return std::max(8.0f, refreshPeriodMs * 2.0f);
     }
 
     class GLFWWindowImpl : public Window
@@ -72,6 +157,18 @@ namespace Engine
     private:
         GLFWwindow*          m_Window = nullptr;
         Scope<OpenGLContext> m_Context;
+
+        // SwapBuffers burst diagnostics（常开轻量）
+        bool     m_SwapBurstActive    = false;
+        uint32_t m_SwapBurstSeq       = 0;
+        uint32_t m_SwapBurstLen       = 0;
+        float    m_SwapBurstMaxMs     = 0.0f;
+        uint32_t m_SwapBurstMissedMax = 0;
+
+        uint32_t m_LastSwapBurstId        = 0;
+        uint32_t m_LastSwapBurstLen       = 0;
+        float    m_LastSwapBurstMaxMs     = 0.0f;
+        uint32_t m_LastSwapBurstMissedMax = 0;
 
         struct WindowData
         {
@@ -305,8 +402,58 @@ namespace Engine
         m_Context->SwapBuffers();
         auto t2 = std::chrono::high_resolution_clock::now();
 
-        pm.SetPollEventsCPU(std::chrono::duration<float, std::milli>(t1 - t0).count());
-        pm.SetSwapBuffersCPU(std::chrono::duration<float, std::milli>(t2 - t1).count());
+        const float pollMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+        const float swapMs = std::chrono::duration<float, std::milli>(t2 - t1).count();
+        pm.SetPollEventsCPU(pollMs);
+        pm.SetSwapBuffersCPU(swapMs);
+
+        const float    refreshHz       = GetWindowRefreshHz(m_Window);
+        const float    refreshPeriodMs = (refreshHz > 0.0f) ? (1000.0f / refreshHz) : 0.0f;
+        const uint32_t missedVBlank    = EstimateMissedVBlank(swapMs, refreshPeriodMs, m_Data.VSync);
+        const float    burstThreshold  = GetSwapBurstThresholdMs(refreshPeriodMs);
+        const bool     swapAnomaly     = swapMs >= burstThreshold;
+
+        if (swapAnomaly)
+        {
+            if (!m_SwapBurstActive)
+            {
+                m_SwapBurstActive    = true;
+                m_SwapBurstSeq++;
+                m_SwapBurstLen       = 0;
+                m_SwapBurstMaxMs     = 0.0f;
+                m_SwapBurstMissedMax = 0;
+                ENGINE_CORE_WARN(
+                    "[Perf][SwapBurst] START id={0} swap={1:.3f}ms threshold={2:.3f}ms refresh={3:.1f}Hz vsync={4}",
+                    m_SwapBurstSeq, swapMs, burstThreshold, refreshHz, m_Data.VSync ? 1 : 0);
+            }
+
+            m_SwapBurstLen++;
+            m_SwapBurstMaxMs     = std::max(m_SwapBurstMaxMs, swapMs);
+            m_SwapBurstMissedMax = std::max(m_SwapBurstMissedMax, missedVBlank);
+        }
+        else if (m_SwapBurstActive)
+        {
+            m_LastSwapBurstId        = m_SwapBurstSeq;
+            m_LastSwapBurstLen       = m_SwapBurstLen;
+            m_LastSwapBurstMaxMs     = m_SwapBurstMaxMs;
+            m_LastSwapBurstMissedMax = m_SwapBurstMissedMax;
+
+            ENGINE_CORE_WARN(
+                "[Perf][SwapBurst] END id={0} len={1} maxSwap={2:.3f}ms maxMissedVBlank={3} refresh={4:.1f}Hz",
+                m_LastSwapBurstId, m_LastSwapBurstLen, m_LastSwapBurstMaxMs, m_LastSwapBurstMissedMax, refreshHz);
+
+            m_SwapBurstActive    = false;
+            m_SwapBurstLen       = 0;
+            m_SwapBurstMaxMs     = 0.0f;
+            m_SwapBurstMissedMax = 0;
+        }
+
+        const uint32_t displayBurstId        = m_SwapBurstActive ? m_SwapBurstSeq : m_LastSwapBurstId;
+        const uint32_t displayBurstLen       = m_SwapBurstActive ? m_SwapBurstLen : m_LastSwapBurstLen;
+        const float    displayBurstMaxMs     = m_SwapBurstActive ? m_SwapBurstMaxMs : m_LastSwapBurstMaxMs;
+        const uint32_t displayBurstMissedMax = m_SwapBurstActive ? m_SwapBurstMissedMax : m_LastSwapBurstMissedMax;
+        pm.SetPresentDiagnostics(refreshHz, refreshPeriodMs, missedVBlank, displayBurstId, displayBurstLen,
+                                 displayBurstMaxMs, displayBurstMissedMax, m_SwapBurstActive);
     }
 
     void GLFWWindowImpl::SetTitle(const std::string& title)

@@ -22,8 +22,29 @@ namespace Engine
     class ParticleSystemGPU
     {
     public:
+        enum class ABConfigSource : uint8_t
+        {
+            Default = 0,
+            UI,
+            Env
+        };
+
+        struct ABConfigSnapshot
+        {
+            bool           ForceGL                  = false;
+            bool           DisableCounterReadback   = false;
+            bool           ForceGLLockedByEnv       = false;
+            bool           DisableReadbackLockedByEnv = false;
+            ABConfigSource ForceGLSource            = ABConfigSource::Default;
+            ABConfigSource DisableReadbackSource    = ABConfigSource::Default;
+        };
+
         ParticleSystemGPU(uint32_t maxParticles);
         ~ParticleSystemGPU();
+
+        static ABConfigSnapshot GetABConfigSnapshot();
+        static void             SetABConfigFromUI(bool forceGL, bool disableCounterReadback);
+        static const char*      ABConfigSourceLabel(ABConfigSource source);
 
         void Init();
         void Update(float                           dt,

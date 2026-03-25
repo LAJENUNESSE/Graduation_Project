@@ -35,7 +35,10 @@ namespace Engine
                       << "ShadowPass_CPU_ms,SceneRender_CPU_ms,ImGui_CPU_ms,"
                       << "PollEvents_CPU_ms,SwapBuffers_CPU_ms,"
                       << "ShadowPass_GPU_ms,SceneRender_GPU_ms,ParticleCompute_GPU_ms,FluidCompute_GPU_ms,"
-                      << "DrawCalls,Vertices,Triangles\n";
+                      << "DrawCalls,Vertices,Triangles,"
+                      << "FrameDominantStage,RefreshHz,RefreshPeriod_ms,Swap_MissedVBlank,Swap_BurstId,Swap_BurstLen,"
+                      << "Particle_CudaMapAll_CPU_ms,Particle_CudaUnmapAll_CPU_ms,Particle_CounterReadback_CPU_ms,"
+                      << "Particle_UsingCuda,Particle_AB_ForceGL,Particle_AB_DisableReadback,Swap_BurstActive\n";
             ENGINE_CORE_INFO("Performance CSV: {}", filename.str());
         }
         else
@@ -75,6 +78,13 @@ namespace Engine
 
         // Reset per-frame flags (set to true by subsystems that run this frame)
         m_FluidActive = false;
+
+        // Reset per-frame present diagnostics (窗口层会在 OnUpdate 重新写入)
+        m_SwapMissedVBlank = 0;
+        m_ParticleUsingCuda = false;
+        m_ParticleCudaMapAllCpuMs = 0.0f;
+        m_ParticleCudaUnmapAllCpuMs = 0.0f;
+        m_ParticleCounterReadbackCpuMs = 0.0f;
     }
 
     void PerformanceMonitor::EndFrame()
@@ -88,6 +98,30 @@ namespace Engine
         m_FrameTimeHistory[m_FrameTimeHistoryOffset] = m_FrameTimeMs;
         m_FrameTimeHistoryOffset                     = (m_FrameTimeHistoryOffset + 1) % FrameHistorySize;
 
+        // Frame dominant CPU stage（用于快速归因长帧来源）
+        m_FrameDominantStage = FrameDominantStage::Other;
+        float dominantMs     = 0.0f;
+        if (m_SwapBuffersCpuMs > dominantMs)
+        {
+            dominantMs           = m_SwapBuffersCpuMs;
+            m_FrameDominantStage = FrameDominantStage::Swap;
+        }
+        if (m_SceneRenderCpuMs > dominantMs)
+        {
+            dominantMs           = m_SceneRenderCpuMs;
+            m_FrameDominantStage = FrameDominantStage::Scene;
+        }
+        if (m_ImGuiCpuMs > dominantMs)
+        {
+            dominantMs           = m_ImGuiCpuMs;
+            m_FrameDominantStage = FrameDominantStage::ImGui;
+        }
+        if (m_PollEventsCpuMs > dominantMs)
+        {
+            dominantMs           = m_PollEventsCpuMs;
+            m_FrameDominantStage = FrameDominantStage::PollEvents;
+        }
+
         m_FrameNumber++;
 
         // Write CSV row
@@ -98,10 +132,19 @@ namespace Engine
                       << std::setprecision(3) << m_ShadowPassCpuMs << "," << std::setprecision(3) << m_SceneRenderCpuMs
                       << "," << std::setprecision(3) << m_ImGuiCpuMs << "," << std::setprecision(3) << m_PollEventsCpuMs
                       << "," << std::setprecision(3) << m_SwapBuffersCpuMs << "," << std::setprecision(3)
-                      << m_ShadowPassGPU.GetElapsedMs() << "," << std::setprecision(3)
-                      << m_SceneRenderGPU.GetElapsedMs() << "," << std::setprecision(3) << GetParticleComputeGpuMs()
-                      << "," << std::setprecision(3) << GetFluidComputeGpuMs() << "," << std::defaultfloat
-                      << m_Stats.DrawCalls << "," << m_Stats.Vertices << "," << m_Stats.Triangles << "\n";
+                      << m_ShadowPassGPU.GetElapsedMs() << "," << std::setprecision(3) << m_SceneRenderGPU.GetElapsedMs()
+                      << "," << std::setprecision(3) << GetParticleComputeGpuMs() << "," << std::setprecision(3)
+                      << GetFluidComputeGpuMs() << "," << std::defaultfloat << m_Stats.DrawCalls << "," << m_Stats.Vertices
+                      << "," << m_Stats.Triangles << "," << GetFrameDominantStageLabel() << "," << std::setprecision(3)
+                      << m_RefreshHz << "," << std::setprecision(3) << m_RefreshPeriodMs << "," << m_SwapMissedVBlank
+                      << "," << m_SwapBurstId << "," << m_SwapBurstLen
+                      << "," << std::setprecision(3) << m_ParticleCudaMapAllCpuMs
+                      << "," << std::setprecision(3) << m_ParticleCudaUnmapAllCpuMs
+                      << "," << std::setprecision(3) << m_ParticleCounterReadbackCpuMs
+                      << "," << (m_ParticleUsingCuda ? 1 : 0)
+                      << "," << (m_ParticleABForceGL ? 1 : 0)
+                      << "," << (m_ParticleABDisableReadback ? 1 : 0)
+                      << "," << (m_SwapBurstActive ? 1 : 0) << "\n";
 
             // Flush every 60 frames (~1 second at 60fps)
             m_FlushCounter++;
