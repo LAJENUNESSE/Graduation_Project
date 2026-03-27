@@ -1,77 +1,126 @@
-# Repository Agent Rules
+# AGENTS.md
 
-本文件定义 Codex 在本仓库工作的项目级规范。
+This file provides guidance to coding agents when working with code in this repository.
 
-## 1. 沟通与范围
+## Project Overview
 
-- 默认使用简体中文进行说明、注释与变更说明。
-- 本仓库是 C++17 + OpenGL 4.3 引擎/编辑器工程，仅在既有架构内修改，不引入无关新依赖。
-- 不修改 `vendor/` 第三方源码，优先在项目层修复集成问题。
-- **遇到不确定的信息时必须主动向用户提问，禁止猜测或脑补。** 宁可多问一句，也不要基于假设给出错误结论。
-- 这包括但不限于：运行场景参数（粒子数量、迭代次数等）、用户意图、项目背景、复现步骤等。
+3D game engine and visual editor built with C++20 / OpenGL 4.3, created as a graduation project. The codebase is in English but comments are often in Chinese.
 
-## 2. 构建约定
+## Build Commands
 
-- 首次拉取或三方缺失时先执行：`git submodule update --init --recursive`。
-- Linux / VM（Ninja）：
-  - 配置：`cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo`
-  - 构建：`cmake --build build --target Editor`
-  - 运行：`./build/Editor/Editor.exe`
-- Windows（VS 2022 Build Tools + vcpkg）统一使用以下 `cmake.exe` 固定路径，不要在脚本里搜索路径：
-  - `C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe`
-  - 配置（无 CUDA）：`"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset default`
-  - 配置（CUDA）：`"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-cuda`
-  - 构建：`"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config RelWithDebInfo --target Editor`
-  - 运行：`./build/Editor/RelWithDebInfo/Editor.exe`
-- Windows 的 Visual Studio 生成器必须带 `--config RelWithDebInfo`；Linux/Ninja 无配置子目录。
-- 已于 `2026-03-10` 验证当前 Windows 环境：Visual Studio Build Tools 2022 17.14、MSVC 14.44.35207、VS 自带 `CMake 3.31.6`、`Ninja 1.12.1`、`vcpkg` 工具链、`CUDA Toolkit 13.1`（`nvcc` 可用）。
-- 当前普通 PowerShell 未将 `cmake`、`ninja`、`cl` 加入 `PATH`；命令行构建优先使用 Developer PowerShell，或显式调用 VS Build Tools 自带工具。
-- `default` 与 `vs2022-cuda` 两个 preset 均输出到 `build/`，切换 preset 后需重新配置。
-- 不要假定 CUDA 始终开启；按当前 preset 与 CMake 选项判断。
-- Windows + MSVC 保持 `/utf-8` 生效（如 CMake 已统一处理，不重复改动）。
-- `engpch.h` 由构建系统注入，除非必要不要手动补 include。
+```bash
+# First-time setup: initialize git submodules (vendors are submodules)
+git submodule update --init --recursive
+````
 
-## 3. 架构边界
+### Linux / VM (Ninja)
 
-- `Ref<T>` = `std::shared_ptr<T>`，`Scope<T>` = `std::unique_ptr<T>`（见 `Core/Base.h`）。
-- 平台相关实现只放在 `Engine/Platform/`；`Engine/src/` 通过抽象接口访问。
-- 如新增 CUDA 相关实现，统一放在 `Engine/Platform/CUDA/` 或同级平台目录；`Engine/src/` 不直接依赖 `cuda_runtime.h`。
-- 资源路径按项目根目录解析（如 `assets/shaders/PBR.glsl`）。
+```bash
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build --target Editor
+# Run
+./build/Editor/Editor.exe
+```
 
-## 4. Scene / ECS / Reflection
+### Windows (VS 2022 Build Tools + vcpkg)
 
-- 新组件必须完成反射声明与注册，否则不会出现在编辑器和序列化中：
-  - 声明：`ENGINE_COMPONENT`、`ENGINE_PROPERTY`
-  - 注册：`REGISTER_COMPONENT_BEGIN/END`、`REGISTER_PROPERTY`
-- 组件结构体必须可默认构造、可拷贝。
-- `PropertyType` 必须与字段真实类型匹配；`Transient` 属性不序列化。
-- `Scene::DestroyEntity()` 前先清理对应 Bullet 刚体。
+cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 
-## 5. Renderer / OpenGL / Shader
+> **⚠️ 禁止使用 `find`/`ls`/`where`/`which` 等命令搜索 cmake 路径。** 下方路径是唯一正确路径，直接复制使用即可。
+>
+> **⚠️ 禁止使用 `CMAKE="..." && "$CMAKE"` 变量模式。** MINGW Bash 中变量赋值 + `&&` + 管道会导致变量展开为空字符串（`command not found`），必须直接写完整路径。
 
-- Shader 文件使用单文件 `#type` 分段，且 `#type` 必须在 `#version` 之前。
-- 渲染 Shader 使用 GLSL 330；Compute Shader 使用 430+。
-- 当前 GPU 计算主路径仍是 OpenGL Compute Shader；只有在性能或能力明确不足时再引入 CUDA 分支，避免无必要地长期维护两套实现。
-- 如后续引入 CUDA，优先以独立 target 方式接入 `CUDAToolkit`；仅在确需编译 `.cu` 时启用 CUDA 语言，不要把 CUDA 编译/链接选项扩散到全部目标。
-- 如涉及 CUDA / OpenGL 互操作，必须明确资源所有权、映射/解绑顺序与同步点，避免跨 API 读写竞争。
-- 顶点布局约定：`location 0/1/2/3 = position/normal/texcoord/tangent`。
-- Uniform 名称与 C++ 设置端保持完全一致（区分大小写）。
-- Compute 流程保证：
-  - `local_size` 与 dispatch 参数匹配
-  - SSBO `std430` 与 C++ 结构体对齐
-  - 跨 pass 读写有 `memoryBarrier`/`barrier` 同步
-- `Material::Set()` 仅缓存值，需通过 `Bind()` 触发实际上传。
+```bash
+# ── 配置（二选一）──────────────────────────────────────
+# 无 CUDA（default preset）
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset default
 
-## 6. Asset / Physics / Editor
+# 有 CUDA（vs2022-cuda preset，需安装 NVIDIA CUDA Toolkit）
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-cuda
 
-- `AssetManager::Init()` 后才能加载资源；每帧调用 `AssetManager::Update()`。
-- 异步加载当前仅支持纹理，Mesh 默认同步加载。
-- 每个 Scene 只能选择一种物理后端（Bullet 或自研），禁止混用。
-- Editor 删除实体采用延迟删除，避免迭代器/句柄失效。
-- Inspector 旋转以“度”显示，内部按“弧度”存储。
-- 编辑器 UI 文本默认中文；资源路径必须位于项目目录内（避免 `..` 越界）。
+# ── 构建（Visual Studio 生成器需指定 --config）─────────
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config RelWithDebInfo --target Editor
 
-## 7. 提交前检查
+# Run
+./build/Editor/RelWithDebInfo/Editor.exe
+```
 
-- 至少构建受影响目标（最低 `Editor`），确认无新增编译/链接错误。
-- 涉及 Shader、反射组件、资源加载、物理同步时，至少走通一次对应运行路径。
+> **注意：** Linux/Ninja 输出路径无配置子目录，Windows/VS 生成器输出路径含 `RelWithDebInfo/` 子目录。
+> 两个 preset 的输出目录相同（`build/`），切换 preset 后需重新配置但构建/运行路径不变。
+
+**Build targets:** `Engine` (static lib), `Editor` (exe), `Sandbox` (exe)
+
+**Run:** exe 启动时会自动检测项目根目录，因此可从任意目录启动。
+
+## Architecture
+
+| 目录                      | 职责                                                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `Editor/`                 | 可视化编辑器（exe），分层协调式架构（EditorLayer → 控制器/面板）                                                            |
+| `Engine/`                 | 引擎静态库（Core, Renderer, Scene, Reflection, Asset, Physics, Audio, Media, Terrain, Script, Events, Debug, ImGui）        |
+| `Engine/Platform/OpenGL/` | OpenGL 4.3 具体实现                                                                                                         |
+| `Engine/Platform/CUDA/`   | CUDA compute sidecar（粒子/SPH，需 `ENGINE_ENABLE_CUDA=ON`），含错误检测 + 全局中毒回退                                     |
+| `vendor/`                 | 第三方库（glfw, glad-generated, glm, entt, spdlog, imgui, imguizmo, yaml-cpp, stb_image, bullet3, assimp, tinyfiledialogs） |
+| `assets/`                 | 着色器(.glsl ×36)、模型、纹理、场景(.scene = YAML)                                                                          |
+| `docs/`                   | 深度调研报告（CUDA 迁移、UE 反射、功能审查等）                                                                              |
+
+各模块的详细约定见 `.claude/rules/` 下的路径限定规则文件。
+
+## Language
+
+* 所有回答、解释、注释均使用**简体中文**。
+
+## Working Style
+
+* **遇到不确定的信息时必须主动向用户提问，禁止猜测或脑补。** 宁可多问一句，也不要基于假设给出错误结论。
+* 这包括但不限于：运行场景参数（粒子数量、迭代次数等）、用户意图、项目背景、复现步骤等。
+* **修复 bug 时，必须实施实际的代码修复。** 不要止步于产出计划、验证文档或分析报告。完整流程：验证 bug → 实施修复 → 构建验证 → 提交。
+* **当用户请求建议或意见**（演示录制、链接策略、架构选型等），**直接给出建议**。除非用户明确要求分析代码，否则不要扫描代码库。
+
+## Key Conventions
+
+* **C++20** standard, MSVC on Windows with `/utf-8` flag for Chinese string literals
+* All asset paths are relative to the project root (e.g., `assets/shaders/PBR.glsl`)
+* Scene files are YAML with `.scene` extension in `assets/scenes/`
+* Shaders are raw GLSL files in `assets/shaders/` — vertex and fragment combined in one file, separated by `#type vertex` / `#type fragment` / `#type compute` pragmas
+* New components must be registered with the reflection system (macros in header, `REGISTER_COMPONENT_*` in a .cpp) to appear in the editor and serialize correctly
+* Platform-specific code lives in `Engine/Platform/` (currently `OpenGL/` and `CUDA/`)
+* `Ref<T>` is `std::shared_ptr<T>`, `Scope<T>` is `std::unique_ptr<T>` (defined in `Core/Base.h`)
+* **Scene 架构**：Scene 为 façade，复杂逻辑委托给 SceneRuntimeCoordinator / SceneHierarchyService / WorldTransformService，运行时资源由 RuntimeStore 管理
+* **Editor 架构**：EditorLayer 是主协调器，职责分散到 EditorSceneSession / EditorShell / EditorPanelCoordinator / EditorRenderController / EditorViewportController + UndoSystem
+* **CUDA sidecar**：粒子和 SPH 管线有 CUDA 加速路径，含错误检测 + 全局中毒回退到 OpenGL Compute
+
+## License
+
+LGPL v2.1+（FFmpeg 以 DLL 动态链接）
+
+## CI/CD
+
+GitHub Actions — CMake 构建 + CodeQL 安全分析
+
+## Development Workflow
+
+Always follow this workflow:
+
+1. Explore relevant files
+2. Plan the change
+3. Implement a small step
+4. Create git commit
+5. Build and verify
+6. Continue
+
+**频繁提交：** 每完成一个小步骤就立即 `git commit`，保存快照。不要攒一大堆改动再提交。
+
+**提交前格式化：** 提交代码之前，对本次修改的 C/C++ 源文件（`.h`/`.cpp`）运行 clang-format，确保代码风格一致。不要格式化 `vendor/` 下的第三方代码。
+
+**⚠️ clang-format 不在全局 PATH 中**，需使用 VS Build Tools 内置路径，规则同 cmake：
+
+```bash
+# 格式化单个文件
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe" -i path/to/file.cpp
+
+# 批量格式化本次 git 修改的 C/C++ 文件（排除 vendor/）
+git diff --name-only --diff-filter=d HEAD | grep -E '\.(h|cpp)$' | grep -v '^vendor/' | xargs -r "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe" -i
+```
+
+项目根目录的 `.clang-format` 会被自动识别，无需额外指定。

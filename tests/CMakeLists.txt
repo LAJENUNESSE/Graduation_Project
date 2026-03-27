@@ -67,6 +67,7 @@ add_executable(EngineTests
     src/TestWorldTransform.cpp
     src/TestCollisionMath.cpp
     src/TestCudaPoisonState.cpp
+    src/TestVulkanInteropCommon.cpp
     src/TestSPHKernel.cpp
     src/TestSDFMath.cpp
     src/TestCommandHistory.cpp
@@ -97,3 +98,4 @@ target_link_libraries(EngineTests PRIVATE
 enable_testing()
 include(GoogleTest)
 gtest_discover_tests(EngineTests)
+
