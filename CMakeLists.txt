@@ -16,6 +16,31 @@ option(ENGINE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_CUDA "Enable CUDA compute sidecar for particle system" OFF)
+option(ENGINE_ENABLE_COMPILER_CACHE "Enable compiler cache launcher when available" ON)
+option(ENGINE_ENABLE_MSVC_MP "Enable /MP for MSVC C/C++ compilation" ON)
+
+# Detect and enable compiler cache launcher (sccache/ccache) for local builds.
+if(ENGINE_ENABLE_COMPILER_CACHE)
+    find_program(ENGINE_COMPILER_CACHE_PROGRAM NAMES sccache ccache)
+    if(ENGINE_COMPILER_CACHE_PROGRAM)
+        if(NOT CMAKE_C_COMPILER_LAUNCHER)
+            set(CMAKE_C_COMPILER_LAUNCHER "${ENGINE_COMPILER_CACHE_PROGRAM}" CACHE STRING "C compiler launcher" FORCE)
+        endif()
+        if(NOT CMAKE_CXX_COMPILER_LAUNCHER)
+            set(CMAKE_CXX_COMPILER_LAUNCHER "${ENGINE_COMPILER_CACHE_PROGRAM}" CACHE STRING "CXX compiler launcher" FORCE)
+        endif()
+        message(STATUS "[Engine] Compiler cache enabled: ${ENGINE_COMPILER_CACHE_PROGRAM}")
+    else()
+        message(STATUS "[Engine] Compiler cache not found (sccache/ccache); continuing without launcher")
+    endif()
+endif()
+
+if(MSVC AND ENGINE_ENABLE_MSVC_MP)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:C>:/MP>
+        $<$<COMPILE_LANGUAGE:CXX>:/MP>
+    )
+endif()
 
 # CUDA Configuration (optional)
 if(ENGINE_ENABLE_CUDA)
@@ -32,8 +57,8 @@ add_subdirectory(vendor)
 add_subdirectory(Engine)
 add_subdirectory(Sandbox)
 add_subdirectory(Editor)
+add_subdirectory(InteropDemo)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
-
