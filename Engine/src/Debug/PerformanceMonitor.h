@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/VulkanExternalRuntime.h"
 #include "Debug/GPUTimerQuery.h"
 
 #include <chrono>
@@ -48,14 +49,14 @@ namespace Engine
                                    uint32_t swapBurstMissedVBlank,
                                    bool     swapBurstActive)
         {
-            m_RefreshHz                 = refreshHz;
-            m_RefreshPeriodMs           = refreshPeriodMs;
-            m_SwapMissedVBlank          = swapMissedVBlank;
-            m_SwapBurstId               = swapBurstId;
-            m_SwapBurstLen              = swapBurstLen;
-            m_SwapBurstMaxMs            = swapBurstMaxMs;
-            m_SwapBurstMissedVBlank     = swapBurstMissedVBlank;
-            m_SwapBurstActive           = swapBurstActive;
+            m_RefreshHz             = refreshHz;
+            m_RefreshPeriodMs       = refreshPeriodMs;
+            m_SwapMissedVBlank      = swapMissedVBlank;
+            m_SwapBurstId           = swapBurstId;
+            m_SwapBurstLen          = swapBurstLen;
+            m_SwapBurstMaxMs        = swapBurstMaxMs;
+            m_SwapBurstMissedVBlank = swapBurstMissedVBlank;
+            m_SwapBurstActive       = swapBurstActive;
         }
 
         // GPU timer queries (owned by monitor, used by Scene)
@@ -74,8 +75,8 @@ namespace Engine
         }
         void SetParticleABDiagnostics(bool forceGL, bool disableReadback)
         {
-            m_ParticleABForceGL          = forceGL;
-            m_ParticleABDisableReadback  = disableReadback;
+            m_ParticleABForceGL         = forceGL;
+            m_ParticleABDisableReadback = disableReadback;
         }
         bool IsParticleUsingCuda() const { return m_ParticleUsingCuda; }
 
@@ -87,26 +88,36 @@ namespace Engine
         void           SetFluidActive(bool v) { m_FluidActive = v; }
         bool           IsFluidActive() const { return m_FluidActive; }
 
+        // VkExtSkeleton diagnostics（查询 VulkanExternalRuntime 单例）
+#ifdef ENGINE_ENABLE_VULKAN_CUDA_INTEROP
+        VkExtSkeletonDiagnostics GetVkExtSkeletonDiagnostics() const
+        {
+            return VulkanExternalRuntime::Get().GetDiagnostics();
+        }
+#else
+        VkExtSkeletonDiagnostics GetVkExtSkeletonDiagnostics() const { return {}; }
+#endif
+
         // Render stats (modified by RenderCommand::DrawIndexed)
         RenderStats&       GetStats() { return m_Stats; }
         const RenderStats& GetStats() const { return m_Stats; }
 
         // Accessors for ImGui panel
-        float GetFPS() const { return m_FPS; }
-        float GetFrameTimeMs() const { return m_FrameTimeMs; }
-        float GetShadowPassCpuMs() const { return m_ShadowPassCpuMs; }
-        float GetSceneRenderCpuMs() const { return m_SceneRenderCpuMs; }
-        float GetImGuiCpuMs() const { return m_ImGuiCpuMs; }
-        float GetPollEventsCpuMs() const { return m_PollEventsCpuMs; }
-        float GetSwapBuffersCpuMs() const { return m_SwapBuffersCpuMs; }
-        float GetRefreshHz() const { return m_RefreshHz; }
-        float GetRefreshPeriodMs() const { return m_RefreshPeriodMs; }
-        uint32_t GetSwapMissedVBlank() const { return m_SwapMissedVBlank; }
-        uint32_t GetSwapBurstId() const { return m_SwapBurstId; }
-        uint32_t GetSwapBurstLen() const { return m_SwapBurstLen; }
-        float    GetSwapBurstMaxMs() const { return m_SwapBurstMaxMs; }
-        uint32_t GetSwapBurstMissedVBlank() const { return m_SwapBurstMissedVBlank; }
-        bool     IsSwapBurstActive() const { return m_SwapBurstActive; }
+        float       GetFPS() const { return m_FPS; }
+        float       GetFrameTimeMs() const { return m_FrameTimeMs; }
+        float       GetShadowPassCpuMs() const { return m_ShadowPassCpuMs; }
+        float       GetSceneRenderCpuMs() const { return m_SceneRenderCpuMs; }
+        float       GetImGuiCpuMs() const { return m_ImGuiCpuMs; }
+        float       GetPollEventsCpuMs() const { return m_PollEventsCpuMs; }
+        float       GetSwapBuffersCpuMs() const { return m_SwapBuffersCpuMs; }
+        float       GetRefreshHz() const { return m_RefreshHz; }
+        float       GetRefreshPeriodMs() const { return m_RefreshPeriodMs; }
+        uint32_t    GetSwapMissedVBlank() const { return m_SwapMissedVBlank; }
+        uint32_t    GetSwapBurstId() const { return m_SwapBurstId; }
+        uint32_t    GetSwapBurstLen() const { return m_SwapBurstLen; }
+        float       GetSwapBurstMaxMs() const { return m_SwapBurstMaxMs; }
+        uint32_t    GetSwapBurstMissedVBlank() const { return m_SwapBurstMissedVBlank; }
+        bool        IsSwapBurstActive() const { return m_SwapBurstActive; }
         const char* GetFrameDominantStageLabel() const
         {
             switch (m_FrameDominantStage)
@@ -193,13 +204,13 @@ namespace Engine
         GPUTimerQuery m_ShadowPassGPU;
         GPUTimerQuery m_SceneRenderGPU;
         GPUTimerQuery m_ParticleComputeGPU;
-        float         m_ParticleComputeCudaMs = 0.0f;
-        bool          m_ParticleUsingCuda     = false;
-        float         m_ParticleCudaMapAllCpuMs = 0.0f;
-        float         m_ParticleCudaUnmapAllCpuMs = 0.0f;
+        float         m_ParticleComputeCudaMs        = 0.0f;
+        bool          m_ParticleUsingCuda            = false;
+        float         m_ParticleCudaMapAllCpuMs      = 0.0f;
+        float         m_ParticleCudaUnmapAllCpuMs    = 0.0f;
         float         m_ParticleCounterReadbackCpuMs = 0.0f;
-        bool          m_ParticleABForceGL = false;
-        bool          m_ParticleABDisableReadback = false;
+        bool          m_ParticleABForceGL            = false;
+        bool          m_ParticleABDisableReadback    = false;
 
         // Fluid GPU timers
         GPUTimerQuery m_FluidComputeGPU;

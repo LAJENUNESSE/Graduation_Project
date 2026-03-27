@@ -31,12 +31,12 @@ namespace Engine
 
         struct ABConfigSnapshot
         {
-            bool           ForceGL                  = false;
-            bool           DisableCounterReadback   = false;
-            bool           ForceGLLockedByEnv       = false;
+            bool           ForceGL                    = false;
+            bool           DisableCounterReadback     = false;
+            bool           ForceGLLockedByEnv         = false;
             bool           DisableReadbackLockedByEnv = false;
-            ABConfigSource ForceGLSource            = ABConfigSource::Default;
-            ABConfigSource DisableReadbackSource    = ABConfigSource::Default;
+            ABConfigSource ForceGLSource              = ABConfigSource::Default;
+            ABConfigSource DisableReadbackSource      = ABConfigSource::Default;
         };
 
         ParticleSystemGPU(uint32_t maxParticles);
@@ -53,7 +53,10 @@ namespace Engine
         };
 
         static InteropBackend GetRequestedInteropBackend();
-        static const char*   InteropBackendLabel(InteropBackend backend);
+        static const char*    InteropBackendLabel(InteropBackend backend);
+
+        /// 查询 VkExtSkeleton 运行时是否就绪（能力探测 + 自检通过）
+        static bool IsVkExtSkeletonReady();
 
         void Init();
         void Update(float                           dt,
@@ -121,8 +124,8 @@ namespace Engine
         bool     m_ReadbackPending = false;
 
 #ifdef ENGINE_ENABLE_CUDA
-        InteropBackend              m_RequestedInteropBackend = InteropBackend::CudaGL;
-        InteropBackend              m_ActiveInteropBackend    = InteropBackend::CudaGL;
+        InteropBackend m_RequestedInteropBackend = InteropBackend::CudaGL;
+        InteropBackend m_ActiveInteropBackend    = InteropBackend::CudaGL;
         // CUDA compute sidecar（Phase 1: emit / simulate / render_args）
         Scope<CudaGLInteropContext> m_CudaInterop;
         bool                        m_UseCudaPath       = false;

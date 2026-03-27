@@ -24,6 +24,10 @@
 #include "Platform/CUDA/CudaErrorHandling.h"
 #endif
 
+#ifdef ENGINE_ENABLE_VULKAN_CUDA_INTEROP
+#include "Core/VulkanExternalRuntime.h"
+#endif
+
 #include "Debug/PerformanceMonitor.h"
 
 namespace Engine
@@ -44,21 +48,21 @@ namespace Engine
         {
             bool Initialized = false;
 
-            bool EnvForceGLValid          = false;
-            bool EnvForceGLValue          = false;
-            bool EnvDisableReadbackValid  = false;
-            bool EnvDisableReadbackValue  = false;
+            bool EnvForceGLValid         = false;
+            bool EnvForceGLValue         = false;
+            bool EnvDisableReadbackValid = false;
+            bool EnvDisableReadbackValue = false;
 
-            bool UIForceGLValue          = false;
-            bool UIDisableReadbackValue  = false;
-            bool UIForceGLTouched        = false;
+            bool UIForceGLValue           = false;
+            bool UIDisableReadbackValue   = false;
+            bool UIForceGLTouched         = false;
             bool UIDisableReadbackTouched = false;
 
-            bool LastLogValid                     = false;
-            bool LastForceGL                      = false;
-            bool LastDisableReadback              = false;
-            ParticleSystemGPU::ABConfigSource LastForceSource = ParticleSystemGPU::ABConfigSource::Default;
-            ParticleSystemGPU::ABConfigSource LastDisableSource = ParticleSystemGPU::ABConfigSource::Default;
+            bool                              LastLogValid        = false;
+            bool                              LastForceGL         = false;
+            bool                              LastDisableReadback = false;
+            ParticleSystemGPU::ABConfigSource LastForceSource     = ParticleSystemGPU::ABConfigSource::Default;
+            ParticleSystemGPU::ABConfigSource LastDisableSource   = ParticleSystemGPU::ABConfigSource::Default;
         };
 
         ParticleABRuntimeState& GetParticleABRuntimeState()
@@ -72,7 +76,7 @@ namespace Engine
             if (!raw)
                 return {};
 
-            std::string token(raw);
+            std::string  token(raw);
             const size_t begin = token.find_first_not_of(" \t\r\n");
             if (begin == std::string::npos)
                 return {};
@@ -118,7 +122,7 @@ namespace Engine
             auto& state = GetParticleABRuntimeState();
 
             ParticleSystemGPU::ABConfigSnapshot snapshot{};
-            snapshot.ForceGLLockedByEnv        = state.EnvForceGLValid;
+            snapshot.ForceGLLockedByEnv         = state.EnvForceGLValid;
             snapshot.DisableReadbackLockedByEnv = state.EnvDisableReadbackValid;
 
             if (state.EnvForceGLValid)
@@ -141,8 +145,9 @@ namespace Engine
             else
             {
                 snapshot.DisableCounterReadback = state.UIDisableReadbackValue;
-                snapshot.DisableReadbackSource  = state.UIDisableReadbackTouched ? ParticleSystemGPU::ABConfigSource::UI
-                                                                                  : ParticleSystemGPU::ABConfigSource::Default;
+                snapshot.DisableReadbackSource  = state.UIDisableReadbackTouched
+                                                      ? ParticleSystemGPU::ABConfigSource::UI
+                                                      : ParticleSystemGPU::ABConfigSource::Default;
             }
 
             return snapshot;
@@ -163,14 +168,13 @@ namespace Engine
 
             ENGINE_CORE_INFO("[Particle][AB] {} forceGL={} ({}) disableReadback={} ({})", reason,
                              snapshot.ForceGL ? 1 : 0, ABSourceToString(snapshot.ForceGLSource),
-                             snapshot.DisableCounterReadback ? 1 : 0,
-                             ABSourceToString(snapshot.DisableReadbackSource));
+                             snapshot.DisableCounterReadback ? 1 : 0, ABSourceToString(snapshot.DisableReadbackSource));
 
-            state.LastLogValid         = true;
-            state.LastForceGL          = snapshot.ForceGL;
-            state.LastDisableReadback  = snapshot.DisableCounterReadback;
-            state.LastForceSource      = snapshot.ForceGLSource;
-            state.LastDisableSource    = snapshot.DisableReadbackSource;
+            state.LastLogValid        = true;
+            state.LastForceGL         = snapshot.ForceGL;
+            state.LastDisableReadback = snapshot.DisableCounterReadback;
+            state.LastForceSource     = snapshot.ForceGLSource;
+            state.LastDisableSource   = snapshot.DisableReadbackSource;
         }
 
         void InitParticleABFromEnvIfNeeded()
@@ -204,9 +208,8 @@ namespace Engine
                 }
                 else
                 {
-                    ENGINE_CORE_WARN(
-                        "[Particle][AB] Invalid ENGINE_PARTICLE_AB_DISABLE_READBACK='{}', ignored.",
-                        rawDisableReadback);
+                    ENGINE_CORE_WARN("[Particle][AB] Invalid ENGINE_PARTICLE_AB_DISABLE_READBACK='{}', ignored.",
+                                     rawDisableReadback);
                 }
             }
 
@@ -215,8 +218,8 @@ namespace Engine
 
         struct ParticleInteropBackendRuntimeState
         {
-            bool Initialized      = false;
-            bool RequestedFromEnv = false;
+            bool                              Initialized      = false;
+            bool                              RequestedFromEnv = false;
             ParticleSystemGPU::InteropBackend RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
         };
 
@@ -249,7 +252,7 @@ namespace Engine
             const char* raw = std::getenv("ENGINE_PARTICLE_INTEROP_BACKEND");
             if (raw && raw[0] != '\0')
             {
-                state.RequestedFromEnv = true;
+                state.RequestedFromEnv  = true;
                 const std::string token = NormalizeBoolToken(raw);
                 if (token == "gl" || token == "cuda-gl" || token == "cudagl" || token == "legacy")
                 {
@@ -263,8 +266,7 @@ namespace Engine
                 else
                 {
                     ENGINE_CORE_WARN(
-                        "[Particle][Interop] Invalid ENGINE_PARTICLE_INTEROP_BACKEND='{}', fallback to CudaGL.",
-                        raw);
+                        "[Particle][Interop] Invalid ENGINE_PARTICLE_INTEROP_BACKEND='{}', fallback to CudaGL.", raw);
                     state.RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
                 }
             }
@@ -403,7 +405,6 @@ namespace Engine
         return ABSourceToString(source);
     }
 
-
     ParticleSystemGPU::InteropBackend ParticleSystemGPU::GetRequestedInteropBackend()
     {
         return ResolveParticleInteropBackend();
@@ -413,6 +414,16 @@ namespace Engine
     {
         return InteropBackendToString(backend);
     }
+
+    bool ParticleSystemGPU::IsVkExtSkeletonReady()
+    {
+#ifdef ENGINE_ENABLE_VULKAN_CUDA_INTEROP
+        return VulkanExternalRuntime::Get().IsReady();
+#else
+        return false;
+#endif
+    }
+
     void ParticleSystemGPU::Init()
     {
         if (m_Initialized)
@@ -426,7 +437,8 @@ namespace Engine
         m_ActiveInteropBackend    = m_RequestedInteropBackend;
         if (m_RequestedInteropBackend == InteropBackend::VulkanExternal)
         {
-            ENGINE_CORE_WARN("[Particle][Interop] VulkanExternal backend requested, but main renderer path is OpenGL; falling back to CudaGL interop.");
+            ENGINE_CORE_WARN("[Particle][Interop] VulkanExternal backend requested, but main renderer path is OpenGL; "
+                             "falling back to CudaGL interop.");
             m_ActiveInteropBackend = InteropBackend::CudaGL;
         }
 #endif
@@ -511,7 +523,8 @@ namespace Engine
         {
             m_CudaInitAttempted = true;
             ENGINE_CORE_INFO("[Particle][Interop] active backend={}", InteropBackendLabel(m_ActiveInteropBackend));
-            if (m_ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned() && CudaGLInteropContext::ProbeDeviceMatch())
+            if (m_ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned() &&
+                CudaGLInteropContext::ProbeDeviceMatch())
             {
                 m_CudaInterop      = CreateScope<CudaGLInteropContext>();
                 m_CudaSlotParticle = m_CudaInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
@@ -586,9 +599,9 @@ namespace Engine
         auto&                  perf     = PerformanceMonitor::Get();
         perf.SetParticleABDiagnostics(abConfig.ForceGL, abConfig.DisableCounterReadback);
 
-        float cudaMapAllCpuMs        = 0.0f;
-        float cudaUnmapAllCpuMs      = 0.0f;
-        float counterReadbackCpuMs   = 0.0f;
+        float cudaMapAllCpuMs      = 0.0f;
+        float cudaUnmapAllCpuMs    = 0.0f;
+        float counterReadbackCpuMs = 0.0f;
 
         const bool sphEnabled = emitter.SPH.Enabled && !m_DisableSPHOnDriver;
         if (emitter.SPH.Enabled && m_DisableSPHOnDriver && !m_SPHDisableLogged)
@@ -620,7 +633,8 @@ namespace Engine
 #ifdef ENGINE_ENABLE_CUDA
         // ---- CUDA compute sidecar path ----
         bool cudaSucceeded = false;
-        if (!abConfig.ForceGL && m_UseCudaPath && m_ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned())
+        if (!abConfig.ForceGL && m_UseCudaPath && m_ActiveInteropBackend == InteropBackend::CudaGL &&
+            !CudaInterop::IsCudaPoisoned())
         {
             if (sphEnabled && m_CudaSPHCtx)
             {
@@ -895,9 +909,9 @@ namespace Engine
                     CudaInterop::RecordCudaEvent(m_CudaTiming.EventStop, stream);
                     const auto unmapStart = std::chrono::high_resolution_clock::now();
                     m_CudaInterop->UnmapAll();
-                    cudaUnmapAllCpuMs += std::chrono::duration<float, std::milli>(
-                                             std::chrono::high_resolution_clock::now() - unmapStart)
-                                             .count();
+                    cudaUnmapAllCpuMs +=
+                        std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - unmapStart)
+                            .count();
 
                     if (CudaInterop::IsCudaPoisoned())
                     {
@@ -1201,7 +1215,7 @@ namespace Engine
                     glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
                     m_ReadbackFence = nullptr;
                 }
-                m_ReadbackPending = false;
+                m_ReadbackPending    = false;
                 counterReadbackCpuMs = 0.0f;
             }
             else
@@ -1274,9 +1288,9 @@ namespace Engine
                 m_ReadbackFence   = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
                 m_ReadbackPending = true;
 
-                counterReadbackCpuMs = std::chrono::duration<float, std::milli>(
-                                           std::chrono::high_resolution_clock::now() - readbackStart)
-                                           .count();
+                counterReadbackCpuMs =
+                    std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - readbackStart)
+                        .count();
             }
         }
 
