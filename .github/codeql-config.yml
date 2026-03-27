@@ -1,4 +1,4 @@
 name: "CodeQL Config"
 
 paths-ignore:
-  - vendor
+  - vendor/**
