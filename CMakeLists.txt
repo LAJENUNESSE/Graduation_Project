@@ -16,6 +16,7 @@ option(ENGINE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_CUDA "Enable CUDA compute sidecar for particle system" OFF)
+option(ENGINE_ENABLE_VULKAN_CUDA_INTEROP "Enable Vulkan external interop hooks for CUDA path" ON)
 option(ENGINE_ENABLE_COMPILER_CACHE "Enable compiler cache launcher when available" ON)
 option(ENGINE_ENABLE_MSVC_MP "Enable /MP for MSVC C/C++ compilation" ON)
 

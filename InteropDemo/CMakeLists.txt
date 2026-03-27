@@ -14,6 +14,7 @@ find_package(CUDAToolkit REQUIRED)
 set(INTEROP_DEMO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/VulkanCudaInteropDemo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CudaParticleKernel.cu
+    ${CMAKE_SOURCE_DIR}/Engine/Platform/CUDA/VulkanExternalInterop.cpp
 )
 
 add_executable(VulkanCudaInteropDemo ${INTEROP_DEMO_SOURCES})
@@ -32,6 +33,7 @@ target_compile_features(VulkanCudaInteropDemo PRIVATE cxx_std_20)
 
 target_include_directories(VulkanCudaInteropDemo PRIVATE
     ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/Engine
     ${CMAKE_SOURCE_DIR}/Engine/Platform
 )
 

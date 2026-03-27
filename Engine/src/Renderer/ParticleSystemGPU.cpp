@@ -212,6 +212,73 @@ namespace Engine
 
             LogParticleABSummaryIfChanged("Init");
         }
+
+        struct ParticleInteropBackendRuntimeState
+        {
+            bool Initialized      = false;
+            bool RequestedFromEnv = false;
+            ParticleSystemGPU::InteropBackend RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
+        };
+
+        ParticleInteropBackendRuntimeState& GetParticleInteropBackendRuntimeState()
+        {
+            static ParticleInteropBackendRuntimeState state;
+            return state;
+        }
+
+        const char* InteropBackendToString(ParticleSystemGPU::InteropBackend backend)
+        {
+            switch (backend)
+            {
+            case ParticleSystemGPU::InteropBackend::VulkanExternal:
+                return "VulkanExternal";
+            case ParticleSystemGPU::InteropBackend::CudaGL:
+            default:
+                return "CudaGL";
+            }
+        }
+
+        void InitParticleInteropBackendFromEnvIfNeeded()
+        {
+            auto& state = GetParticleInteropBackendRuntimeState();
+            if (state.Initialized)
+                return;
+
+            state.Initialized = true;
+
+            const char* raw = std::getenv("ENGINE_PARTICLE_INTEROP_BACKEND");
+            if (raw && raw[0] != '\0')
+            {
+                state.RequestedFromEnv = true;
+                const std::string token = NormalizeBoolToken(raw);
+                if (token == "gl" || token == "cuda-gl" || token == "cudagl" || token == "legacy")
+                {
+                    state.RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
+                }
+                else if (token == "vkext" || token == "vulkan" || token == "vulkan-external" ||
+                         token == "vulkan_external")
+                {
+                    state.RequestedBackend = ParticleSystemGPU::InteropBackend::VulkanExternal;
+                }
+                else
+                {
+                    ENGINE_CORE_WARN(
+                        "[Particle][Interop] Invalid ENGINE_PARTICLE_INTEROP_BACKEND='{}', fallback to CudaGL.",
+                        raw);
+                    state.RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
+                }
+            }
+
+            ENGINE_CORE_INFO("[Particle][Interop] requestedBackend={} source={}",
+                             InteropBackendToString(state.RequestedBackend),
+                             state.RequestedFromEnv ? "ENV" : "Default");
+        }
+
+        ParticleSystemGPU::InteropBackend ResolveParticleInteropBackend()
+        {
+            InitParticleInteropBackendFromEnvIfNeeded();
+            return GetParticleInteropBackendRuntimeState().RequestedBackend;
+        }
     } // namespace
 
     // Must match GLSL struct layout: 5 x vec4 = 80 bytes
@@ -336,6 +403,16 @@ namespace Engine
         return ABSourceToString(source);
     }
 
+
+    ParticleSystemGPU::InteropBackend ParticleSystemGPU::GetRequestedInteropBackend()
+    {
+        return ResolveParticleInteropBackend();
+    }
+
+    const char* ParticleSystemGPU::InteropBackendLabel(InteropBackend backend)
+    {
+        return InteropBackendToString(backend);
+    }
     void ParticleSystemGPU::Init()
     {
         if (m_Initialized)
@@ -343,6 +420,16 @@ namespace Engine
 
         // 初始化并打印一次 AB 开关摘要（环境变量/默认值）
         (void)GetABConfigSnapshot();
+
+#ifdef ENGINE_ENABLE_CUDA
+        m_RequestedInteropBackend = GetRequestedInteropBackend();
+        m_ActiveInteropBackend    = m_RequestedInteropBackend;
+        if (m_RequestedInteropBackend == InteropBackend::VulkanExternal)
+        {
+            ENGINE_CORE_WARN("[Particle][Interop] VulkanExternal backend requested, but main renderer path is OpenGL; falling back to CudaGL interop.");
+            m_ActiveInteropBackend = InteropBackend::CudaGL;
+        }
+#endif
 
         // Load compute shaders
         m_EmitShader       = Shader::Create("assets/shaders/particle_emit.glsl");
@@ -423,7 +510,8 @@ namespace Engine
         if (!m_CudaInitAttempted)
         {
             m_CudaInitAttempted = true;
-            if (!CudaInterop::IsCudaPoisoned() && CudaGLInteropContext::ProbeDeviceMatch())
+            ENGINE_CORE_INFO("[Particle][Interop] active backend={}", InteropBackendLabel(m_ActiveInteropBackend));
+            if (m_ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned() && CudaGLInteropContext::ProbeDeviceMatch())
             {
                 m_CudaInterop      = CreateScope<CudaGLInteropContext>();
                 m_CudaSlotParticle = m_CudaInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
@@ -532,7 +620,7 @@ namespace Engine
 #ifdef ENGINE_ENABLE_CUDA
         // ---- CUDA compute sidecar path ----
         bool cudaSucceeded = false;
-        if (!abConfig.ForceGL && m_UseCudaPath && !CudaInterop::IsCudaPoisoned())
+        if (!abConfig.ForceGL && m_UseCudaPath && m_ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned())
         {
             if (sphEnabled && m_CudaSPHCtx)
             {

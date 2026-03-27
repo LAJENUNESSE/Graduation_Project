@@ -46,6 +46,15 @@ namespace Engine
         static void             SetABConfigFromUI(bool forceGL, bool disableCounterReadback);
         static const char*      ABConfigSourceLabel(ABConfigSource source);
 
+        enum class InteropBackend : uint8_t
+        {
+            CudaGL         = 0,
+            VulkanExternal = 1
+        };
+
+        static InteropBackend GetRequestedInteropBackend();
+        static const char*   InteropBackendLabel(InteropBackend backend);
+
         void Init();
         void Update(float                           dt,
                     const glm::vec3&                emitterPos,
@@ -112,6 +121,8 @@ namespace Engine
         bool     m_ReadbackPending = false;
 
 #ifdef ENGINE_ENABLE_CUDA
+        InteropBackend              m_RequestedInteropBackend = InteropBackend::CudaGL;
+        InteropBackend              m_ActiveInteropBackend    = InteropBackend::CudaGL;
         // CUDA compute sidecar（Phase 1: emit / simulate / render_args）
         Scope<CudaGLInteropContext> m_CudaInterop;
         bool                        m_UseCudaPath       = false;
