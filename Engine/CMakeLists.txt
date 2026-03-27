@@ -155,6 +155,8 @@ if(ENGINE_ENABLE_CUDA)
         if(Vulkan_FOUND)
             list(APPEND ENGINE_CUDA_SOURCES
                 ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalInterop.cpp
+                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalRuntime.cpp
+                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalSmokeKernel.cu
             )
             target_link_libraries(Engine PUBLIC Vulkan::Vulkan)
             target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN_CUDA_INTEROP=1)
@@ -170,6 +172,13 @@ if(ENGINE_ENABLE_CUDA)
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
     )
+
+    if(ENGINE_ENABLE_VULKAN_CUDA_INTEROP AND Vulkan_FOUND)
+        set_source_files_properties(
+            ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalSmokeKernel.cu
+            PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+        )
+    endif()
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_CUDA=1)
     target_include_directories(Engine PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
     target_link_libraries(Engine PUBLIC CUDA::cudart)

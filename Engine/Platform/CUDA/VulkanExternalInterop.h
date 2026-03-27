@@ -6,6 +6,11 @@
 #include <cstdint>
 
 #include <cuda_runtime_api.h>
+
+// 在包含 vulkan.h 之前定义平台宏以获取 Win32 扩展
+#ifdef _WIN32
+#define VK_USE_PLATFORM_WIN32_KHR
+#endif
 #include <vulkan/vulkan.h>
 
 namespace Engine
@@ -15,23 +20,21 @@ namespace Engine
         class VulkanExternalExport
         {
         public:
-            static VkExternalMemoryHandleTypeFlagBits VkMemoryHandleType(
-                ExternalHandleType handleType = GetDefaultExternalHandleType());
-            static VkExternalSemaphoreHandleTypeFlagBits VkSemaphoreHandleType(
-                ExternalHandleType handleType = GetDefaultExternalHandleType());
+            static VkExternalMemoryHandleTypeFlagBits
+            VkMemoryHandleType(ExternalHandleType handleType = GetDefaultExternalHandleType());
+            static VkExternalSemaphoreHandleTypeFlagBits
+            VkSemaphoreHandleType(ExternalHandleType handleType = GetDefaultExternalHandleType());
 
-            static cudaExternalMemoryHandleType CudaMemoryHandleType(
-                ExternalHandleType handleType = GetDefaultExternalHandleType());
-            static cudaExternalSemaphoreHandleType CudaSemaphoreHandleType(
-                ExternalHandleType handleType = GetDefaultExternalHandleType());
+            static cudaExternalMemoryHandleType
+            CudaMemoryHandleType(ExternalHandleType handleType = GetDefaultExternalHandleType());
+            static cudaExternalSemaphoreHandleType
+            CudaSemaphoreHandleType(ExternalHandleType handleType = GetDefaultExternalHandleType());
 
             static OwnedInteropHandle ExportMemory(VkDevice           device,
                                                    VkDeviceMemory     memory,
                                                    ExternalHandleType handleType = GetDefaultExternalHandleType());
             static OwnedInteropHandle ExportTimelineSemaphore(
-                VkDevice           device,
-                VkSemaphore        semaphore,
-                ExternalHandleType handleType = GetDefaultExternalHandleType());
+                VkDevice device, VkSemaphore semaphore, ExternalHandleType handleType = GetDefaultExternalHandleType());
         };
 
         class CudaExternalInteropContext
@@ -75,4 +78,3 @@ namespace Engine
         };
     } // namespace CudaInterop
 } // namespace Engine
-

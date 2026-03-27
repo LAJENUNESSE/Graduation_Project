@@ -68,6 +68,7 @@ add_executable(EngineTests
     src/TestCollisionMath.cpp
     src/TestCudaPoisonState.cpp
     src/TestVulkanInteropCommon.cpp
+    src/TestVulkanInteropDiagnostics.cpp
     src/TestSPHKernel.cpp
     src/TestSDFMath.cpp
     src/TestCommandHistory.cpp

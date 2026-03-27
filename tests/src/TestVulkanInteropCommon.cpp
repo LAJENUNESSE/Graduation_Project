@@ -61,3 +61,16 @@ TEST(VulkanInteropCommon, HandleOwnershipTransferredAfterImport)
     EXPECT_FALSE(handle.IsValid());
 }
 
+TEST(VulkanInteropCommon, SyncValueLongSequence)
+{
+    uint64_t prevVkSignal = 0;
+    for (uint64_t frame = 0; frame < 10000; ++frame)
+    {
+        const auto v = BuildInteropFrameSyncValues(frame);
+        EXPECT_EQ(v.CudaSignalValue, frame * 2u + 1u);
+        EXPECT_EQ(v.VulkanSignalValue, frame * 2u + 2u);
+        EXPECT_EQ(v.WaitVulkanValue, (frame == 0u) ? 0u : ((frame - 1u) * 2u + 2u));
+        EXPECT_GT(v.VulkanSignalValue, prevVkSignal);
+        prevVkSignal = v.VulkanSignalValue;
+    }
+}
