@@ -15,10 +15,6 @@ namespace Engine
 
     struct ParticleEmitterComponent;
 
-#ifdef ENGINE_ENABLE_CUDA
-    class CudaGLInteropContext;
-#endif
-
     class ParticleSystemGPU
     {
     public:
@@ -123,25 +119,9 @@ namespace Engine
         void*    m_ReadbackFence   = nullptr; // GLsync fence
         bool     m_ReadbackPending = false;
 
-#ifdef ENGINE_ENABLE_CUDA
-        InteropBackend m_RequestedInteropBackend = InteropBackend::CudaGL;
-        InteropBackend m_ActiveInteropBackend    = InteropBackend::CudaGL;
-        // CUDA compute sidecar（Phase 1: emit / simulate / render_args）
-        Scope<CudaGLInteropContext> m_CudaInterop;
-        bool                        m_UseCudaPath       = false;
-        bool                        m_CudaInitAttempted = false;
-        int                         m_CudaSlotParticle  = -1;
-        int                         m_CudaSlotDeadList  = -1;
-        int                         m_CudaSlotAliveList = -1;
-        int                         m_CudaSlotCounter   = -1;
-        int                         m_CudaSlotIndirect  = -1;
-
-        // CUDA event 计时（Ping-pong 双缓冲）
-        CudaTimingHelper m_CudaTiming;
-
-        // CUDA SPH context（grid + PCISPH + rigidBody 缓冲区）
-        void* m_CudaSPHCtx = nullptr;
-#endif
+        // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
+        struct CudaImpl;
+        Scope<CudaImpl> m_CudaImpl;
 
         void InitSPH(float smoothingRadius);
     };
