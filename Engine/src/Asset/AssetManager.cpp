@@ -18,6 +18,8 @@ namespace Engine
     std::unordered_map<std::string, AssetHandle> AssetManager::s_MeshPathIndex;
     std::unordered_map<std::string, AssetHandle> AssetManager::s_CubemapPathIndex;
     std::unordered_map<AssetHandle, AssetType>   AssetManager::s_HandleTypes;
+    std::unordered_map<std::string, AssetHandle> AssetManager::s_PendingAsyncLoads;
+    std::mutex                                   AssetManager::s_AssetMutex;
 
     Scope<AsyncLoadQueue> AssetManager::s_AsyncQueue;
     Scope<FileWatcher>    AssetManager::s_FileWatcher;
@@ -104,7 +106,13 @@ namespace Engine
             for (auto& result : results)
             {
                 auto tex = Texture2D::Create(result.Pixels.data(), result.Width, result.Height);
-                s_Textures.Replace(result.TargetHandle, tex);
+
+                {
+                    std::lock_guard<std::mutex> lock(s_AssetMutex);
+                    s_Textures.Replace(result.TargetHandle, tex);
+                    s_PendingAsyncLoads.erase(result.Path);
+                }
+
                 ENGINE_CORE_INFO("Async texture loaded: {0}", result.Path);
             }
         }
@@ -258,26 +266,40 @@ namespace Engine
         if (path.empty())
             return {};
 
-        // Check cache first
-        auto it = s_TexturePathIndex.find(path);
-        if (it != s_TexturePathIndex.end())
+        AssetHandle h;
+        bool        needSubmit = false;
+
         {
-            if (s_Textures.Get(it->second))
-                return it->second;
-            s_TexturePathIndex.erase(it);
+            std::lock_guard<std::mutex> lock(s_AssetMutex);
+
+            // Check cache first
+            auto it = s_TexturePathIndex.find(path);
+            if (it != s_TexturePathIndex.end())
+            {
+                if (s_Textures.Get(it->second))
+                    return it->second;
+                s_TexturePathIndex.erase(it);
+            }
+
+            // Check if already pending
+            auto pendingIt = s_PendingAsyncLoads.find(path);
+            if (pendingIt != s_PendingAsyncLoads.end())
+                return pendingIt->second;
+
+            // Create 1x1 gray placeholder
+            auto     placeholder = Texture2D::Create(1, 1);
+            uint32_t gray        = 0xFF808080;
+            placeholder->SetData(&gray, sizeof(uint32_t));
+
+            h                        = s_Textures.Insert(placeholder, path);
+            s_TexturePathIndex[path] = h;
+            s_HandleTypes[h]         = AssetType::Texture2D;
+            s_PendingAsyncLoads[path] = h;
+            needSubmit               = true;
         }
 
-        // Create 1x1 gray placeholder
-        auto     placeholder = Texture2D::Create(1, 1);
-        uint32_t gray        = 0xFF808080;
-        placeholder->SetData(&gray, sizeof(uint32_t));
-
-        AssetHandle h            = s_Textures.Insert(placeholder, path);
-        s_TexturePathIndex[path] = h;
-        s_HandleTypes[h]         = AssetType::Texture2D;
-
-        // Submit to async queue
-        if (s_AsyncQueue)
+        // Submit outside lock (SubmitTexture is thread-safe)
+        if (needSubmit && s_AsyncQueue)
             s_AsyncQueue->SubmitTexture(path, h);
 
         if (s_FileWatcher)
