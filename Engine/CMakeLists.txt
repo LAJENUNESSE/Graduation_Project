@@ -150,6 +150,7 @@ if(ENGINE_ENABLE_VULKAN)
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSwapchain.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanTexture.cpp
     )
     target_link_libraries(Engine PUBLIC Vulkan::Vulkan)
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN=1)
