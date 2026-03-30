@@ -4,18 +4,45 @@
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Platform/OpenGL/OpenGLShader.h"
+#include "Renderer/RendererAPI.h"
 
 namespace Engine
 {
 
     Ref<Shader> Shader::Create(const std::string& filepath)
     {
-        return CreateRef<OpenGLShader>(filepath);
+        switch (RendererAPI::GetAPI())
+        {
+        case RendererAPI::API::None:
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            return nullptr;
+        case RendererAPI::API::OpenGL:
+            return CreateRef<OpenGLShader>(filepath);
+        case RendererAPI::API::Vulkan:
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+            return nullptr;
+        }
+
+        ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
+        return nullptr;
     }
 
     Ref<Shader> Shader::Create(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
     {
-        return CreateRef<OpenGLShader>(name, vertexSrc, fragmentSrc);
+        switch (RendererAPI::GetAPI())
+        {
+        case RendererAPI::API::None:
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            return nullptr;
+        case RendererAPI::API::OpenGL:
+            return CreateRef<OpenGLShader>(name, vertexSrc, fragmentSrc);
+        case RendererAPI::API::Vulkan:
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+            return nullptr;
+        }
+
+        ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
+        return nullptr;
     }
 
     void ShaderLibrary::Add(const std::string& name, const Ref<Shader>& shader)

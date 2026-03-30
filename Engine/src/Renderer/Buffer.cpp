@@ -86,6 +86,9 @@ namespace Engine
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLVertexBuffer>(size);
+        case RendererAPI::API::Vulkan:
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+            return nullptr;
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -101,6 +104,9 @@ namespace Engine
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLVertexBuffer>(vertices, size);
+        case RendererAPI::API::Vulkan:
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+            return nullptr;
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -116,6 +122,9 @@ namespace Engine
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLIndexBuffer>(indices, count);
+        case RendererAPI::API::Vulkan:
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+            return nullptr;
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
