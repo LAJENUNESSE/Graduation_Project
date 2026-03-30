@@ -29,7 +29,7 @@ namespace Engine
             uint32_t*      d_sortedIndices; // N × uint32
             PCISPHData*    d_pcisph;        // N × 48B
             RigidBodyData* d_rigidBody;     // maxRB × 112B
-            float4*        d_surfaceNormals; // N × float4 (Akinci 表面法线)
+            Vec4*          d_surfaceNormals; // N × Vec4 (Akinci 表面法线)
             void*          d_cubTemp;       // CUB 临时存储
             size_t         cubTempBytes;
             uint32_t       maxParticles;
@@ -56,7 +56,7 @@ namespace Engine
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_sortedIndices, maxParticles * sizeof(uint32_t)));
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_pcisph, maxParticles * sizeof(PCISPHData)));
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_rigidBody, maxRigidBodies * sizeof(RigidBodyData)));
-            ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_surfaceNormals, maxParticles * sizeof(float4)));
+            ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_surfaceNormals, maxParticles * sizeof(Vec4)));
 
             if (ok)
             {
@@ -410,7 +410,7 @@ namespace Engine
                                              uint32_t*    d_cellStart,
                                              uint32_t*    d_cellCount,
                                              uint32_t*    d_sortedIndices,
-                                             float4*      d_surfaceNormals,
+                                             Vec4*        d_surfaceNormals,
                                              SPHParams    p)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -469,7 +469,7 @@ namespace Engine
             particles[i].params.z = density; // z=density
 
             // 写出 Akinci 表面法线 (乘以 h)
-            d_surfaceNormals[i] = make_float4(h * snx, h * sny, h * snz, 0.0f);
+            d_surfaceNormals[i] = Vec4{h * snx, h * sny, h * snz, 0.0f};
         }
 
         void LaunchSPHDensity(void* ctxPtr, void* particles, const SPHParams& p, void* stream)
@@ -495,7 +495,7 @@ namespace Engine
                                            uint32_t*        d_cellCount,
                                            uint32_t*        d_sortedIndices,
                                            RigidBodyData*   d_rigidBody,
-                                           const float4*    d_surfaceNormals,
+                                           const Vec4*      d_surfaceNormals,
                                            SPHParams        p,
                                            PCISPHIterParams ip)
         {
@@ -524,7 +524,7 @@ namespace Engine
             float fsx = 0.0f, fsy = 0.0f, fsz = 0.0f; // 表面张力
 
             // Akinci 表面法线（从 DensityKernel 预计算）
-            float4 normalI = d_surfaceNormals[i];
+            Vec4 normalI = d_surfaceNormals[i];
 
             int gx0, gy0, gz0;
             PosToCell(px, py, pz, p.cellSize, gx0, gy0, gz0);
@@ -582,8 +582,8 @@ namespace Engine
                                 fsy += stMul * ry * invR;
                                 fsz += stMul * rz * invR;
                                 // 曲率修正: f_curvature = -γ * m_j * (n_i - n_j)
-                                float4 normalJ = d_surfaceNormals[j];
-                                float  curvMul = -p.surfaceTension * p.particleMass;
+                                Vec4  normalJ = d_surfaceNormals[j];
+                                float curvMul = -p.surfaceTension * p.particleMass;
                                 fsx += curvMul * (normalI.x - normalJ.x);
                                 fsy += curvMul * (normalI.y - normalJ.y);
                                 fsz += curvMul * (normalI.z - normalJ.z);
@@ -647,7 +647,7 @@ namespace Engine
                                                 uint32_t*      d_cellStart,
                                                 uint32_t*      d_cellCount,
                                                 uint32_t*      d_sortedIndices,
-                                                const float4*  d_surfaceNormals,
+                                                const Vec4*    d_surfaceNormals,
                                                 SPHParams      p)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -673,7 +673,7 @@ namespace Engine
             float fsx = 0.0f, fsy = 0.0f, fsz = 0.0f; // 表面张力
 
             // Akinci 表面法线（从 DensityKernel 预计算）
-            float4 normalI = d_surfaceNormals[i];
+            Vec4 normalI = d_surfaceNormals[i];
 
             int gx0, gy0, gz0;
             PosToCell(px, py, pz, p.cellSize, gx0, gy0, gz0);
@@ -723,8 +723,8 @@ namespace Engine
                                 fsy += stMul * ry * invR;
                                 fsz += stMul * rz * invR;
                                 // 曲率修正: f_curvature = -γ * m_j * (n_i - n_j)
-                                float4 normalJ = d_surfaceNormals[j];
-                                float  curvMul = -p.surfaceTension * p.particleMass;
+                                Vec4  normalJ = d_surfaceNormals[j];
+                                float curvMul = -p.surfaceTension * p.particleMass;
                                 fsx += curvMul * (normalI.x - normalJ.x);
                                 fsy += curvMul * (normalI.y - normalJ.y);
                                 fsz += curvMul * (normalI.z - normalJ.z);
