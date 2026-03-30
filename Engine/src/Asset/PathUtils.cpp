@@ -7,6 +7,9 @@
 
 #ifdef _WIN32
 #include <Windows.h>
+#elif defined(__linux__)
+#include <limits.h>
+#include <unistd.h>
 #endif
 
 namespace Engine::PathUtils
@@ -78,6 +81,14 @@ namespace Engine::PathUtils
             wchar_t exePath[MAX_PATH];
             if (GetModuleFileNameW(nullptr, exePath, MAX_PATH) != 0)
                 return NormalizePath(std::filesystem::path(exePath).parent_path());
+#elif defined(__linux__)
+            char    buf[PATH_MAX];
+            ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+            if (len > 0)
+            {
+                buf[len] = '\0';
+                return NormalizePath(std::filesystem::path(buf).parent_path());
+            }
 #endif
             return {};
         }
