@@ -110,9 +110,15 @@ namespace Engine
             float     minOverlap = std::numeric_limits<float>::max();
             glm::vec3 bestAxis(0.0f);
 
+            // SAT (Separating Axis Theorem) 检测
+            // 需要测试 15 个潜在分离轴: 3 (A 的面法线) + 3 (B 的面法线) + 9 (边叉积)
             auto testAxis = [&](const glm::vec3& axis) -> bool
             {
                 float len = glm::length(axis);
+                // 退化轴处理（长度接近零）:
+                // 当两条边近乎平行时，叉积结果趋近于零向量。
+                // 此时该轴不提供有效的分离信息，但也不意味着存在分离 —— 应跳过并继续测试其他轴。
+                // 这是 SAT 算法的标准做法，参见 Ericson "Real-Time Collision Detection" §4.4.1
                 if (len < 1e-6f)
                     return true;
 
