@@ -141,6 +141,18 @@ target_precompile_headers(Engine PRIVATE
 engine_apply_warnings(Engine)
 engine_apply_sanitizers(Engine)
 
+# Vulkan backend (conditional)
+if(ENGINE_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
+    list(APPEND ENGINE_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
+    )
+    target_link_libraries(Engine PUBLIC Vulkan::Vulkan)
+    target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN=1)
+    message(STATUS "[Engine] Vulkan backend enabled (SDK version: ${Vulkan_VERSION})")
+endif()
+
 if(ENGINE_ENABLE_CUDA)
     find_package(CUDAToolkit REQUIRED)
 

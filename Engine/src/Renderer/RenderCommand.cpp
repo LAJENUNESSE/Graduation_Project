@@ -4,6 +4,10 @@
 #include "Core/Assert.h"
 #include "Platform/OpenGL/OpenGLRendererAPI.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanRendererAPI.h"
+#endif
+
 namespace Engine
 {
 
@@ -17,8 +21,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateScope<OpenGLRendererAPI>();
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateScope<VulkanRendererAPI>();
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in! Enable ENGINE_ENABLE_VULKAN.");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
