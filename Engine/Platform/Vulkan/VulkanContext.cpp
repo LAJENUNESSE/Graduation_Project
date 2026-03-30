@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Platform/Vulkan/VulkanContext.h"
 #include "Platform/Vulkan/VulkanSwapchain.h"
+#include "Platform/Vulkan/VulkanCommandBuffer.h"
 
 // clang-format off
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -25,11 +26,27 @@ namespace Engine
 
     VulkanContext::~VulkanContext()
     {
-        m_Swapchain.reset(); // Destroy swapchain first
-
         if (m_Device != VK_NULL_HANDLE)
         {
             vkDeviceWaitIdle(m_Device);
+        }
+
+        // Destroy sync objects
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            if (m_RenderFinishedSemaphores[i] != VK_NULL_HANDLE)
+                vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
+            if (m_ImageAvailableSemaphores[i] != VK_NULL_HANDLE)
+                vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
+            if (m_InFlightFences[i] != VK_NULL_HANDLE)
+                vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
+        }
+
+        m_CommandBuffers.clear();
+        m_Swapchain.reset();
+
+        if (m_Device != VK_NULL_HANDLE)
+        {
             vkDestroyDevice(m_Device, nullptr);
         }
         if (m_Surface != VK_NULL_HANDLE)
@@ -49,14 +66,65 @@ namespace Engine
         SelectPhysicalDevice();
         CreateDevice();
         CreateSwapchain();
+        CreateCommandBuffers();
+        CreateSyncObjects();
 
         ENGINE_CORE_INFO("Vulkan Context initialized successfully");
     }
 
     void VulkanContext::SwapBuffers()
     {
-        // Swapchain present will be handled by VulkanSwapchain
-        // This is a placeholder for now
+        // Basic present flow (simplified for now, full frame rendering will be implemented later)
+        
+        // Wait for previous frame
+        vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+
+        // Acquire next image
+        uint32_t imageIndex;
+        VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain->GetSwapchain(), UINT64_MAX,
+                                                m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            // Swapchain needs recreation (window resize)
+            ENGINE_CORE_WARN("Swapchain out of date, recreation needed");
+            return;
+        }
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
+                                    "Failed to acquire swapchain image!");
+
+        vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
+
+        // TODO: Record and submit command buffer here (when render passes are implemented)
+
+        // Present
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores    = &m_RenderFinishedSemaphores[m_CurrentFrame];
+
+        VkSwapchainKHR swapchains[] = {m_Swapchain->GetSwapchain()};
+        presentInfo.swapchainCount  = 1;
+        presentInfo.pSwapchains     = swapchains;
+        presentInfo.pImageIndices   = &imageIndex;
+
+        result = vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        {
+            ENGINE_CORE_WARN("Swapchain suboptimal or out of date at present");
+        }
+        else
+        {
+            ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to present swapchain image!");
+        }
+
+        m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+
+    VulkanCommandBuffer* VulkanContext::GetCommandBuffer(uint32_t index) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(index < m_CommandBuffers.size(), "Command buffer index out of range!");
+        return m_CommandBuffers[index].get();
     }
 
     void VulkanContext::CreateInstance()
@@ -171,6 +239,47 @@ namespace Engine
 
         m_Swapchain = std::make_unique<VulkanSwapchain>(m_PhysicalDevice, m_Device, m_Surface,
                                                         static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    }
+
+    void VulkanContext::CreateCommandBuffers()
+    {
+        uint32_t imageCount = m_Swapchain->GetImageCount();
+        m_CommandBuffers.resize(imageCount);
+        
+        for (uint32_t i = 0; i < imageCount; i++)
+        {
+            m_CommandBuffers[i] = std::make_unique<VulkanCommandBuffer>(m_Device, m_GraphicsQueueFamily);
+        }
+        
+        ENGINE_CORE_INFO("Created {} command buffers", imageCount);
+    }
+
+    void VulkanContext::CreateSyncObjects()
+    {
+        m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+        m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            VkResult result = vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]);
+            ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create image available semaphore!");
+            
+            result = vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]);
+            ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create render finished semaphore!");
+            
+            result = vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]);
+            ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create in-flight fence!");
+        }
+        
+        ENGINE_CORE_INFO("Created sync objects for {} frames in flight", MAX_FRAMES_IN_FLIGHT);
     }
 
 } // namespace Engine
