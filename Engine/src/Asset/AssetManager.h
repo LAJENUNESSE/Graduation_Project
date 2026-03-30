@@ -6,6 +6,7 @@
 #include "Asset/SlotMap.h"
 #include "Core/Base.h"
 
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -60,6 +61,12 @@ namespace Engine
 
         // Track which handles are textures/meshes/cubemaps for generic GetPath
         static std::unordered_map<AssetHandle, AssetType> s_HandleTypes;
+
+        // Pending async loads — prevent duplicate requests for same path
+        static std::unordered_map<std::string, AssetHandle> s_PendingAsyncLoads;
+
+        // Mutex for thread-safe access to asset data structures
+        static std::mutex s_AssetMutex;
 
         static Scope<AsyncLoadQueue> s_AsyncQueue;
         static Scope<FileWatcher>    s_FileWatcher;
