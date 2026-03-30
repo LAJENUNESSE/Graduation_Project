@@ -89,6 +89,10 @@ namespace Engine
         }
 
         // 根据碰撞器形状计算世界空间逆惯性张量
+        // 惯性张量变换公式: I_world = R * I_local * R^T
+        // 逆惯性张量变换公式: I_world^(-1) = R * I_local^(-1) * R^T
+        // 注意：这里只做一次旋转变换，没有双重修正问题。
+        // Bullet 内部使用其自己的惯性张量计算，此处是引擎独立的物理模拟实现。
         glm::mat3 ComputeWorldInverseInertiaTensor(entt::registry&           reg,
                                                    entt::entity              entity,
                                                    const TransformComponent& transform,
