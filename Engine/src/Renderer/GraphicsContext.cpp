@@ -5,6 +5,10 @@
 #include "Platform/OpenGL/OpenGLContext.h"
 #include "Renderer/RendererAPI.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanContext.h"
+#endif
+
 namespace Engine
 {
 
@@ -18,8 +22,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateScope<OpenGLContext>(static_cast<GLFWwindow*>(window));
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateScope<VulkanContext>(static_cast<GLFWwindow*>(window));
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not enabled in build!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");

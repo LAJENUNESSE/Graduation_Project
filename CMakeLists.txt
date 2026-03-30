@@ -15,8 +15,8 @@ option(ENGINE_ENABLE_STRICT_WARNINGS "Enable stricter warnings for project targe
 option(ENGINE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
+option(ENGINE_ENABLE_VULKAN "Enable Vulkan rendering backend" ON)
 option(ENGINE_ENABLE_CUDA "Enable CUDA compute sidecar for particle system" OFF)
-option(ENGINE_ENABLE_VULKAN_CUDA_INTEROP "Enable Vulkan external interop hooks for CUDA path" ON)
 option(ENGINE_ENABLE_COMPILER_CACHE "Enable compiler cache launcher when available" ON)
 option(ENGINE_ENABLE_MSVC_MP "Enable /MP for MSVC C/C++ compilation" ON)
 
@@ -41,6 +41,13 @@ if(MSVC AND ENGINE_ENABLE_MSVC_MP)
         $<$<COMPILE_LANGUAGE:C>:/MP>
         $<$<COMPILE_LANGUAGE:CXX>:/MP>
     )
+endif()
+
+
+# Vulkan Configuration (optional)
+if(ENGINE_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
+    message(STATUS "[Engine] Vulkan SDK found: ${Vulkan_VERSION}")
 endif()
 
 # CUDA Configuration (optional)
