@@ -5,6 +5,13 @@
 // 1) 同步值生成规则
 // 2) 平台句柄类型映射
 // 3) 导出句柄导入 CUDA 后的所有权规则
+//
+// English summary:
+// Cross-platform utilities for Vulkan <-> CUDA external interop (no direct Vulkan/CUDA headers).
+// This header provides:
+// 1) rules for generating sync values,
+// 2) mappings for platform handle types,
+// 3) ownership rules after importing an exported handle into CUDA.
 
 #include <cstdint>
 
@@ -111,4 +118,3 @@ namespace Engine
 
     } // namespace CudaInterop
 } // namespace Engine
-

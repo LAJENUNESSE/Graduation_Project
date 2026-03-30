@@ -1,0 +1,22 @@
+name: Check comment language
+
+on:
+  pull_request:
+    paths:
+      - '**/*.cpp'
+      - '**/*.h'
+      - '**/*.glsl'
+      - '**/*.md'
+
+jobs:
+  check-comments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Run comment language check
+        run: |
+          python3 scripts/check_comments.py

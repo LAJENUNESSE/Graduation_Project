@@ -1,12 +1,12 @@
 // CUDA 错误处理工具：粘性错误检测 + 全局中毒机制。
-// 一旦任何 CUDA API 失败，整个 CUDA 上下文标记为"中毒"，
+// 一旦任何 CUDA API 失败，整个 CUDA 上下文标记为 "中毒"，
 // 后续所有 CUDA 调用静默跳过，避免级联错误日志刷屏。
 //
 // 注意：此头文件同时被 .cu（nvcc）和 .cpp（MSVC）包含，
 // 因此不能引入 spdlog（nvcc 无法编译 fmt 的某些字面量）。
 // 使用 fprintf(stderr, ...) 输出错误信息。
+//
 #pragma once
-
 #include "CudaPoisonState.h"
 
 #include <cuda_runtime.h>
