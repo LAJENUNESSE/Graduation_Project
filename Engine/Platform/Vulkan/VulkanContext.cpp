@@ -9,6 +9,10 @@
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#if defined(ENGINE_ENABLE_VULKAN)
+#include <imgui.h>
+#include <imgui_impl_vulkan.h>
+#endif
 // clang-format on
 
 #include "Core/Assert.h"
@@ -34,6 +38,9 @@ namespace Engine
         {
             vkDeviceWaitIdle(m_Device);
         }
+
+        // Destroy ImGui resources
+        DestroyImGuiResources();
 
         // Destroy sync objects
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -75,6 +82,7 @@ namespace Engine
         CreateSwapchain();
         CreateCommandBuffers();
         CreateSyncObjects();
+        CreateImGuiResources();
 
         ENGINE_CORE_INFO("Vulkan Context initialized successfully");
     }
@@ -100,6 +108,7 @@ namespace Engine
         ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
                                     "Failed to acquire swapchain image!");
 
+        m_CurrentImageIndex = imageIndex; // Store for ImGui rendering
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
         // TODO: Record and submit command buffer here (when render passes are implemented)
@@ -287,6 +296,168 @@ namespace Engine
         }
         
         ENGINE_CORE_INFO("Created sync objects for {} frames in flight", MAX_FRAMES_IN_FLIGHT);
+    }
+
+    void VulkanContext::CreateImGuiResources()
+    {
+        // Create RenderPass for ImGui (renders directly to swapchain)
+        VkAttachmentDescription colorAttachment{};
+        colorAttachment.format         = m_Swapchain->GetImageFormat();
+        colorAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+        colorAttachment.loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD; // Keep previous content (scene)
+        colorAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.initialLayout  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference colorRef{};
+        colorRef.attachment = 0;
+        colorRef.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments    = &colorRef;
+
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass    = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass    = 0;
+        dependency.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        VkRenderPassCreateInfo renderPassInfo{};
+        renderPassInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = 1;
+        renderPassInfo.pAttachments    = &colorAttachment;
+        renderPassInfo.subpassCount    = 1;
+        renderPassInfo.pSubpasses      = &subpass;
+        renderPassInfo.dependencyCount = 1;
+        renderPassInfo.pDependencies   = &dependency;
+
+        VkResult result = vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_ImGuiRenderPass);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create ImGui render pass!");
+
+        // Create command pool for ImGui
+        VkCommandPoolCreateInfo poolInfo{};
+        poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        poolInfo.queueFamilyIndex = m_GraphicsQueueFamily;
+
+        result = vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_ImGuiCommandPool);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create ImGui command pool!");
+
+        // Create command buffers for ImGui (one per swapchain image)
+        uint32_t imageCount = m_Swapchain->GetImageCount();
+        m_ImGuiCommandBuffers.resize(imageCount);
+
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool        = m_ImGuiCommandPool;
+        allocInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = imageCount;
+
+        result = vkAllocateCommandBuffers(m_Device, &allocInfo, m_ImGuiCommandBuffers.data());
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to allocate ImGui command buffers!");
+
+        // Create framebuffers for ImGui (one per swapchain image view)
+        m_ImGuiFramebuffers.resize(imageCount);
+        const auto& imageViews = m_Swapchain->GetImageViews();
+        VkExtent2D  extent     = m_Swapchain->GetExtent();
+
+        for (uint32_t i = 0; i < imageCount; i++)
+        {
+            VkImageView attachments[] = {imageViews[i]};
+
+            VkFramebufferCreateInfo fbInfo{};
+            fbInfo.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            fbInfo.renderPass      = m_ImGuiRenderPass;
+            fbInfo.attachmentCount = 1;
+            fbInfo.pAttachments    = attachments;
+            fbInfo.width           = extent.width;
+            fbInfo.height          = extent.height;
+            fbInfo.layers          = 1;
+
+            result = vkCreateFramebuffer(m_Device, &fbInfo, nullptr, &m_ImGuiFramebuffers[i]);
+            ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create ImGui framebuffer!");
+        }
+
+        ENGINE_CORE_INFO("Created ImGui Vulkan resources (RenderPass, CommandPool, {} Framebuffers)", imageCount);
+    }
+
+    void VulkanContext::DestroyImGuiResources()
+    {
+        for (auto fb : m_ImGuiFramebuffers)
+        {
+            if (fb != VK_NULL_HANDLE)
+                vkDestroyFramebuffer(m_Device, fb, nullptr);
+        }
+        m_ImGuiFramebuffers.clear();
+
+        if (m_ImGuiCommandPool != VK_NULL_HANDLE)
+        {
+            vkDestroyCommandPool(m_Device, m_ImGuiCommandPool, nullptr);
+            m_ImGuiCommandPool = VK_NULL_HANDLE;
+        }
+        m_ImGuiCommandBuffers.clear();
+
+        if (m_ImGuiRenderPass != VK_NULL_HANDLE)
+        {
+            vkDestroyRenderPass(m_Device, m_ImGuiRenderPass, nullptr);
+            m_ImGuiRenderPass = VK_NULL_HANDLE;
+        }
+    }
+
+    void VulkanContext::RenderImGui(void* drawData)
+    {
+#if defined(ENGINE_ENABLE_VULKAN)
+        if (!drawData)
+            return;
+
+        ImDrawData* imDrawData = static_cast<ImDrawData*>(drawData);
+
+        VkCommandBuffer cmd = m_ImGuiCommandBuffers[m_CurrentImageIndex];
+
+        // Begin command buffer
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        vkResetCommandBuffer(cmd, 0);
+        vkBeginCommandBuffer(cmd, &beginInfo);
+
+        // Begin render pass
+        VkRenderPassBeginInfo rpInfo{};
+        rpInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        rpInfo.renderPass        = m_ImGuiRenderPass;
+        rpInfo.framebuffer       = m_ImGuiFramebuffers[m_CurrentImageIndex];
+        rpInfo.renderArea.offset = {0, 0};
+        rpInfo.renderArea.extent = m_Swapchain->GetExtent();
+
+        // No clear values since we're loading previous content
+        rpInfo.clearValueCount = 0;
+        rpInfo.pClearValues    = nullptr;
+
+        vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        // Record ImGui draw commands
+        ImGui_ImplVulkan_RenderDrawData(imDrawData, cmd);
+
+        vkCmdEndRenderPass(cmd);
+        vkEndCommandBuffer(cmd);
+
+        // Submit command buffer (will be submitted as part of main frame submission)
+        // For now, submit immediately for simplicity
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers    = &cmd;
+
+        vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(m_GraphicsQueue); // Simplified sync for now
+#endif
     }
 
 } // namespace Engine

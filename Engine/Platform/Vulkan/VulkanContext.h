@@ -35,6 +35,11 @@ namespace Engine
         VulkanSwapchain*     GetSwapchain() const { return m_Swapchain.get(); }
         VulkanCommandBuffer* GetCommandBuffer(uint32_t index) const;
 
+        // ImGui support
+        VkRenderPass GetImGuiRenderPass() const { return m_ImGuiRenderPass; }
+        VkCommandPool GetCommandPool() const { return m_ImGuiCommandPool; }
+        void RenderImGui(void* drawData); // ImDrawData* passed as void* to avoid ImGui header dependency
+
     private:
         void CreateInstance();
         void SelectPhysicalDevice();
@@ -43,6 +48,8 @@ namespace Engine
         void CreateSwapchain();
         void CreateCommandBuffers();
         void CreateSyncObjects();
+        void CreateImGuiResources();
+        void DestroyImGuiResources();
 
     private:
         GLFWwindow* m_WindowHandle;
@@ -64,6 +71,13 @@ namespace Engine
         std::vector<VkSemaphore>  m_RenderFinishedSemaphores;
         std::vector<VkFence>      m_InFlightFences;
         uint32_t                  m_CurrentFrame = 0;
+
+        // ImGui resources
+        VkRenderPass                  m_ImGuiRenderPass  = VK_NULL_HANDLE;
+        VkCommandPool                 m_ImGuiCommandPool = VK_NULL_HANDLE;
+        std::vector<VkCommandBuffer>  m_ImGuiCommandBuffers;
+        std::vector<VkFramebuffer>    m_ImGuiFramebuffers;
+        uint32_t                      m_CurrentImageIndex = 0;
 
         static VulkanContext* s_Instance;
     };
