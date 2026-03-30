@@ -19,6 +19,8 @@
 namespace Engine
 {
 
+    VulkanContext* VulkanContext::s_Instance = nullptr;
+
     VulkanContext::VulkanContext(GLFWwindow* windowHandle) : m_WindowHandle(windowHandle)
     {
         ENGINE_CORE_RELEASE_ASSERT(windowHandle, "Window handle is null!");
@@ -26,6 +28,8 @@ namespace Engine
 
     VulkanContext::~VulkanContext()
     {
+        s_Instance = nullptr;
+
         if (m_Device != VK_NULL_HANDLE)
         {
             vkDeviceWaitIdle(m_Device);
@@ -61,6 +65,9 @@ namespace Engine
 
     void VulkanContext::Init()
     {
+        ENGINE_CORE_RELEASE_ASSERT(s_Instance == nullptr, "VulkanContext already initialized!");
+        s_Instance = this;
+
         CreateInstance();
         CreateSurface();
         SelectPhysicalDevice();

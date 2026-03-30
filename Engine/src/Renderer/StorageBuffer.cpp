@@ -5,6 +5,10 @@
 #include "Platform/OpenGL/OpenGLStorageBuffer.h"
 #include "Renderer/RendererAPI.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanBuffer.h"
+#endif
+
 namespace Engine
 {
 
@@ -18,8 +22,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLStorageBuffer>(size, binding);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanStorageBuffer>(size, binding);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -36,8 +44,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLStorageBuffer>(data, size, binding);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanStorageBuffer>(data, size, binding);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -54,8 +66,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLStorageBuffer>(size, binding, true);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanStorageBuffer>(size, binding, true);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -72,8 +88,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLStorageBuffer>(data, size, binding, true);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanStorageBuffer>(data, size, binding, true);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -90,8 +110,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLStorageBuffer>(size, binding, OpenGLStorageBuffer::DynamicStorageTag{});
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanStorageBuffer>(size, binding, VulkanStorageBuffer::DynamicStorageTag{});
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -108,8 +132,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLStorageBuffer>(data, size, binding, OpenGLStorageBuffer::DynamicStorageTag{});
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanStorageBuffer>(data, size, binding, VulkanStorageBuffer::DynamicStorageTag{});
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");

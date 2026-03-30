@@ -22,6 +22,9 @@ namespace Engine
         void Init() override;
         void SwapBuffers() override;
 
+        // Singleton-style access for Vulkan resources (buffer/texture/shader creation)
+        static VulkanContext* Get() { return s_Instance; }
+
         VkInstance       GetInstance() const { return m_Instance; }
         VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
         VkDevice         GetDevice() const { return m_Device; }
@@ -61,6 +64,8 @@ namespace Engine
         std::vector<VkSemaphore>  m_RenderFinishedSemaphores;
         std::vector<VkFence>      m_InFlightFences;
         uint32_t                  m_CurrentFrame = 0;
+
+        static VulkanContext* s_Instance;
     };
 
 } // namespace Engine

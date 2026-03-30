@@ -145,10 +145,11 @@ engine_apply_sanitizers(Engine)
 if(ENGINE_ENABLE_VULKAN)
     find_package(Vulkan REQUIRED)
     list(APPEND ENGINE_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanBuffer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanCommandBuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSwapchain.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanCommandBuffer.cpp
     )
     target_link_libraries(Engine PUBLIC Vulkan::Vulkan)
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN=1)

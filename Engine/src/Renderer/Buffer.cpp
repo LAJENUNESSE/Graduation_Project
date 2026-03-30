@@ -6,6 +6,10 @@
 #include "Platform/OpenGL/OpenGLBuffer.h"
 #include "Renderer/RendererAPI.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanBuffer.h"
+#endif
+
 namespace Engine
 {
 
@@ -87,8 +91,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLVertexBuffer>(size);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanVertexBuffer>(size);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -105,8 +113,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLVertexBuffer>(vertices, size);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanVertexBuffer>(vertices, size);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -123,8 +135,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLIndexBuffer>(indices, count);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanIndexBuffer>(indices, count);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
