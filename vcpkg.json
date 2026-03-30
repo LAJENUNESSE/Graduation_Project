@@ -5,6 +5,7 @@
   "dependencies": [
     "ffmpeg",
     "openal-soft",
+    "shaderc",
     "vulkan"
   ]
 }

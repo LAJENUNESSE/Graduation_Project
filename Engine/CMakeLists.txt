@@ -144,15 +144,17 @@ engine_apply_sanitizers(Engine)
 # Vulkan backend (conditional)
 if(ENGINE_ENABLE_VULKAN)
     find_package(Vulkan REQUIRED)
+    find_package(unofficial-shaderc CONFIG REQUIRED)
     list(APPEND ENGINE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanBuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanCommandBuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanShader.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSwapchain.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanTexture.cpp
     )
-    target_link_libraries(Engine PUBLIC Vulkan::Vulkan)
+    target_link_libraries(Engine PUBLIC Vulkan::Vulkan unofficial::shaderc::shaderc)
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN=1)
     message(STATUS "[Engine] Vulkan backend enabled (SDK version: ${Vulkan_VERSION})")
 endif()
