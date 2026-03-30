@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Platform/Vulkan/VulkanContext.h"
+#include "Platform/Vulkan/VulkanSwapchain.h"
 
 // clang-format off
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -24,6 +25,8 @@ namespace Engine
 
     VulkanContext::~VulkanContext()
     {
+        m_Swapchain.reset(); // Destroy swapchain first
+
         if (m_Device != VK_NULL_HANDLE)
         {
             vkDeviceWaitIdle(m_Device);
@@ -45,6 +48,7 @@ namespace Engine
         CreateSurface();
         SelectPhysicalDevice();
         CreateDevice();
+        CreateSwapchain();
 
         ENGINE_CORE_INFO("Vulkan Context initialized successfully");
     }
@@ -158,6 +162,15 @@ namespace Engine
         vkGetDeviceQueue(m_Device, m_GraphicsQueueFamily, 0, &m_GraphicsQueue);
 
         ENGINE_CORE_INFO("Vulkan logical device created");
+    }
+
+    void VulkanContext::CreateSwapchain()
+    {
+        int width, height;
+        glfwGetFramebufferSize(m_WindowHandle, &width, &height);
+
+        m_Swapchain = std::make_unique<VulkanSwapchain>(m_PhysicalDevice, m_Device, m_Surface,
+                                                        static_cast<uint32_t>(width), static_cast<uint32_t>(height));
     }
 
 } // namespace Engine

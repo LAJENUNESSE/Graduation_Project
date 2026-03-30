@@ -3,11 +3,13 @@
 #include "Renderer/GraphicsContext.h"
 
 #include <vulkan/vulkan.h>
+#include <memory>
 
 struct GLFWwindow;
 
 namespace Engine
 {
+    class VulkanSwapchain;
 
     class VulkanContext : public GraphicsContext
     {
@@ -23,11 +25,14 @@ namespace Engine
         VkDevice         GetDevice() const { return m_Device; }
         VkSurfaceKHR     GetSurface() const { return m_Surface; }
 
+        VulkanSwapchain* GetSwapchain() const { return m_Swapchain.get(); }
+
     private:
         void CreateInstance();
         void SelectPhysicalDevice();
         void CreateDevice();
         void CreateSurface();
+        void CreateSwapchain();
 
     private:
         GLFWwindow* m_WindowHandle;
@@ -39,6 +44,8 @@ namespace Engine
 
         uint32_t m_GraphicsQueueFamily = 0;
         VkQueue  m_GraphicsQueue       = VK_NULL_HANDLE;
+
+        std::unique_ptr<VulkanSwapchain> m_Swapchain;
     };
 
 } // namespace Engine
