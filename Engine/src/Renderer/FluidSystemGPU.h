@@ -15,10 +15,6 @@ namespace Engine
 
     struct FluidEmitterComponent;
 
-#ifdef ENGINE_ENABLE_CUDA
-    class CudaGLInteropContext;
-#endif
-
     class FluidSystemGPU
     {
     public:
@@ -70,15 +66,9 @@ namespace Engine
         void InitPCISPH();
         void InitRigidBodyBuffer();
 
-#ifdef ENGINE_ENABLE_CUDA
-        Scope<CudaGLInteropContext> m_CudaInterop;
-        bool                        m_UseCudaPath       = false;
-        bool                        m_CudaInitAttempted = false;
-        int                         m_CudaSlotParticle  = -1;      // 仅 ParticleBuffer 注册 interop（渲染需要）
-        void*                       m_CudaSPHCtx        = nullptr; // CudaSPHContext（grid + PCISPH + rigidBody）
-        // CUDA event 计时（Ping-pong 双缓冲）
-        CudaTimingHelper m_CudaTiming;
-#endif
+        // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
+        struct CudaImpl;
+        Scope<CudaImpl> m_CudaImpl;
     };
 
 } // namespace Engine

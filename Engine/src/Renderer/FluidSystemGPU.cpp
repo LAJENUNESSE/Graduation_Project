@@ -23,6 +23,32 @@
 namespace Engine
 {
 
+    // =========================================================================
+    // CUDA Pimpl 实现（隐藏 CUDA 依赖）
+    // =========================================================================
+#ifdef ENGINE_ENABLE_CUDA
+    struct FluidSystemGPU::CudaImpl
+    {
+        Scope<CudaGLInteropContext> Interop;
+        bool                        UseCudaPath   = false;
+        bool                        InitAttempted = false;
+        int                         SlotParticle  = -1;
+        void*                       SPHCtx        = nullptr;
+        CudaTimingHelper            Timing;
+
+        ~CudaImpl()
+        {
+            if (SPHCtx)
+                CudaInterop::DestroySPHContext(SPHCtx);
+            Timing.Destroy();
+        }
+    };
+#else
+    struct FluidSystemGPU::CudaImpl
+    {
+    }; // Empty stub when CUDA disabled
+#endif
+
     // Must match GLSL struct layout: 5 x vec4 = 80 bytes
     struct FluidGPUParticle
     {
@@ -56,15 +82,14 @@ namespace Engine
                   "linearVel offset mismatch");
 #endif
 
-    FluidSystemGPU::FluidSystemGPU(uint32_t particleCount) : m_ParticleCount(particleCount) {}
+    FluidSystemGPU::FluidSystemGPU(uint32_t particleCount)
+        : m_ParticleCount(particleCount), m_CudaImpl(CreateScope<CudaImpl>())
+    {
+    }
 
     FluidSystemGPU::~FluidSystemGPU()
     {
-#ifdef ENGINE_ENABLE_CUDA
-        if (m_CudaSPHCtx)
-            CudaInterop::DestroySPHContext(m_CudaSPHCtx);
-        m_CudaTiming.Destroy();
-#endif
+        // CudaImpl 析构函数处理 CUDA 资源清理
     }
 
     void FluidSystemGPU::Init()
@@ -98,21 +123,21 @@ namespace Engine
         m_Initialized = true;
 
 #ifdef ENGINE_ENABLE_CUDA
-        if (!m_CudaInitAttempted)
+        if (!m_CudaImpl->InitAttempted)
         {
-            m_CudaInitAttempted = true;
+            m_CudaImpl->InitAttempted = true;
             if (!CudaInterop::IsCudaPoisoned() && CudaGLInteropContext::ProbeDeviceMatch())
             {
-                m_CudaInterop = CreateScope<CudaGLInteropContext>();
-                m_CudaSlotParticle =
-                    m_CudaInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "FluidParticleBuffer");
-                if (m_CudaSlotParticle >= 0)
+                m_CudaImpl->Interop = CreateScope<CudaGLInteropContext>();
+                m_CudaImpl->SlotParticle =
+                    m_CudaImpl->Interop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "FluidParticleBuffer");
+                if (m_CudaImpl->SlotParticle >= 0)
                 {
-                    m_CudaSPHCtx = CudaInterop::CreateSPHContext(m_ParticleCount, 64, MAX_RIGID_BODIES);
-                    if (m_CudaSPHCtx)
+                    m_CudaImpl->SPHCtx = CudaInterop::CreateSPHContext(m_ParticleCount, 64, MAX_RIGID_BODIES);
+                    if (m_CudaImpl->SPHCtx)
                     {
-                        m_CudaTiming.Init();
-                        m_UseCudaPath = true;
+                        m_CudaImpl->Timing.Init();
+                        m_CudaImpl->UseCudaPath = true;
                         ENGINE_INFO("[Fluid] CUDA SPH sidecar activated.");
                     }
                     else
@@ -203,18 +228,19 @@ namespace Engine
 
 #ifdef ENGINE_ENABLE_CUDA
         bool cudaSucceeded = false;
-        if (m_UseCudaPath && !CudaInterop::IsCudaPoisoned())
+        if (m_CudaImpl->UseCudaPath && !CudaInterop::IsCudaPoisoned())
         {
-            if (m_CudaInterop->MapAll())
+            if (m_CudaImpl->Interop->MapAll())
             {
-                void* stream       = m_CudaInterop->GetStream();
-                void* devParticles = m_CudaInterop->GetMappedPointer(m_CudaSlotParticle);
-                CudaInterop::RecordCudaEvent(m_CudaTiming.EventStart, stream);
+                void* stream       = m_CudaImpl->Interop->GetStream();
+                void* devParticles = m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotParticle);
+                CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStart, stream);
 
                 float cellSize = 2.0f * kp.h;
 
                 // Grid Build（内部用 CUB prefix sum，替代 3 dispatch）
-                CudaInterop::LaunchSPHGridBuild(m_CudaSPHCtx, devParticles, m_ParticleCount, 64, cellSize, stream);
+                CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles, m_ParticleCount, 64, cellSize,
+                                                stream);
 
                 // 构造 SPHParams
                 CudaInterop::SPHParams p{};
@@ -242,11 +268,11 @@ namespace Engine
                     auto bodies = CollectRigidBodies(registry, MAX_RIGID_BODIES, RigidBodyUploadFilter::AllColliders);
                     cudaRigidBodyCount = static_cast<uint32_t>(bodies.size());
                     if (!bodies.empty())
-                        CudaInterop::SPHUploadRigidBodies(m_CudaSPHCtx, bodies.data(), cudaRigidBodyCount);
+                        CudaInterop::SPHUploadRigidBodies(m_CudaImpl->SPHCtx, bodies.data(), cudaRigidBodyCount);
                 }
 
                 // SPH Density
-                CudaInterop::LaunchSPHDensity(m_CudaSPHCtx, devParticles, p, stream);
+                CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, p, stream);
 
                 CudaInterop::PCISPHIterParams ip{};
                 ip.pcisphDelta       = SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
@@ -258,7 +284,7 @@ namespace Engine
 
                 if (emitter.PCISPHEnabled)
                 {
-                    CudaInterop::LaunchPCISPHInit(m_CudaSPHCtx, devParticles, p, stream);
+                    CudaInterop::LaunchPCISPHInit(m_CudaImpl->SPHCtx, devParticles, p, stream);
 
                     int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
                     for (int iter = 0; iter < iterations; ++iter)
@@ -266,21 +292,21 @@ namespace Engine
                         // 迭代 1+：用预测位置重建 grid
                         if (iter > 0)
                         {
-                            CudaInterop::LaunchSPHGridBuild(m_CudaSPHCtx, devParticles, m_ParticleCount, 64, cellSize,
-                                                            stream, true);
+                            CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles, m_ParticleCount, 64,
+                                                            cellSize, stream, true);
                         }
-                        CudaInterop::LaunchPCISPHPredict(m_CudaSPHCtx, devParticles, clampedDt,
+                        CudaInterop::LaunchPCISPHPredict(m_CudaImpl->SPHCtx, devParticles, clampedDt,
                                                          static_cast<int>(m_ParticleCount), stream);
                         ip.usePredictedPos = (iter > 0) ? 1 : 0;
-                        CudaInterop::LaunchPCISPHDensity(m_CudaSPHCtx, devParticles, p, ip, stream);
-                        CudaInterop::LaunchPCISPHForce(m_CudaSPHCtx, devParticles, p, ip, stream);
+                        CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, p, ip, stream);
+                        CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, p, ip, stream);
                     }
-                    CudaInterop::LaunchPCISPHApply(m_CudaSPHCtx, devParticles, static_cast<int>(m_ParticleCount),
+                    CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles, static_cast<int>(m_ParticleCount),
                                                    stream);
                 }
                 else
                 {
-                    CudaInterop::LaunchSPHForce(m_CudaSPHCtx, devParticles, p, ip, stream);
+                    CudaInterop::LaunchSPHForce(m_CudaImpl->SPHCtx, devParticles, p, ip, stream);
                 }
 
                 CudaInterop::SPHSimulateParams sp{};
@@ -299,33 +325,34 @@ namespace Engine
                 sp.particleCount  = static_cast<int>(m_ParticleCount);
                 CudaInterop::LaunchSPHSimulate(devParticles, sp, stream);
 
-                CudaInterop::RecordCudaEvent(m_CudaTiming.EventStop, stream);
-                m_CudaInterop->UnmapAll();
+                CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStop, stream);
+                m_CudaImpl->Interop->UnmapAll();
 
                 if (CudaInterop::IsCudaPoisoned())
                 {
                     ENGINE_WARN("[Fluid] CUDA poisoned during compute ({}); falling back to GL.",
                                 CudaInterop::GetCudaPoisonReason());
-                    m_UseCudaPath = false;
+                    m_CudaImpl->UseCudaPath = false;
                 }
                 else
                 {
                     // 延迟查询：读取上一帧的计时结果（此时 GPU 已完成，非阻塞）
-                    if (m_CudaTiming.HasPrevTiming && m_CudaTiming.PrevStop)
+                    if (m_CudaImpl->Timing.HasPrevTiming && m_CudaImpl->Timing.PrevStop)
                     {
-                        float ms = CudaInterop::CudaEventElapsedMs(m_CudaTiming.PrevStart, m_CudaTiming.PrevStop);
+                        float ms =
+                            CudaInterop::CudaEventElapsedMs(m_CudaImpl->Timing.PrevStart, m_CudaImpl->Timing.PrevStop);
                         if (ms >= 0.0f)
                             PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
                     }
                     // 交换事件对：当前帧的 start/stop 变成下帧待查询的 prev
-                    m_CudaTiming.SwapEvents();
+                    m_CudaImpl->Timing.SwapEvents();
                     cudaSucceeded = true;
                 }
             }
             else
             {
                 ENGINE_WARN("[Fluid] CUDA MapAll failed ({}); falling back to GL.", CudaInterop::GetCudaPoisonReason());
-                m_UseCudaPath = false;
+                m_CudaImpl->UseCudaPath = false;
             }
         }
         if (!cudaSucceeded)
