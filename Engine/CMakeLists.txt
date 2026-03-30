@@ -148,6 +148,7 @@ if(ENGINE_ENABLE_CUDA)
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaGLInteropContext.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaTimingHelper.cu
     )
 
     if(ENGINE_ENABLE_VULKAN_CUDA_INTEROP)
@@ -170,6 +171,7 @@ if(ENGINE_ENABLE_CUDA)
     set_source_files_properties(
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaTimingHelper.cu
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
     )
 

@@ -73,20 +73,8 @@ namespace Engine
                                        uint32_t                        maxRigidBodies,
                                        RigidBodyUploadFilter           filter = RigidBodyUploadFilter::AllColliders);
 
-#ifdef ENGINE_ENABLE_CUDA
-    // CUDA event 计时 ping-pong 双缓冲辅助（避免 GPU 同步阻塞）
-    struct CudaTimingHelper
-    {
-        void* EventStart    = nullptr;
-        void* EventStop     = nullptr;
-        void* PrevStart     = nullptr;
-        void* PrevStop      = nullptr;
-        bool  HasPrevTiming = false;
-
-        void Init();
-        void SwapEvents();
-        void Destroy();
-    };
-#endif
-
 } // namespace Engine
+
+#ifdef ENGINE_ENABLE_CUDA
+#include "Platform/CUDA/CudaTimingHelper.h"
+#endif

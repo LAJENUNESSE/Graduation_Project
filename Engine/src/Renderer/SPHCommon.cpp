@@ -5,9 +5,7 @@
 
 #include <cmath>
 
-#ifdef ENGINE_ENABLE_CUDA
-#include "Platform/CUDA/CudaParticlePipeline.h"
-#endif
+// CudaTimingHelper 实现已移至 Platform/CUDA/CudaTimingHelper.cu
 
 namespace Engine
 {
@@ -125,36 +123,5 @@ namespace Engine
 
         return static_cast<uint32_t>(bodies.size());
     }
-
-#ifdef ENGINE_ENABLE_CUDA
-    void CudaTimingHelper::Init()
-    {
-        EventStart = CudaInterop::CreateCudaEvent();
-        EventStop  = CudaInterop::CreateCudaEvent();
-        PrevStart  = CudaInterop::CreateCudaEvent();
-        PrevStop   = CudaInterop::CreateCudaEvent();
-    }
-
-    void CudaTimingHelper::SwapEvents()
-    {
-        std::swap(EventStart, PrevStart);
-        std::swap(EventStop, PrevStop);
-        HasPrevTiming = true;
-    }
-
-    void CudaTimingHelper::Destroy()
-    {
-        if (EventStart)
-            CudaInterop::DestroyCudaEvent(EventStart);
-        if (EventStop)
-            CudaInterop::DestroyCudaEvent(EventStop);
-        if (PrevStart)
-            CudaInterop::DestroyCudaEvent(PrevStart);
-        if (PrevStop)
-            CudaInterop::DestroyCudaEvent(PrevStop);
-        EventStart = EventStop = PrevStart = PrevStop = nullptr;
-        HasPrevTiming                                 = false;
-    }
-#endif
 
 } // namespace Engine
