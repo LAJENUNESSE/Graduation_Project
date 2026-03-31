@@ -145,7 +145,7 @@ engine_apply_sanitizers(Engine)
 if(ENGINE_ENABLE_VULKAN)
     find_package(Vulkan REQUIRED)
     find_package(unofficial-shaderc CONFIG REQUIRED)
-    list(APPEND ENGINE_SOURCES
+    target_sources(Engine PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanBuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanCommandBuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
