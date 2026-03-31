@@ -469,11 +469,35 @@ namespace Engine
 #ifdef ENGINE_ENABLE_CUDA
         m_CudaImpl->RequestedInteropBackend = GetRequestedInteropBackend();
         m_CudaImpl->ActiveInteropBackend    = m_CudaImpl->RequestedInteropBackend;
-        if (m_CudaImpl->RequestedInteropBackend == InteropBackend::VulkanExternal)
+
+        // 根据当前渲染器 API 自动调整 interop 后端
+        const auto currentAPI = RendererAPI::GetAPI();
+        if (currentAPI == RendererAPI::API::OpenGL)
         {
-            ENGINE_CORE_WARN("[Particle][Interop] VulkanExternal backend requested, but main renderer path is OpenGL; "
-                             "falling back to CudaGL interop.");
-            m_CudaImpl->ActiveInteropBackend = InteropBackend::CudaGL;
+            // OpenGL 模式下只能用 CudaGL
+            if (m_CudaImpl->RequestedInteropBackend == InteropBackend::VulkanExternal ||
+                m_CudaImpl->RequestedInteropBackend == InteropBackend::CudaVulkan)
+            {
+                ENGINE_CORE_WARN("[Particle][Interop] {} backend requested, but renderer is OpenGL; "
+                                 "falling back to CudaGL interop.",
+                                 InteropBackendLabel(m_CudaImpl->RequestedInteropBackend));
+                m_CudaImpl->ActiveInteropBackend = InteropBackend::CudaGL;
+            }
+        }
+        else if (currentAPI == RendererAPI::API::Vulkan)
+        {
+            // Vulkan 模式下优先使用 CudaVulkan
+            if (m_CudaImpl->RequestedInteropBackend == InteropBackend::CudaGL)
+            {
+                ENGINE_CORE_INFO("[Particle][Interop] CudaGL backend requested, but renderer is Vulkan; "
+                                 "upgrading to CudaVulkan interop.");
+                m_CudaImpl->ActiveInteropBackend = InteropBackend::CudaVulkan;
+            }
+            else if (m_CudaImpl->RequestedInteropBackend == InteropBackend::VulkanExternal)
+            {
+                ENGINE_CORE_INFO("[Particle][Interop] VulkanExternal is deprecated; using CudaVulkan instead.");
+                m_CudaImpl->ActiveInteropBackend = InteropBackend::CudaVulkan;
+            }
         }
 #endif
 
@@ -552,46 +576,65 @@ namespace Engine
         m_Initialized = true;
 
 #ifdef ENGINE_ENABLE_CUDA
-        // ---- CUDA sidecar 初始化（一次性，失败后永久走 GL）----
+        // ---- CUDA sidecar 初始化（一次性，失败后永久走 GL/Vulkan Compute）----
         if (!m_CudaImpl->InitAttempted)
         {
             m_CudaImpl->InitAttempted = true;
             ENGINE_CORE_INFO("[Particle][Interop] active backend={}",
                              InteropBackendLabel(m_CudaImpl->ActiveInteropBackend));
+
+            bool cudaInitialized = false;
+
             if (m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned() &&
                 CudaGLInteropContext::ProbeDeviceMatch())
             {
-                m_CudaImpl->Interop = CreateScope<CudaGLInteropContext>();
+                // ---- CudaGL 路径：注册 OpenGL 缓冲区 ----
+                m_CudaImpl->GLInterop = CreateScope<CudaGLInteropContext>();
                 m_CudaImpl->SlotParticle =
-                    m_CudaImpl->Interop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
-                m_CudaImpl->SlotDeadList = m_CudaImpl->Interop->RegisterBuffer(m_DeadList->GetRendererID(), "DeadList");
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
+                m_CudaImpl->SlotDeadList =
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_DeadList->GetRendererID(), "DeadList");
                 m_CudaImpl->SlotAliveList =
-                    m_CudaImpl->Interop->RegisterBuffer(m_AliveList->GetRendererID(), "AliveList");
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_AliveList->GetRendererID(), "AliveList");
                 m_CudaImpl->SlotCounter =
-                    m_CudaImpl->Interop->RegisterBuffer(m_CounterBuffer->GetRendererID(), "CounterBuffer");
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_CounterBuffer->GetRendererID(), "CounterBuffer");
                 m_CudaImpl->SlotIndirect =
-                    m_CudaImpl->Interop->RegisterBuffer(m_IndirectArgs->GetRendererID(), "IndirectArgs");
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_IndirectArgs->GetRendererID(), "IndirectArgs");
 
                 if (m_CudaImpl->SlotParticle >= 0 && m_CudaImpl->SlotDeadList >= 0 && m_CudaImpl->SlotAliveList >= 0 &&
                     m_CudaImpl->SlotCounter >= 0 && m_CudaImpl->SlotIndirect >= 0)
                 {
-                    m_CudaImpl->UseCudaPath = true;
-                    m_CudaImpl->Timing.Init();
-                    m_CudaImpl->SPHCtx = CudaInterop::CreateSPHContext(m_MaxParticles, 64, MAX_RIGID_BODIES);
-                    if (!m_CudaImpl->SPHCtx)
-                        ENGINE_WARN("[Particle] CUDA CreateSPHContext failed; SPH will use GL compute.");
-                    ENGINE_INFO("[Particle] CUDA compute sidecar activated ({0} buffers registered).",
-                                m_CudaImpl->Interop->GetSlotCount());
+                    cudaInitialized = true;
+                    ENGINE_INFO("[Particle] CUDA-GL compute sidecar activated ({0} buffers registered).",
+                                m_CudaImpl->GLInterop->GetSlotCount());
                 }
                 else
                 {
-                    ENGINE_WARN("[Particle] CUDA buffer registration partially failed; falling back to GL compute.");
-                    m_CudaImpl->Interop.reset();
+                    ENGINE_WARN("[Particle] CUDA-GL buffer registration partially failed; falling back to GL compute.");
+                    m_CudaImpl->GLInterop.reset();
                 }
+            }
+            else if (m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaVulkan && !CudaInterop::IsCudaPoisoned())
+            {
+                // ---- CudaVulkan 路径：需要从 VulkanContext 获取设备句柄 ----
+                // TODO: 当 Vulkan 后端完全集成后，在此处初始化 VkInterop
+                // 目前只是占位，实际初始化需要 VulkanContext 提供的设备/队列信息
+                ENGINE_CORE_WARN("[Particle][Interop] CudaVulkan backend selected but VulkanContext not yet available; "
+                                 "CUDA sidecar deferred until Vulkan renderer integration complete.");
+                // VkInterop 初始化将在后续集成时实现
             }
             else
             {
-                ENGINE_INFO("[Particle] No CUDA-capable device matching GL context; using GL compute path.");
+                ENGINE_INFO("[Particle] No CUDA-capable device matching graphics context; using compute shader path.");
+            }
+
+            if (cudaInitialized)
+            {
+                m_CudaImpl->UseCudaPath = true;
+                m_CudaImpl->Timing.Init();
+                m_CudaImpl->SPHCtx = CudaInterop::CreateSPHContext(m_MaxParticles, 64, MAX_RIGID_BODIES);
+                if (!m_CudaImpl->SPHCtx)
+                    ENGINE_WARN("[Particle] CUDA CreateSPHContext failed; SPH will use compute shader.");
             }
         }
 #endif
@@ -734,14 +777,14 @@ namespace Engine
                     glFlush();
 
                     const auto mapStart = std::chrono::high_resolution_clock::now();
-                    const bool mapOk    = m_CudaImpl->Interop->MapAll();
+                    const bool mapOk    = m_CudaImpl->MapAll();
                     cudaMapAllCpuMs +=
                         std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - mapStart)
                             .count();
                     if (mapOk)
                     {
-                        void* stream       = m_CudaImpl->Interop->GetStream();
-                        void* devParticles = m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotParticle);
+                        void* stream       = m_CudaImpl->GetStream();
+                        void* devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
                         CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStart, stream);
 
                         SPHKernelParams kp       = SPHKernelParams::Compute(emitter.SPH.SmoothingRadius);
@@ -833,19 +876,19 @@ namespace Engine
                         // SPH 的 FluidSimulateKernel 不处理 life，需要单独处理
                         {
                             CudaInterop::LaunchLifeUpdate(
-                                devParticles, m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotDeadList),
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotAliveList),
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter), clampedDt,
+                                devParticles, m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList),
+                                m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotAliveList),
+                                m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter), clampedDt,
                                 m_MaxParticles, stream);
                             // RenderArgs 也在 CUDA 侧完成
                             CudaInterop::LaunchRenderArgs(
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter),
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotIndirect), stream);
+                                m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter),
+                                m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotIndirect), stream);
                         }
 
                         CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStop, stream);
                         const auto unmapStart = std::chrono::high_resolution_clock::now();
-                        m_CudaImpl->Interop->UnmapAll();
+                        m_CudaImpl->UnmapAll();
                         cudaUnmapAllCpuMs += std::chrono::duration<float, std::milli>(
                                                  std::chrono::high_resolution_clock::now() - unmapStart)
                                                  .count();
@@ -884,13 +927,13 @@ namespace Engine
             else if (!sphEnabled)
             {
                 const auto mapStart = std::chrono::high_resolution_clock::now();
-                const bool mapOk    = m_CudaImpl->Interop->MapAll();
+                const bool mapOk    = m_CudaImpl->MapAll();
                 cudaMapAllCpuMs +=
                     std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - mapStart)
                         .count();
                 if (mapOk)
                 {
-                    void* stream = m_CudaImpl->Interop->GetStream();
+                    void* stream = m_CudaImpl->GetStream();
                     CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStart, stream);
 
                     // Emit
@@ -923,9 +966,9 @@ namespace Engine
                         ep.maxParticles = m_MaxParticles;
                         ep.emitCount    = emitCount;
 
-                        CudaInterop::LaunchEmit(m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotParticle),
-                                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotDeadList),
-                                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter), ep,
+                        CudaInterop::LaunchEmit(m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle),
+                                                m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList),
+                                                m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter), ep,
                                                 stream);
                     }
 
@@ -939,21 +982,21 @@ namespace Engine
                         sp.damping      = emitter.Damping;
                         sp.maxParticles = m_MaxParticles;
 
-                        CudaInterop::LaunchSimulate(m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotParticle),
-                                                    m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotDeadList),
-                                                    m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotAliveList),
-                                                    m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter), sp,
+                        CudaInterop::LaunchSimulate(m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle),
+                                                    m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList),
+                                                    m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotAliveList),
+                                                    m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter), sp,
                                                     stream);
                     }
 
                     // Render Args
-                    CudaInterop::LaunchRenderArgs(m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter),
-                                                  m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotIndirect),
+                    CudaInterop::LaunchRenderArgs(m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter),
+                                                  m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotIndirect),
                                                   stream);
 
                     CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStop, stream);
                     const auto unmapStart = std::chrono::high_resolution_clock::now();
-                    m_CudaImpl->Interop->UnmapAll();
+                    m_CudaImpl->UnmapAll();
                     cudaUnmapAllCpuMs +=
                         std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - unmapStart)
                             .count();
