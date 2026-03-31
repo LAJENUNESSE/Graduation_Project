@@ -70,3 +70,9 @@ patches/
 # Obsidian / local knowledge base
 Game_Engine/
 .obsidian/
+
+# Agent work plans
+.sisyphus/
+
+# CMake temp (root level)
+CMakeFiles/
