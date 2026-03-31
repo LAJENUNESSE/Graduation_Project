@@ -30,7 +30,6 @@ add_library(EngineTestCore STATIC
     ${ENGINE_SRC_DIR}/Scene/SceneHierarchyService.cpp
     ${ENGINE_SRC_DIR}/Scene/WorldTransformService.cpp
     ${ENGINE_SRC_DIR}/Scene/SceneCamera.cpp
-    ${ENGINE_SRC_DIR}/Physics/CollisionMath.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../Editor/src/CommandHistory.cpp
 )
 
@@ -65,7 +64,6 @@ add_executable(EngineTests
     src/TestSceneEntityIndex.cpp
     src/TestSceneHierarchy.cpp
     src/TestWorldTransform.cpp
-    src/TestCollisionMath.cpp
     src/TestCudaPoisonState.cpp
     src/TestVulkanInteropCommon.cpp
     src/TestVulkanInteropDiagnostics.cpp

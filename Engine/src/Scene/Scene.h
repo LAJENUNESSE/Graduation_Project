@@ -23,12 +23,6 @@ namespace Engine
     class SceneRenderer;
     class SceneRuntimeCoordinator;
 
-    enum class PhysicsBackend
-    {
-        Custom = 0,
-        Bullet = 1
-    };
-
     class Scene
     {
     public:
@@ -79,8 +73,7 @@ namespace Engine
         SceneEnvironmentState& GetEnvironmentState() { return m_EnvironmentState; }
         WorldTransformCache& GetTransformCache() { return m_TransformCache; }
 
-        PhysicsBackend GetPhysicsBackend() const { return m_PhysicsBackend; }
-        void SetPhysicsBackend(PhysicsBackend backend) { m_PhysicsBackend = backend; }
+
 
     private:
         void SyncEnvironmentFromRenderer();
@@ -97,7 +90,6 @@ namespace Engine
 
         // 环境数据（Shadow + Skybox）：Scene 拥有，渲染器消费
         SceneEnvironmentState m_EnvironmentState;
-        PhysicsBackend m_PhysicsBackend = PhysicsBackend::Custom;
         std::unique_ptr<SceneRuntimeCoordinator> m_RuntimeCoordinator;
 
         friend class Entity;

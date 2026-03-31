@@ -2,7 +2,6 @@
 #include "Scene/Runtime/SceneRuntimeCoordinator.h"
 #include "Core/Log.h"
 #include "Physics/BulletPhysicsWorld.h"
-#include "Physics/PhysicsWorld.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
@@ -35,59 +34,39 @@ namespace Engine
             m_BulletPhysicsWorld->DestroyBody(entity);
     }
 
-    void SceneRuntimeCoordinator::OnRuntimeStart(PhysicsBackend backend, SceneRenderer* renderer)
+    void SceneRuntimeCoordinator::OnRuntimeStart(SceneRenderer* renderer)
     {
-        const char* backendName = backend == PhysicsBackend::Custom ? "Custom" : "Bullet";
-        size_t      entityCount = 0;
+        size_t entityCount = 0;
         for (auto entity : m_Registry.view<IDComponent>())
         {
             (void)entity;
             ++entityCount;
         }
-        ENGINE_CORE_INFO("[SceneLifecycle] RuntimeStart backend={0}, entities={1}", backendName, entityCount);
+        ENGINE_CORE_INFO("[SceneLifecycle] RuntimeStart backend=Bullet, entities={0}", entityCount);
 
-        if (backend == PhysicsBackend::Custom)
+        m_BulletPhysicsWorld = std::make_unique<BulletPhysicsWorld>();
+        m_BulletPhysicsWorld->Init();
+
+        // 在创建物理体之前，确保地形网格数据已生成（Scene::Copy 不拷贝 runtime 组件）
         {
-            m_PhysicsWorld = std::make_unique<PhysicsWorld>();
-            m_PhysicsWorld->Init();
-
-            // 初始化刚体持久四元数（从 Transform 的欧拉角构建）
+            auto terrainView = m_Registry.view<TransformComponent, TerrainComponent>();
+            for (auto entity : terrainView)
             {
-                auto rbView = m_Registry.view<TransformComponent, RigidBodyComponent>();
-                for (auto entity : rbView)
+                auto& tc             = m_Registry.get<TerrainComponent>(entity);
+                bool  hasRuntimeMesh = m_Registry.all_of<TerrainRuntimeComponent>(entity) &&
+                                      m_Registry.get<TerrainRuntimeComponent>(entity).MeshData;
+                if (!hasRuntimeMesh && !tc.HeightmapPath.empty())
                 {
-                    auto& transform = rbView.get<TransformComponent>(entity);
-                    auto& rb        = rbView.get<RigidBodyComponent>(entity);
-                    rb.Orientation  = glm::quat(transform.Rotation);
+                    auto meshData = TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale,
+                                                                   tc.LODLevels);
+                    auto& rtc     = m_Registry.get_or_emplace<TerrainRuntimeComponent>(entity);
+                    rtc.MeshData  = std::make_unique<TerrainMeshData>(std::move(meshData));
+                    tc.MeshDirty  = false;
                 }
             }
         }
-        else
-        {
-            m_BulletPhysicsWorld = std::make_unique<BulletPhysicsWorld>();
-            m_BulletPhysicsWorld->Init();
 
-            // 在创建物理体之前，确保地形网格数据已生成（Scene::Copy 不拷贝 runtime 组件）
-            {
-                auto terrainView = m_Registry.view<TransformComponent, TerrainComponent>();
-                for (auto entity : terrainView)
-                {
-                    auto& tc             = m_Registry.get<TerrainComponent>(entity);
-                    bool  hasRuntimeMesh = m_Registry.all_of<TerrainRuntimeComponent>(entity) &&
-                                          m_Registry.get<TerrainRuntimeComponent>(entity).MeshData;
-                    if (!hasRuntimeMesh && !tc.HeightmapPath.empty())
-                    {
-                        auto meshData = TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale,
-                                                                       tc.LODLevels);
-                        auto& rtc     = m_Registry.get_or_emplace<TerrainRuntimeComponent>(entity);
-                        rtc.MeshData  = std::make_unique<TerrainMeshData>(std::move(meshData));
-                        tc.MeshDirty  = false;
-                    }
-                }
-            }
-
-            m_BulletPhysicsWorld->CreateBodies(m_Registry, m_EntityIndex);
-        }
+        m_BulletPhysicsWorld->CreateBodies(m_Registry, m_EntityIndex);
 
         // NativeScript OnCreate
         {
@@ -181,7 +160,6 @@ namespace Engine
             }
         }
 
-        m_PhysicsWorld.reset();
         if (m_BulletPhysicsWorld)
         {
             m_BulletPhysicsWorld->Shutdown();
@@ -189,7 +167,7 @@ namespace Engine
         }
     }
 
-    void SceneRuntimeCoordinator::OnUpdateRuntime(Timestep ts, PhysicsBackend backend, SceneRenderer* renderer)
+    void SceneRuntimeCoordinator::OnUpdateRuntime(Timestep ts, SceneRenderer* renderer)
     {
         // NativeScript OnUpdate（物理之前）
         {
@@ -202,10 +180,8 @@ namespace Engine
             }
         }
 
-        // Physics step
-        if (backend == PhysicsBackend::Custom && m_PhysicsWorld)
-            m_PhysicsWorld->Step(ts, m_Registry, m_EntityIndex);
-        else if (backend == PhysicsBackend::Bullet && m_BulletPhysicsWorld)
+        // Physics step (Bullet only)
+        if (m_BulletPhysicsWorld)
         {
             m_BulletPhysicsWorld->Step(ts, m_Registry, m_EntityIndex);
 

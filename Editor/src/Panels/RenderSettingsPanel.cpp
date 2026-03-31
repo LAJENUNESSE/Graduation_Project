@@ -263,14 +263,11 @@ namespace Engine
                                 ABSourceLabel(ab.DisableReadbackSource));
         }
 
-        // 物理设置
+        // 物理设置（已移除 Custom 后端，强制使用 Bullet）
         ImGui::Separator();
         ImGui::Text("物理设置");
         {
-            const char* backendItems[] = {"手写物理", "Bullet3"};
-            int         currentBackend = static_cast<int>(m_Scene->GetPhysicsBackend());
-            if (ImGui::Combo("物理后端", &currentBackend, backendItems, 2))
-                m_Scene->SetPhysicsBackend(static_cast<PhysicsBackend>(currentBackend));
+            ImGui::TextDisabled("物理后端: Bullet3");
         }
         ImGui::Checkbox("显示碰撞体", m_ShowPhysicsColliders);
 

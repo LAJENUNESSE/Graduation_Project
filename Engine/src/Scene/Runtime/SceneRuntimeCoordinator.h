@@ -14,11 +14,8 @@ namespace Engine
     class SceneEntityIndex;
     class ResourceLifecycleCoordinator;
     class SceneRenderer;
-    class PhysicsWorld;
     class BulletPhysicsWorld;
     struct CollisionEvent;
-
-    enum class PhysicsBackend;
 
     class SceneRuntimeCoordinator
     {
@@ -29,9 +26,9 @@ namespace Engine
                                 Scene*                        scene);
         ~SceneRuntimeCoordinator();
 
-        void OnRuntimeStart(PhysicsBackend backend, SceneRenderer* renderer);
+        void OnRuntimeStart(SceneRenderer* renderer);
         void OnRuntimeStop(SceneRenderer* renderer);
-        void OnUpdateRuntime(Timestep ts, PhysicsBackend backend, SceneRenderer* renderer);
+        void OnUpdateRuntime(Timestep ts, SceneRenderer* renderer);
 
         // 供 Scene::DestroyEntity 调用
         void DestroyPhysicsBody(entt::entity entity);
@@ -48,7 +45,6 @@ namespace Engine
         ResourceLifecycleCoordinator& m_Lifecycle;
         Scene*                        m_Scene; // 非所有权，用于构造 Entity{handle, scene}
 
-        std::unique_ptr<PhysicsWorld>       m_PhysicsWorld;
         std::unique_ptr<BulletPhysicsWorld> m_BulletPhysicsWorld;
 
         void ProcessCollisionParticleBursts(const std::vector<CollisionEvent>&       events,

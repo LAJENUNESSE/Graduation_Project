@@ -377,7 +377,6 @@ namespace Engine
             out << YAML::Key << "ToneMappingMode" << YAML::Value << renderSettings.PostProcessing.ToneMappingMode;
             out << YAML::Key << "GammaCorrection" << YAML::Value << renderSettings.PostProcessing.GammaCorrection;
             out << YAML::Key << "MSAASamples" << YAML::Value << renderSettings.MSAASamples;
-            out << YAML::Key << "PhysicsBackend" << YAML::Value << renderSettings.PhysicsBackend;
             out << YAML::Key << "SSAOEnabled" << YAML::Value << renderSettings.SSAOEnabled;
             out << YAML::Key << "SSAORadius" << YAML::Value << renderSettings.SSAORadius;
             out << YAML::Key << "SSAOBias" << YAML::Value << renderSettings.SSAOBias;
@@ -569,16 +568,8 @@ namespace Engine
                     ENGINE_CORE_WARN("Invalid MSAASamples {0}, falling back to {1}", samples, normalizedSamples);
                 outRenderSettings->MSAASamples = normalizedSamples;
             }
-            if (renderNode["PhysicsBackend"])
-            {
-                int backend = renderNode["PhysicsBackend"].as<int>();
-                if (backend < 0 || backend > 1)
-                {
-                    ENGINE_CORE_WARN("Invalid PhysicsBackend {0}, falling back to 0 (Custom)", backend);
-                    backend = 0;
-                }
-                outRenderSettings->PhysicsBackend = backend;
-            }
+            // 兼容旧场景：跳过已废弃的 PhysicsBackend 字段
+            // （现在强制使用 Bullet，不再需要读取此设置）
             if (renderNode["SSAOEnabled"])
                 outRenderSettings->SSAOEnabled = renderNode["SSAOEnabled"].as<bool>();
             if (renderNode["SSAORadius"])
