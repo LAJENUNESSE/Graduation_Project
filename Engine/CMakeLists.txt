@@ -139,26 +139,6 @@ target_precompile_headers(Engine PRIVATE
 engine_apply_warnings(Engine)
 engine_apply_sanitizers(Engine)
 
-# Vulkan backend (conditional)
-if(ENGINE_ENABLE_VULKAN)
-    find_package(Vulkan REQUIRED)
-    find_package(unofficial-shaderc CONFIG REQUIRED)
-    target_sources(Engine PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanBuffer.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanCommandBuffer.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanFramebuffer.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanPipeline.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanShader.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSwapchain.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanTexture.cpp
-    )
-    target_link_libraries(Engine PUBLIC Vulkan::Vulkan unofficial::shaderc::shaderc)
-    target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN=1)
-    message(STATUS "[Engine] Vulkan backend enabled (SDK version: ${Vulkan_VERSION})")
-endif()
-
 if(ENGINE_ENABLE_CUDA)
     find_package(CUDAToolkit REQUIRED)
 
@@ -169,21 +149,6 @@ if(ENGINE_ENABLE_CUDA)
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaTimingHelper.cu
     )
 
-    if(ENGINE_ENABLE_VULKAN_CUDA_INTEROP)
-        find_package(Vulkan QUIET)
-        if(Vulkan_FOUND)
-            list(APPEND ENGINE_CUDA_SOURCES
-                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalInterop.cpp
-                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalRuntime.cpp
-                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalSmokeKernel.cu
-            )
-            target_link_libraries(Engine PUBLIC Vulkan::Vulkan)
-            target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN_CUDA_INTEROP=1)
-        else()
-            message(STATUS "[Engine] Vulkan not found, disable ENGINE_ENABLE_VULKAN_CUDA_INTEROP for Engine target")
-        endif()
-    endif()
-
     target_sources(Engine PRIVATE ${ENGINE_CUDA_SOURCES})
 
     set_source_files_properties(
@@ -193,12 +158,6 @@ if(ENGINE_ENABLE_CUDA)
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
     )
 
-    if(ENGINE_ENABLE_VULKAN_CUDA_INTEROP AND Vulkan_FOUND)
-        set_source_files_properties(
-            ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalSmokeKernel.cu
-            PROPERTIES SKIP_PRECOMPILE_HEADERS ON
-        )
-    endif()
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_CUDA=1)
     target_include_directories(Engine PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
     target_link_libraries(Engine PUBLIC CUDA::cudart)
