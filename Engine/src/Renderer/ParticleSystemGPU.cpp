@@ -497,8 +497,12 @@ namespace Engine
             m_EmitShader->SetFloat3("u_EmitterPos", emitterPos);
             m_EmitShader->SetFloat3("u_EmitDirection", emitter.EmitDirection);
             m_EmitShader->SetFloat("u_EmitAngle", glm::radians(emitter.EmitAngle));
-            m_EmitShader->SetFloat("u_LifeMin", emitter.LifeMin);
-            m_EmitShader->SetFloat("u_LifeMax", emitter.LifeMax);
+
+            // Sanitize LifeMin/LifeMax: ensure positive and LifeMin <= LifeMax
+            float safeLifeMin = std::max(emitter.LifeMin, 1e-6f);
+            float safeLifeMax = std::max(emitter.LifeMax, safeLifeMin);
+            m_EmitShader->SetFloat("u_LifeMin", safeLifeMin);
+            m_EmitShader->SetFloat("u_LifeMax", safeLifeMax);
             m_EmitShader->SetFloat("u_SpeedMin", emitter.SpeedMin);
             m_EmitShader->SetFloat("u_SpeedMax", emitter.SpeedMax);
             m_EmitShader->SetFloat("u_SizeStart", emitter.SizeStart);
