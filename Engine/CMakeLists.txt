@@ -31,9 +31,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImGui/ImGuiLayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Media/FFmpegDecoder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/BulletPhysicsWorld.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/CollisionMath.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/PhysicsDebugDraw.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/PhysicsWorld.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Reflection/AutoInspector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Reflection/AutoSerializer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Reflection/ComponentRegistry.cpp
@@ -140,54 +138,3 @@ target_precompile_headers(Engine PRIVATE
 
 engine_apply_warnings(Engine)
 engine_apply_sanitizers(Engine)
-
-if(ENGINE_ENABLE_CUDA)
-    find_package(CUDAToolkit REQUIRED)
-
-    set(ENGINE_CUDA_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaGLInteropContext.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaTimingHelper.cu
-    )
-
-    if(ENGINE_ENABLE_VULKAN_CUDA_INTEROP)
-        find_package(Vulkan QUIET)
-        if(Vulkan_FOUND)
-            list(APPEND ENGINE_CUDA_SOURCES
-                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalInterop.cpp
-                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalRuntime.cpp
-                ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalSmokeKernel.cu
-            )
-            target_link_libraries(Engine PUBLIC Vulkan::Vulkan)
-            target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN_CUDA_INTEROP=1)
-        else()
-            message(STATUS "[Engine] Vulkan not found, disable ENGINE_ENABLE_VULKAN_CUDA_INTEROP for Engine target")
-        endif()
-    endif()
-
-    target_sources(Engine PRIVATE ${ENGINE_CUDA_SOURCES})
-
-    set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaParticlePipeline.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaSPHPipeline.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/CudaTimingHelper.cu
-        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
-    )
-
-    if(ENGINE_ENABLE_VULKAN_CUDA_INTEROP AND Vulkan_FOUND)
-        set_source_files_properties(
-            ${CMAKE_CURRENT_SOURCE_DIR}/Platform/CUDA/VulkanExternalSmokeKernel.cu
-            PROPERTIES SKIP_PRECOMPILE_HEADERS ON
-        )
-    endif()
-    target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_CUDA=1)
-    target_include_directories(Engine PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
-    target_link_libraries(Engine PUBLIC CUDA::cudart)
-    set_property(TARGET Engine PROPERTY CUDA_STANDARD 17)
-    set_property(TARGET Engine PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
-    if(MSVC)
-        target_compile_options(Engine PRIVATE
-            $<$<COMPILE_LANGUAGE:CUDA>:--compiler-options=/utf-8,/Zc:preprocessor,/wd4505>)
-    endif()
-endif()

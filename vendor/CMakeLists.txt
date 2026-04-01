@@ -43,7 +43,7 @@ target_include_directories(stb_image PUBLIC
 )
 
 # ── Dear ImGui ────────────────────────────────────────────────────────────────
-add_library(imgui STATIC
+set(IMGUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_demo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_draw.cpp
@@ -52,11 +52,24 @@ add_library(imgui STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_glfw.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_opengl3.cpp
 )
+
+# Vulkan backend (optional)
+if(ENGINE_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
+    list(APPEND IMGUI_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_vulkan.cpp
+    )
+endif()
+
+add_library(imgui STATIC ${IMGUI_SOURCES})
 target_include_directories(imgui PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends
 )
 target_link_libraries(imgui PUBLIC glfw glad)
+if(ENGINE_ENABLE_VULKAN)
+    target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+endif()
 
 # ── EnTT (header-only) ───────────────────────────────────────────────────────
 add_library(entt INTERFACE)

@@ -45,7 +45,8 @@ namespace Engine
         enum class InteropBackend : uint8_t
         {
             CudaGL         = 0,
-            VulkanExternal = 1
+            VulkanExternal = 1, // Deprecated: use CudaVulkan instead
+            CudaVulkan     = 2  // CUDA-Vulkan external memory + timeline semaphore interop
         };
 
         static InteropBackend GetRequestedInteropBackend();

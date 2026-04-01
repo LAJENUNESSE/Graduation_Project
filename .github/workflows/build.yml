@@ -68,21 +68,12 @@ jobs:
       matrix:
         include:
           - name: GCC
-            cuda: false
             sanitize: false
             ccache-key: linux-gcc
             vcpkg-cache-key: vcpkg-linux
             cmake-preset: linux-default
             extra-cmake-flags: ''
-          - name: GCC + CUDA
-            cuda: true
-            sanitize: false
-            ccache-key: linux-gcc-cuda
-            vcpkg-cache-key: vcpkg-linux-cuda
-            cmake-preset: linux-cuda
-            extra-cmake-flags: '-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache'
           - name: GCC + ASAN/UBSAN
-            cuda: false
             sanitize: true
             ccache-key: linux-gcc-sanitize
             vcpkg-cache-key: vcpkg-linux-sanitize
@@ -104,13 +95,6 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1
         with:
           key: ${{ matrix.ccache-key }}
-
-      - name: Install CUDA Toolkit
-        if: matrix.cuda
-        uses: Jimver/cuda-toolkit@v0.2.29
-        with:
-          cuda: '12.8.1'
-          method: network
 
       - name: Install system dependencies
         run: |

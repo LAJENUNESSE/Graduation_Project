@@ -5,7 +5,8 @@
 #include "Core/Log.h"
 #include "Core/MouseCodes.h"
 
-#include "Platform/OpenGL/OpenGLContext.h"
+#include "Renderer/GraphicsContext.h"
+#include "Renderer/RendererAPI.h"
 
 #include "Events/ApplicationEvent.h"
 #include "Events/KeyEvent.h"
@@ -71,8 +72,8 @@ namespace Engine
                 return static_cast<float>(mode->refreshRate);
         }
 
-        int monitorCount = 0;
-        GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+        int           monitorCount = 0;
+        GLFWmonitor** monitors     = glfwGetMonitors(&monitorCount);
         if (!monitors || monitorCount <= 0)
             return 60.0f;
 
@@ -155,8 +156,8 @@ namespace Engine
         void Shutdown();
 
     private:
-        GLFWwindow*          m_Window = nullptr;
-        Scope<OpenGLContext> m_Context;
+        GLFWwindow*            m_Window = nullptr;
+        Scope<GraphicsContext> m_Context;
 
         // SwapBuffers burst diagnostics（常开轻量）
         bool     m_SwapBurstActive    = false;
@@ -223,12 +224,21 @@ namespace Engine
 #endif
         }
 
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        // Set GLFW window hints based on the selected rendering API
+        if (RendererAPI::GetAPI() == RendererAPI::API::OpenGL)
+        {
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #ifdef __APPLE__
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 #endif
+        }
+        else if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            // Vulkan: Tell GLFW not to create an OpenGL context
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        }
 
         m_Window = glfwCreateWindow(static_cast<int>(props.Width), static_cast<int>(props.Height), m_Data.Title.c_str(),
                                     nullptr, nullptr);
@@ -245,7 +255,7 @@ namespace Engine
         }
         ++s_GLFWWindowCount;
 
-        m_Context = CreateScope<OpenGLContext>(m_Window);
+        m_Context = GraphicsContext::Create(m_Window);
         m_Context->Init();
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
@@ -417,7 +427,7 @@ namespace Engine
         {
             if (!m_SwapBurstActive)
             {
-                m_SwapBurstActive    = true;
+                m_SwapBurstActive = true;
                 m_SwapBurstSeq++;
                 m_SwapBurstLen       = 0;
                 m_SwapBurstMaxMs     = 0.0f;
@@ -465,7 +475,13 @@ namespace Engine
 
     void GLFWWindowImpl::SetVSync(bool enabled)
     {
-        glfwSwapInterval(enabled ? 1 : 0);
+        // glfwSwapInterval only applies to OpenGL contexts
+        // For Vulkan, VSync is controlled via Swapchain PresentMode
+        if (RendererAPI::GetAPI() == RendererAPI::API::OpenGL)
+        {
+            glfwSwapInterval(enabled ? 1 : 0);
+        }
+        // TODO: For Vulkan, implement VSync toggle via Swapchain recreation
         m_Data.VSync = enabled;
     }
 

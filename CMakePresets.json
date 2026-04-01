@@ -47,20 +47,11 @@
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build"
     },
-    {
+{
       "name": "default",
       "displayName": "Windows (VS 2022 + vcpkg)",
       "description": "默认 Windows 开发/CI 预设：启用严格 warning 与 warnings-as-errors。",
       "inherits": "windows-vs2022"
-    },
-    {
-      "name": "vs2022-cuda",
-      "displayName": "Windows (VS 2022 + CUDA sidecar)",
-      "description": "Windows CUDA 编译验证预设：在默认质量门槛上启用 CUDA sidecar。",
-      "inherits": "windows-vs2022",
-      "cacheVariables": {
-        "ENGINE_ENABLE_CUDA": "ON"
-      }
     },
     {
       "name": "linux-default",
@@ -68,15 +59,7 @@
       "description": "Linux CI 预设：vcpkg + RelWithDebInfo + 严格 warning。",
       "inherits": ["quality-defaults", "vcpkg-base", "ninja-relwithdebinfo"]
     },
-    {
-      "name": "linux-cuda",
-      "displayName": "Linux (Ninja + vcpkg + CUDA)",
-      "description": "Linux CUDA 编译验证预设：在默认质量门槛上启用 CUDA sidecar。",
-      "inherits": ["quality-defaults", "vcpkg-base", "ninja-relwithdebinfo"],
-      "cacheVariables": {
-        "ENGINE_ENABLE_CUDA": "ON"
-      }
-    },
+
     {
       "name": "linux-sanitize",
       "displayName": "Linux (Ninja + vcpkg + ASAN/UBSAN)",

@@ -116,7 +116,6 @@ namespace Engine
             return;
 
         m_PostProcessingSettings = renderSettings.PostProcessing;
-        activeScene->SetPhysicsBackend(static_cast<PhysicsBackend>(renderSettings.PhysicsBackend));
         PushSSAOSettingsToRenderer(renderSettings);
 
         if (renderSettings.MSAASamples != m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples)
@@ -130,7 +129,6 @@ namespace Engine
         EditorRenderSettings renderSettings;
         renderSettings.PostProcessing = m_PostProcessingSettings;
         renderSettings.MSAASamples = m_ViewportController.GetHDRFramebuffer()->GetSpecification().Samples;
-        renderSettings.PhysicsBackend = activeScene ? static_cast<int>(activeScene->GetPhysicsBackend()) : 0;
         PullSSAOSettingsFromRenderer(renderSettings);
         return renderSettings;
     }

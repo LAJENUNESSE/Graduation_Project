@@ -37,9 +37,7 @@ namespace Engine
                       << "ShadowPass_GPU_ms,SceneRender_GPU_ms,ParticleCompute_GPU_ms,FluidCompute_GPU_ms,"
                       << "DrawCalls,Vertices,Triangles,"
                       << "FrameDominantStage,RefreshHz,RefreshPeriod_ms,Swap_MissedVBlank,Swap_BurstId,Swap_BurstLen,"
-                      << "Particle_CudaMapAll_CPU_ms,Particle_CudaUnmapAll_CPU_ms,Particle_CounterReadback_CPU_ms,"
-                      << "Particle_UsingCuda,Particle_AB_ForceGL,Particle_AB_DisableReadback,Swap_BurstActive,"
-                      << "VkExt_Active,VkExt_LastStatus,VkExt_CudaWaitMs,VkExt_CudaKernelMs,VkExt_VkSubmitMs\n";
+                      << "Swap_BurstActive\n";
             ENGINE_CORE_INFO("Performance CSV: {}", filename.str());
         }
         else
@@ -81,11 +79,7 @@ namespace Engine
         m_FluidActive = false;
 
         // Reset per-frame present diagnostics (窗口层会在 OnUpdate 重新写入)
-        m_SwapMissedVBlank             = 0;
-        m_ParticleUsingCuda            = false;
-        m_ParticleCudaMapAllCpuMs      = 0.0f;
-        m_ParticleCudaUnmapAllCpuMs    = 0.0f;
-        m_ParticleCounterReadbackCpuMs = 0.0f;
+        m_SwapMissedVBlank = 0;
     }
 
     void PerformanceMonitor::EndFrame()
@@ -139,17 +133,7 @@ namespace Engine
                       << m_Stats.DrawCalls << "," << m_Stats.Vertices << "," << m_Stats.Triangles << ","
                       << GetFrameDominantStageLabel() << "," << std::setprecision(3) << m_RefreshHz << ","
                       << std::setprecision(3) << m_RefreshPeriodMs << "," << m_SwapMissedVBlank << "," << m_SwapBurstId
-                      << "," << m_SwapBurstLen << "," << std::setprecision(3) << m_ParticleCudaMapAllCpuMs << ","
-                      << std::setprecision(3) << m_ParticleCudaUnmapAllCpuMs << "," << std::setprecision(3)
-                      << m_ParticleCounterReadbackCpuMs << "," << (m_ParticleUsingCuda ? 1 : 0) << ","
-                      << (m_ParticleABForceGL ? 1 : 0) << "," << (m_ParticleABDisableReadback ? 1 : 0) << ","
-                      << (m_SwapBurstActive ? 1 : 0);
-
-            // VkExtSkeleton diagnostics
-            auto vkextDiag = GetVkExtSkeletonDiagnostics();
-            m_CsvFile << "," << (vkextDiag.Active ? 1 : 0) << "," << static_cast<int>(vkextDiag.LastStatus) << ","
-                      << std::setprecision(3) << vkextDiag.CudaWaitMs << "," << std::setprecision(3)
-                      << vkextDiag.CudaKernelMs << "," << std::setprecision(3) << vkextDiag.VkSubmitMs << "\n";
+                      << "," << m_SwapBurstLen << "," << (m_SwapBurstActive ? 1 : 0) << "\n";
 
             // Flush every 60 frames (~1 second at 60fps)
             m_FlushCounter++;

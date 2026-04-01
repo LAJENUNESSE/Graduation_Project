@@ -17,7 +17,6 @@ namespace Engine
     {
         PostProcessingSettings PostProcessing;
         uint32_t               MSAASamples    = 1;
-        int                    PhysicsBackend = 0; // 0=手写, 1=Bullet3
 
         // SSAO 设置
         bool  SSAOEnabled    = false;

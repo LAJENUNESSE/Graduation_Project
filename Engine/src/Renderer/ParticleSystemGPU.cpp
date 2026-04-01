@@ -16,57 +16,17 @@
 #include <cstring>
 #include <string>
 
-#ifdef ENGINE_ENABLE_CUDA
-#include "Platform/CUDA/CudaGLInteropContext.h"
-#include "Platform/CUDA/CudaParticlePipeline.h"
-#include "Platform/CUDA/CudaParticleTypes.h"
-#include "Platform/CUDA/CudaSPHPipeline.h"
-#include "Platform/CUDA/CudaErrorHandling.h"
-#include "Platform/CUDA/CudaTimingHelper.h"
-#endif
-
-#ifdef ENGINE_ENABLE_VULKAN_CUDA_INTEROP
-#include "Core/VulkanExternalRuntime.h"
-#endif
-
 #include "Debug/PerformanceMonitor.h"
 
 namespace Engine
 {
 
     // =========================================================================
-    // CUDA Pimpl 实现（隐藏 CUDA 依赖）
+    // CudaImpl stub (CUDA removed)
     // =========================================================================
-#ifdef ENGINE_ENABLE_CUDA
     struct ParticleSystemGPU::CudaImpl
     {
-        ParticleSystemGPU::InteropBackend RequestedInteropBackend = ParticleSystemGPU::InteropBackend::CudaGL;
-        ParticleSystemGPU::InteropBackend ActiveInteropBackend    = ParticleSystemGPU::InteropBackend::CudaGL;
-
-        Scope<CudaGLInteropContext> Interop;
-        bool                        UseCudaPath   = false;
-        bool                        InitAttempted = false;
-        int                         SlotParticle  = -1;
-        int                         SlotDeadList  = -1;
-        int                         SlotAliveList = -1;
-        int                         SlotCounter   = -1;
-        int                         SlotIndirect  = -1;
-
-        CudaTimingHelper Timing;
-        void*            SPHCtx = nullptr;
-
-        ~CudaImpl()
-        {
-            if (SPHCtx)
-                CudaInterop::DestroySPHContext(SPHCtx);
-            Timing.Destroy();
-        }
-    };
-#else
-    struct ParticleSystemGPU::CudaImpl
-    {
-    }; // Empty stub when CUDA disabled
-#endif
+    }; // Empty stub
 
     namespace
     {
@@ -250,72 +210,6 @@ namespace Engine
 
             LogParticleABSummaryIfChanged("Init");
         }
-
-        struct ParticleInteropBackendRuntimeState
-        {
-            bool                              Initialized      = false;
-            bool                              RequestedFromEnv = false;
-            ParticleSystemGPU::InteropBackend RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
-        };
-
-        ParticleInteropBackendRuntimeState& GetParticleInteropBackendRuntimeState()
-        {
-            static ParticleInteropBackendRuntimeState state;
-            return state;
-        }
-
-        const char* InteropBackendToString(ParticleSystemGPU::InteropBackend backend)
-        {
-            switch (backend)
-            {
-            case ParticleSystemGPU::InteropBackend::VulkanExternal:
-                return "VulkanExternal";
-            case ParticleSystemGPU::InteropBackend::CudaGL:
-            default:
-                return "CudaGL";
-            }
-        }
-
-        void InitParticleInteropBackendFromEnvIfNeeded()
-        {
-            auto& state = GetParticleInteropBackendRuntimeState();
-            if (state.Initialized)
-                return;
-
-            state.Initialized = true;
-
-            const char* raw = std::getenv("ENGINE_PARTICLE_INTEROP_BACKEND");
-            if (raw && raw[0] != '\0')
-            {
-                state.RequestedFromEnv  = true;
-                const std::string token = NormalizeBoolToken(raw);
-                if (token == "gl" || token == "cuda-gl" || token == "cudagl" || token == "legacy")
-                {
-                    state.RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
-                }
-                else if (token == "vkext" || token == "vulkan" || token == "vulkan-external" ||
-                         token == "vulkan_external")
-                {
-                    state.RequestedBackend = ParticleSystemGPU::InteropBackend::VulkanExternal;
-                }
-                else
-                {
-                    ENGINE_CORE_WARN(
-                        "[Particle][Interop] Invalid ENGINE_PARTICLE_INTEROP_BACKEND='{}', fallback to CudaGL.", raw);
-                    state.RequestedBackend = ParticleSystemGPU::InteropBackend::CudaGL;
-                }
-            }
-
-            ENGINE_CORE_INFO("[Particle][Interop] requestedBackend={} source={}",
-                             InteropBackendToString(state.RequestedBackend),
-                             state.RequestedFromEnv ? "ENV" : "Default");
-        }
-
-        ParticleSystemGPU::InteropBackend ResolveParticleInteropBackend()
-        {
-            InitParticleInteropBackendFromEnvIfNeeded();
-            return GetParticleInteropBackendRuntimeState().RequestedBackend;
-        }
     } // namespace
 
     // Must match GLSL struct layout: 5 x vec4 = 80 bytes
@@ -345,35 +239,6 @@ namespace Engine
         uint32_t first;
         uint32_t baseInstance;
     };
-
-#ifdef ENGINE_ENABLE_CUDA
-    // 交叉验证 C++ 结构体与 CUDA 共享 POD 类型的内存布局一致性
-    static_assert(sizeof(GPUParticleData) == sizeof(CudaInterop::GPUParticle),
-                  "GPUParticleData / CudaInterop::GPUParticle size mismatch");
-    static_assert(sizeof(CounterData) == sizeof(CudaInterop::CounterData), "CounterData size mismatch");
-    static_assert(sizeof(IndirectDrawCommand) == sizeof(CudaInterop::IndirectDrawCommand),
-                  "IndirectDrawCommand size mismatch");
-
-    static_assert(offsetof(GPUParticleData, posAndLife) == offsetof(CudaInterop::GPUParticle, posAndLife), "");
-    static_assert(offsetof(GPUParticleData, velAndMaxLife) == offsetof(CudaInterop::GPUParticle, velAndMaxLife), "");
-    static_assert(offsetof(GPUParticleData, startColor) == offsetof(CudaInterop::GPUParticle, startColor), "");
-    static_assert(offsetof(GPUParticleData, endColor) == offsetof(CudaInterop::GPUParticle, endColor), "");
-    static_assert(offsetof(GPUParticleData, params) == offsetof(CudaInterop::GPUParticle, params), "");
-
-    static_assert(offsetof(CounterData, deadCount) == offsetof(CudaInterop::CounterData, deadCount), "");
-    static_assert(offsetof(CounterData, aliveCount) == offsetof(CudaInterop::CounterData, aliveCount), "");
-    static_assert(offsetof(CounterData, emitCount) == offsetof(CudaInterop::CounterData, emitCount), "");
-
-    // IndirectDrawCommand 字段名不同但 offset 必须匹配
-    static_assert(offsetof(IndirectDrawCommand, count) == offsetof(CudaInterop::IndirectDrawCommand, vertexCount), "");
-    static_assert(offsetof(IndirectDrawCommand, instanceCount) ==
-                      offsetof(CudaInterop::IndirectDrawCommand, instanceCount),
-                  "");
-    static_assert(offsetof(IndirectDrawCommand, first) == offsetof(CudaInterop::IndirectDrawCommand, firstVertex), "");
-    static_assert(offsetof(IndirectDrawCommand, baseInstance) ==
-                      offsetof(CudaInterop::IndirectDrawCommand, baseInstance),
-                  "");
-#endif
 
     ParticleSystemGPU::ParticleSystemGPU(uint32_t maxParticles)
         : m_MaxParticles(maxParticles), m_CudaImpl(CreateScope<CudaImpl>())
@@ -441,21 +306,27 @@ namespace Engine
 
     ParticleSystemGPU::InteropBackend ParticleSystemGPU::GetRequestedInteropBackend()
     {
-        return ResolveParticleInteropBackend();
+        // CUDA removed - always return CudaGL as placeholder
+        return InteropBackend::CudaGL;
     }
 
     const char* ParticleSystemGPU::InteropBackendLabel(InteropBackend backend)
     {
-        return InteropBackendToString(backend);
+        switch (backend)
+        {
+        case InteropBackend::VulkanExternal:
+            return "VulkanExternal (deprecated)";
+        case InteropBackend::CudaVulkan:
+            return "CudaVulkan";
+        case InteropBackend::CudaGL:
+        default:
+            return "CudaGL";
+        }
     }
 
     bool ParticleSystemGPU::IsVkExtSkeletonReady()
     {
-#ifdef ENGINE_ENABLE_VULKAN_CUDA_INTEROP
-        return VulkanExternalRuntime::Get().IsReady();
-#else
         return false;
-#endif
     }
 
     void ParticleSystemGPU::Init()
@@ -465,17 +336,6 @@ namespace Engine
 
         // 初始化并打印一次 AB 开关摘要（环境变量/默认值）
         (void)GetABConfigSnapshot();
-
-#ifdef ENGINE_ENABLE_CUDA
-        m_CudaImpl->RequestedInteropBackend = GetRequestedInteropBackend();
-        m_CudaImpl->ActiveInteropBackend    = m_CudaImpl->RequestedInteropBackend;
-        if (m_CudaImpl->RequestedInteropBackend == InteropBackend::VulkanExternal)
-        {
-            ENGINE_CORE_WARN("[Particle][Interop] VulkanExternal backend requested, but main renderer path is OpenGL; "
-                             "falling back to CudaGL interop.");
-            m_CudaImpl->ActiveInteropBackend = InteropBackend::CudaGL;
-        }
-#endif
 
         // Load compute shaders
         m_EmitShader       = Shader::Create("assets/shaders/particle_emit.glsl");
@@ -550,51 +410,6 @@ namespace Engine
         }
 
         m_Initialized = true;
-
-#ifdef ENGINE_ENABLE_CUDA
-        // ---- CUDA sidecar 初始化（一次性，失败后永久走 GL）----
-        if (!m_CudaImpl->InitAttempted)
-        {
-            m_CudaImpl->InitAttempted = true;
-            ENGINE_CORE_INFO("[Particle][Interop] active backend={}",
-                             InteropBackendLabel(m_CudaImpl->ActiveInteropBackend));
-            if (m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned() &&
-                CudaGLInteropContext::ProbeDeviceMatch())
-            {
-                m_CudaImpl->Interop = CreateScope<CudaGLInteropContext>();
-                m_CudaImpl->SlotParticle =
-                    m_CudaImpl->Interop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
-                m_CudaImpl->SlotDeadList = m_CudaImpl->Interop->RegisterBuffer(m_DeadList->GetRendererID(), "DeadList");
-                m_CudaImpl->SlotAliveList =
-                    m_CudaImpl->Interop->RegisterBuffer(m_AliveList->GetRendererID(), "AliveList");
-                m_CudaImpl->SlotCounter =
-                    m_CudaImpl->Interop->RegisterBuffer(m_CounterBuffer->GetRendererID(), "CounterBuffer");
-                m_CudaImpl->SlotIndirect =
-                    m_CudaImpl->Interop->RegisterBuffer(m_IndirectArgs->GetRendererID(), "IndirectArgs");
-
-                if (m_CudaImpl->SlotParticle >= 0 && m_CudaImpl->SlotDeadList >= 0 && m_CudaImpl->SlotAliveList >= 0 &&
-                    m_CudaImpl->SlotCounter >= 0 && m_CudaImpl->SlotIndirect >= 0)
-                {
-                    m_CudaImpl->UseCudaPath = true;
-                    m_CudaImpl->Timing.Init();
-                    m_CudaImpl->SPHCtx = CudaInterop::CreateSPHContext(m_MaxParticles, 64, MAX_RIGID_BODIES);
-                    if (!m_CudaImpl->SPHCtx)
-                        ENGINE_WARN("[Particle] CUDA CreateSPHContext failed; SPH will use GL compute.");
-                    ENGINE_INFO("[Particle] CUDA compute sidecar activated ({0} buffers registered).",
-                                m_CudaImpl->Interop->GetSlotCount());
-                }
-                else
-                {
-                    ENGINE_WARN("[Particle] CUDA buffer registration partially failed; falling back to GL compute.");
-                    m_CudaImpl->Interop.reset();
-                }
-            }
-            else
-            {
-                ENGINE_INFO("[Particle] No CUDA-capable device matching GL context; using GL compute path.");
-            }
-        }
-#endif
     }
 
     void ParticleSystemGPU::InitSPH(float smoothingRadius)
@@ -635,11 +450,7 @@ namespace Engine
             return;
 
         const ABConfigSnapshot abConfig = GetABConfigSnapshot();
-        auto&                  perf     = PerformanceMonitor::Get();
-        perf.SetParticleABDiagnostics(abConfig.ForceGL, abConfig.DisableCounterReadback);
 
-        float cudaMapAllCpuMs      = 0.0f;
-        float cudaUnmapAllCpuMs    = 0.0f;
         float counterReadbackCpuMs = 0.0f;
 
         const bool sphEnabled = emitter.SPH.Enabled && !m_DisableSPHOnDriver;
@@ -669,587 +480,261 @@ namespace Engine
 
         m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8); // emitCount
 
-#ifdef ENGINE_ENABLE_CUDA
-        // ---- CUDA compute sidecar path ----
-        bool cudaSucceeded = false;
-        if (!abConfig.ForceGL && m_CudaImpl->UseCudaPath &&
-            m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned())
+        // GL Compute path
+        PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
+
+        // Bind all buffers
+        m_ParticleBuffer->Bind(0);
+        m_DeadList->Bind(1);
+        m_AliveList->Bind(2);
+        m_CounterBuffer->Bind(3);
+        m_IndirectArgs->Bind(4);
+
+        // ---- Pass 1: Emit ----
+        if (emitCount > 0)
         {
-            if (sphEnabled && m_CudaImpl->SPHCtx)
-            {
-                // ===== CUDA SPH 路径: GL Emit+Compact → CUDA SPH → GL RenderArgs =====
-                PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
+            m_EmitShader->Bind();
+            m_EmitShader->SetFloat3("u_EmitterPos", emitterPos);
+            m_EmitShader->SetFloat3("u_EmitDirection", emitter.EmitDirection);
+            m_EmitShader->SetFloat("u_EmitAngle", glm::radians(emitter.EmitAngle));
+            m_EmitShader->SetFloat("u_LifeMin", emitter.LifeMin);
+            m_EmitShader->SetFloat("u_LifeMax", emitter.LifeMax);
+            m_EmitShader->SetFloat("u_SpeedMin", emitter.SpeedMin);
+            m_EmitShader->SetFloat("u_SpeedMax", emitter.SpeedMax);
+            m_EmitShader->SetFloat("u_SizeStart", emitter.SizeStart);
+            m_EmitShader->SetFloat("u_SizeEnd", emitter.SizeEnd);
+            m_EmitShader->SetFloat4("u_StartColor", emitter.ColorStart);
+            m_EmitShader->SetFloat4("u_EndColor", emitter.ColorEnd);
+            m_EmitShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
 
-                // ---- Phase 1 (GL): Emit + Compact + Counter 回读 ----
-                m_ParticleBuffer->Bind(0);
-                m_DeadList->Bind(1);
-                m_AliveList->Bind(2);
-                m_CounterBuffer->Bind(3);
-                m_IndirectArgs->Bind(4);
+            // Time-based seed for RNG
+            m_TotalTime += dt;
+            m_EmitShader->SetFloat("u_Time", m_TotalTime);
 
-                if (emitCount > 0)
-                {
-                    m_EmitShader->Bind();
-                    m_EmitShader->SetFloat3("u_EmitterPos", emitterPos);
-                    m_EmitShader->SetFloat3("u_EmitDirection", emitter.EmitDirection);
-                    m_EmitShader->SetFloat("u_EmitAngle", glm::radians(emitter.EmitAngle));
-                    m_EmitShader->SetFloat("u_LifeMin", emitter.LifeMin);
-                    m_EmitShader->SetFloat("u_LifeMax", emitter.LifeMax);
-                    m_EmitShader->SetFloat("u_SpeedMin", emitter.SpeedMin);
-                    m_EmitShader->SetFloat("u_SpeedMax", emitter.SpeedMax);
-                    m_EmitShader->SetFloat("u_SizeStart", emitter.SizeStart);
-                    m_EmitShader->SetFloat("u_SizeEnd", emitter.SizeEnd);
-                    m_EmitShader->SetFloat4("u_StartColor", emitter.ColorStart);
-                    m_EmitShader->SetFloat4("u_EndColor", emitter.ColorEnd);
-                    m_EmitShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
-                    m_TotalTime += dt;
-                    m_EmitShader->SetFloat("u_Time", m_TotalTime);
-
-                    uint32_t groups = (emitCount + 63) / 64;
-                    RenderCommand::DispatchCompute(groups);
-                    RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-                }
-
-                // Compact: 重建 alive/dead lists
-                {
-                    CounterData zeroC{};
-                    m_CounterBuffer->SetData(&zeroC, sizeof(CounterData), 0);
-                    RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                    m_CompactShader->Bind();
-                    m_CompactShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
-                    uint32_t compactGroups = (m_MaxParticles + 255) / 256;
-                    RenderCommand::DispatchCompute(compactGroups);
-                    RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                    // 不做同步回读（glGetBufferSubData 会导致 ~28ms GPU pipeline stall）。
-                    // 使用上一帧异步回读的 m_LastAliveCount，1 帧延迟对 SPH dispatch 可接受。
-                }
-
-                // ---- Phase 2 (CUDA): SPH 核心计算 ----
-                if (m_LastAliveCount > 0)
-                {
-                    // glFlush 确保 GL 命令提交到驱动队列，
-                    // cudaGraphicsMapResources 负责跨 API 同步。
-                    glFlush();
-
-                    const auto mapStart = std::chrono::high_resolution_clock::now();
-                    const bool mapOk    = m_CudaImpl->Interop->MapAll();
-                    cudaMapAllCpuMs +=
-                        std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - mapStart)
-                            .count();
-                    if (mapOk)
-                    {
-                        void* stream       = m_CudaImpl->Interop->GetStream();
-                        void* devParticles = m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotParticle);
-                        CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStart, stream);
-
-                        SPHKernelParams kp       = SPHKernelParams::Compute(emitter.SPH.SmoothingRadius);
-                        float           cellSize = 2.0f * kp.h;
-
-                        // Grid Build
-                        CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles, m_LastAliveCount, 64,
-                                                        cellSize, stream);
-
-                        // SPH 参数
-                        CudaInterop::SPHParams p{};
-                        p.smoothingRadius = kp.h;
-                        p.poly6Coeff      = kp.poly6Coeff;
-                        p.spikyCoeff      = kp.spikyCoeff;
-                        p.particleMass    = emitter.SPH.ParticleMass;
-                        p.restDensity     = emitter.SPH.RestDensity;
-                        p.gasConstant     = emitter.SPH.GasConstant;
-                        p.viscosity       = emitter.SPH.Viscosity;
-                        p.surfaceTension  = emitter.SPH.SurfaceTension;
-                        p.deltaTime       = clampedDt;
-                        p.gridSize        = 64;
-                        p.cellSize        = cellSize;
-                        p.aliveCount      = static_cast<int>(m_LastAliveCount);
-                        p.gravity[0]      = emitter.Gravity.x;
-                        p.gravity[1]      = emitter.Gravity.y;
-                        p.gravity[2]      = emitter.Gravity.z;
-                        p.warmupTime      = SPH_WARMUP_TIME;
-
-                        // 刚体数据：CPU→CUDA 上传
-                        uint32_t cudaRigidBodyCount = 0;
-                        if (emitter.SPH.RigidBodyCoupling && registry)
-                        {
-                            auto bodies        = CollectRigidBodies(registry, MAX_RIGID_BODIES,
-                                                                    RigidBodyUploadFilter::RequireRigidBodyComponent);
-                            cudaRigidBodyCount = static_cast<uint32_t>(bodies.size());
-                            if (!bodies.empty())
-                                CudaInterop::SPHUploadRigidBodies(m_CudaImpl->SPHCtx, bodies.data(),
-                                                                  cudaRigidBodyCount);
-                        }
-
-                        // Density
-                        CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, p, stream);
-
-                        CudaInterop::PCISPHIterParams ip{};
-                        ip.pcisphDelta = SPHKernelMath::ComputePCISPHDelta(
-                            emitter.SPH.SmoothingRadius, emitter.SPH.ParticleMass, emitter.SPH.RestDensity, clampedDt);
-                        ip.boundaryStiffness = emitter.SPH.BoundaryStiffness;
-                        ip.boundaryDamping   = emitter.SPH.BoundaryDamping;
-                        ip.rigidBodyCount    = static_cast<int>(cudaRigidBodyCount);
-                        ip.usePredictedPos   = 0;
-
-                        if (emitter.SPH.PCISPHEnabled)
-                        {
-                            // PCISPH 路径
-                            CudaInterop::LaunchPCISPHInit(m_CudaImpl->SPHCtx, devParticles, p, stream);
-                            int iterations = std::clamp(emitter.SPH.PCISPHIterations, 1, 8);
-                            for (int iter = 0; iter < iterations; ++iter)
-                            {
-                                if (iter > 0)
-                                    CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles, m_LastAliveCount,
-                                                                    64, cellSize, stream, true);
-                                CudaInterop::LaunchPCISPHPredict(m_CudaImpl->SPHCtx, devParticles, clampedDt,
-                                                                 static_cast<int>(m_LastAliveCount), stream);
-                                ip.usePredictedPos = (iter > 0) ? 1 : 0;
-                                CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, p, ip, stream);
-                                CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, p, ip, stream);
-                            }
-                            CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles,
-                                                           static_cast<int>(m_LastAliveCount), stream);
-                        }
-                        else
-                        {
-                            // WCSPH 路径
-                            CudaInterop::LaunchSPHForce(m_CudaImpl->SPHCtx, devParticles, p, ip, stream);
-                        }
-
-                        // SPH Simulate: gravity + damping + position integration
-                        CudaInterop::SPHSimulateParams sp{};
-                        sp.deltaTime     = clampedDt;
-                        sp.damping       = emitter.Damping;
-                        sp.gravity[0]    = emitter.SPH.PCISPHEnabled ? 0.0f : emitter.Gravity.x;
-                        sp.gravity[1]    = emitter.SPH.PCISPHEnabled ? 0.0f : emitter.Gravity.y;
-                        sp.gravity[2]    = emitter.SPH.PCISPHEnabled ? 0.0f : emitter.Gravity.z;
-                        sp.useBoundary   = 0;
-                        sp.particleCount = static_cast<int>(m_LastAliveCount);
-                        CudaInterop::LaunchSPHSimulate(devParticles, sp, stream);
-
-                        // Life 管理：递减 life + 重建 alive/dead lists
-                        // SPH 的 FluidSimulateKernel 不处理 life，需要单独处理
-                        {
-                            CudaInterop::LaunchLifeUpdate(
-                                devParticles, m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotDeadList),
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotAliveList),
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter), clampedDt,
-                                m_MaxParticles, stream);
-                            // RenderArgs 也在 CUDA 侧完成
-                            CudaInterop::LaunchRenderArgs(
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter),
-                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotIndirect), stream);
-                        }
-
-                        CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStop, stream);
-                        const auto unmapStart = std::chrono::high_resolution_clock::now();
-                        m_CudaImpl->Interop->UnmapAll();
-                        cudaUnmapAllCpuMs += std::chrono::duration<float, std::milli>(
-                                                 std::chrono::high_resolution_clock::now() - unmapStart)
-                                                 .count();
-
-                        if (CudaInterop::IsCudaPoisoned())
-                        {
-                            ENGINE_WARN("[Particle] CUDA poisoned during SPH compute ({}); falling back to GL.",
-                                        CudaInterop::GetCudaPoisonReason());
-                            m_CudaImpl->UseCudaPath = false;
-                        }
-                        else
-                        {
-                            if (m_CudaImpl->Timing.HasPrevTiming && m_CudaImpl->Timing.PrevStop)
-                            {
-                                float ms = CudaInterop::CudaEventElapsedMs(m_CudaImpl->Timing.PrevStart,
-                                                                           m_CudaImpl->Timing.PrevStop);
-                                if (ms >= 0.0f)
-                                    PerformanceMonitor::Get().SetParticleComputeCudaMs(ms);
-                            }
-                            m_CudaImpl->Timing.SwapEvents();
-                        }
-                    }
-                    else
-                    {
-                        ENGINE_WARN("[Particle] CUDA MapAll failed ({}); permanently falling back to GL compute.",
-                                    CudaInterop::GetCudaPoisonReason());
-                        m_CudaImpl->UseCudaPath = false;
-                    }
-                }
-
-                // ---- Phase 3: 计时结束 ----
-                // RenderArgs 已在 CUDA 侧的 LifeUpdate 后完成
-                PerformanceMonitor::Get().GetParticleComputeGPUTimer().End();
-                cudaSucceeded = true;
-            }
-            else if (!sphEnabled)
-            {
-                const auto mapStart = std::chrono::high_resolution_clock::now();
-                const bool mapOk    = m_CudaImpl->Interop->MapAll();
-                cudaMapAllCpuMs +=
-                    std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - mapStart)
-                        .count();
-                if (mapOk)
-                {
-                    void* stream = m_CudaImpl->Interop->GetStream();
-                    CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStart, stream);
-
-                    // Emit
-                    if (emitCount > 0)
-                    {
-                        CudaInterop::EmitParams ep{};
-                        ep.emitterPos[0]    = emitterPos.x;
-                        ep.emitterPos[1]    = emitterPos.y;
-                        ep.emitterPos[2]    = emitterPos.z;
-                        ep.emitDirection[0] = emitter.EmitDirection.x;
-                        ep.emitDirection[1] = emitter.EmitDirection.y;
-                        ep.emitDirection[2] = emitter.EmitDirection.z;
-                        ep.emitAngle        = glm::radians(emitter.EmitAngle);
-                        ep.lifeMin          = emitter.LifeMin;
-                        ep.lifeMax          = emitter.LifeMax;
-                        ep.speedMin         = emitter.SpeedMin;
-                        ep.speedMax         = emitter.SpeedMax;
-                        ep.sizeStart        = emitter.SizeStart;
-                        ep.sizeEnd          = emitter.SizeEnd;
-                        ep.startColor[0]    = emitter.ColorStart.r;
-                        ep.startColor[1]    = emitter.ColorStart.g;
-                        ep.startColor[2]    = emitter.ColorStart.b;
-                        ep.startColor[3]    = emitter.ColorStart.a;
-                        ep.endColor[0]      = emitter.ColorEnd.r;
-                        ep.endColor[1]      = emitter.ColorEnd.g;
-                        ep.endColor[2]      = emitter.ColorEnd.b;
-                        ep.endColor[3]      = emitter.ColorEnd.a;
-                        m_TotalTime += dt;
-                        ep.time         = m_TotalTime;
-                        ep.maxParticles = m_MaxParticles;
-                        ep.emitCount    = emitCount;
-
-                        CudaInterop::LaunchEmit(m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotParticle),
-                                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotDeadList),
-                                                m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter), ep,
-                                                stream);
-                    }
-
-                    // Simulate
-                    {
-                        CudaInterop::SimulateParams sp{};
-                        sp.deltaTime    = std::min(dt, 0.05f);
-                        sp.gravity[0]   = emitter.Gravity.x;
-                        sp.gravity[1]   = emitter.Gravity.y;
-                        sp.gravity[2]   = emitter.Gravity.z;
-                        sp.damping      = emitter.Damping;
-                        sp.maxParticles = m_MaxParticles;
-
-                        CudaInterop::LaunchSimulate(m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotParticle),
-                                                    m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotDeadList),
-                                                    m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotAliveList),
-                                                    m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter), sp,
-                                                    stream);
-                    }
-
-                    // Render Args
-                    CudaInterop::LaunchRenderArgs(m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotCounter),
-                                                  m_CudaImpl->Interop->GetMappedPointer(m_CudaImpl->SlotIndirect),
-                                                  stream);
-
-                    CudaInterop::RecordCudaEvent(m_CudaImpl->Timing.EventStop, stream);
-                    const auto unmapStart = std::chrono::high_resolution_clock::now();
-                    m_CudaImpl->Interop->UnmapAll();
-                    cudaUnmapAllCpuMs +=
-                        std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - unmapStart)
-                            .count();
-
-                    if (CudaInterop::IsCudaPoisoned())
-                    {
-                        ENGINE_WARN(
-                            "[Particle] CUDA poisoned during compute ({}); permanently falling back to GL compute.",
-                            CudaInterop::GetCudaPoisonReason());
-                        m_CudaImpl->UseCudaPath = false;
-                    }
-                    else
-                    {
-                        // 延迟查询：读取上一帧的计时结果（此时 GPU 已完成，非阻塞）
-                        if (m_CudaImpl->Timing.HasPrevTiming && m_CudaImpl->Timing.PrevStop)
-                        {
-                            float ms = CudaInterop::CudaEventElapsedMs(m_CudaImpl->Timing.PrevStart,
-                                                                       m_CudaImpl->Timing.PrevStop);
-                            if (ms >= 0.0f)
-                                PerformanceMonitor::Get().SetParticleComputeCudaMs(ms);
-                        }
-                        // 交换事件对：当前帧的 start/stop 变成下帧待查询的 prev
-                        m_CudaImpl->Timing.SwapEvents();
-                        cudaSucceeded = true;
-                    }
-                }
-                else
-                {
-                    ENGINE_WARN("[Particle] CUDA MapAll failed ({}); permanently falling back to GL compute.",
-                                CudaInterop::GetCudaPoisonReason());
-                    m_CudaImpl->UseCudaPath = false;
-                }
-            }
+            uint32_t groups = (emitCount + 63) / 64;
+            RenderCommand::DispatchCompute(groups);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
         }
-        if (!cudaSucceeded)
-#endif
-        { // GL Compute path
-            PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
 
-            // Bind all buffers
-            m_ParticleBuffer->Bind(0);
-            m_DeadList->Bind(1);
-            m_AliveList->Bind(2);
-            m_CounterBuffer->Bind(3);
-            m_IndirectArgs->Bind(4);
+        // ---- Pass 1.5: Compact alive/dead lists (fresh for SPH) ----
+        // emit 后立即重建 alive list，确保 SPH 看到新生粒子
+        if (sphEnabled)
+        {
+            CounterData zero{};
+            m_CounterBuffer->SetData(&zero, sizeof(CounterData), 0);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-            // ---- Pass 1: Emit ----
-            if (emitCount > 0)
+            m_CompactShader->Bind();
+            m_CompactShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
+            uint32_t compactGroups = (m_MaxParticles + 255) / 256;
+            RenderCommand::DispatchCompute(compactGroups);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+            // 不做同步回读（glGetBufferSubData 会导致 ~28ms GPU pipeline stall）。
+            // 使用上一帧异步回读的 m_LastAliveCount，1 帧延迟对 SPH dispatch 可接受。
+        }
+
+        // ---- SPH passes (only when SPHEnabled) ----
+        if (sphEnabled)
+        {
+            // Lazy-init spatial hash grid
+            if (!m_SPHInitialized)
+                InitSPH(emitter.SPH.SmoothingRadius);
+
+            // compact 已重建 alive list，m_LastAliveCount 是当前帧精确值
+            if (m_LastAliveCount > 0)
             {
-                m_EmitShader->Bind();
-                m_EmitShader->SetFloat3("u_EmitterPos", emitterPos);
-                m_EmitShader->SetFloat3("u_EmitDirection", emitter.EmitDirection);
-                m_EmitShader->SetFloat("u_EmitAngle", glm::radians(emitter.EmitAngle));
-                m_EmitShader->SetFloat("u_LifeMin", emitter.LifeMin);
-                m_EmitShader->SetFloat("u_LifeMax", emitter.LifeMax);
-                m_EmitShader->SetFloat("u_SpeedMin", emitter.SpeedMin);
-                m_EmitShader->SetFloat("u_SpeedMax", emitter.SpeedMax);
-                m_EmitShader->SetFloat("u_SizeStart", emitter.SizeStart);
-                m_EmitShader->SetFloat("u_SizeEnd", emitter.SizeEnd);
-                m_EmitShader->SetFloat4("u_StartColor", emitter.ColorStart);
-                m_EmitShader->SetFloat4("u_EndColor", emitter.ColorEnd);
-                m_EmitShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
+                float cellSize = m_Grid.GetCellSize();
+                int   gridSize = static_cast<int>(m_Grid.GetGridSize());
 
-                // Time-based seed for RNG
-                m_TotalTime += dt;
-                m_EmitShader->SetFloat("u_Time", m_TotalTime);
+                // CPU 侧预计算 SPH kernel 常量（避免 GPU 每粒子每邻居重复计算）
+                SPHKernelParams kp = SPHKernelParams::Compute(emitter.SPH.SmoothingRadius);
 
-                uint32_t groups = (emitCount + 63) / 64;
-                RenderCommand::DispatchCompute(groups);
-                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-            }
+                // Pass 2a: Build Spatial Hash Grid
+                m_Grid.Build(m_LastAliveCount);
 
-            // ---- Pass 1.5: Compact alive/dead lists (fresh for SPH) ----
-            // emit 后立即重建 alive list，确保 SPH 看到新生粒子
-            if (sphEnabled)
-            {
-                CounterData zero{};
-                m_CounterBuffer->SetData(&zero, sizeof(CounterData), 0);
+                // Pass 2b: SPH Density
+                m_SPHShaders.DensityShader->Bind();
+                m_SPHShaders.DensityShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                m_SPHShaders.DensityShader->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
+                m_SPHShaders.DensityShader->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
+                m_SPHShaders.DensityShader->SetFloat("u_RestDensity", emitter.SPH.RestDensity);
+                m_SPHShaders.DensityShader->SetFloat("u_GasConstant", emitter.SPH.GasConstant);
+                m_SPHShaders.DensityShader->SetInt("u_GridSize", gridSize);
+                m_SPHShaders.DensityShader->SetFloat("u_CellSize", cellSize);
+                m_SPHShaders.DensityShader->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
+
+                uint32_t sphGroups = (m_LastAliveCount + 255) / 256;
+                RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-                m_CompactShader->Bind();
-                m_CompactShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
-                uint32_t compactGroups = (m_MaxParticles + 255) / 256;
-                RenderCommand::DispatchCompute(compactGroups);
-                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                // 不做同步回读（glGetBufferSubData 会导致 ~28ms GPU pipeline stall）。
-                // 使用上一帧异步回读的 m_LastAliveCount，1 帧延迟对 SPH dispatch 可接受。
-            }
-
-            // ---- SPH passes (only when SPHEnabled) ----
-            if (sphEnabled)
-            {
-                // Lazy-init spatial hash grid
-                if (!m_SPHInitialized)
-                    InitSPH(emitter.SPH.SmoothingRadius);
-
-                // compact 已重建 alive list，m_LastAliveCount 是当前帧精确值
-                if (m_LastAliveCount > 0)
+                if (emitter.SPH.PCISPHEnabled)
                 {
-                    float cellSize = m_Grid.GetCellSize();
-                    int   gridSize = static_cast<int>(m_Grid.GetGridSize());
+                    // ---- PCISPH 路径 ----
+                    InitPCISPH();
 
-                    // CPU 侧预计算 SPH kernel 常量（避免 GPU 每粒子每邻居重复计算）
-                    SPHKernelParams kp = SPHKernelParams::Compute(emitter.SPH.SmoothingRadius);
+                    uint32_t rigidBodyCount = 0;
+                    if (emitter.SPH.RigidBodyCoupling && registry)
+                    {
+                        InitRigidBodyBuffer();
+                        rigidBodyCount =
+                            UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                      RigidBodyUploadFilter::RequireRigidBodyComponent);
+                    }
 
-                    // Pass 2a: Build Spatial Hash Grid
-                    m_Grid.Build(m_LastAliveCount);
+                    m_PCISPHBuffer->Bind(1);
+                    if (m_RigidBodyBuffer)
+                        m_RigidBodyBuffer->Bind(3);
 
-                    // Pass 2b: SPH Density
-                    m_SPHShaders.DensityShader->Bind();
-                    m_SPHShaders.DensityShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                    m_SPHShaders.DensityShader->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
-                    m_SPHShaders.DensityShader->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
-                    m_SPHShaders.DensityShader->SetFloat("u_RestDensity", emitter.SPH.RestDensity);
-                    m_SPHShaders.DensityShader->SetFloat("u_GasConstant", emitter.SPH.GasConstant);
-                    m_SPHShaders.DensityShader->SetInt("u_GridSize", gridSize);
-                    m_SPHShaders.DensityShader->SetFloat("u_CellSize", cellSize);
-                    m_SPHShaders.DensityShader->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
-
-                    uint32_t sphGroups = (m_LastAliveCount + 255) / 256;
+                    // PCISPH Init
+                    m_SPHShaders.PCISPHInit->Bind();
+                    m_SPHShaders.PCISPHInit->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_SPHShaders.PCISPHInit->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
+                    m_SPHShaders.PCISPHInit->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
+                    m_SPHShaders.PCISPHInit->SetFloat("u_Viscosity", emitter.SPH.Viscosity);
+                    m_SPHShaders.PCISPHInit->SetFloat("u_DeltaTime", clampedDt);
+                    m_SPHShaders.PCISPHInit->SetInt("u_GridSize", gridSize);
+                    m_SPHShaders.PCISPHInit->SetFloat("u_CellSize", cellSize);
+                    m_SPHShaders.PCISPHInit->SetFloat3("u_Gravity", emitter.Gravity);
+                    m_SPHShaders.PCISPHInit->SetFloat("u_SurfaceTension", emitter.SPH.SurfaceTension);
+                    m_SPHShaders.PCISPHInit->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
                     RenderCommand::DispatchCompute(sphGroups);
                     RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-                    if (emitter.SPH.PCISPHEnabled)
+                    // 循环前一次性设置所有三个 shader 的 uniform（跨 glUseProgram 保持）
+                    int iterations = std::clamp(emitter.SPH.PCISPHIterations, 1, 8);
+
+                    m_SPHShaders.PCISPHPredict->Bind();
+                    m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_SPHShaders.PCISPHPredict->SetFloat("u_DeltaTime", clampedDt);
+
+                    m_SPHShaders.PCISPHDensity->Bind();
+                    m_SPHShaders.PCISPHDensity->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_RestDensity", emitter.SPH.RestDensity);
+                    m_SPHShaders.PCISPHDensity->SetFloat(
+                        "u_PCISPHDelta",
+                        SPHKernelMath::ComputePCISPHDelta(emitter.SPH.SmoothingRadius, emitter.SPH.ParticleMass,
+                                                          emitter.SPH.RestDensity, clampedDt));
+                    m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
+                    m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
+
+                    m_SPHShaders.PCISPHForce->Bind();
+                    m_SPHShaders.PCISPHForce->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_SPHShaders.PCISPHForce->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_DeltaTime", clampedDt);
+                    m_SPHShaders.PCISPHForce->SetInt("u_GridSize", gridSize);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_CellSize", cellSize);
+                    m_SPHShaders.PCISPHForce->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
+                    m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryStiffness", emitter.SPH.BoundaryStiffness);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.SPH.BoundaryDamping);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
+                    m_SPHShaders.PCISPHForce->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
+
+                    // 单帧内完成所有 PCISPH 迭代（与 FluidSystemGPU 一致）
+                    // 自适应 grid 策略：迭代 0 复用原始 grid，迭代 1+ 用预测位置重建
+                    for (int iter = 0; iter < iterations; iter++)
                     {
-                        // ---- PCISPH 路径 ----
-                        InitPCISPH();
-
-                        uint32_t rigidBodyCount = 0;
-                        if (emitter.SPH.RigidBodyCoupling && registry)
+                        // 迭代 1+：用预测位置重建空间哈希 grid
+                        if (iter > 0)
                         {
-                            InitRigidBodyBuffer();
-                            rigidBodyCount =
-                                UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                                          RigidBodyUploadFilter::RequireRigidBodyComponent);
+                            m_PCISPHBuffer->Bind(9); // binding 9: PCISPHData for predicted pos
+                            m_Grid.Build(m_LastAliveCount, true);
+                            // 重新绑定 PCISPH 使用的 buffer slots
+                            m_ParticleBuffer->Bind(0);
+                            m_AliveList->Bind(2);
+                            m_PCISPHBuffer->Bind(1);
+                            if (m_RigidBodyBuffer)
+                                m_RigidBodyBuffer->Bind(3);
                         }
-
-                        m_PCISPHBuffer->Bind(1);
-                        if (m_RigidBodyBuffer)
-                            m_RigidBodyBuffer->Bind(3);
-
-                        // PCISPH Init
-                        m_SPHShaders.PCISPHInit->Bind();
-                        m_SPHShaders.PCISPHInit->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_SPHShaders.PCISPHInit->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
-                        m_SPHShaders.PCISPHInit->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
-                        m_SPHShaders.PCISPHInit->SetFloat("u_Viscosity", emitter.SPH.Viscosity);
-                        m_SPHShaders.PCISPHInit->SetFloat("u_DeltaTime", clampedDt);
-                        m_SPHShaders.PCISPHInit->SetInt("u_GridSize", gridSize);
-                        m_SPHShaders.PCISPHInit->SetFloat("u_CellSize", cellSize);
-                        m_SPHShaders.PCISPHInit->SetFloat3("u_Gravity", emitter.Gravity);
-                        m_SPHShaders.PCISPHInit->SetFloat("u_SurfaceTension", emitter.SPH.SurfaceTension);
-                        m_SPHShaders.PCISPHInit->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                        // 循环前一次性设置所有三个 shader 的 uniform（跨 glUseProgram 保持）
-                        int iterations = std::clamp(emitter.SPH.PCISPHIterations, 1, 8);
 
                         m_SPHShaders.PCISPHPredict->Bind();
-                        m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_SPHShaders.PCISPHPredict->SetFloat("u_DeltaTime", clampedDt);
+                        RenderCommand::DispatchCompute(sphGroups);
+                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
                         m_SPHShaders.PCISPHDensity->Bind();
-                        m_SPHShaders.PCISPHDensity->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_SPHShaders.PCISPHDensity->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
-                        m_SPHShaders.PCISPHDensity->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
-                        m_SPHShaders.PCISPHDensity->SetFloat("u_RestDensity", emitter.SPH.RestDensity);
-                        m_SPHShaders.PCISPHDensity->SetFloat(
-                            "u_PCISPHDelta",
-                            SPHKernelMath::ComputePCISPHDelta(emitter.SPH.SmoothingRadius, emitter.SPH.ParticleMass,
-                                                              emitter.SPH.RestDensity, clampedDt));
-                        m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
-                        m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
-                        m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
+                        RenderCommand::DispatchCompute(sphGroups);
+                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
                         m_SPHShaders.PCISPHForce->Bind();
-                        m_SPHShaders.PCISPHForce->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_SPHShaders.PCISPHForce->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
-                        m_SPHShaders.PCISPHForce->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
-                        m_SPHShaders.PCISPHForce->SetFloat("u_DeltaTime", clampedDt);
-                        m_SPHShaders.PCISPHForce->SetInt("u_GridSize", gridSize);
-                        m_SPHShaders.PCISPHForce->SetFloat("u_CellSize", cellSize);
-                        m_SPHShaders.PCISPHForce->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
-                        m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryStiffness", emitter.SPH.BoundaryStiffness);
-                        m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.SPH.BoundaryDamping);
-                        m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
-                        m_SPHShaders.PCISPHForce->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
-
-                        // 单帧内完成所有 PCISPH 迭代（与 FluidSystemGPU 一致）
-                        // 自适应 grid 策略：迭代 0 复用原始 grid，迭代 1+ 用预测位置重建
-                        for (int iter = 0; iter < iterations; iter++)
-                        {
-                            // 迭代 1+：用预测位置重建空间哈希 grid
-                            if (iter > 0)
-                            {
-                                m_PCISPHBuffer->Bind(9); // binding 9: PCISPHData for predicted pos
-                                m_Grid.Build(m_LastAliveCount, true);
-                                // 重新绑定 PCISPH 使用的 buffer slots
-                                m_ParticleBuffer->Bind(0);
-                                m_AliveList->Bind(2);
-                                m_PCISPHBuffer->Bind(1);
-                                if (m_RigidBodyBuffer)
-                                    m_RigidBodyBuffer->Bind(3);
-                            }
-
-                            m_SPHShaders.PCISPHPredict->Bind();
-                            RenderCommand::DispatchCompute(sphGroups);
-                            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                            m_SPHShaders.PCISPHDensity->Bind();
-                            RenderCommand::DispatchCompute(sphGroups);
-                            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-
-                            m_SPHShaders.PCISPHForce->Bind();
-                            RenderCommand::DispatchCompute(sphGroups);
-                            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-                        }
-
-                        // 所有迭代完成，apply v* → particle.vel
-                        m_SPHShaders.PCISPHApply->Bind();
-                        m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
                         RenderCommand::DispatchCompute(sphGroups);
                         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
                     }
-                    else
-                    {
-                        // ---- 现有 WCSPH 路径: SPH Force ----
-                        m_SPHShaders.ForceShader->Bind();
-                        m_SPHShaders.ForceShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
-                        m_SPHShaders.ForceShader->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
-                        m_SPHShaders.ForceShader->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
-                        m_SPHShaders.ForceShader->SetFloat("u_Viscosity", emitter.SPH.Viscosity);
-                        m_SPHShaders.ForceShader->SetFloat("u_DeltaTime", clampedDt);
-                        m_SPHShaders.ForceShader->SetInt("u_GridSize", gridSize);
-                        m_SPHShaders.ForceShader->SetFloat("u_CellSize", cellSize);
-                        // 表面张力 + 刚体耦合 uniform
-                        m_SPHShaders.ForceShader->SetFloat("u_SurfaceTension", emitter.SPH.SurfaceTension);
-                        m_SPHShaders.ForceShader->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
-                        m_SPHShaders.ForceShader->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
 
-                        uint32_t rigidBodyCount = 0;
-                        if (emitter.SPH.RigidBodyCoupling && registry)
-                        {
-                            InitRigidBodyBuffer();
-                            rigidBodyCount =
-                                UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                                          RigidBodyUploadFilter::RequireRigidBodyComponent);
-                            m_RigidBodyBuffer->Bind(3);
-                        }
-                        m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
-                        m_SPHShaders.ForceShader->SetFloat("u_BoundaryStiffness", emitter.SPH.BoundaryStiffness);
-                        m_SPHShaders.ForceShader->SetFloat("u_BoundaryDamping", emitter.SPH.BoundaryDamping);
-
-                        RenderCommand::DispatchCompute(sphGroups);
-                        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-                    }
+                    // 所有迭代完成，apply v* → particle.vel
+                    m_SPHShaders.PCISPHApply->Bind();
+                    m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    RenderCommand::DispatchCompute(sphGroups);
+                    RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
                 }
+                else
+                {
+                    // ---- 现有 WCSPH 路径: SPH Force ----
+                    m_SPHShaders.ForceShader->Bind();
+                    m_SPHShaders.ForceShader->SetInt("u_AliveCount", static_cast<int>(m_LastAliveCount));
+                    m_SPHShaders.ForceShader->SetFloat("u_SmoothingRadius", emitter.SPH.SmoothingRadius);
+                    m_SPHShaders.ForceShader->SetFloat("u_ParticleMass", emitter.SPH.ParticleMass);
+                    m_SPHShaders.ForceShader->SetFloat("u_Viscosity", emitter.SPH.Viscosity);
+                    m_SPHShaders.ForceShader->SetFloat("u_DeltaTime", clampedDt);
+                    m_SPHShaders.ForceShader->SetInt("u_GridSize", gridSize);
+                    m_SPHShaders.ForceShader->SetFloat("u_CellSize", cellSize);
+                    // 表面张力 + 刚体耦合 uniform
+                    m_SPHShaders.ForceShader->SetFloat("u_SurfaceTension", emitter.SPH.SurfaceTension);
+                    m_SPHShaders.ForceShader->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
+                    m_SPHShaders.ForceShader->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
 
-                // Rebind DeadList(1), CounterBuffer(3), IndirectArgs(4) — Grid/PCISPH passes
-                // temporarily used these binding slots.
-                m_DeadList->Bind(1);
-                m_CounterBuffer->Bind(3);
-                m_IndirectArgs->Bind(4);
+                    uint32_t rigidBodyCount = 0;
+                    if (emitter.SPH.RigidBodyCoupling && registry)
+                    {
+                        InitRigidBodyBuffer();
+                        rigidBodyCount =
+                            UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                      RigidBodyUploadFilter::RequireRigidBodyComponent);
+                        m_RigidBodyBuffer->Bind(3);
+                    }
+                    m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
+                    m_SPHShaders.ForceShader->SetFloat("u_BoundaryStiffness", emitter.SPH.BoundaryStiffness);
+                    m_SPHShaders.ForceShader->SetFloat("u_BoundaryDamping", emitter.SPH.BoundaryDamping);
+
+                    RenderCommand::DispatchCompute(sphGroups);
+                    RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+                }
             }
 
-            // ---- Pass 3: Simulate (gravity + damping + alive/dead management) ----
-            // simulate 遍历全池处理 lifetime，dispatch 全部 workgroup
-            if (m_LastAliveCount > 0 || emitCount > 0)
-            {
-                // PCISPH handles gravity internally, so pass zero gravity to simulate pass
-                glm::vec3 simGravity = (sphEnabled && emitter.SPH.PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;
-                float     simulateDt = std::min(dt, 0.05f);
-                m_SimulateShader->Bind();
-                m_SimulateShader->SetFloat("u_DeltaTime", simulateDt);
-                m_SimulateShader->SetFloat3("u_Gravity", simGravity);
-                m_SimulateShader->SetFloat("u_Damping", emitter.Damping);
-                m_SimulateShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
+            // Rebind DeadList(1), CounterBuffer(3), IndirectArgs(4) — Grid/PCISPH passes
+            // temporarily used these binding slots.
+            m_DeadList->Bind(1);
+            m_CounterBuffer->Bind(3);
+            m_IndirectArgs->Bind(4);
+        }
 
-                uint32_t simGroups = (m_MaxParticles + 255) / 256;
-                RenderCommand::DispatchCompute(simGroups);
-                RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
-            }
+        // ---- Pass 3: Simulate (gravity + damping + alive/dead management) ----
+        // simulate 遍历全池处理 lifetime，dispatch 全部 workgroup
+        if (m_LastAliveCount > 0 || emitCount > 0)
+        {
+            // PCISPH handles gravity internally, so pass zero gravity to simulate pass
+            glm::vec3 simGravity = (sphEnabled && emitter.SPH.PCISPHEnabled) ? glm::vec3(0.0f) : emitter.Gravity;
+            float     simulateDt = std::min(dt, 0.05f);
+            m_SimulateShader->Bind();
+            m_SimulateShader->SetFloat("u_DeltaTime", simulateDt);
+            m_SimulateShader->SetFloat3("u_Gravity", simGravity);
+            m_SimulateShader->SetFloat("u_Damping", emitter.Damping);
+            m_SimulateShader->SetInt("u_MaxParticles", static_cast<int>(m_MaxParticles));
 
-            // ---- Pass 4: Render Args ----
-            m_RenderArgsShader->Bind();
-            RenderCommand::DispatchCompute(1);
-            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
+            uint32_t simGroups = (m_MaxParticles + 255) / 256;
+            RenderCommand::DispatchCompute(simGroups);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+        }
 
-            PerformanceMonitor::Get().GetParticleComputeGPUTimer().End();
-        } // GL Compute path
+        // ---- Pass 4: Render Args ----
+        m_RenderArgsShader->Bind();
+        RenderCommand::DispatchCompute(1);
+        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
 
-#ifdef ENGINE_ENABLE_CUDA
-        perf.SetParticleUsingCuda(cudaSucceeded);
-#endif
+        PerformanceMonitor::Get().GetParticleComputeGPUTimer().End();
 
         // ---- 异步回读：用于 simulate 按存活数 dispatch + SPH + direct-draw ----
         {
@@ -1339,8 +824,6 @@ namespace Engine
                         .count();
             }
         }
-
-        perf.AddParticleInteropCpuTimings(cudaMapAllCpuMs, cudaUnmapAllCpuMs, counterReadbackCpuMs);
     }
 
     void ParticleSystemGPU::Render(const glm::mat4& viewMatrix, const glm::mat4& projection)

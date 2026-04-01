@@ -144,12 +144,12 @@ namespace Engine
     void Scene::OnUpdateRuntime(Timestep ts, EditorCamera& camera)
     {
         m_TransformCache.BeginFrame();
-        m_RuntimeCoordinator->OnUpdateRuntime(ts, m_PhysicsBackend, m_SceneRenderer);
+        m_RuntimeCoordinator->OnUpdateRuntime(ts, m_SceneRenderer);
     }
 
     void Scene::OnRuntimeStart()
     {
-        m_RuntimeCoordinator->OnRuntimeStart(m_PhysicsBackend, m_SceneRenderer);
+        m_RuntimeCoordinator->OnRuntimeStart(m_SceneRenderer);
     }
 
     void Scene::OnRuntimeStop()
@@ -163,7 +163,6 @@ namespace Engine
 
         newScene->m_ViewportWidth  = src->m_ViewportWidth;
         newScene->m_ViewportHeight = src->m_ViewportHeight;
-        newScene->m_PhysicsBackend = src->m_PhysicsBackend;
 
         // 拷贝环境数据（Shadow + Skybox）— 直接拷贝 scene 状态，不从 renderer 反向拉取
         newScene->m_EnvironmentState = src->m_EnvironmentState;

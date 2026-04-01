@@ -4,7 +4,6 @@
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Core/Timestep.h"
-#include "Core/VulkanExternalRuntime.h"
 #include "Debug/PerformanceMonitor.h"
 #include "Debug/ProfileTimer.h"
 #include "Events/ApplicationEvent.h"
