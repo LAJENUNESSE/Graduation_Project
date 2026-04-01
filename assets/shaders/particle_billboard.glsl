@@ -39,7 +39,7 @@ void main()
     // Life fraction: 0 at birth, 1 at death
     float life    = p.posAndLife.w;
     float maxLife = p.velAndMaxLife.w;
-    float t       = 1.0 - clamp(life / maxLife, 0.0, 1.0);
+    float t       = 1.0 - clamp(life / max(maxLife, 1e-6), 0.0, 1.0);
 
     // Interpolate color and size over lifetime
     v_Color    = mix(p.startColor, p.endColor, t);
