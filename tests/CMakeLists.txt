@@ -60,13 +60,9 @@ add_executable(EngineTests
     src/TestTimestep.cpp
     src/TestUUID.cpp
     src/TestEvents.cpp
-    src/TestCudaParticleTypes.cpp
     src/TestSceneEntityIndex.cpp
     src/TestSceneHierarchy.cpp
     src/TestWorldTransform.cpp
-    src/TestCudaPoisonState.cpp
-    src/TestVulkanInteropCommon.cpp
-    src/TestVulkanInteropDiagnostics.cpp
     src/TestSPHKernel.cpp
     src/TestSDFMath.cpp
     src/TestCommandHistory.cpp

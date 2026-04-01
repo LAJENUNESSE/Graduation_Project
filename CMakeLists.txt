@@ -15,7 +15,6 @@ option(ENGINE_ENABLE_STRICT_WARNINGS "Enable stricter warnings for project targe
 option(ENGINE_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
 option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
-option(ENGINE_ENABLE_CUDA "Enable CUDA compute sidecar for particle system" OFF)
 option(ENGINE_ENABLE_COMPILER_CACHE "Enable compiler cache launcher when available" ON)
 option(ENGINE_ENABLE_MSVC_MP "Enable /MP for MSVC C/C++ compilation" ON)
 
@@ -40,18 +39,6 @@ if(MSVC AND ENGINE_ENABLE_MSVC_MP)
         $<$<COMPILE_LANGUAGE:C>:/MP>
         $<$<COMPILE_LANGUAGE:CXX>:/MP>
     )
-endif()
-
-
-# CUDA Configuration (optional)
-if(ENGINE_ENABLE_CUDA)
-    enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD 17)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
-    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 75 86 89 100)
-    endif()
 endif()
 
 add_subdirectory(vendor)
