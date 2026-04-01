@@ -154,10 +154,7 @@ namespace Engine
         ImGui::Text("GPU 耗时 (上一帧):");
         ImGui::Text("  阴影Pass:  %.3f ms", pm.GetShadowPassGpuMs());
         ImGui::Text("  场景渲染:  %.3f ms", pm.GetSceneRenderGpuMs());
-        ImGui::Text("  粒子Compute: %.3f ms [%s]", pm.GetParticleComputeGpuMs(),
-                    pm.IsParticleUsingCuda() ? "CUDA" : "GL");
-        ImGui::Text("  粒子CPU分段: Map=%.3f ms, Unmap=%.3f ms, Readback=%.3f ms", pm.GetParticleCudaMapAllCpuMs(),
-                    pm.GetParticleCudaUnmapAllCpuMs(), pm.GetParticleCounterReadbackCpuMs());
+        ImGui::Text("  粒子Compute: %.3f ms", pm.GetParticleComputeGpuMs());
         {
             const auto ab = ParticleSystemGPU::GetABConfigSnapshot();
             ImGui::Text("  粒子AB: ForceGL=%d (%s), DisableReadback=%d (%s)", ab.ForceGL ? 1 : 0,
@@ -165,8 +162,7 @@ namespace Engine
                         ABSourceLabel(ab.DisableReadbackSource));
         }
         if (pm.IsFluidActive())
-            ImGui::Text("  流体Compute: %.3f ms [%s]", pm.GetFluidComputeGpuMs(),
-                        pm.IsFluidUsingCuda() ? "CUDA" : "GL");
+            ImGui::Text("  流体Compute: %.3f ms", pm.GetFluidComputeGpuMs());
 
         ImGui::Separator();
         const auto& stats = pm.GetStats();

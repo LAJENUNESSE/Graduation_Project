@@ -450,8 +450,6 @@ namespace Engine
             return;
 
         const ABConfigSnapshot abConfig = GetABConfigSnapshot();
-        auto&                  perf     = PerformanceMonitor::Get();
-        perf.SetParticleABDiagnostics(abConfig.ForceGL, abConfig.DisableCounterReadback);
 
         float counterReadbackCpuMs = 0.0f;
 
@@ -826,8 +824,6 @@ namespace Engine
                         .count();
             }
         }
-
-        perf.AddParticleInteropCpuTimings(0.0f, 0.0f, counterReadbackCpuMs);
     }
 
     void ParticleSystemGPU::Render(const glm::mat4& viewMatrix, const glm::mat4& projection)

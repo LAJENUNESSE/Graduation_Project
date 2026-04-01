@@ -325,7 +325,6 @@ namespace Engine
 
         PerformanceMonitor::Get().GetFluidComputeGPUTimer().End();
 
-        PerformanceMonitor::Get().SetFluidUsingCuda(false);
         PerformanceMonitor::Get().SetFluidActive(true);
     }
 
