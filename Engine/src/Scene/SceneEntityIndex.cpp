@@ -1,6 +1,8 @@
 #include "engpch.h"
 #include "Scene/SceneEntityIndex.h"
 
+#include "Core/Log.h"
+
 namespace Engine
 {
 
