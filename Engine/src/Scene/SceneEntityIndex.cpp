@@ -6,6 +6,11 @@ namespace Engine
 
     void SceneEntityIndex::Insert(UUID uuid, entt::entity entity)
     {
+        if (m_Map.find(uuid) != m_Map.end())
+        {
+            ENGINE_CORE_ERROR("SceneEntityIndex: duplicate UUID {0}, insertion skipped", static_cast<uint64_t>(uuid));
+            return;
+        }
         m_Map[uuid] = entity;
     }
 
