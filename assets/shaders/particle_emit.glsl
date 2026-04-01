@@ -78,6 +78,7 @@ void main()
 
     // Random life
     float life = mix(u_LifeMin, u_LifeMax, rand(seed));
+    life = max(life, 1e-6);
     seed = pcg_hash(seed);
 
     // Random direction within cone
