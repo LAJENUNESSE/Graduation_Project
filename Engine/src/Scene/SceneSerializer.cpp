@@ -947,7 +947,7 @@ namespace Engine
                 // AudioListenerComponent — 通过反射 AutoSerializer 自动反序列化
                 // VideoPlayerComponent — 通过反射 AutoSerializer 自动反序列化
             }
-            catch (const YAML::Exception& e)
+            catch (const std::exception& e)
             {
                 ENGINE_CORE_ERROR("Failed to deserialize entity: {0}", e.what());
                 // Rollback: destroy partially-created entity to avoid corrupt scene state
