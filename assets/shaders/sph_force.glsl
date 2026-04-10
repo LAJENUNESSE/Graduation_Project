@@ -42,11 +42,14 @@ struct GPUMeshSDFBody
     vec4 rotCol0;
     vec4 rotCol1;
     vec4 rotCol2;
-    vec4 halfExtents;
-    vec4 linearVelAndBlend;
+    vec4 invScaleAndBlend;
+    vec4 localMin;
+    vec4 localExtent;
+    vec4 gridParams;
 };
 
 layout(std430, binding = 10) readonly buffer MeshSDFBuffer { GPUMeshSDFBody meshSDFBodies[]; };
+layout(std430, binding = 11) readonly buffer MeshSDFVoxelBuffer { float meshSDFVoxels[]; };
 
 uniform int   u_AliveCount;
 uniform float u_SmoothingRadius;
@@ -58,6 +61,7 @@ uniform float u_CellSize;
 uniform float u_SurfaceTension;     // γ, 0=关闭
 uniform int   u_RigidBodyCount;     // 0=无刚体
 uniform int   u_MeshSDFCount;       // 0=无 Mesh SDF
+uniform int   u_MeshSDFVoxelCount;  // 体素总数
 uniform float u_BoundaryStiffness;
 uniform float u_BoundaryDamping;
 uniform float u_SpikyCoeff;         // -45 / (π * h^6), CPU 预计算
@@ -229,37 +233,26 @@ void main()
         }
     }
 
-    // Mesh SDF 代理边界力（当前: OBB SDF 代理）
+    // Mesh 体素 SDF 边界力
     for (int mb = 0; mb < u_MeshSDFCount; mb++)
     {
+        if (u_MeshSDFVoxelCount <= 0)
+            break;
+
         vec3 mbPos = meshSDFBodies[mb].posAndType.xyz;
         mat3 mbRot = mat3(meshSDFBodies[mb].rotCol0.xyz,
                           meshSDFBodies[mb].rotCol1.xyz,
                           meshSDFBodies[mb].rotCol2.xyz);
 
         vec3 localPos = transpose(mbRot) * (posI - mbPos);
-        vec3 he = meshSDFBodies[mb].halfExtents.xyz;
-        vec3 d = abs(localPos) - he;
-        float sdf = length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
-
-        vec3 s = sign(localPos);
-        vec3 outside = max(d, 0.0);
-        float outsideLen = length(outside);
-        vec3 localNormal;
-        if (outsideLen > 1e-6)
-            localNormal = s * outside / outsideLen;
-        else if (d.x > d.y && d.x > d.z)
-            localNormal = vec3(s.x, 0.0, 0.0);
-        else if (d.y > d.z)
-            localNormal = vec3(0.0, s.y, 0.0);
-        else
-            localNormal = vec3(0.0, 0.0, s.z);
+        float sdf = sampleMeshSDF(mb, localPos);
+        vec3 localNormal = estimateMeshSDFNormal(mb, localPos);
 
         if (sdf < h)
         {
             vec3 worldNormal = mbRot * localNormal;
-            vec3 mbVel = meshSDFBodies[mb].linearVelAndBlend.xyz;
-            float blend = clamp(meshSDFBodies[mb].linearVelAndBlend.w, 0.0, 1.0);
+            vec3 mbVel = vec3(0.0);
+            float blend = clamp(meshSDFBodies[mb].invScaleAndBlend.w, 0.0, 1.0);
             vec3 velRel = velI - mbVel;
             float penetration = max(0.0, h - sdf);
             vec3 f = u_BoundaryStiffness * penetration * worldNormal
@@ -286,4 +279,71 @@ void main()
 
     // 直接应用到速度（simulate pass 之后会再叠加重力 + 阻尼）
     particles[myParticleIdx].velAndMaxLife.xyz += sphAccel * u_DeltaTime;
+}
+float sampleMeshSDF(int bodyIndex, vec3 localPos)
+{
+    float resolutionF = meshSDFBodies[bodyIndex].gridParams.x;
+    int   resolution  = max(int(resolutionF), 1);
+    int   voxelOffset = int(meshSDFBodies[bodyIndex].gridParams.y);
+    int   voxelCount  = int(meshSDFBodies[bodyIndex].gridParams.z);
+    vec3  localMin    = meshSDFBodies[bodyIndex].localMin.xyz;
+    vec3  localExtent = max(meshSDFBodies[bodyIndex].localExtent.xyz, vec3(1e-5));
+
+    vec3 uvw = clamp((localPos - localMin) / localExtent, vec3(0.0), vec3(1.0));
+    vec3 g   = uvw * vec3(float(resolution - 1));
+
+    ivec3 i0 = ivec3(floor(g));
+    ivec3 i1 = min(i0 + ivec3(1), ivec3(resolution - 1));
+    vec3  t  = fract(g);
+
+    int plane = resolution * resolution;
+    int idx000 = i0.z * plane + i0.y * resolution + i0.x;
+    int idx100 = i0.z * plane + i0.y * resolution + i1.x;
+    int idx010 = i0.z * plane + i1.y * resolution + i0.x;
+    int idx110 = i0.z * plane + i1.y * resolution + i1.x;
+    int idx001 = i1.z * plane + i0.y * resolution + i0.x;
+    int idx101 = i1.z * plane + i0.y * resolution + i1.x;
+    int idx011 = i1.z * plane + i1.y * resolution + i0.x;
+    int idx111 = i1.z * plane + i1.y * resolution + i1.x;
+
+    idx000 = clamp(idx000, 0, max(voxelCount - 1, 0));
+    idx100 = clamp(idx100, 0, max(voxelCount - 1, 0));
+    idx010 = clamp(idx010, 0, max(voxelCount - 1, 0));
+    idx110 = clamp(idx110, 0, max(voxelCount - 1, 0));
+    idx001 = clamp(idx001, 0, max(voxelCount - 1, 0));
+    idx101 = clamp(idx101, 0, max(voxelCount - 1, 0));
+    idx011 = clamp(idx011, 0, max(voxelCount - 1, 0));
+    idx111 = clamp(idx111, 0, max(voxelCount - 1, 0));
+
+    float c000 = meshSDFVoxels[voxelOffset + idx000];
+    float c100 = meshSDFVoxels[voxelOffset + idx100];
+    float c010 = meshSDFVoxels[voxelOffset + idx010];
+    float c110 = meshSDFVoxels[voxelOffset + idx110];
+    float c001 = meshSDFVoxels[voxelOffset + idx001];
+    float c101 = meshSDFVoxels[voxelOffset + idx101];
+    float c011 = meshSDFVoxels[voxelOffset + idx011];
+    float c111 = meshSDFVoxels[voxelOffset + idx111];
+
+    float c00 = mix(c000, c100, t.x);
+    float c10 = mix(c010, c110, t.x);
+    float c01 = mix(c001, c101, t.x);
+    float c11 = mix(c011, c111, t.x);
+    float c0  = mix(c00, c10, t.y);
+    float c1  = mix(c01, c11, t.y);
+    return mix(c0, c1, t.z);
+}
+
+vec3 estimateMeshSDFNormal(int bodyIndex, vec3 localPos)
+{
+    vec3 localExtent = max(meshSDFBodies[bodyIndex].localExtent.xyz, vec3(1e-5));
+    float resolution = max(meshSDFBodies[bodyIndex].gridParams.x, 1.0);
+    vec3 e = localExtent / resolution;
+    float dx = sampleMeshSDF(bodyIndex, localPos + vec3(e.x, 0.0, 0.0)) -
+               sampleMeshSDF(bodyIndex, localPos - vec3(e.x, 0.0, 0.0));
+    float dy = sampleMeshSDF(bodyIndex, localPos + vec3(0.0, e.y, 0.0)) -
+               sampleMeshSDF(bodyIndex, localPos - vec3(0.0, e.y, 0.0));
+    float dz = sampleMeshSDF(bodyIndex, localPos + vec3(0.0, 0.0, e.z)) -
+               sampleMeshSDF(bodyIndex, localPos - vec3(0.0, 0.0, e.z));
+    vec3 n = vec3(dx, dy, dz);
+    return (dot(n, n) > 1e-10) ? normalize(n) : vec3(0.0, 1.0, 0.0);
 }

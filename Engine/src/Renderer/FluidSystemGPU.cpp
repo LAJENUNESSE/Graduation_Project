@@ -105,9 +105,10 @@ namespace Engine
 
     void FluidSystemGPU::InitMeshSDFBuffer()
     {
-        if (m_MeshSDFBuffer)
+        if (m_MeshSDFMetaBuffer && m_MeshSDFVoxelBuffer)
             return;
-        m_MeshSDFBuffer = ShaderStorageBuffer::Create(MAX_MESH_SDF_BODIES * sizeof(GPUMeshSDFData), 10);
+        m_MeshSDFMetaBuffer  = ShaderStorageBuffer::Create(MAX_MESH_SDF_BODIES * sizeof(GPUMeshSDFData), 10);
+        m_MeshSDFVoxelBuffer = ShaderStorageBuffer::Create(MAX_MESH_SDF_VOXELS * sizeof(float), 11);
     }
 
     void FluidSystemGPU::Emit(const glm::vec3& emitterPos, const FluidEmitterComponent& emitter)
@@ -186,6 +187,7 @@ namespace Engine
 
             uint32_t rigidBodyCount = 0;
             uint32_t meshSDFCount   = 0;
+            uint32_t meshSDFVoxels  = 0;
             if (emitter.RigidBodyCoupling && registry)
             {
                 InitRigidBodyBuffer();
@@ -195,17 +197,22 @@ namespace Engine
                 if (emitter.MeshSDFCoupling)
                 {
                     InitMeshSDFBuffer();
-                    meshSDFCount =
-                        UploadMeshSDFBodiesToBuffer(registry, m_MeshSDFBuffer, MAX_MESH_SDF_BODIES,
-                                                    emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
+                    const MeshSDFUploadResult upload = UploadMeshSDFToBuffers(
+                        registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
+                        static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
+                        emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
+                    meshSDFCount  = upload.BodyCount;
+                    meshSDFVoxels = upload.VoxelCount;
                 }
             }
 
             m_PCISPHBuffer->Bind(1);
             if (m_RigidBodyBuffer)
                 m_RigidBodyBuffer->Bind(3);
-            if (m_MeshSDFBuffer)
-                m_MeshSDFBuffer->Bind(10);
+            if (m_MeshSDFMetaBuffer)
+                m_MeshSDFMetaBuffer->Bind(10);
+            if (m_MeshSDFVoxelBuffer)
+                m_MeshSDFVoxelBuffer->Bind(11);
             m_SurfaceNormalBuffer->Bind(8); // Akinci 表面法线（density pass 已写入）
 
             // PCISPH Init
@@ -275,6 +282,7 @@ namespace Engine
                 m_SPHShaders.PCISPHForce->SetFloat("u_CellSize", cellSize);
                 m_SPHShaders.PCISPHForce->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
                 m_SPHShaders.PCISPHForce->SetInt("u_MeshSDFCount", static_cast<int>(meshSDFCount));
+                m_SPHShaders.PCISPHForce->SetInt("u_MeshSDFVoxelCount", static_cast<int>(meshSDFVoxels));
                 m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
                 m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
                 m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
@@ -306,6 +314,7 @@ namespace Engine
 
             uint32_t rigidBodyCount = 0;
             uint32_t meshSDFCount   = 0;
+            uint32_t meshSDFVoxels  = 0;
             if (emitter.RigidBodyCoupling && registry)
             {
                 InitRigidBodyBuffer();
@@ -316,14 +325,19 @@ namespace Engine
                 if (emitter.MeshSDFCoupling)
                 {
                     InitMeshSDFBuffer();
-                    meshSDFCount =
-                        UploadMeshSDFBodiesToBuffer(registry, m_MeshSDFBuffer, MAX_MESH_SDF_BODIES,
-                                                    emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
-                    m_MeshSDFBuffer->Bind(10);
+                    const MeshSDFUploadResult upload = UploadMeshSDFToBuffers(
+                        registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
+                        static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
+                        emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
+                    meshSDFCount  = upload.BodyCount;
+                    meshSDFVoxels = upload.VoxelCount;
+                    m_MeshSDFMetaBuffer->Bind(10);
+                    m_MeshSDFVoxelBuffer->Bind(11);
                 }
             }
             m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
             m_SPHShaders.ForceShader->SetInt("u_MeshSDFCount", static_cast<int>(meshSDFCount));
+            m_SPHShaders.ForceShader->SetInt("u_MeshSDFVoxelCount", static_cast<int>(meshSDFVoxels));
             m_SPHShaders.ForceShader->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
             m_SPHShaders.ForceShader->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
 

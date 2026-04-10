@@ -59,7 +59,8 @@ namespace Engine
         // PCISPH
         Ref<ShaderStorageBuffer> m_PCISPHBuffer;        // 48B/particle
         Ref<ShaderStorageBuffer> m_RigidBodyBuffer;     // 112B × MAX_RIGID_BODIES
-        Ref<ShaderStorageBuffer> m_MeshSDFBuffer;       // Mesh SDF 代理数据, binding 10
+        Ref<ShaderStorageBuffer> m_MeshSDFMetaBuffer;   // Mesh SDF 元数据, binding 10
+        Ref<ShaderStorageBuffer> m_MeshSDFVoxelBuffer;  // Mesh SDF 体素值, binding 11
         Ref<ShaderStorageBuffer> m_SurfaceNormalBuffer; // vec4/particle, binding 8 (Akinci 表面法线)
         bool                     m_PCISPHInitialized = false;
 
