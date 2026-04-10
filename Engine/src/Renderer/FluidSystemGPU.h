@@ -59,12 +59,14 @@ namespace Engine
         // PCISPH
         Ref<ShaderStorageBuffer> m_PCISPHBuffer;        // 48B/particle
         Ref<ShaderStorageBuffer> m_RigidBodyBuffer;     // 112B × MAX_RIGID_BODIES
+        Ref<ShaderStorageBuffer> m_MeshSDFBuffer;       // Mesh SDF 代理数据, binding 10
         Ref<ShaderStorageBuffer> m_SurfaceNormalBuffer; // vec4/particle, binding 8 (Akinci 表面法线)
         bool                     m_PCISPHInitialized = false;
 
         void InitSPH(float smoothingRadius);
         void InitPCISPH();
         void InitRigidBodyBuffer();
+        void InitMeshSDFBuffer();
 
         // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
         struct CudaImpl;

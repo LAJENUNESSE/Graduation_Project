@@ -32,10 +32,21 @@ struct GPURigidBody
     vec4 angularVel;
 };
 
+struct GPUMeshSDFBody
+{
+    vec4 posAndType;
+    vec4 rotCol0;
+    vec4 rotCol1;
+    vec4 rotCol2;
+    vec4 halfExtents;
+    vec4 linearVelAndBlend;
+};
+
 layout(std430, binding = 0) readonly buffer ParticlePool   { GPUParticle  particles[];   };
 layout(std430, binding = 1) buffer PCISPHBuffer             { PCISPHData   pcisphData[];  };
 layout(std430, binding = 2) readonly buffer AliveList       { uint aliveIndices[];        };
 layout(std430, binding = 3) readonly buffer RigidBodyBuffer { GPURigidBody rigidBodies[]; };
+layout(std430, binding = 10) readonly buffer MeshSDFBuffer  { GPUMeshSDFBody meshSDFBodies[]; };
 layout(std430, binding = 5) readonly buffer CellStart       { uint cellStart[];           };
 layout(std430, binding = 6) readonly buffer CellCount       { uint cellCount[];           };
 layout(std430, binding = 7) readonly buffer SortedIndices   { uint sortedIndices[];       };
@@ -47,6 +58,7 @@ uniform float u_DeltaTime;
 uniform int   u_GridSize;
 uniform float u_CellSize;
 uniform int   u_RigidBodyCount;
+uniform int   u_MeshSDFCount;
 uniform float u_BoundaryStiffness;
 uniform float u_BoundaryDamping;
 uniform float u_SpikyCoeff;         // -45 / (π * h^6), CPU 预计算
@@ -178,6 +190,45 @@ void main()
             float penetration = max(0.0, u_SmoothingRadius - sdf);
             fBoundary += u_BoundaryStiffness * penetration * worldNormal
                        - u_BoundaryDamping * dot(velRel, worldNormal) * worldNormal;
+        }
+    }
+
+    // --- Mesh SDF 代理边界力（当前: OBB SDF 代理） ---
+    for (int mb = 0; mb < u_MeshSDFCount; mb++)
+    {
+        vec3 mbPos = meshSDFBodies[mb].posAndType.xyz;
+        mat3 mbRot = mat3(meshSDFBodies[mb].rotCol0.xyz,
+                          meshSDFBodies[mb].rotCol1.xyz,
+                          meshSDFBodies[mb].rotCol2.xyz);
+
+        vec3 localPos = transpose(mbRot) * (posI - mbPos);
+        vec3 he = meshSDFBodies[mb].halfExtents.xyz;
+        vec3 d = abs(localPos) - he;
+        float sdf = length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
+
+        vec3 s = sign(localPos);
+        vec3 outside = max(d, 0.0);
+        float outsideLen = length(outside);
+        vec3 localNormal;
+        if (outsideLen > 1e-6)
+            localNormal = s * outside / outsideLen;
+        else if (d.x > d.y && d.x > d.z)
+            localNormal = vec3(s.x, 0, 0);
+        else if (d.y > d.z)
+            localNormal = vec3(0, s.y, 0);
+        else
+            localNormal = vec3(0, 0, s.z);
+
+        if (sdf < u_SmoothingRadius)
+        {
+            vec3 worldNormal = mbRot * localNormal;
+            vec3 mbVel = meshSDFBodies[mb].linearVelAndBlend.xyz;
+            float blend = clamp(meshSDFBodies[mb].linearVelAndBlend.w, 0.0, 1.0);
+            vec3 velRel = pcisphData[gid].predictedVelAndDensity.xyz - mbVel;
+            float penetration = max(0.0, u_SmoothingRadius - sdf);
+            vec3 f = u_BoundaryStiffness * penetration * worldNormal
+                   - u_BoundaryDamping * dot(velRel, worldNormal) * worldNormal;
+            fBoundary += f * blend;
         }
     }
 
