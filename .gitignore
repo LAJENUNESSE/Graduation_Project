@@ -43,7 +43,8 @@ logs/
 docs/
 
 # Scripts
-scripts/
+scripts/*
+!scripts/translate-msg.ps1
 
 # VTune Profiler
 vtune_results/
@@ -76,3 +77,7 @@ Game_Engine/
 
 # CMake temp (root level)
 CMakeFiles/
+
+# Build artifacts
+dist/
+vcpkg_installed/

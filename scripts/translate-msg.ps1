@@ -151,7 +151,7 @@ for ($i = 1; $i -lt $lines.Length; $i++) {
         $tail = $mList.Groups[2].Value
         $outLines.Add($lead + (Replace-All $tail))
     } else {
-        $outLines.Add(Replace-All $line)
+        $outLines.Add((Replace-All $line))
     }
 }
 
