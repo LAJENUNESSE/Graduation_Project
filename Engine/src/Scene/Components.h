@@ -481,6 +481,10 @@ namespace Engine
         float BoundaryStiffness = 5000.0f;
         float BoundaryDamping   = 0.5f;
 
+        // Mesh SDF 代理碰撞（当前为 Mesh OBB SDF 代理）
+        bool  MeshSDFCoupling = true;
+        float MeshSDFBlend    = 1.0f;
+
         // 边界盒
         bool      UseBoundary = true;
         glm::vec3 BoundaryMin = {-1.0f, -1.0f, -1.0f};

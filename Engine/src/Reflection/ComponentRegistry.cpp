@@ -204,6 +204,11 @@ namespace Engine
 
     // 刚体耦合
     ENGINE_PROPERTY(FluidEmitterComponent, RigidBodyCoupling, "刚体耦合", Bool)
+    ENGINE_PROPERTY(FluidEmitterComponent, MeshSDFCoupling, "Mesh SDF 耦合", Bool)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, MeshSDFBlend, "Mesh SDF 混合", Float, hints.Speed = 0.01f;
+                       hints.Min    = 0.0f;
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, BoundaryStiffness, "边界刚度", Float, hints.Speed = 100.0f;
                        hints.Min    = 0.0f;
                        hints.Max    = 50000.0f;
@@ -262,6 +267,8 @@ namespace Engine
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, PCISPHDelta)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SurfaceTension)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, RigidBodyCoupling)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, MeshSDFCoupling)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, MeshSDFBlend)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryStiffness)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryDamping)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, UseBoundary)

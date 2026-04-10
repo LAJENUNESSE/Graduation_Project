@@ -336,6 +336,8 @@ namespace Engine
             out << YAML::Key << "RigidBodyCoupling" << YAML::Value << pe.SPH.RigidBodyCoupling;
             out << YAML::Key << "BoundaryStiffness" << YAML::Value << pe.SPH.BoundaryStiffness;
             out << YAML::Key << "BoundaryDamping" << YAML::Value << pe.SPH.BoundaryDamping;
+            out << YAML::Key << "MeshSDFCoupling" << YAML::Value << pe.SPH.MeshSDFCoupling;
+            out << YAML::Key << "MeshSDFBlend" << YAML::Value << pe.SPH.MeshSDFBlend;
             out << YAML::EndMap;
             out << YAML::EndMap;
         }
@@ -893,6 +895,10 @@ namespace Engine
                             pe.SPH.BoundaryStiffness = sphNode["BoundaryStiffness"].as<float>();
                         if (sphNode["BoundaryDamping"])
                             pe.SPH.BoundaryDamping = sphNode["BoundaryDamping"].as<float>();
+                        if (sphNode["MeshSDFCoupling"])
+                            pe.SPH.MeshSDFCoupling = sphNode["MeshSDFCoupling"].as<bool>();
+                        if (sphNode["MeshSDFBlend"])
+                            pe.SPH.MeshSDFBlend = sphNode["MeshSDFBlend"].as<float>();
                     }
                     else
                     {
@@ -926,6 +932,10 @@ namespace Engine
                             pe.SPH.BoundaryStiffness = particleEmitterComponent["SPH_BoundaryStiffness"].as<float>();
                         if (particleEmitterComponent["SPH_BoundaryDamping"])
                             pe.SPH.BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
+                        if (particleEmitterComponent["SPH_MeshSDFCoupling"])
+                            pe.SPH.MeshSDFCoupling = particleEmitterComponent["SPH_MeshSDFCoupling"].as<bool>();
+                        if (particleEmitterComponent["SPH_MeshSDFBlend"])
+                            pe.SPH.MeshSDFBlend = particleEmitterComponent["SPH_MeshSDFBlend"].as<float>();
                     }
                 }
 
