@@ -225,8 +225,10 @@ namespace Engine
         float BoundaryDamping   = 0.5f;
 
         // Mesh SDF 代理碰撞（当前为 Mesh OBB SDF 代理）
-        bool  MeshSDFCoupling = true;
-        float MeshSDFBlend    = 1.0f;
+        bool  MeshSDFCoupling   = true;
+        int   MeshSDFResolution = 24;
+        float MeshSDFBand       = 0.05f;
+        float MeshSDFBlend      = 1.0f;
     };
 
     struct ParticleEmitterComponent
@@ -486,8 +488,10 @@ namespace Engine
         float BoundaryDamping   = 0.5f;
 
         // Mesh SDF 代理碰撞（当前为 Mesh OBB SDF 代理）
-        bool  MeshSDFCoupling = true;
-        float MeshSDFBlend    = 1.0f;
+        bool  MeshSDFCoupling   = true;
+        int   MeshSDFResolution = 24;
+        float MeshSDFBand       = 0.05f;
+        float MeshSDFBlend      = 1.0f;
 
         // 边界盒
         bool      UseBoundary = true;

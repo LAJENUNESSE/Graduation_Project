@@ -337,6 +337,8 @@ namespace Engine
             out << YAML::Key << "BoundaryStiffness" << YAML::Value << pe.SPH.BoundaryStiffness;
             out << YAML::Key << "BoundaryDamping" << YAML::Value << pe.SPH.BoundaryDamping;
             out << YAML::Key << "MeshSDFCoupling" << YAML::Value << pe.SPH.MeshSDFCoupling;
+            out << YAML::Key << "MeshSDFResolution" << YAML::Value << pe.SPH.MeshSDFResolution;
+            out << YAML::Key << "MeshSDFBand" << YAML::Value << pe.SPH.MeshSDFBand;
             out << YAML::Key << "MeshSDFBlend" << YAML::Value << pe.SPH.MeshSDFBlend;
             out << YAML::EndMap;
             out << YAML::EndMap;
@@ -897,6 +899,10 @@ namespace Engine
                             pe.SPH.BoundaryDamping = sphNode["BoundaryDamping"].as<float>();
                         if (sphNode["MeshSDFCoupling"])
                             pe.SPH.MeshSDFCoupling = sphNode["MeshSDFCoupling"].as<bool>();
+                        if (sphNode["MeshSDFResolution"])
+                            pe.SPH.MeshSDFResolution = std::clamp(sphNode["MeshSDFResolution"].as<int>(), 8, 64);
+                        if (sphNode["MeshSDFBand"])
+                            pe.SPH.MeshSDFBand = sphNode["MeshSDFBand"].as<float>();
                         if (sphNode["MeshSDFBlend"])
                             pe.SPH.MeshSDFBlend = sphNode["MeshSDFBlend"].as<float>();
                     }
@@ -934,6 +940,11 @@ namespace Engine
                             pe.SPH.BoundaryDamping = particleEmitterComponent["SPH_BoundaryDamping"].as<float>();
                         if (particleEmitterComponent["SPH_MeshSDFCoupling"])
                             pe.SPH.MeshSDFCoupling = particleEmitterComponent["SPH_MeshSDFCoupling"].as<bool>();
+                        if (particleEmitterComponent["SPH_MeshSDFResolution"])
+                            pe.SPH.MeshSDFResolution =
+                                std::clamp(particleEmitterComponent["SPH_MeshSDFResolution"].as<int>(), 8, 64);
+                        if (particleEmitterComponent["SPH_MeshSDFBand"])
+                            pe.SPH.MeshSDFBand = particleEmitterComponent["SPH_MeshSDFBand"].as<float>();
                         if (particleEmitterComponent["SPH_MeshSDFBlend"])
                             pe.SPH.MeshSDFBlend = particleEmitterComponent["SPH_MeshSDFBlend"].as<float>();
                     }
