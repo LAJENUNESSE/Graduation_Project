@@ -43,8 +43,7 @@ logs/
 docs/
 
 # Scripts
-scripts/*
-!scripts/translate-msg.ps1
+scripts/
 
 # VTune Profiler
 vtune_results/
