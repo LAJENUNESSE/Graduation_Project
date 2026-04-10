@@ -82,7 +82,7 @@ namespace Engine
             if (mrc.Type != MeshType::Model || !mrc.MeshAsset.IsValid())
                 return false;
 
-            const Ref<Mesh> mesh = AssetManager::Get<Mesh>(mrc.MeshAsset);
+            Mesh* mesh = AssetManager::Get<Mesh>(mrc.MeshAsset);
             if (!mesh)
                 return false;
 

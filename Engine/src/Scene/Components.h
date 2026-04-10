@@ -223,6 +223,10 @@ namespace Engine
         bool  RigidBodyCoupling = false;
         float BoundaryStiffness = 5000.0f;
         float BoundaryDamping   = 0.5f;
+
+        // Mesh SDF 代理碰撞（当前为 Mesh OBB SDF 代理）
+        bool  MeshSDFCoupling = true;
+        float MeshSDFBlend    = 1.0f;
     };
 
     struct ParticleEmitterComponent
