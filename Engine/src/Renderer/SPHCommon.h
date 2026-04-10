@@ -51,6 +51,17 @@ namespace Engine
         glm::vec4 angularVel;
     };
 
+    // Mesh SDF 近似数据（当前实现为 Mesh 本地 AABB 的 OBB SDF 代理）
+    struct GPUMeshSDFData
+    {
+        glm::vec4 posAndType; // xyz=center, w=0(proxy type)
+        glm::vec4 rotCol0;
+        glm::vec4 rotCol1;
+        glm::vec4 rotCol2;
+        glm::vec4 halfExtents;       // xyz=OBB 半尺寸
+        glm::vec4 linearVelAndBlend; // xyz=线速度, w=blend
+    };
+
     enum class RigidBodyUploadFilter
     {
         AllColliders = 0,
@@ -59,7 +70,8 @@ namespace Engine
 
     // 从 registry 收集带碰撞器的实体，上传到 GPU buffer
     // 返回实际上传的刚体数量
-    static constexpr uint32_t MAX_RIGID_BODIES = 64;
+    static constexpr uint32_t MAX_RIGID_BODIES    = 64;
+    static constexpr uint32_t MAX_MESH_SDF_BODIES = 64;
 
     // 从 registry 收集刚体数据（纯 CPU 侧，供 GL 和 CUDA 路径共用）
     std::vector<GPURigidBodyData>
@@ -72,6 +84,20 @@ namespace Engine
                                        const Ref<ShaderStorageBuffer>& buffer,
                                        uint32_t                        maxRigidBodies,
                                        RigidBodyUploadFilter           filter = RigidBodyUploadFilter::AllColliders);
+
+    // 收集 MeshCollider 的 SDF 代理（当前用网格局部 AABB 构建 OBB SDF）
+    std::vector<GPUMeshSDFData>
+    CollectMeshSDFBodies(entt::registry*       registry,
+                         uint32_t              maxMeshSDFBodies,
+                         float                 defaultBlend,
+                         RigidBodyUploadFilter filter = RigidBodyUploadFilter::AllColliders);
+
+    // 收集 + 上传 Mesh SDF 代理到 GL SSBO
+    uint32_t UploadMeshSDFBodiesToBuffer(entt::registry*                 registry,
+                                         const Ref<ShaderStorageBuffer>& buffer,
+                                         uint32_t                        maxMeshSDFBodies,
+                                         float                           defaultBlend,
+                                         RigidBodyUploadFilter           filter = RigidBodyUploadFilter::AllColliders);
 
 } // namespace Engine
 
