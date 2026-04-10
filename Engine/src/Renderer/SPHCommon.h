@@ -51,15 +51,23 @@ namespace Engine
         glm::vec4 angularVel;
     };
 
-    // Mesh SDF 近似数据（当前实现为 Mesh 本地 AABB 的 OBB SDF 代理）
+    // Mesh SDF 元数据（真实体素 SDF 采样）
     struct GPUMeshSDFData
     {
-        glm::vec4 posAndType; // xyz=center, w=0(proxy type)
+        glm::vec4 posAndType; // xyz=world translation, w=0
         glm::vec4 rotCol0;
         glm::vec4 rotCol1;
         glm::vec4 rotCol2;
-        glm::vec4 halfExtents;       // xyz=OBB 半尺寸
-        glm::vec4 linearVelAndBlend; // xyz=线速度, w=blend
+        glm::vec4 invScaleAndBlend; // xyz=1/abs(scale), w=blend
+        glm::vec4 localMin;         // xyz=mesh local AABB min
+        glm::vec4 localExtent;      // xyz=mesh local AABB extent
+        glm::vec4 gridParams;       // x=resolution, y=voxelOffset, z=voxelCount, w=band
+    };
+
+    struct MeshSDFUploadResult
+    {
+        uint32_t BodyCount  = 0;
+        uint32_t VoxelCount = 0;
     };
 
     enum class RigidBodyUploadFilter
@@ -70,8 +78,11 @@ namespace Engine
 
     // 从 registry 收集带碰撞器的实体，上传到 GPU buffer
     // 返回实际上传的刚体数量
-    static constexpr uint32_t MAX_RIGID_BODIES    = 64;
-    static constexpr uint32_t MAX_MESH_SDF_BODIES = 64;
+    static constexpr uint32_t MAX_RIGID_BODIES        = 64;
+    static constexpr uint32_t MAX_MESH_SDF_BODIES     = 16;
+    static constexpr uint32_t MAX_MESH_SDF_RESOLUTION = 32;
+    static constexpr uint32_t MAX_MESH_SDF_VOXELS =
+        MAX_MESH_SDF_BODIES * MAX_MESH_SDF_RESOLUTION * MAX_MESH_SDF_RESOLUTION * MAX_MESH_SDF_RESOLUTION;
 
     // 从 registry 收集刚体数据（纯 CPU 侧，供 GL 和 CUDA 路径共用）
     std::vector<GPURigidBodyData>
@@ -85,19 +96,15 @@ namespace Engine
                                        uint32_t                        maxRigidBodies,
                                        RigidBodyUploadFilter           filter = RigidBodyUploadFilter::AllColliders);
 
-    // 收集 MeshCollider 的 SDF 代理（当前用网格局部 AABB 构建 OBB SDF）
-    std::vector<GPUMeshSDFData>
-    CollectMeshSDFBodies(entt::registry*       registry,
-                         uint32_t              maxMeshSDFBodies,
-                         float                 defaultBlend,
-                         RigidBodyUploadFilter filter = RigidBodyUploadFilter::AllColliders);
-
-    // 收集 + 上传 Mesh SDF 代理到 GL SSBO
-    uint32_t UploadMeshSDFBodiesToBuffer(entt::registry*                 registry,
-                                         const Ref<ShaderStorageBuffer>& buffer,
-                                         uint32_t                        maxMeshSDFBodies,
-                                         float                           defaultBlend,
-                                         RigidBodyUploadFilter           filter = RigidBodyUploadFilter::AllColliders);
+    // 生成并上传真实体素 SDF（元数据 + 体素数组）
+    MeshSDFUploadResult UploadMeshSDFToBuffers(entt::registry*                 registry,
+                                               const Ref<ShaderStorageBuffer>& metaBuffer,
+                                               const Ref<ShaderStorageBuffer>& voxelBuffer,
+                                               uint32_t                        maxMeshSDFBodies,
+                                               uint32_t                        resolution,
+                                               float                           band,
+                                               float                           defaultBlend,
+                                               RigidBodyUploadFilter filter = RigidBodyUploadFilter::AllColliders);
 
 } // namespace Engine
 
