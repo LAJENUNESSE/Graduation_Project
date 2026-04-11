@@ -8,6 +8,7 @@
 #include "Panels/SceneHierarchyPanel.h"
 #include "Renderer/Framebuffer.h"
 #include "Renderer/ParticleSystemGPU.h"
+#include "Renderer/SceneRenderer.h"
 #include "Scene/Entity.h"
 #include "UndoSystem.h"
 
@@ -163,6 +164,20 @@ namespace Engine
         }
         if (pm.IsFluidActive())
             ImGui::Text("  流体Compute: %.3f ms", pm.GetFluidComputeGpuMs());
+
+        if (m_SceneRenderer)
+        {
+            const auto& mesh = m_SceneRenderer->GetMeshSDFFrameStats();
+            ImGui::Separator();
+            ImGui::Text("Mesh SDF 统计:");
+            ImGui::Text("  活跃发射器: %u", mesh.ActiveEmitters);
+            ImGui::Text("  碰撞体数: %u", mesh.BodyCount);
+            ImGui::Text("  体素总数: %u", mesh.VoxelCount);
+            ImGui::Text("  估算采样: %u", mesh.EstimatedSamples);
+            ImGui::Text("  分辨率(最大): %u", mesh.Resolution);
+            ImGui::Text("  带宽(最大): %.3f", mesh.Band);
+            ImGui::Text("  构建CPU耗时: %.3f ms", mesh.BuildCpuMs);
+        }
 
         ImGui::Separator();
         const auto& stats = pm.GetStats();
