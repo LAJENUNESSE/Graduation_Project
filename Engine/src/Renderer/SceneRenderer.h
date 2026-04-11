@@ -59,6 +59,17 @@ namespace Engine
     class SceneRenderer
     {
     public:
+        struct MeshSDFFrameStats
+        {
+            uint32_t ActiveEmitters    = 0;
+            uint32_t BodyCount         = 0;
+            uint32_t VoxelCount        = 0;
+            uint32_t EstimatedSamples  = 0;
+            uint32_t Resolution        = 0;
+            float    Band              = 0.0f;
+            float    BuildCpuMs        = 0.0f;
+        };
+
         void Init(uint32_t viewportWidth = 1280, uint32_t viewportHeight = 720);
         void Shutdown();
 
@@ -82,6 +93,8 @@ namespace Engine
         // 逐实体释放粒子/流体 GPU 缓存
         void ReleaseParticleSystem(uint32_t entityID);
         void ReleaseFluidSystem(uint32_t entityID);
+        const std::unordered_map<uint32_t, Ref<FluidSystemGPU>>& GetFluidSystems() const { return m_FluidSystems; }
+        const MeshSDFFrameStats& GetMeshSDFFrameStats() const { return m_MeshSDFFrameStats; }
 
         // SSAO 设置
         bool&  GetSSAOEnabled() { return m_SSAOEnabled; }
@@ -95,6 +108,10 @@ namespace Engine
 
         // 供 MSAA 解析后单独绘制流体，避免颜色被 blit 覆盖
         void RenderFluidPass();
+
+        // Mesh SDF 调试可视化
+        bool& GetShowMeshSDFBounds() { return m_ShowMeshSDFBounds; }
+        bool& GetShowMeshSDFStats() { return m_ShowMeshSDFStats; }
 
         // 供 EditorLayer 精细控制 pass 执行
         std::vector<RenderPassConfig>& GetPassQueue() { return m_PassQueue; }
@@ -156,6 +173,9 @@ namespace Engine
         std::unordered_set<uint32_t>                      m_FluidEmitted; // 替代 FluidEmitterComponent::Emitted
         FluidRenderer                                     m_FluidRenderer;
         float                                             m_TotalTime = 0.0f;
+        bool                                              m_ShowMeshSDFBounds = false;
+        bool                                              m_ShowMeshSDFStats  = true;
+        MeshSDFFrameStats                                 m_MeshSDFFrameStats;
 
         // 完整渲染管线依赖（由外部注入）
         Ref<Framebuffer>        m_HDRFramebuffer;

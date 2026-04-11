@@ -21,7 +21,8 @@ namespace Engine
                         PostProcessingSettings* postProcessingSettings,
                         Ref<Framebuffer>        hdrFramebuffer,
                         Ref<Scene>              scene,
-                        bool*                   showPhysicsColliders);
+                        bool*                   showPhysicsColliders,
+                        bool*                   showMeshSDFBounds);
 
         void SetScene(const Ref<Scene>& scene) { m_Scene = scene; }
         void SetHDRFramebuffer(const Ref<Framebuffer>& fb) { m_HDRFramebuffer = fb; }
@@ -38,6 +39,7 @@ namespace Engine
         Ref<Framebuffer>        m_HDRFramebuffer;
         Ref<Scene>              m_Scene;
         bool*                   m_ShowPhysicsColliders = nullptr;
+        bool*                   m_ShowMeshSDFBounds    = nullptr;
         MSAAChangedCallback     m_OnMSAAChanged;
         bool                    m_ReadOnly = false;
     };

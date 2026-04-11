@@ -49,6 +49,7 @@ namespace Engine
         RenderSettingsPanel&            GetRenderSettingsPanel() { return *m_RenderSettingsPanel; }
         CommandHistory&                 GetCommandHistory() { return *m_CommandHistory; }
         bool&                           ShowPhysicsColliders() { return m_ShowPhysicsColliders; }
+        bool&                           ShowMeshSDFBounds() { return m_ShowMeshSDFBounds; }
 
     private:
         // 基础设施（先创建）
@@ -58,6 +59,7 @@ namespace Engine
         Scope<PhysicsDebugDraw>       m_PhysicsDebugDraw;
         Scope<CommandHistory>         m_CommandHistory;
         bool                          m_ShowPhysicsColliders = false;
+        bool                          m_ShowMeshSDFBounds    = false;
 
         // 面板
         Scope<SceneHierarchyPanel> m_HierarchyPanel;

@@ -53,6 +53,7 @@ namespace Engine
             *m_PanelCoordinator,
             *m_PhysicsDebugDraw,
             m_ShowPhysicsColliders,
+            m_ShowMeshSDFBounds,
         });
 
         // 初始化
@@ -63,7 +64,13 @@ namespace Engine
         m_HierarchyPanel->SetCommandHistory(m_CommandHistory.get());
         m_PanelCoordinator->Initialize(m_HierarchyPanel.get(), m_PropertiesPanel.get(), m_ConsolePanel.get(),
                                        m_AssetBrowserPanel.get(), m_RenderSettingsPanel.get(), m_CommandHistory.get());
+        m_PanelCoordinator->SetSceneRenderer(m_SceneRenderer.get());
         m_SelectionGizmoController->Initialize(m_PanelCoordinator.get(), m_CommandHistory.get());
+
+        m_RenderSettingsPanel->SetContext(&m_RenderController->GetSceneRenderer(),
+                                          m_RenderController->GetPostProcessingSettings(),
+                                          m_ViewportController->GetHDRFramebuffer(), m_SceneSession->GetEditorScene(),
+                                          &m_ShowPhysicsColliders, &m_ShowMeshSDFBounds);
 
         m_ConsolePanel->RegisterSink();
     }

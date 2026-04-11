@@ -125,6 +125,19 @@ namespace Engine
             Flush(camera.GetViewProjection());
     }
 
+    void PhysicsDebugDraw::DrawMeshSDFBounds(const std::vector<MeshSDFDebugBounds>& bounds, const EditorCamera& camera)
+    {
+        if (!m_Initialized)
+            Init();
+
+        m_LineVertices.clear();
+        for (const auto& b : bounds)
+            DrawBox(b.Center, b.HalfExtents, b.Rotation, b.Color);
+
+        if (!m_LineVertices.empty())
+            Flush(camera.GetViewProjection());
+    }
+
     void PhysicsDebugDraw::DrawLine(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color)
     {
         m_LineVertices.push_back({from, color});

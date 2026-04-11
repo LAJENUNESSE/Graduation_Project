@@ -381,14 +381,15 @@ namespace Engine
              }});
 
         m_PassQueue.push_back({"FluidPass", [this](RenderContext& ctx)
-                               {
-                                   if (!ctx.Registry)
-                                       return;
+                                {
+                                    if (!ctx.Registry)
+                                        return;
 
-                                   auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
+                                    auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
+                                    m_MeshSDFFrameStats = {};
 
-                                   // 一次性诊断：报告 FluidEmitter 实体数量
-                                   static bool s_FluidPassLogged = false;
+                                    // 一次性诊断：报告 FluidEmitter 实体数量
+                                    static bool s_FluidPassLogged = false;
                                    if (!s_FluidPassLogged)
                                    {
                                        s_FluidPassLogged = true;
@@ -418,12 +419,24 @@ namespace Engine
                                            m_FluidEmitted.insert(eid);
                                        }
 
-                                       // 每帧模拟
-                                       system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
+                                        // 每帧模拟
+                                        system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
 
-                                       // Screen-Space Fluid 渲染
-                                       m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(),
-                                                              emitter.ParticleCount, emitter.ParticleRadius,
+                                        const auto& meshStats = system->GetMeshSDFDebugStats();
+                                        if (meshStats.Enabled)
+                                        {
+                                            ++m_MeshSDFFrameStats.ActiveEmitters;
+                                            m_MeshSDFFrameStats.BodyCount += meshStats.BodyCount;
+                                            m_MeshSDFFrameStats.VoxelCount += meshStats.VoxelCount;
+                                            m_MeshSDFFrameStats.EstimatedSamples += meshStats.EstimatedSamples;
+                                            m_MeshSDFFrameStats.Resolution = std::max(m_MeshSDFFrameStats.Resolution, meshStats.Resolution);
+                                            m_MeshSDFFrameStats.Band = std::max(m_MeshSDFFrameStats.Band, meshStats.Band);
+                                            m_MeshSDFFrameStats.BuildCpuMs += meshStats.LastBuildCpuMs;
+                                        }
+
+                                        // Screen-Space Fluid 渲染
+                                        m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(),
+                                                               emitter.ParticleCount, emitter.ParticleRadius,
                                                               ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection(),
                                                               ctx.SceneColorTexID, ctx.SceneDepthTexID, emitter);
                                    }
