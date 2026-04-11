@@ -290,11 +290,9 @@ namespace Engine
         m_CompositeShader->SetInt("u_SceneColor", 2);
 
         RenderCommand::BindTextureUnit(3, sceneDepthTexID);
-        m_CompositeShader->SetInt("u_SceneDepth", 3);
 
         // Uniforms
         m_CompositeShader->SetMat4("u_InvProjection", invProjection);
-        m_CompositeShader->SetMat4("u_InvView", invView);
         m_CompositeShader->SetFloat2("u_ScreenSize", glm::vec2(m_Width, m_Height));
 
         m_CompositeShader->SetFloat3("u_FluidColor", emitter.FluidColor);
@@ -303,6 +301,7 @@ namespace Engine
         m_CompositeShader->SetFloat("u_FresnelPower", emitter.FresnelPower);
         m_CompositeShader->SetFloat("u_RefractionStrength", emitter.RefractionStrength);
         m_CompositeShader->SetFloat("u_Reflectivity", emitter.Reflectivity);
+        m_CompositeShader->SetFloat("u_RefractiveIndex", 1.333f);
 
         RenderFullscreenQuad();
 
