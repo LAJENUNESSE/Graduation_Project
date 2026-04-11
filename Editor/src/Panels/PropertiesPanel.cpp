@@ -517,6 +517,10 @@ namespace Engine
         DrawComponent<ParticleEmitterComponent>(
             "粒子发射器", entity, [this](auto& component)
             { m_FrameModified |= PropertiesPanelCustomDrawers::DrawParticleEmitterInspector(component); });
+        // FluidEmitter
+        DrawComponent<FluidEmitterComponent>(
+            "流体发射器", entity, [this](auto& component)
+            { m_FrameModified |= PropertiesPanelCustomDrawers::DrawFluidEmitterInspector(component); });
         // CollisionParticleTrigger — 通过反射自动绘制
 
         // AudioSource

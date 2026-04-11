@@ -13,6 +13,7 @@ namespace Engine
         bool DrawMeshRendererInspector(MeshRendererComponent& component);
         bool DrawTerrainInspector(TerrainComponent& component);
         bool DrawParticleEmitterInspector(ParticleEmitterComponent& component);
+        bool DrawFluidEmitterInspector(FluidEmitterComponent& component);
         bool DrawAudioSourceInspector(AudioSourceComponent& component, const AudioRuntimeState* runtimeState = nullptr);
         bool DrawAudioListenerInspector(AudioListenerComponent& component);
         bool DrawVideoPlayerInspector(VideoPlayerComponent& component, const VideoRuntimeState* runtimeState = nullptr);

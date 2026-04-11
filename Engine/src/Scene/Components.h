@@ -461,6 +461,15 @@ namespace Engine
 
     struct FluidEmitterComponent
     {
+        enum class Preset
+        {
+            Custom = 0,
+            FaucetWater,
+            MudFlow,
+            MountainEruption
+        };
+        Preset CurrentPreset = Preset::Custom;
+
         // 发射参数
         uint32_t  ParticleCount   = 5000;
         float     ParticleRadius  = 0.02f;
@@ -511,6 +520,108 @@ namespace Engine
 
         FluidEmitterComponent()                             = default;
         FluidEmitterComponent(const FluidEmitterComponent&) = default;
+
+        static void ApplyPreset(FluidEmitterComponent& emitter, Preset preset)
+        {
+            emitter.CurrentPreset = preset;
+
+            switch (preset)
+            {
+            case Preset::FaucetWater:
+                emitter.ParticleCount      = 12000;
+                emitter.ParticleRadius     = 0.014f;
+                emitter.EmitExtents        = {0.03f, 0.03f, 0.03f};
+                emitter.InitialVelocity    = {0.0f, -5.5f, 0.0f};
+                emitter.RestDensity        = 1000.0f;
+                emitter.GasConstant        = 65.0f;
+                emitter.Viscosity          = 2.0f;
+                emitter.SmoothingRadius    = 0.075f;
+                emitter.ParticleMass       = 0.018f;
+                emitter.Gravity            = {0.0f, -9.81f, 0.0f};
+                emitter.Damping            = 0.998f;
+                emitter.PCISPHEnabled      = true;
+                emitter.PCISPHIterations   = 4;
+                emitter.PCISPHDelta        = 0.3f;
+                emitter.SurfaceTension     = 0.1f;
+                emitter.RigidBodyCoupling  = true;
+                emitter.MeshSDFCoupling    = true;
+                emitter.MeshSDFResolution  = 28;
+                emitter.MeshSDFBand        = 0.035f;
+                emitter.BoundaryStiffness  = 9000.0f;
+                emitter.BoundaryDamping    = 0.35f;
+                emitter.MeshSDFBlend       = 1.0f;
+                emitter.UseBoundary        = true;
+                emitter.FluidColor         = {0.08f, 0.45f, 0.95f};
+                emitter.AbsorptionColor    = {0.25f, 0.35f, 0.6f};
+                emitter.AbsorptionScale    = 3.5f;
+                emitter.RefractionStrength = 0.06f;
+                emitter.Reflectivity       = 0.03f;
+                break;
+            case Preset::MudFlow:
+                emitter.ParticleCount      = 9000;
+                emitter.ParticleRadius     = 0.02f;
+                emitter.EmitExtents        = {0.18f, 0.09f, 0.18f};
+                emitter.InitialVelocity    = {0.0f, -1.5f, 0.6f};
+                emitter.RestDensity        = 1450.0f;
+                emitter.GasConstant        = 120.0f;
+                emitter.Viscosity          = 14.0f;
+                emitter.SmoothingRadius    = 0.11f;
+                emitter.ParticleMass       = 0.028f;
+                emitter.Gravity            = {0.0f, -9.81f, 0.0f};
+                emitter.Damping            = 0.996f;
+                emitter.PCISPHEnabled      = true;
+                emitter.PCISPHIterations   = 5;
+                emitter.PCISPHDelta        = 0.28f;
+                emitter.SurfaceTension     = 0.4f;
+                emitter.RigidBodyCoupling  = true;
+                emitter.MeshSDFCoupling    = true;
+                emitter.MeshSDFResolution  = 24;
+                emitter.MeshSDFBand        = 0.055f;
+                emitter.BoundaryStiffness  = 13000.0f;
+                emitter.BoundaryDamping    = 0.55f;
+                emitter.MeshSDFBlend       = 1.0f;
+                emitter.UseBoundary        = true;
+                emitter.FluidColor         = {0.33f, 0.2f, 0.09f};
+                emitter.AbsorptionColor    = {0.65f, 0.42f, 0.18f};
+                emitter.AbsorptionScale    = 8.0f;
+                emitter.RefractionStrength = 0.02f;
+                emitter.Reflectivity       = 0.01f;
+                break;
+            case Preset::MountainEruption:
+                emitter.ParticleCount      = 15000;
+                emitter.ParticleRadius     = 0.016f;
+                emitter.EmitExtents        = {0.14f, 0.06f, 0.14f};
+                emitter.InitialVelocity    = {0.0f, 8.0f, 1.8f};
+                emitter.RestDensity        = 1250.0f;
+                emitter.GasConstant        = 160.0f;
+                emitter.Viscosity          = 8.0f;
+                emitter.SmoothingRadius    = 0.095f;
+                emitter.ParticleMass       = 0.02f;
+                emitter.Gravity            = {0.0f, -9.81f, 0.0f};
+                emitter.Damping            = 0.995f;
+                emitter.PCISPHEnabled      = true;
+                emitter.PCISPHIterations   = 4;
+                emitter.PCISPHDelta        = 0.26f;
+                emitter.SurfaceTension     = 0.25f;
+                emitter.RigidBodyCoupling  = true;
+                emitter.MeshSDFCoupling    = true;
+                emitter.MeshSDFResolution  = 26;
+                emitter.MeshSDFBand        = 0.05f;
+                emitter.BoundaryStiffness  = 11000.0f;
+                emitter.BoundaryDamping    = 0.42f;
+                emitter.MeshSDFBlend       = 1.0f;
+                emitter.UseBoundary        = true;
+                emitter.FluidColor         = {0.55f, 0.16f, 0.08f};
+                emitter.AbsorptionColor    = {0.85f, 0.38f, 0.12f};
+                emitter.AbsorptionScale    = 6.5f;
+                emitter.RefractionStrength = 0.03f;
+                emitter.Reflectivity       = 0.02f;
+                break;
+            case Preset::Custom:
+            default:
+                break;
+            }
+        }
     };
 
 } // namespace Engine

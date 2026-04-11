@@ -15,6 +15,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <algorithm>
 
 namespace Engine
 {
@@ -636,6 +637,58 @@ namespace Engine
                     ImGui::DragFloat("边界刚度", &component.SPH.BoundaryStiffness, 100.0f, 100.0f, 50000.0f, "%.0f");
                 changed |= ImGui::DragFloat("边界阻尼", &component.SPH.BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
             }
+
+            return changed;
+        }
+
+        bool DrawFluidEmitterInspector(FluidEmitterComponent& component)
+        {
+            bool        changed       = false;
+            const char* presetNames[] = {"自定义", "水龙头水流", "泥浆流", "山体喷发"};
+            int         presetIdx     = static_cast<int>(component.CurrentPreset);
+            if (ImGui::Combo("预设", &presetIdx, presetNames, 4))
+            {
+                auto preset = static_cast<FluidEmitterComponent::Preset>(presetIdx);
+                if (preset != FluidEmitterComponent::Preset::Custom)
+                    FluidEmitterComponent::ApplyPreset(component, preset);
+                else
+                    component.CurrentPreset = FluidEmitterComponent::Preset::Custom;
+                changed = true;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("发射参数");
+            int particleCount = static_cast<int>(component.ParticleCount);
+            if (ImGui::DragInt("粒子数量", &particleCount, 100.0f, 100, 300000))
+            {
+                component.ParticleCount = static_cast<uint32_t>(std::max(particleCount, 100));
+                changed                 = true;
+            }
+            changed |= ImGui::DragFloat("粒子半径", &component.ParticleRadius, 0.001f, 0.001f, 0.2f, "%.3f");
+            changed |= DrawVec3Control("发射半尺寸", component.EmitExtents);
+            changed |= DrawVec3Control("初始速度", component.InitialVelocity);
+
+            ImGui::Separator();
+            ImGui::Text("动力学");
+            changed |= ImGui::DragFloat("静止密度", &component.RestDensity, 5.0f, 100.0f, 5000.0f, "%.1f");
+            changed |= ImGui::DragFloat("气体常数", &component.GasConstant, 1.0f, 1.0f, 500.0f, "%.1f");
+            changed |= ImGui::DragFloat("粘度", &component.Viscosity, 0.1f, 0.0f, 100.0f, "%.2f");
+            changed |= ImGui::DragFloat("核半径", &component.SmoothingRadius, 0.001f, 0.01f, 0.5f, "%.3f");
+            changed |= ImGui::DragFloat("粒子质量", &component.ParticleMass, 0.001f, 0.001f, 1.0f, "%.3f");
+            changed |= DrawVec3Control("重力", component.Gravity);
+            changed |= ImGui::DragFloat("阻尼", &component.Damping, 0.001f, 0.9f, 1.0f, "%.3f");
+
+            ImGui::Separator();
+            ImGui::Text("Mesh SDF 碰撞");
+            changed |= ImGui::Checkbox("刚体耦合", &component.RigidBodyCoupling);
+            changed |= ImGui::Checkbox("Mesh SDF 耦合", &component.MeshSDFCoupling);
+            changed |= ImGui::DragInt("SDF 分辨率", &component.MeshSDFResolution, 1.0f, 8, 64);
+            changed |= ImGui::DragFloat("SDF 带宽", &component.MeshSDFBand, 0.001f, 0.0f, 0.5f, "%.3f");
+            changed |= ImGui::DragFloat("边界刚度", &component.BoundaryStiffness, 100.0f, 0.0f, 50000.0f, "%.0f");
+            changed |= ImGui::DragFloat("边界阻尼", &component.BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
+
+            if (changed && component.CurrentPreset != FluidEmitterComponent::Preset::Custom)
+                component.CurrentPreset = FluidEmitterComponent::Preset::Custom;
 
             return changed;
         }

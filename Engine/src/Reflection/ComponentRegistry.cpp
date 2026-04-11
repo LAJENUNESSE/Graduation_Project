@@ -156,6 +156,10 @@ namespace Engine
 
     ENGINE_COMPONENT(FluidEmitterComponent, "流体发射器")
 
+    static const char* s_FluidPresetNames[] = {"自定义", "水龙头水流", "泥浆流", "山体喷发"};
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, CurrentPreset, "预设", Enum, hints.EnumNames = s_FluidPresetNames;
+                       hints.EnumCount = 4)
+
     // 发射参数
     ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleCount, "粒子数量", UInt32, hints.Speed = 100.0f;
                        hints.Min = 100.0f;
@@ -258,6 +262,8 @@ namespace Engine
                        hints.Format = "%.0f")
 
     REGISTER_COMPONENT_BEGIN(FluidEmitterComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, CurrentPreset)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleCount)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleRadius)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, EmitExtents)
