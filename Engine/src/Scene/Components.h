@@ -508,12 +508,12 @@ namespace Engine
         glm::vec3 BoundaryMax = {1.0f, 1.0f, 1.0f};
 
         // 渲染参数
-        glm::vec3 FluidColor         = {0.1f, 0.4f, 0.8f};
-        glm::vec3 AbsorptionColor    = {0.5f, 0.2f, 0.05f};
-        float     AbsorptionScale    = 5.0f;
-        float     FresnelPower       = 3.0f;
-        float     RefractionStrength = 0.05f;
-        float     Reflectivity       = 0.04f;
+        glm::vec3 FluidColor         = {0.1f, 0.42f, 0.85f};
+        glm::vec3 AbsorptionColor    = {0.08f, 0.12f, 0.2f};
+        float     AbsorptionScale    = 1.2f;
+        float     FresnelPower       = 4.0f;
+        float     RefractionStrength = 0.08f;
+        float     Reflectivity       = 0.12f;
         int       SmoothIterations   = 2;
         float     SmoothFilterRadius = 5.0f;
         float     SmoothDepthFalloff = 100.0f;
@@ -529,7 +529,7 @@ namespace Engine
             {
             case Preset::FaucetWater:
                 emitter.ParticleCount      = 12000;
-                emitter.ParticleRadius     = 0.014f;
+                emitter.ParticleRadius     = 0.018f;
                 emitter.EmitExtents        = {0.03f, 0.03f, 0.03f};
                 emitter.InitialVelocity    = {0.0f, -5.5f, 0.0f};
                 emitter.RestDensity        = 1000.0f;
@@ -542,7 +542,7 @@ namespace Engine
                 emitter.PCISPHEnabled      = true;
                 emitter.PCISPHIterations   = 4;
                 emitter.PCISPHDelta        = 0.3f;
-                emitter.SurfaceTension     = 0.1f;
+                emitter.SurfaceTension     = 0.22f;
                 emitter.RigidBodyCoupling  = true;
                 emitter.MeshSDFCoupling    = true;
                 emitter.MeshSDFResolution  = 28;
@@ -551,11 +551,15 @@ namespace Engine
                 emitter.BoundaryDamping    = 0.35f;
                 emitter.MeshSDFBlend       = 1.0f;
                 emitter.UseBoundary        = true;
-                emitter.FluidColor         = {0.08f, 0.45f, 0.95f};
-                emitter.AbsorptionColor    = {0.25f, 0.35f, 0.6f};
-                emitter.AbsorptionScale    = 3.5f;
-                emitter.RefractionStrength = 0.06f;
-                emitter.Reflectivity       = 0.03f;
+                emitter.FluidColor         = {0.12f, 0.52f, 0.98f};
+                emitter.AbsorptionColor    = {0.06f, 0.09f, 0.16f};
+                emitter.AbsorptionScale    = 1.0f;
+                emitter.FresnelPower       = 4.8f;
+                emitter.RefractionStrength = 0.09f;
+                emitter.Reflectivity       = 0.16f;
+                emitter.SmoothIterations   = 3;
+                emitter.SmoothFilterRadius = 4.0f;
+                emitter.SmoothDepthFalloff = 70.0f;
                 break;
             case Preset::MudFlow:
                 emitter.ParticleCount      = 9000;
@@ -581,11 +585,15 @@ namespace Engine
                 emitter.BoundaryDamping    = 0.55f;
                 emitter.MeshSDFBlend       = 1.0f;
                 emitter.UseBoundary        = true;
-                emitter.FluidColor         = {0.33f, 0.2f, 0.09f};
+                emitter.FluidColor         = {0.36f, 0.24f, 0.12f};
                 emitter.AbsorptionColor    = {0.65f, 0.42f, 0.18f};
-                emitter.AbsorptionScale    = 8.0f;
-                emitter.RefractionStrength = 0.02f;
-                emitter.Reflectivity       = 0.01f;
+                emitter.AbsorptionScale    = 4.0f;
+                emitter.FresnelPower       = 2.2f;
+                emitter.RefractionStrength = 0.04f;
+                emitter.Reflectivity       = 0.08f;
+                emitter.SmoothIterations   = 2;
+                emitter.SmoothFilterRadius = 5.5f;
+                emitter.SmoothDepthFalloff = 115.0f;
                 break;
             case Preset::MountainEruption:
                 emitter.ParticleCount      = 15000;
@@ -611,11 +619,15 @@ namespace Engine
                 emitter.BoundaryDamping    = 0.42f;
                 emitter.MeshSDFBlend       = 1.0f;
                 emitter.UseBoundary        = true;
-                emitter.FluidColor         = {0.55f, 0.16f, 0.08f};
-                emitter.AbsorptionColor    = {0.85f, 0.38f, 0.12f};
-                emitter.AbsorptionScale    = 6.5f;
-                emitter.RefractionStrength = 0.03f;
-                emitter.Reflectivity       = 0.02f;
+                emitter.FluidColor         = {0.66f, 0.2f, 0.09f};
+                emitter.AbsorptionColor    = {0.78f, 0.3f, 0.1f};
+                emitter.AbsorptionScale    = 3.8f;
+                emitter.FresnelPower       = 2.6f;
+                emitter.RefractionStrength = 0.05f;
+                emitter.Reflectivity       = 0.1f;
+                emitter.SmoothIterations   = 2;
+                emitter.SmoothFilterRadius = 4.8f;
+                emitter.SmoothDepthFalloff = 95.0f;
                 break;
             case Preset::Custom:
             default:

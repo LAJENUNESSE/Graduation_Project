@@ -124,7 +124,7 @@ namespace Engine
         m_EmitShader->SetFloat3("u_EmitExtents", emitter.EmitExtents);
         m_EmitShader->SetFloat3("u_InitialVelocity", emitter.InitialVelocity);
         m_EmitShader->SetInt("u_ParticleCount", static_cast<int>(m_ParticleCount));
-        m_EmitShader->SetFloat("u_Time", 0.0f);
+        m_EmitShader->SetFloat("u_Time", m_TotalTime);
 
         uint32_t groups = (m_ParticleCount + 63) / 64;
         RenderCommand::DispatchCompute(groups);
