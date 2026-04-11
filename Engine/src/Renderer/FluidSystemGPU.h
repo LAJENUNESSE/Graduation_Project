@@ -9,6 +9,7 @@
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <vector>
 
 namespace Engine
 {
@@ -18,6 +19,28 @@ namespace Engine
     class FluidSystemGPU
     {
     public:
+        struct MeshSDFDebugBody
+        {
+            glm::vec3 Center      = glm::vec3(0.0f);
+            glm::vec3 HalfExtents = glm::vec3(0.0f);
+            glm::vec3 Rotation    = glm::vec3(0.0f);
+            uint32_t  Resolution  = 0;
+            uint32_t  VoxelCount  = 0;
+            float     Band        = 0.0f;
+            float     Blend       = 0.0f;
+        };
+
+        struct MeshSDFDebugStats
+        {
+            uint32_t BodyCount          = 0;
+            uint32_t VoxelCount         = 0;
+            uint32_t EstimatedSamples   = 0;
+            uint32_t Resolution         = 0;
+            float    Band               = 0.0f;
+            float    LastBuildCpuMs     = 0.0f;
+            bool     Enabled            = false;
+        };
+
         FluidSystemGPU(uint32_t particleCount);
         ~FluidSystemGPU();
 
@@ -31,6 +54,8 @@ namespace Engine
         uint32_t                 GetParticleCount() const { return m_ParticleCount; }
         Ref<ShaderStorageBuffer> GetParticleBuffer() const { return m_ParticleBuffer; }
         Ref<VertexArray>         GetEmptyVAO() const { return m_EmptyVAO; }
+        const std::vector<MeshSDFDebugBody>& GetMeshSDFDebugBodies() const { return m_MeshSDFDebugBodies; }
+        const MeshSDFDebugStats&             GetMeshSDFDebugStats() const { return m_MeshSDFDebugStats; }
 
     private:
         uint32_t m_ParticleCount;
@@ -63,6 +88,10 @@ namespace Engine
         Ref<ShaderStorageBuffer> m_MeshSDFVoxelBuffer;  // Mesh SDF 体素值, binding 11
         Ref<ShaderStorageBuffer> m_SurfaceNormalBuffer; // vec4/particle, binding 8 (Akinci 表面法线)
         bool                     m_PCISPHInitialized = false;
+
+        // 调试可视化数据
+        std::vector<MeshSDFDebugBody> m_MeshSDFDebugBodies;
+        MeshSDFDebugStats             m_MeshSDFDebugStats;
 
         void InitSPH(float smoothingRadius);
         void InitPCISPH();

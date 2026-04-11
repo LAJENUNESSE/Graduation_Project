@@ -8,6 +8,7 @@
 #include "Scene/Components.h"
 
 #include <cmath>
+#include <chrono>
 #include <glad/gl.h>
 
 #include "Debug/PerformanceMonitor.h"
@@ -188,6 +189,7 @@ namespace Engine
             uint32_t rigidBodyCount = 0;
             uint32_t meshSDFCount   = 0;
             uint32_t meshSDFVoxels  = 0;
+            float    meshSDFBuildMs = 0.0f;
             if (emitter.RigidBodyCoupling && registry)
             {
                 InitRigidBodyBuffer();
@@ -197,14 +199,50 @@ namespace Engine
                 if (emitter.MeshSDFCoupling)
                 {
                     InitMeshSDFBuffer();
-                    const MeshSDFUploadResult upload = UploadMeshSDFToBuffers(
+                    auto                      uploadStart = std::chrono::high_resolution_clock::now();
+                    const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
                         registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
                         static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
                         emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
-                    meshSDFCount  = upload.BodyCount;
-                    meshSDFVoxels = upload.VoxelCount;
+                    auto uploadEnd = std::chrono::high_resolution_clock::now();
+                    meshSDFCount   = upload.BodyCount;
+                    meshSDFVoxels  = upload.VoxelCount;
+                    meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
                 }
             }
+
+            m_MeshSDFDebugBodies.clear();
+            if (meshSDFCount > 0 && m_MeshSDFMetaBuffer)
+            {
+                std::vector<GPUMeshSDFData> metaReadback(meshSDFCount);
+                m_MeshSDFMetaBuffer->GetData(metaReadback.data(),
+                                             static_cast<uint32_t>(meshSDFCount * sizeof(GPUMeshSDFData)), 0);
+                m_MeshSDFDebugBodies.reserve(meshSDFCount);
+                for (const auto& meta : metaReadback)
+                {
+                    MeshSDFDebugBody dbg{};
+                    dbg.Center                  = glm::vec3(meta.posAndType);
+                    dbg.Rotation                = glm::eulerAngles(glm::quat_cast(
+                        glm::mat3(glm::vec3(meta.rotCol0), glm::vec3(meta.rotCol1), glm::vec3(meta.rotCol2))));
+                    const glm::vec3 invScale    = glm::vec3(meta.invScaleAndBlend);
+                    const glm::vec3 scale       = glm::max(glm::abs(1.0f / invScale), glm::vec3(1e-4f));
+                    const glm::vec3 worldExtent = glm::vec3(meta.localExtent) * scale;
+                    dbg.HalfExtents             = 0.5f * worldExtent;
+                    dbg.Resolution              = static_cast<uint32_t>(std::max(meta.gridParams.x, 0.0f));
+                    dbg.VoxelCount              = static_cast<uint32_t>(std::max(meta.gridParams.z, 0.0f));
+                    dbg.Band                    = meta.gridParams.w;
+                    dbg.Blend                   = meta.invScaleAndBlend.w;
+                    m_MeshSDFDebugBodies.push_back(dbg);
+                }
+            }
+
+            m_MeshSDFDebugStats.Enabled          = emitter.MeshSDFCoupling;
+            m_MeshSDFDebugStats.BodyCount        = meshSDFCount;
+            m_MeshSDFDebugStats.VoxelCount       = meshSDFVoxels;
+            m_MeshSDFDebugStats.EstimatedSamples = meshSDFCount * m_ParticleCount;
+            m_MeshSDFDebugStats.Resolution       = static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 0));
+            m_MeshSDFDebugStats.Band             = emitter.MeshSDFBand;
+            m_MeshSDFDebugStats.LastBuildCpuMs   = meshSDFBuildMs;
 
             m_PCISPHBuffer->Bind(1);
             if (m_RigidBodyBuffer)
@@ -315,6 +353,7 @@ namespace Engine
             uint32_t rigidBodyCount = 0;
             uint32_t meshSDFCount   = 0;
             uint32_t meshSDFVoxels  = 0;
+            float    meshSDFBuildMs = 0.0f;
             if (emitter.RigidBodyCoupling && registry)
             {
                 InitRigidBodyBuffer();
@@ -325,16 +364,52 @@ namespace Engine
                 if (emitter.MeshSDFCoupling)
                 {
                     InitMeshSDFBuffer();
-                    const MeshSDFUploadResult upload = UploadMeshSDFToBuffers(
+                    auto                      uploadStart = std::chrono::high_resolution_clock::now();
+                    const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
                         registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
                         static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
                         emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
-                    meshSDFCount  = upload.BodyCount;
-                    meshSDFVoxels = upload.VoxelCount;
+                    auto uploadEnd = std::chrono::high_resolution_clock::now();
+                    meshSDFCount   = upload.BodyCount;
+                    meshSDFVoxels  = upload.VoxelCount;
+                    meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
                     m_MeshSDFMetaBuffer->Bind(10);
                     m_MeshSDFVoxelBuffer->Bind(11);
                 }
             }
+
+            m_MeshSDFDebugBodies.clear();
+            if (meshSDFCount > 0 && m_MeshSDFMetaBuffer)
+            {
+                std::vector<GPUMeshSDFData> metaReadback(meshSDFCount);
+                m_MeshSDFMetaBuffer->GetData(metaReadback.data(),
+                                             static_cast<uint32_t>(meshSDFCount * sizeof(GPUMeshSDFData)), 0);
+                m_MeshSDFDebugBodies.reserve(meshSDFCount);
+                for (const auto& meta : metaReadback)
+                {
+                    MeshSDFDebugBody dbg{};
+                    dbg.Center                  = glm::vec3(meta.posAndType);
+                    dbg.Rotation                = glm::eulerAngles(glm::quat_cast(
+                        glm::mat3(glm::vec3(meta.rotCol0), glm::vec3(meta.rotCol1), glm::vec3(meta.rotCol2))));
+                    const glm::vec3 invScale    = glm::vec3(meta.invScaleAndBlend);
+                    const glm::vec3 scale       = glm::max(glm::abs(1.0f / invScale), glm::vec3(1e-4f));
+                    const glm::vec3 worldExtent = glm::vec3(meta.localExtent) * scale;
+                    dbg.HalfExtents             = 0.5f * worldExtent;
+                    dbg.Resolution              = static_cast<uint32_t>(std::max(meta.gridParams.x, 0.0f));
+                    dbg.VoxelCount              = static_cast<uint32_t>(std::max(meta.gridParams.z, 0.0f));
+                    dbg.Band                    = meta.gridParams.w;
+                    dbg.Blend                   = meta.invScaleAndBlend.w;
+                    m_MeshSDFDebugBodies.push_back(dbg);
+                }
+            }
+
+            m_MeshSDFDebugStats.Enabled          = emitter.MeshSDFCoupling;
+            m_MeshSDFDebugStats.BodyCount        = meshSDFCount;
+            m_MeshSDFDebugStats.VoxelCount       = meshSDFVoxels;
+            m_MeshSDFDebugStats.EstimatedSamples = meshSDFCount * m_ParticleCount;
+            m_MeshSDFDebugStats.Resolution       = static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 0));
+            m_MeshSDFDebugStats.Band             = emitter.MeshSDFBand;
+            m_MeshSDFDebugStats.LastBuildCpuMs   = meshSDFBuildMs;
             m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
             m_SPHShaders.ForceShader->SetInt("u_MeshSDFCount", static_cast<int>(meshSDFCount));
             m_SPHShaders.ForceShader->SetInt("u_MeshSDFVoxelCount", static_cast<int>(meshSDFVoxels));
