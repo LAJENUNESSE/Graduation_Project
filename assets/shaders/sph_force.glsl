@@ -102,6 +102,11 @@ uint hashCell(ivec3 cell, int gridSize)
     return uint(cell.x + cell.y * gridSize + cell.z * gridSize * gridSize);
 }
 
+// NVIDIA/部分驱动在某些路径下对后置函数定义解析更严格，
+// 显式前置声明可避免“undefined variable/function”误判。
+float sampleMeshSDF(int bodyIndex, vec3 localPos);
+vec3 estimateMeshSDFNormal(int bodyIndex, vec3 localPos);
+
 void main()
 {
     uint gid = gl_GlobalInvocationID.x;
