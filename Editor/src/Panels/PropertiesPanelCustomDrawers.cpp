@@ -687,6 +687,18 @@ namespace Engine
             changed |= ImGui::DragFloat("边界刚度", &component.BoundaryStiffness, 100.0f, 0.0f, 50000.0f, "%.0f");
             changed |= ImGui::DragFloat("边界阻尼", &component.BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
 
+            ImGui::Separator();
+            ImGui::Text("渲染参数");
+            changed |= ImGui::ColorEdit3("流体颜色", glm::value_ptr(component.FluidColor));
+            changed |= ImGui::ColorEdit3("吸收颜色", glm::value_ptr(component.AbsorptionColor));
+            changed |= ImGui::DragFloat("吸收强度", &component.AbsorptionScale, 0.05f, 0.0f, 20.0f, "%.2f");
+            changed |= ImGui::DragFloat("Fresnel 幂", &component.FresnelPower, 0.1f, 0.0f, 10.0f, "%.2f");
+            changed |= ImGui::DragFloat("折射强度", &component.RefractionStrength, 0.001f, 0.0f, 1.0f, "%.3f");
+            changed |= ImGui::DragFloat("反射率", &component.Reflectivity, 0.001f, 0.0f, 1.0f, "%.3f");
+            changed |= ImGui::SliderInt("平滑迭代", &component.SmoothIterations, 1, 8);
+            changed |= ImGui::DragFloat("平滑半径", &component.SmoothFilterRadius, 0.1f, 0.1f, 12.0f, "%.2f");
+            changed |= ImGui::DragFloat("深度衰减", &component.SmoothDepthFalloff, 1.0f, 1.0f, 300.0f, "%.1f");
+
             if (changed && component.CurrentPreset != FluidEmitterComponent::Preset::Custom)
                 component.CurrentPreset = FluidEmitterComponent::Preset::Custom;
 
