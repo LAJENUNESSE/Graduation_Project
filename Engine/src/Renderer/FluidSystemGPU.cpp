@@ -277,14 +277,10 @@ namespace Engine
                 // 迭代 1+：用预测位置重建空间哈希 grid
                 if (iter > 0)
                 {
-                    m_PCISPHBuffer->Bind(9); // binding 9: PCISPHData for predicted pos
                     m_Grid.Build(m_ParticleCount, true);
-                    // 重新绑定 PCISPH 使用的 buffer slots
-                    m_ParticleBuffer->Bind(0);
-                    m_AliveList->Bind(2);
+                    // Grid.Build() 将 CellHash 绑定到 slot 1，覆盖了 PCISPHBuffer
+                    // 必须恢复，否则后续 PCISPH shader（Predict/Density/Force）读不到正确的 PCISPHData
                     m_PCISPHBuffer->Bind(1);
-                    if (m_RigidBodyBuffer)
-                        m_RigidBodyBuffer->Bind(3);
                 }
 
                 // Predict: x* = pos + dt * v*
