@@ -14,11 +14,18 @@ function script:OnCreate()
 end
 
 function script:OnUpdate(dt)
-    -- 注意：当前 Lua API 不支持按名称查找实体
-    -- 需要 Scene:FindEntityByName API 才能实现此功能
-    -- 目前此脚本作为占位实现
-    local x, y, z = self.Entity:GetTranslation()
-    self._Distance = math.sqrt(x * x + y * y + z * z)
+    local target = Scene.FindEntityByName(self.TargetName)
+    if not target then
+        return
+    end
+
+    local dist = self.Entity:DistanceTo(target)
+    self._Distance = dist
+
+    if dist > self.MaxDistance then
+        Engine.Info("DistanceDestroy: distance " .. dist .. " exceeds " .. self.MaxDistance .. ", destroying self")
+        self.Entity:DestroySelf()
+    end
 end
 
 function script:OnDestroy()

@@ -257,6 +257,324 @@ namespace Engine
             return 0;
         }
 
+        // Scene API - 获取当前实例对应的 Scene 指针
+        Scene* GetSceneFromInstance(lua_State* L)
+        {
+            lua_getfield(L, LUA_REGISTRYINDEX, "LuaScriptInstance_Scene");
+            Scene* scene = static_cast<Scene*>(lua_touserdata(L, -1));
+            lua_pop(L, 1);
+            return scene;
+        }
+
+        // 将 Entity 转换为 Lua userdata（带 Engine.Entity metatable）
+        void PushEntity(lua_State* L, Entity entity)
+        {
+            Entity* userdata = static_cast<Entity*>(lua_newuserdatauv(L, sizeof(Entity), 0));
+            new (userdata) Entity(entity);
+            luaL_getmetatable(L, "Engine.Entity");
+            lua_setmetatable(L, -2);
+        }
+
+        // 将 UUID 转换为 Entity userdata（Scene 未知时返回 nil）
+        void PushEntityByUUID(lua_State* L, UUID uuid, Scene* scene)
+        {
+            if (uuid == 0)
+            {
+                lua_pushnil(L);
+                return;
+            }
+            Entity found = scene->FindEntityByUUID(uuid);
+            if (!found)
+            {
+                lua_pushnil(L);
+                return;
+            }
+            PushEntity(L, found);
+        }
+
+        // Scene:FindEntityByName(name) - 按名称查找实体
+        int LuaSceneFindEntityByName(lua_State* L)
+        {
+            const char* name  = luaL_checkstring(L, 1);
+            Scene*      scene = GetSceneFromInstance(L);
+            if (!scene)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto view = scene->GetAllEntitiesWith<TagComponent>();
+            for (auto entity : view)
+            {
+                const auto& tag = view.get<TagComponent>(entity).Tag;
+                if (tag == name)
+                {
+                    Entity e = {entity, scene};
+                    PushEntity(L, e);
+                    return 1;
+                }
+            }
+            lua_pushnil(L);
+            return 1;
+        }
+
+        // Scene:FindEntitiesWithTag(tag) - 按标签查找所有匹配实体
+        int LuaSceneFindEntitiesWithTag(lua_State* L)
+        {
+            const char* tagName = luaL_checkstring(L, 1);
+            Scene*      scene   = GetSceneFromInstance(L);
+            if (!scene)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            lua_newtable(L);
+            int  index = 1;
+            auto view  = scene->GetAllEntitiesWith<TagComponent>();
+            for (auto entity : view)
+            {
+                const auto& tag = view.get<TagComponent>(entity).Tag;
+                if (tag == tagName)
+                {
+                    Entity e = {entity, scene};
+                    PushEntity(L, e);
+                    lua_seti(L, -2, index++);
+                }
+            }
+            return 1;
+        }
+
+        // Scene:GetEntityName(entity) - 获取实体名称
+        int LuaSceneGetEntityName(lua_State* L)
+        {
+            auto*  entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            Scene* scene     = GetSceneFromInstance(L);
+            if (!entityPtr || !(*entityPtr) || !scene)
+            {
+                lua_pushstring(L, "");
+                return 1;
+            }
+            if (entityPtr->HasComponent<TagComponent>())
+            {
+                const auto& tag = entityPtr->GetComponent<TagComponent>().Tag;
+                lua_pushstring(L, tag.c_str());
+            }
+            else
+            {
+                lua_pushstring(L, "Entity");
+            }
+            return 1;
+        }
+
+        // Scene:DestroyEntity(entity) - 销毁指定实体
+        int LuaSceneDestroyEntity(lua_State* L)
+        {
+            auto*  entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            Scene* scene     = GetSceneFromInstance(L);
+            if (!entityPtr || !(*entityPtr) || !scene)
+                return 0;
+
+            entt::entity entity  = static_cast<entt::entity>(*entityPtr);
+            Entity       wrapped = {entity, scene};
+            scene->DestroyEntity(wrapped);
+            return 0;
+        }
+
+        // Entity:GetTag() - 获取实体标签
+        int LuaEntityGetTag(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr))
+            {
+                lua_pushstring(L, "");
+                return 1;
+            }
+            if (entityPtr->HasComponent<TagComponent>())
+            {
+                const auto& tag = entityPtr->GetComponent<TagComponent>().Tag;
+                lua_pushstring(L, tag.c_str());
+            }
+            else
+            {
+                lua_pushstring(L, "Entity");
+            }
+            return 1;
+        }
+
+        // Entity:SetTag(tag) - 设置实体标签
+        int LuaEntitySetTag(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr))
+                return 0;
+            const char* tag = luaL_checkstring(L, 2);
+            if (entityPtr->HasComponent<TagComponent>())
+            {
+                entityPtr->GetComponent<TagComponent>().Tag = tag;
+            }
+            return 0;
+        }
+
+        // Entity:GetParent() - 获取父实体
+        int LuaEntityGetParent(lua_State* L)
+        {
+            auto*  entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            Scene* scene     = GetSceneFromInstance(L);
+            if (!entityPtr || !(*entityPtr) || !scene)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            if (entityPtr->HasComponent<RelationshipComponent>())
+            {
+                const auto& rc = entityPtr->GetComponent<RelationshipComponent>();
+                PushEntityByUUID(L, rc.ParentID, scene);
+            }
+            else
+            {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+
+        // Entity:SetParent(parentEntity) - 设置父实体
+        int LuaEntitySetParent(lua_State* L)
+        {
+            auto*  entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            auto*  parentPtr = static_cast<Entity*>(lua_touserdata(L, 2));
+            Scene* scene     = GetSceneFromInstance(L);
+            if (!entityPtr || !(*entityPtr) || !scene)
+                return 0;
+
+            Entity child = *entityPtr;
+            if (!parentPtr || !(*parentPtr))
+            {
+                scene->RemoveParent(child);
+            }
+            else
+            {
+                Entity parent = *parentPtr;
+                scene->SetParent(child, parent);
+            }
+            return 0;
+        }
+
+        // Entity:GetChildCount() - 获取子实体数量
+        int LuaEntityGetChildCount(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr))
+            {
+                lua_pushinteger(L, 0);
+                return 1;
+            }
+            if (entityPtr->HasComponent<RelationshipComponent>())
+            {
+                const auto& rc = entityPtr->GetComponent<RelationshipComponent>();
+                lua_pushinteger(L, static_cast<lua_Integer>(rc.Children.size()));
+            }
+            else
+            {
+                lua_pushinteger(L, 0);
+            }
+            return 1;
+        }
+
+        // 递归查找子实体
+        Entity FindChildRecursive(Scene* scene, entt::entity parent, const std::string& name)
+        {
+            if (!scene->GetRegistry().any_of<RelationshipComponent>(parent))
+                return {};
+
+            const auto& rc = scene->GetRegistry().get<RelationshipComponent>(parent);
+            for (UUID childID : rc.Children)
+            {
+                Entity child = scene->FindEntityByUUID(childID);
+                if (child && child.HasComponent<TagComponent>())
+                {
+                    const auto& tag = child.GetComponent<TagComponent>().Tag;
+                    if (tag == name)
+                        return child;
+                }
+                if (child)
+                {
+                    Entity found = FindChildRecursive(scene, static_cast<entt::entity>(child), name);
+                    if (found)
+                        return found;
+                }
+            }
+            return {};
+        }
+
+        // Entity:FindChildByName(name) - 递归查找子实体
+        int LuaEntityFindChildByName(lua_State* L)
+        {
+            auto*       entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            const char* name      = luaL_checkstring(L, 2);
+            Scene*      scene     = GetSceneFromInstance(L);
+            if (!entityPtr || !(*entityPtr) || !scene)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            Entity found = FindChildRecursive(scene, static_cast<entt::entity>(*entityPtr), name);
+            if (found)
+            {
+                PushEntity(L, found);
+            }
+            else
+            {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+
+        void RegisterSceneAPI(lua_State* L)
+        {
+            lua_newtable(L);
+            lua_pushcfunction(L, LuaSceneFindEntityByName);
+            lua_setfield(L, -2, "FindEntityByName");
+            lua_pushcfunction(L, LuaSceneFindEntitiesWithTag);
+            lua_setfield(L, -2, "FindEntitiesWithTag");
+            lua_pushcfunction(L, LuaSceneGetEntityName);
+            lua_setfield(L, -2, "GetEntityName");
+            lua_pushcfunction(L, LuaSceneDestroyEntity);
+            lua_setfield(L, -2, "DestroyEntity");
+            lua_setglobal(L, "Scene");
+        }
+
+        // 向已有 Engine.Entity metatable 添加 Tag/Parent 方法
+        // 必须在 RegisterEntityMetatable 之后调用
+        void RegisterEntityTagAndParentMethods(lua_State* L)
+        {
+            luaL_getmetatable(L, "Engine.Entity");
+            if (lua_isnil(L, -1))
+            {
+                lua_pop(L, 1);
+                return;
+            }
+
+            // Tag
+            lua_pushcfunction(L, LuaEntityGetTag);
+            lua_setfield(L, -2, "GetTag");
+            lua_pushcfunction(L, LuaEntitySetTag);
+            lua_setfield(L, -2, "SetTag");
+
+            // Parent / Children
+            lua_pushcfunction(L, LuaEntityGetParent);
+            lua_setfield(L, -2, "GetParent");
+            lua_pushcfunction(L, LuaEntitySetParent);
+            lua_setfield(L, -2, "SetParent");
+            lua_pushcfunction(L, LuaEntityGetChildCount);
+            lua_setfield(L, -2, "GetChildCount");
+            lua_pushcfunction(L, LuaEntityFindChildByName);
+            lua_setfield(L, -2, "FindChildByName");
+
+            lua_pop(L, 1);
+        }
+
         int LuaEntityDistanceTo(lua_State* L)
         {
             auto* selfPtr  = static_cast<Entity*>(lua_touserdata(L, 1));
@@ -442,6 +760,8 @@ namespace Engine
         luaL_openlibs(m_State);
         RegisterEngineGlobal(m_State);
         RegisterEntityMetatable(m_State);
+        RegisterEntityTagAndParentMethods(m_State);
+        RegisterSceneAPI(m_State);
 
         return true;
     }
@@ -506,6 +826,10 @@ namespace Engine
         instance.ScenePtr   = scene;
         instance.TableRef   = luaL_ref(m_State, LUA_REGISTRYINDEX);
         m_Instances[entity] = instance;
+
+        // 将 scene 指针存入 Lua registry，供 Scene API 函数使用
+        lua_pushlightuserdata(m_State, scene);
+        lua_setfield(m_State, LUA_REGISTRYINDEX, "LuaScriptInstance_Scene");
 
         // 注入 Entity userdata
         auto& created = m_Instances[entity];

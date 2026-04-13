@@ -1,5 +1,5 @@
 -- 轨道相机：绕目标实体旋转，鼠标拖动改变角度
--- 挂载方式：添加到相机实体，指定 TargetName 为要跟随的目标名称
+-- 挂载方式：添加到相机实体，在 TargetName 中指定要跟随的目标名称
 -- 运行时：按住左键拖动旋转，滚轮调节距离
 
 local script = {}
@@ -19,14 +19,22 @@ script._LastMY = 0.0            -- 内部：上一帧鼠标 Y
 
 function script:OnCreate()
     Engine.Info("OrbitCamera OnCreate, target=" .. self.TargetName)
+    self._TargetEntity = Scene.FindEntityByName(self.TargetName)
+    if not self._TargetEntity then
+        Engine.Warn("OrbitCamera: target entity '" .. self.TargetName .. "' not found, orbiting origin")
+    end
     self._Pitch = 20.0
     self._Yaw = 0.0
 end
 
 function script:OnUpdate(dt)
-    -- 暂时无法通过 Lua 查找其他实体（FindEntityByName 未暴露）
-    -- 此脚本需要配合 Scene:FindEntityByName 使用
-    -- 目前通过 Transform 手动对齐到目标位置
+    -- 获取目标位置（优先用 Scene.FindEntityByName 查找的目标实体，否则用相机自身位置）
+    local tx, ty, tz
+    if self._TargetEntity then
+        tx, ty, tz = self._TargetEntity:GetTranslation()
+    else
+        tx, ty, tz = self.Entity:GetTranslation()
+    end
 
     local mx, my = Engine.GetMousePosition()
     if Engine.IsMouseButtonPressed(Mouse.MOUSE_LEFT) then
@@ -40,13 +48,31 @@ function script:OnUpdate(dt)
     self._LastMX = mx
     self._LastMY = my
 
-    -- 球坐标转笛卡尔
+    -- 球坐标转笛卡尔（相机相对于目标位置偏移）
     local pitchRad = math.rad(self._Pitch)
     local yawRad = math.rad(self._Yaw)
 
-    local cx = self.Distance * math.cos(pitchRad) * math.sin(yawRad)
-    local cy = self.Distance * math.sin(pitchRad) + self.HeightOffset
-    local cz = self.Distance * math.cos(pitchRad) * math.cos(yawRad)
+    local cx = tx + self.Distance * math.cos(pitchRad) * math.sin(yawRad)
+    local cy = ty + self.Distance * math.sin(pitchRad) + self.HeightOffset
+    local cz = tz + self.Distance * math.cos(pitchRad) * math.cos(yawRad)
+
+    -- 设置相机位置（偏移到目标周围）
+    self.Entity:SetTranslation(cx, cy, cz)
+
+    -- 计算朝向目标的旋转：偏航角 = atan2(dx, dz)，俯仰角 = atan2(-dy, sqrt(dx^2+dz^2))
+    local dx = tx - cx
+    local dy = (ty + self.HeightOffset) - cy
+    local dz = tz - cz
+    local yaw = math.deg(math.atan(dx, dz))
+    local pitch = math.deg(math.atan(-dy, math.sqrt(dx * dx + dz * dz)))
+    self.Entity:SetRotation(pitch, yaw, 0)
+end
+
+function script:OnDestroy()
+    Engine.Info("OrbitCamera OnDestroy")
+end
+
+return scriptRad)
 
     -- 相机朝向目标（负 Z）
     self.Entity:SetTranslation(cx, cy, cz)
