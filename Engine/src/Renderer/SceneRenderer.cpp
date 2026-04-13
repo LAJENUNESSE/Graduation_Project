@@ -12,6 +12,7 @@
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
 #include "Scene/Systems/MeshRenderSystem.h"
+#include "Scene/WorldTransformService.h"
 
 #include <glad/gl.h>
 #include <random>
@@ -118,9 +119,10 @@ namespace Engine
             m_FullscreenQuadVAO->SetIndexBuffer(ib);
         }
 
-        m_PassQueue.push_back(
-            {"LightCollect", [this](RenderContext& ctx)
-             { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache); }});
+        m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx) {
+                                   m_LightEnv =
+                                       LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache);
+                               }});
 
         m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx)
                                {
@@ -351,8 +353,12 @@ namespace Engine
 
                  for (auto entity : view)
                  {
-                     auto& transform = view.get<TransformComponent>(entity);
-                     auto& emitter   = view.get<ParticleEmitterComponent>(entity);
+                     auto& emitter = view.get<ParticleEmitterComponent>(entity);
+
+                     // 计算世界坐标（子实体的 Translation 是局部坐标，需变换到世界空间）
+                     glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                         *ctx.Registry, entity, *ctx.EntityIndex, ctx.TransformCache);
+                     glm::vec3 worldPos = glm::vec3(worldMat[3]);
 
                      uint32_t eid    = static_cast<uint32_t>(entity);
                      auto&    system = m_ParticleSystems[eid];
@@ -363,7 +369,7 @@ namespace Engine
                          system->Init();
                      }
 
-                     system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
+                     system->Update(ctx.DeltaTime, worldPos, emitter, ctx.Registry);
 
                      if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
                          RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
@@ -398,8 +404,12 @@ namespace Engine
 
                                    for (auto entity : fluidView)
                                    {
-                                       auto& transform = fluidView.get<TransformComponent>(entity);
-                                       auto& emitter   = fluidView.get<FluidEmitterComponent>(entity);
+                                       auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
+
+                                       // 计算世界坐标（子实体的 Translation 是局部坐标，需变换到世界空间）
+                                       glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                                           *ctx.Registry, entity, *ctx.EntityIndex, ctx.TransformCache);
+                                       glm::vec3 worldPos = glm::vec3(worldMat[3]);
 
                                        uint32_t eid    = static_cast<uint32_t>(entity);
                                        auto&    system = m_FluidSystems[eid];
@@ -414,12 +424,12 @@ namespace Engine
                                        // 首次发射
                                        if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
                                        {
-                                           system->Emit(transform.Translation, emitter);
+                                           system->Emit(worldPos, emitter);
                                            m_FluidEmitted.insert(eid);
                                        }
 
                                        // 每帧模拟
-                                       system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
+                                       system->Update(ctx.DeltaTime, worldPos, emitter, ctx.Registry);
 
                                        // Screen-Space Fluid 渲染
                                        m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(),
