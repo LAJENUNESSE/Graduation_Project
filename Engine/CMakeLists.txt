@@ -75,6 +75,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Systems/SkyboxSystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Systems/TerrainRenderSystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scene/Systems/VideoSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Script/LuaScriptEngine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Script/ScriptRegistry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Terrain/TerrainMeshGenerator.cpp
 )
@@ -93,6 +94,9 @@ find_package(Threads REQUIRED)
 # FFmpeg (vcpkg)
 find_package(FFMPEG REQUIRED)
 
+# Lua (vcpkg)
+find_package(Lua REQUIRED)
+
 # OpenAL (vcpkg)
 find_package(OpenAL CONFIG REQUIRED)
 
@@ -103,6 +107,7 @@ target_include_directories(Engine
     PRIVATE
         ${CMAKE_SOURCE_DIR}/vendor/bullet3/src
         ${FFMPEG_INCLUDE_DIRS}
+        ${LUA_INCLUDE_DIR}
 )
 
 target_link_libraries(Engine PUBLIC
@@ -122,6 +127,7 @@ target_link_libraries(Engine PUBLIC
     LinearMath
     Threads::Threads
     ${FFMPEG_LIBRARIES}
+    ${LUA_LIBRARIES}
     OpenAL::OpenAL
 )
 
