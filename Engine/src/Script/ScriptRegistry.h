@@ -10,6 +10,7 @@ namespace Engine
 
     struct ScriptEntry
     {
+        ScriptBackend                                      Backend = ScriptBackend::NativeCpp;
         const char*                                        DisplayName;
         std::function<std::shared_ptr<ScriptableEntity>()> Factory;
     };
@@ -27,7 +28,7 @@ namespace Engine
                       const char*                                        displayName,
                       std::function<std::shared_ptr<ScriptableEntity>()> factory)
         {
-            m_Scripts[name] = {displayName, std::move(factory)};
+            m_Scripts[name] = {ScriptBackend::NativeCpp, displayName, std::move(factory)};
         }
 
         void Bind(NativeScriptComponent& nsc, const std::string& name)
@@ -36,10 +37,25 @@ namespace Engine
             if (it == m_Scripts.end())
                 return;
 
-            nsc.ScriptName        = name;
+            if (it->second.Backend != ScriptBackend::NativeCpp)
+                return;
+
+            nsc.Backend    = ScriptBackend::NativeCpp;
+            nsc.ScriptName = name;
+            nsc.ScriptPath.clear();
             auto factory          = it->second.Factory;
             nsc.InstantiateScript = [factory](NativeScriptComponent& comp) { comp.Instance = factory(); };
             nsc.DestroyScript     = [](NativeScriptComponent& comp) { comp.Instance.reset(); };
+        }
+
+        void BindLua(NativeScriptComponent& nsc, const std::string& path)
+        {
+            nsc.Backend = ScriptBackend::Lua;
+            nsc.ScriptName.clear();
+            nsc.ScriptPath        = path;
+            nsc.InstantiateScript = nullptr;
+            nsc.DestroyScript     = nullptr;
+            nsc.Instance.reset();
         }
 
         const std::unordered_map<std::string, ScriptEntry>& GetAll() const { return m_Scripts; }

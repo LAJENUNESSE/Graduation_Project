@@ -224,7 +224,9 @@ namespace Engine
             {
                 auto& srcNsc             = srcReg.get<NativeScriptComponent>(srcEntity);
                 auto& dstNsc             = newEntity.AddComponent<NativeScriptComponent>();
+                dstNsc.Backend           = srcNsc.Backend;
                 dstNsc.ScriptName        = srcNsc.ScriptName;
+                dstNsc.ScriptPath        = srcNsc.ScriptPath;
                 dstNsc.InstantiateScript = srcNsc.InstantiateScript;
                 dstNsc.DestroyScript     = srcNsc.DestroyScript;
                 // Instance 不拷贝（运行时创建）

@@ -257,7 +257,9 @@ namespace Engine
             out << YAML::Key << "NativeScriptComponent";
             out << YAML::BeginMap;
             auto& nsc = entity.GetComponent<NativeScriptComponent>();
+            out << YAML::Key << "Backend" << YAML::Value << static_cast<int>(nsc.Backend);
             out << YAML::Key << "ScriptName" << YAML::Value << nsc.ScriptName;
+            out << YAML::Key << "ScriptPath" << YAML::Value << nsc.ScriptPath;
             out << YAML::EndMap;
         }
 
@@ -955,13 +957,23 @@ namespace Engine
                 if (nativeScriptNode)
                 {
                     auto& nsc = deserializedEntity.AddComponent<NativeScriptComponent>();
+                    if (nativeScriptNode["Backend"])
+                    {
+                        int backend = nativeScriptNode["Backend"].as<int>();
+                        nsc.Backend = (backend == static_cast<int>(ScriptBackend::Lua)) ? ScriptBackend::Lua
+                                                                                        : ScriptBackend::NativeCpp;
+                    }
+                    if (nativeScriptNode["ScriptPath"])
+                        nsc.ScriptPath = nativeScriptNode["ScriptPath"].as<std::string>();
                     if (nativeScriptNode["ScriptName"])
                     {
                         std::string scriptName = nativeScriptNode["ScriptName"].as<std::string>();
                         nsc.ScriptName         = scriptName;
-                        if (!scriptName.empty())
+                        if (nsc.Backend == ScriptBackend::NativeCpp && !scriptName.empty())
                             ScriptRegistry::Instance().Bind(nsc, scriptName);
                     }
+                    if (nsc.Backend == ScriptBackend::Lua && !nsc.ScriptPath.empty())
+                        ScriptRegistry::Instance().BindLua(nsc, nsc.ScriptPath);
                 }
 
                 // AudioSourceComponent — 通过反射 AutoSerializer 自动反序列化
