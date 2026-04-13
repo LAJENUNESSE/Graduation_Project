@@ -16,6 +16,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>
+#include <filesystem>
 
 namespace Engine
 {
@@ -822,6 +823,77 @@ namespace Engine
         bool DrawNativeScriptInspector(NativeScriptComponent& component)
         {
             bool        modified    = false;
+            const char* backendName = component.Backend == ScriptBackend::Lua ? "Lua" : "Native C++";
+            if (ImGui::BeginCombo("脚本后端", backendName))
+            {
+                bool nativeSelected = component.Backend == ScriptBackend::NativeCpp;
+                if (ImGui::Selectable("Native C++", nativeSelected))
+                {
+                    component.Backend = ScriptBackend::NativeCpp;
+                    component.ScriptPath.clear();
+                    modified = true;
+                }
+                if (ImGui::Selectable("Lua", component.Backend == ScriptBackend::Lua))
+                {
+                    component.Backend = ScriptBackend::Lua;
+                    component.ScriptName.clear();
+                    component.InstantiateScript = nullptr;
+                    component.DestroyScript     = nullptr;
+                    if (component.Instance)
+                        component.Instance.reset();
+                    modified = true;
+                }
+                ImGui::EndCombo();
+            }
+
+            if (component.Backend == ScriptBackend::Lua)
+            {
+                char pathBuf[256];
+                memset(pathBuf, 0, sizeof(pathBuf));
+                std::strncpy(pathBuf, component.ScriptPath.c_str(), sizeof(pathBuf) - 1);
+                if (ImGui::InputText("Lua 脚本", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    std::string normalizedPath;
+                    if (TryNormalizeProjectAssetPath(pathBuf, "Lua 脚本", normalizedPath))
+                    {
+                        ScriptRegistry::Instance().BindLua(component, normalizedPath);
+                        modified = true;
+                    }
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("浏览##LuaScript"))
+                {
+                    std::string relStr;
+                    if (TrySelectProjectAssetPath("*.lua", "Lua 脚本", "Lua 脚本", relStr))
+                    {
+                        ScriptRegistry::Instance().BindLua(component, relStr);
+                        modified = true;
+                    }
+                }
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload =
+                            ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::None).PayloadType))
+                    {
+                        std::string droppedPath(static_cast<const char*>(payload->Data));
+                        if (std::filesystem::path(droppedPath).extension() == ".lua")
+                        {
+                            std::string normalizedPath;
+                            if (TryNormalizeProjectAssetPath(droppedPath, "Lua 脚本", normalizedPath, false))
+                            {
+                                ScriptRegistry::Instance().BindLua(component, normalizedPath);
+                                modified = true;
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                return modified;
+            }
+
             auto&       scripts     = ScriptRegistry::Instance().GetAll();
             const char* currentName = component.ScriptName.empty() ? "(无)" : component.ScriptName.c_str();
 
@@ -839,7 +911,9 @@ namespace Engine
 
             if (ImGui::Selectable("(无)", component.ScriptName.empty()))
             {
+                component.Backend = ScriptBackend::NativeCpp;
                 component.ScriptName.clear();
+                component.ScriptPath.clear();
                 component.InstantiateScript = nullptr;
                 component.DestroyScript     = nullptr;
                 if (component.Instance)
@@ -852,6 +926,7 @@ namespace Engine
                 bool selected = (name == component.ScriptName);
                 if (ImGui::Selectable(entry.DisplayName, selected))
                 {
+                    component.Backend = ScriptBackend::NativeCpp;
                     component.Instance.reset();
                     ScriptRegistry::Instance().Bind(component, name);
                     modified = true;
