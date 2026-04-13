@@ -197,6 +197,10 @@ namespace Engine
 
     void SceneRuntimeCoordinator::OnUpdateRuntime(Timestep ts, SceneRenderer* renderer)
     {
+        // Lua 脚本热重载检测
+        if (m_LuaScriptEngine)
+            m_LuaScriptEngine->CheckAndReloadScripts();
+
         // NativeScript OnUpdate（物理之前）
         {
             auto view = m_Registry.view<NativeScriptComponent>();

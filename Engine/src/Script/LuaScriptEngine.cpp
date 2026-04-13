@@ -1215,6 +1215,10 @@ namespace Engine
         }
 
         const std::string absPath = PathUtils::PathToUtf8String(resolved);
+
+        // 记录文件修改时间，用于热重载检测
+        std::filesystem::file_time_type lastWriteTime = std::filesystem::last_write_time(resolved);
+
         if (luaL_dofile(m_State, absPath.c_str()) != LUA_OK)
         {
             const char* error = lua_tostring(m_State, -1);
@@ -1239,10 +1243,11 @@ namespace Engine
         }
 
         ScriptInstance instance;
-        instance.ScriptPath = scriptPath;
-        instance.ScenePtr   = scene;
-        instance.TableRef   = luaL_ref(m_State, LUA_REGISTRYINDEX);
-        m_Instances[entity] = instance;
+        instance.ScriptPath       = scriptPath;
+        instance.ScenePtr         = scene;
+        instance.FileModifiedTime = lastWriteTime;
+        instance.TableRef         = luaL_ref(m_State, LUA_REGISTRYINDEX);
+        m_Instances[entity]       = instance;
 
         // 将 scene 指针存入 Lua registry，供 Scene API 函数使用
         lua_pushlightuserdata(m_State, scene);
@@ -1323,6 +1328,57 @@ namespace Engine
 
         lua_pop(m_State, 1); // table
         return true;
+    }
+
+    bool LuaScriptEngine::ReloadScript(entt::entity entity)
+    {
+        auto it = m_Instances.find(entity);
+        if (it == m_Instances.end())
+            return false;
+
+        const std::string& scriptPath = it->second.ScriptPath;
+        Scene* scene                   = it->second.ScenePtr;
+
+        ENGINE_CORE_INFO("[Lua] Reloading script: {0}", scriptPath);
+
+        // 销毁旧实例（调用 OnDestroy）
+        if (it->second.TableRef != LUA_NOREF && it->second.TableRef != LUA_REFNIL)
+            luaL_unref(m_State, LUA_REGISTRYINDEX, it->second.TableRef);
+        m_Instances.erase(it);
+
+        // 重新加载脚本
+        CreateEntityInstance(entity, scene, scriptPath);
+        return true;
+    }
+
+    void LuaScriptEngine::CheckAndReloadScripts()
+    {
+        if (!m_State)
+            return;
+
+        for (auto& [entity, instance] : m_Instances)
+        {
+            if (instance.ScriptPath.empty())
+                continue;
+
+            std::filesystem::path resolved = PathUtils::ResolvePath(instance.ScriptPath);
+            if (!std::filesystem::exists(resolved))
+                continue;
+
+            try
+            {
+                auto currentTime = std::filesystem::last_write_time(resolved);
+                if (currentTime > instance.FileModifiedTime)
+                {
+                    ENGINE_CORE_INFO("[Lua] Detected script change: {0}", instance.ScriptPath);
+                    ReloadScript(entity);
+                }
+            }
+            catch (...)
+            {
+                // 忽略文件系统错误
+            }
+        }
     }
 
 } // namespace Engine
