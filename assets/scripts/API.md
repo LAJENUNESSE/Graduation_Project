@@ -36,15 +36,17 @@ return script
 
 | Lua 方法 | 说明 | 返回值 / 参数 |
 |----------|------|---------------|
-| `Entity:GetTranslation()` | 获取世界位置 | `x, y, z`（米） |
-| `Entity:SetTranslation(x, y, z)` | 设置世界位置 | 传入 x, y, z |
-| `Entity:GetRotation()` | 获取欧拉旋转角 | `x, y, z`（**度数**） |
-| `Entity:SetRotation(x, y, z)` | 设置欧拉旋转角 | 传入 x, y, z（**度数**） |
+| `Entity:GetTranslation()` | 获取局部位置（相对于父实体） | `x, y, z`（米） |
+| `Entity:SetTranslation(x, y, z)` | 设置局部位置 | 传入 x, y, z |
+| `Entity:GetWorldTranslation()` | 获取世界位置 | `x, y, z`（米） |
+| `Entity:GetRotation()` | 获取局部欧拉旋转角 | `x, y, z`（**度数**） |
+| `Entity:SetRotation(x, y, z)` | 设置局部欧拉旋转角 | 传入 x, y, z（**度数**） |
+| `Entity:GetWorldRotation()` | 获取世界欧拉旋转角 | `x, y, z`（**度数**） |
 | `Entity:GetScale()` | 获取缩放 | `x, y, z`（倍数） |
 | `Entity:SetScale(x, y, z)` | 设置缩放 | 传入 x, y, z |
-| `Entity:GetForward()` | 获取前向向量 | `x, y, z`（归一化） |
-| `Entity:Translate(dx, dy, dz)` | 相对位移 | 在当前位置上加 |
-| `Entity:Rotate(dx, dy, dz)` | 相对旋转 | 在当前角度上加（度数） |
+| `Entity:GetForward()` | 获取世界前向向量（归一化） | `x, y, z` |
+| `Entity:Translate(dx, dy, dz)` | 相对位移（局部坐标） | 在当前位置上加 |
+| `Entity:Rotate(dx, dy, dz)` | 相对旋转（局部坐标） | 在当前角度上加（度数） |
 
 ### 实体操作
 
@@ -53,8 +55,6 @@ return script
 | `Entity:GetName()` | 获取实体名称（TagComponent） |
 | `Entity:DestroySelf()` | 销毁自身实体（立即移除） |
 | `Entity:DistanceTo(other)` | 计算到另一实体的距离（米） |
-
-> **注意**：`DistanceTo(other)` 的 `other` 参数需要是一个有效的 Entity userdata。当前版本不支持通过名称查找其他实体，`FindEntityByName` API 尚未暴露给 Lua。
 
 ---
 
@@ -209,7 +209,6 @@ return script
 
 | 功能 | 说明 |
 |------|------|
-| `Scene:FindEntityByName(name)` | 按名称查找实体 |
 | 组件增删查 | `AddComponent`/`GetComponent`/`HasComponent` |
 | 碰撞回调 | `OnCollisionEnter`/`OnCollisionExit` |
 | 触发器回调 | `OnTriggerEnter`/`OnTriggerExit` |

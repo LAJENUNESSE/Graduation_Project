@@ -5,8 +5,10 @@
 #include "Core/Log.h"
 #include "Core/Input.h"
 #include "Scene/Components.h"
-#include "Scene/Scene.h"
 #include "Scene/Entity.h"
+#include "Scene/Scene.h"
+#include "Scene/SceneEntityIndex.h"
+#include "Scene/WorldTransformService.h"
 
 extern "C"
 {
@@ -69,6 +71,9 @@ namespace Engine
             lua_pushnumber(L, pos.y);
             return 2;
         }
+
+        // 前向声明：获取脚本实例对应的 Scene 指针
+        Scene* GetSceneFromInstance(lua_State* L);
 
         int LuaEntityGetTranslation(lua_State* L)
         {
@@ -137,6 +142,68 @@ namespace Engine
             return 0;
         }
 
+        int LuaEntityGetWorldTranslation(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<TransformComponent>())
+            {
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                return 3;
+            }
+
+            Scene* scene = GetSceneFromInstance(L);
+            if (!scene)
+            {
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                return 3;
+            }
+
+            // 使用 WorldTransformService 计算世界变换（包含父实体变换链）
+            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                scene->GetRegistry(), static_cast<entt::entity>(*entityPtr), scene->GetEntityIndex());
+            lua_pushnumber(L, worldMat[3].x);
+            lua_pushnumber(L, worldMat[3].y);
+            lua_pushnumber(L, worldMat[3].z);
+            return 3;
+        }
+
+        int LuaEntityGetWorldRotation(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<TransformComponent>())
+            {
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                return 3;
+            }
+
+            Scene* scene = GetSceneFromInstance(L);
+            if (!scene)
+            {
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                return 3;
+            }
+
+            // 使用 WorldTransformService 计算世界变换（包含父实体变换链）
+            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                scene->GetRegistry(), static_cast<entt::entity>(*entityPtr), scene->GetEntityIndex());
+
+            // 提取世界旋转矩阵，转为欧拉角（弧度→度数）
+            glm::quat worldQuat = glm::quat_cast(glm::mat3(worldMat));
+            glm::vec3 euler     = glm::eulerAngles(worldQuat);
+            lua_pushnumber(L, glm::degrees(euler.x));
+            lua_pushnumber(L, glm::degrees(euler.y));
+            lua_pushnumber(L, glm::degrees(euler.z));
+            return 3;
+        }
+
         int LuaEntityGetScale(lua_State* L)
         {
             auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
@@ -181,9 +248,22 @@ namespace Engine
                 return 3;
             }
 
-            const auto& r       = entityPtr->GetComponent<TransformComponent>().Rotation;
-            glm::quat   q       = glm::quat({glm::radians(r.x), glm::radians(r.y), glm::radians(r.z)});
-            glm::vec3   forward = glm::normalize(-glm::vec3(0, 0, 1) * q);
+            Scene* scene = GetSceneFromInstance(L);
+            if (!scene)
+            {
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, -1.0);
+                return 3;
+            }
+
+            // 使用 WorldTransformService 计算世界变换（包含父实体变换链），参考 adc92184 粒子/流体修复
+            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                scene->GetRegistry(), static_cast<entt::entity>(*entityPtr), scene->GetEntityIndex());
+
+            // 提取世界旋转矩阵（3x3），Rotation 存的是弧度，直接用无需再转
+            glm::mat3 worldRot(worldMat);
+            glm::vec3 forward = glm::normalize(-worldRot * glm::vec3(0, 0, 1));
             lua_pushnumber(L, forward.x);
             lua_pushnumber(L, forward.y);
             lua_pushnumber(L, forward.z);
@@ -682,10 +762,10 @@ namespace Engine
             auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
             if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<RigidBodyComponent>())
                 return 0;
-            float x = static_cast<float>(luaL_checknumber(L, 2));
-            float y = static_cast<float>(luaL_checknumber(L, 3));
-            float z = static_cast<float>(luaL_checknumber(L, 4));
-            auto& rb        = entityPtr->GetComponent<RigidBodyComponent>();
+            float x           = static_cast<float>(luaL_checknumber(L, 2));
+            float y           = static_cast<float>(luaL_checknumber(L, 3));
+            float z           = static_cast<float>(luaL_checknumber(L, 4));
+            auto& rb          = entityPtr->GetComponent<RigidBodyComponent>();
             rb.LinearVelocity = {x, y, z};
             return 0;
         }
@@ -695,11 +775,11 @@ namespace Engine
             auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
             if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<RigidBodyComponent>())
                 return 0;
-            float x = static_cast<float>(luaL_checknumber(L, 2));
-            float y = static_cast<float>(luaL_checknumber(L, 3));
-            float z = static_cast<float>(luaL_checknumber(L, 4));
-            auto& rb   = entityPtr->GetComponent<RigidBodyComponent>();
-            rb.Force   += glm::vec3{x, y, z};
+            float x  = static_cast<float>(luaL_checknumber(L, 2));
+            float y  = static_cast<float>(luaL_checknumber(L, 3));
+            float z  = static_cast<float>(luaL_checknumber(L, 4));
+            auto& rb = entityPtr->GetComponent<RigidBodyComponent>();
+            rb.Force += glm::vec3{x, y, z};
             return 0;
         }
 
@@ -710,7 +790,7 @@ namespace Engine
             if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<CameraComponent>())
                 return 0;
             float fovDeg = static_cast<float>(luaL_checknumber(L, 2));
-            auto& cam      = entityPtr->GetComponent<CameraComponent>().Camera;
+            auto& cam    = entityPtr->GetComponent<CameraComponent>().Camera;
             cam.SetPerspective(glm::radians(fovDeg), cam.GetPerspectiveNearClip(), cam.GetPerspectiveFarClip());
             return 0;
         }
@@ -722,7 +802,7 @@ namespace Engine
                 return 0;
             float nearClip = static_cast<float>(luaL_checknumber(L, 2));
             float farClip  = static_cast<float>(luaL_checknumber(L, 3));
-            auto& cam    = entityPtr->GetComponent<CameraComponent>().Camera;
+            auto& cam      = entityPtr->GetComponent<CameraComponent>().Camera;
             cam.SetPerspective(cam.GetPerspectiveVerticalFOV(), nearClip, farClip);
             return 0;
         }
@@ -733,8 +813,8 @@ namespace Engine
             auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
             if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<AudioSourceComponent>())
                 return 0;
-            const char* path = luaL_checkstring(L, 2);
-            auto& audio       = entityPtr->GetComponent<AudioSourceComponent>();
+            const char* path  = luaL_checkstring(L, 2);
+            auto&       audio = entityPtr->GetComponent<AudioSourceComponent>();
             audio.AudioPath   = path;
             audio.PlayOnStart = true;
             return 0;
@@ -755,7 +835,7 @@ namespace Engine
             auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
             if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<AudioSourceComponent>())
                 return 0;
-            float volume = static_cast<float>(luaL_checknumber(L, 2));
+            float volume                                           = static_cast<float>(luaL_checknumber(L, 2));
             entityPtr->GetComponent<AudioSourceComponent>().Volume = glm::clamp(volume, 0.0f, 1.0f);
             return 0;
         }
@@ -773,10 +853,14 @@ namespace Engine
             lua_setfield(L, -2, "GetTranslation");
             lua_pushcfunction(L, LuaEntitySetTranslation);
             lua_setfield(L, -2, "SetTranslation");
+            lua_pushcfunction(L, LuaEntityGetWorldTranslation);
+            lua_setfield(L, -2, "GetWorldTranslation");
             lua_pushcfunction(L, LuaEntityGetRotation);
             lua_setfield(L, -2, "GetRotation");
             lua_pushcfunction(L, LuaEntitySetRotation);
             lua_setfield(L, -2, "SetRotation");
+            lua_pushcfunction(L, LuaEntityGetWorldRotation);
+            lua_setfield(L, -2, "GetWorldRotation");
             lua_pushcfunction(L, LuaEntityGetScale);
             lua_setfield(L, -2, "GetScale");
             lua_pushcfunction(L, LuaEntitySetScale);
@@ -1337,7 +1421,7 @@ namespace Engine
             return false;
 
         const std::string& scriptPath = it->second.ScriptPath;
-        Scene* scene                   = it->second.ScenePtr;
+        Scene*             scene      = it->second.ScenePtr;
 
         ENGINE_CORE_INFO("[Lua] Reloading script: {0}", scriptPath);
 
