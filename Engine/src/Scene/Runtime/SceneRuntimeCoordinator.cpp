@@ -301,9 +301,34 @@ namespace Engine
 
                 auto& nsc = m_Registry.get<NativeScriptComponent>(selfEntity);
 
+                // 兼容 Lua 后端
                 if (nsc.Backend == ScriptBackend::Lua)
+                {
+                    if (m_LuaScriptEngine)
+                    {
+                        if (event.IsTrigger)
+                        {
+                            if (event.Type == CollisionEventType::Enter)
+                                m_LuaScriptEngine->DispatchTriggerEnter(selfEntity, otherEntity);
+                            else if (event.Type == CollisionEventType::Exit)
+                                m_LuaScriptEngine->DispatchTriggerExit(selfEntity, otherEntity);
+                        }
+                        else
+                        {
+                            if (event.Type == CollisionEventType::Enter)
+                                m_LuaScriptEngine->DispatchCollisionEnter(selfEntity, otherEntity, event.ContactPoint,
+                                                                          contactNormal, event.Impulse);
+                            else if (event.Type == CollisionEventType::Stay)
+                                m_LuaScriptEngine->DispatchCollisionStay(selfEntity, otherEntity, event.ContactPoint,
+                                                                         contactNormal, event.Impulse);
+                            else if (event.Type == CollisionEventType::Exit)
+                                m_LuaScriptEngine->DispatchCollisionExit(selfEntity, otherEntity);
+                        }
+                    }
                     return;
+                }
 
+                // Native C++ 后端
                 if (!nsc.Instance)
                     return;
 

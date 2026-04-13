@@ -220,6 +220,50 @@ namespace Engine
             return 0;
         }
 
+        // ========== Math helpers ==========
+        static int LuaMathClamp(lua_State* L)
+        {
+            float val = static_cast<float>(luaL_checknumber(L, 1));
+            float min = static_cast<float>(luaL_checknumber(L, 2));
+            float max = static_cast<float>(luaL_checknumber(L, 3));
+            lua_pushnumber(L, glm::clamp(val, min, max));
+            return 1;
+        }
+
+        static int LuaMathDegreesToRadians(lua_State* L)
+        {
+            float deg = static_cast<float>(luaL_checknumber(L, 1));
+            lua_pushnumber(L, glm::radians(deg));
+            return 1;
+        }
+
+        static int LuaMathRadiansToDegrees(lua_State* L)
+        {
+            float rad = static_cast<float>(luaL_checknumber(L, 1));
+            lua_pushnumber(L, glm::degrees(rad));
+            return 1;
+        }
+
+        static int LuaMathLerp(lua_State* L)
+        {
+            float a = static_cast<float>(luaL_checknumber(L, 1));
+            float b = static_cast<float>(luaL_checknumber(L, 2));
+            float t = static_cast<float>(luaL_checknumber(L, 3));
+            lua_pushnumber(L, glm::mix(a, b, t));
+            return 1;
+        }
+
+        static int LuaMathVec3(lua_State* L)
+        {
+            float x = static_cast<float>(luaL_optnumber(L, 1, 0.0));
+            float y = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+            float z = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+            lua_pushnumber(L, x);
+            lua_pushnumber(L, y);
+            lua_pushnumber(L, z);
+            return 3;
+        }
+
         int LuaEntityGetName(lua_State* L)
         {
             auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
@@ -315,6 +359,21 @@ namespace Engine
                 }
             }
             lua_pushnil(L);
+            return 1;
+        }
+
+        // Scene:CreateEntity(name) - 创建新实体
+        int LuaSceneCreateEntity(lua_State* L)
+        {
+            const char* name  = luaL_checkstring(L, 1);
+            Scene*      scene = GetSceneFromInstance(L);
+            if (!scene)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            Entity created = scene->CreateEntity(name ? name : "Entity");
+            PushEntity(L, created);
             return 1;
         }
 
@@ -536,6 +595,8 @@ namespace Engine
             lua_newtable(L);
             lua_pushcfunction(L, LuaSceneFindEntityByName);
             lua_setfield(L, -2, "FindEntityByName");
+            lua_pushcfunction(L, LuaSceneCreateEntity);
+            lua_setfield(L, -2, "CreateEntity");
             lua_pushcfunction(L, LuaSceneFindEntitiesWithTag);
             lua_setfield(L, -2, "FindEntitiesWithTag");
             lua_pushcfunction(L, LuaSceneGetEntityName);
@@ -598,6 +659,107 @@ namespace Engine
             return 1;
         }
 
+        // ========== RigidBody API ==========
+        int LuaEntityGetVelocity(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<RigidBodyComponent>())
+            {
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                lua_pushnumber(L, 0.0);
+                return 3;
+            }
+            const auto& rb = entityPtr->GetComponent<RigidBodyComponent>();
+            lua_pushnumber(L, rb.LinearVelocity.x);
+            lua_pushnumber(L, rb.LinearVelocity.y);
+            lua_pushnumber(L, rb.LinearVelocity.z);
+            return 3;
+        }
+
+        int LuaEntitySetVelocity(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<RigidBodyComponent>())
+                return 0;
+            float x = static_cast<float>(luaL_checknumber(L, 2));
+            float y = static_cast<float>(luaL_checknumber(L, 3));
+            float z = static_cast<float>(luaL_checknumber(L, 4));
+            auto& rb        = entityPtr->GetComponent<RigidBodyComponent>();
+            rb.LinearVelocity = {x, y, z};
+            return 0;
+        }
+
+        int LuaEntityApplyImpulse(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<RigidBodyComponent>())
+                return 0;
+            float x = static_cast<float>(luaL_checknumber(L, 2));
+            float y = static_cast<float>(luaL_checknumber(L, 3));
+            float z = static_cast<float>(luaL_checknumber(L, 4));
+            auto& rb   = entityPtr->GetComponent<RigidBodyComponent>();
+            rb.Force   += glm::vec3{x, y, z};
+            return 0;
+        }
+
+        // ========== Camera API ==========
+        int LuaEntitySetCameraFOV(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<CameraComponent>())
+                return 0;
+            float fovDeg = static_cast<float>(luaL_checknumber(L, 2));
+            auto& cam      = entityPtr->GetComponent<CameraComponent>().Camera;
+            cam.SetPerspective(glm::radians(fovDeg), cam.GetPerspectiveNearClip(), cam.GetPerspectiveFarClip());
+            return 0;
+        }
+
+        int LuaEntitySetCameraNearFar(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<CameraComponent>())
+                return 0;
+            float nearClip = static_cast<float>(luaL_checknumber(L, 2));
+            float farClip  = static_cast<float>(luaL_checknumber(L, 3));
+            auto& cam    = entityPtr->GetComponent<CameraComponent>().Camera;
+            cam.SetPerspective(cam.GetPerspectiveVerticalFOV(), nearClip, farClip);
+            return 0;
+        }
+
+        // ========== Audio API ==========
+        int LuaEntityPlaySound(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<AudioSourceComponent>())
+                return 0;
+            const char* path = luaL_checkstring(L, 2);
+            auto& audio       = entityPtr->GetComponent<AudioSourceComponent>();
+            audio.AudioPath   = path;
+            audio.PlayOnStart = true;
+            return 0;
+        }
+
+        int LuaEntityStopSound(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<AudioSourceComponent>())
+                return 0;
+            auto& audio       = entityPtr->GetComponent<AudioSourceComponent>();
+            audio.PlayOnStart = false;
+            return 0;
+        }
+
+        int LuaEntitySetVolume(lua_State* L)
+        {
+            auto* entityPtr = static_cast<Entity*>(lua_touserdata(L, 1));
+            if (!entityPtr || !(*entityPtr) || !entityPtr->HasComponent<AudioSourceComponent>())
+                return 0;
+            float volume = static_cast<float>(luaL_checknumber(L, 2));
+            entityPtr->GetComponent<AudioSourceComponent>().Volume = glm::clamp(volume, 0.0f, 1.0f);
+            return 0;
+        }
+
         void RegisterEntityMetatable(lua_State* L)
         {
             if (luaL_newmetatable(L, "Engine.Entity") == 0)
@@ -633,6 +795,28 @@ namespace Engine
             lua_setfield(L, -2, "DestroySelf");
             lua_pushcfunction(L, LuaEntityDistanceTo);
             lua_setfield(L, -2, "DistanceTo");
+
+            // RigidBody
+            lua_pushcfunction(L, LuaEntityGetVelocity);
+            lua_setfield(L, -2, "GetVelocity");
+            lua_pushcfunction(L, LuaEntitySetVelocity);
+            lua_setfield(L, -2, "SetVelocity");
+            lua_pushcfunction(L, LuaEntityApplyImpulse);
+            lua_setfield(L, -2, "ApplyImpulse");
+
+            // Camera
+            lua_pushcfunction(L, LuaEntitySetCameraFOV);
+            lua_setfield(L, -2, "SetCameraFOV");
+            lua_pushcfunction(L, LuaEntitySetCameraNearFar);
+            lua_setfield(L, -2, "SetCameraNearFar");
+
+            // Audio
+            lua_pushcfunction(L, LuaEntityPlaySound);
+            lua_setfield(L, -2, "PlaySound");
+            lua_pushcfunction(L, LuaEntityStopSound);
+            lua_setfield(L, -2, "StopSound");
+            lua_pushcfunction(L, LuaEntitySetVolume);
+            lua_setfield(L, -2, "SetVolume");
 
             lua_pushvalue(L, -1);
             lua_setfield(L, -2, "__index");
@@ -735,8 +919,241 @@ namespace Engine
             lua_pushinteger(L, 2);
             lua_setfield(L, -2, "MOUSE_MIDDLE");
             lua_setglobal(L, "Mouse");
+
+            // Math helpers
+            lua_newtable(L);
+
+            // Clamp
+            lua_pushcfunction(L, LuaMathClamp);
+            lua_setfield(L, -2, "Clamp");
+
+            // DegreesToRadians
+            lua_pushcfunction(L, LuaMathDegreesToRadians);
+            lua_setfield(L, -2, "DegreesToRadians");
+
+            // RadiansToDegrees
+            lua_pushcfunction(L, LuaMathRadiansToDegrees);
+            lua_setfield(L, -2, "RadiansToDegrees");
+
+            // Lerp
+            lua_pushcfunction(L, LuaMathLerp);
+            lua_setfield(L, -2, "Lerp");
+
+            // Vec3
+            lua_pushcfunction(L, LuaMathVec3);
+            lua_setfield(L, -2, "Vec3");
+
+            lua_setglobal(L, "Math");
         }
+
     } // namespace
+
+    // 碰撞信息表: { other=Entity, contact_point={x,y,z}, contact_normal={x,y,z}, impulse=number }
+    static void PushCollisionInfo(
+        lua_State* L, Entity otherEntity, const glm::vec3& contactPoint, const glm::vec3& contactNormal, float impulse)
+    {
+        lua_newtable(L);
+        PushEntity(L, otherEntity);
+        lua_setfield(L, -2, "other");
+        lua_pushnumber(L, contactPoint.x);
+        lua_pushnumber(L, contactPoint.y);
+        lua_pushnumber(L, contactPoint.z);
+        lua_setfield(L, -2, "contact_point");
+        lua_pushnumber(L, contactNormal.x);
+        lua_pushnumber(L, contactNormal.y);
+        lua_pushnumber(L, contactNormal.z);
+        lua_setfield(L, -2, "contact_normal");
+        lua_pushnumber(L, impulse);
+        lua_setfield(L, -2, "impulse");
+    }
+
+    void LuaScriptEngine::DispatchCollisionEnter(entt::entity     entity,
+                                                 entt::entity     otherEntity,
+                                                 const glm::vec3& contactPoint,
+                                                 const glm::vec3& contactNormal,
+                                                 float            impulse)
+    {
+        if (!m_State)
+            return;
+        auto it = m_Instances.find(entity);
+        if (it == m_Instances.end())
+            return;
+        Scene* scene = it->second.ScenePtr;
+        Entity otherEntityWrapped{otherEntity, scene};
+
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, it->second.TableRef);
+        if (!lua_istable(m_State, -1))
+        {
+            lua_pop(m_State, 1);
+            return;
+        }
+
+        lua_getfield(m_State, -1, "OnCollisionEnter");
+        if (!lua_isfunction(m_State, -1))
+        {
+            lua_pop(m_State, 2);
+            return;
+        }
+
+        lua_pushvalue(m_State, -2); // self
+        PushCollisionInfo(m_State, otherEntityWrapped, contactPoint, contactNormal, impulse);
+
+        if (lua_pcall(m_State, 2, 0, 0) != LUA_OK)
+        {
+            const char* error = lua_tostring(m_State, -1);
+            ENGINE_CORE_ERROR("[Lua] OnCollisionEnter failed: {0}", error ? error : "unknown");
+            lua_pop(m_State, 1);
+        }
+        lua_pop(m_State, 1); // table
+    }
+
+    void LuaScriptEngine::DispatchCollisionStay(entt::entity     entity,
+                                                entt::entity     otherEntity,
+                                                const glm::vec3& contactPoint,
+                                                const glm::vec3& contactNormal,
+                                                float            impulse)
+    {
+        if (!m_State)
+            return;
+        auto it = m_Instances.find(entity);
+        if (it == m_Instances.end())
+            return;
+        Scene* scene = it->second.ScenePtr;
+        Entity otherEntityWrapped{otherEntity, scene};
+
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, it->second.TableRef);
+        if (!lua_istable(m_State, -1))
+        {
+            lua_pop(m_State, 1);
+            return;
+        }
+
+        lua_getfield(m_State, -1, "OnCollisionStay");
+        if (!lua_isfunction(m_State, -1))
+        {
+            lua_pop(m_State, 2);
+            return;
+        }
+
+        lua_pushvalue(m_State, -2); // self
+        PushCollisionInfo(m_State, otherEntityWrapped, contactPoint, contactNormal, impulse);
+
+        if (lua_pcall(m_State, 2, 0, 0) != LUA_OK)
+        {
+            const char* error = lua_tostring(m_State, -1);
+            ENGINE_CORE_ERROR("[Lua] OnCollisionStay failed: {0}", error ? error : "unknown");
+            lua_pop(m_State, 1);
+        }
+        lua_pop(m_State, 1); // table
+    }
+
+    void LuaScriptEngine::DispatchCollisionExit(entt::entity entity, entt::entity otherEntity)
+    {
+        if (!m_State)
+            return;
+        auto it = m_Instances.find(entity);
+        if (it == m_Instances.end())
+            return;
+        Scene* scene = it->second.ScenePtr;
+        Entity otherEntityWrapped{otherEntity, scene};
+
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, it->second.TableRef);
+        if (!lua_istable(m_State, -1))
+        {
+            lua_pop(m_State, 1);
+            return;
+        }
+
+        lua_getfield(m_State, -1, "OnCollisionExit");
+        if (!lua_isfunction(m_State, -1))
+        {
+            lua_pop(m_State, 2);
+            return;
+        }
+
+        lua_pushvalue(m_State, -2); // self
+        PushEntity(m_State, otherEntityWrapped);
+
+        if (lua_pcall(m_State, 2, 0, 0) != LUA_OK)
+        {
+            const char* error = lua_tostring(m_State, -1);
+            ENGINE_CORE_ERROR("[Lua] OnCollisionExit failed: {0}", error ? error : "unknown");
+            lua_pop(m_State, 1);
+        }
+        lua_pop(m_State, 1); // table
+    }
+
+    void LuaScriptEngine::DispatchTriggerEnter(entt::entity entity, entt::entity otherEntity)
+    {
+        if (!m_State)
+            return;
+        auto it = m_Instances.find(entity);
+        if (it == m_Instances.end())
+            return;
+        Scene* scene = it->second.ScenePtr;
+        Entity otherEntityWrapped{otherEntity, scene};
+
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, it->second.TableRef);
+        if (!lua_istable(m_State, -1))
+        {
+            lua_pop(m_State, 1);
+            return;
+        }
+
+        lua_getfield(m_State, -1, "OnTriggerEnter");
+        if (!lua_isfunction(m_State, -1))
+        {
+            lua_pop(m_State, 2);
+            return;
+        }
+
+        lua_pushvalue(m_State, -2); // self
+        PushEntity(m_State, otherEntityWrapped);
+
+        if (lua_pcall(m_State, 2, 0, 0) != LUA_OK)
+        {
+            const char* error = lua_tostring(m_State, -1);
+            ENGINE_CORE_ERROR("[Lua] OnTriggerEnter failed: {0}", error ? error : "unknown");
+            lua_pop(m_State, 1);
+        }
+        lua_pop(m_State, 1); // table
+    }
+
+    void LuaScriptEngine::DispatchTriggerExit(entt::entity entity, entt::entity otherEntity)
+    {
+        if (!m_State)
+            return;
+        auto it = m_Instances.find(entity);
+        if (it == m_Instances.end())
+            return;
+        Scene* scene = it->second.ScenePtr;
+        Entity otherEntityWrapped{otherEntity, scene};
+
+        lua_rawgeti(m_State, LUA_REGISTRYINDEX, it->second.TableRef);
+        if (!lua_istable(m_State, -1))
+        {
+            lua_pop(m_State, 1);
+            return;
+        }
+
+        lua_getfield(m_State, -1, "OnTriggerExit");
+        if (!lua_isfunction(m_State, -1))
+        {
+            lua_pop(m_State, 2);
+            return;
+        }
+
+        lua_pushvalue(m_State, -2); // self
+        PushEntity(m_State, otherEntityWrapped);
+
+        if (lua_pcall(m_State, 2, 0, 0) != LUA_OK)
+        {
+            const char* error = lua_tostring(m_State, -1);
+            ENGINE_CORE_ERROR("[Lua] OnTriggerExit failed: {0}", error ? error : "unknown");
+            lua_pop(m_State, 1);
+        }
+        lua_pop(m_State, 1); // table
+    }
 
     LuaScriptEngine::LuaScriptEngine() = default;
 
