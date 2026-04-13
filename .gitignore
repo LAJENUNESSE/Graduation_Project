@@ -42,8 +42,11 @@ logs/
 # Doc
 docs/
 
-# Scripts
+# Scripts (build scripts, ignored)
 scripts/
+
+# Lua game scripts (tracked!)
+!assets/scripts/
 
 # VTune Profiler
 vtune_results/

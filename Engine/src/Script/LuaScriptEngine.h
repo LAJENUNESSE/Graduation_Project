@@ -33,6 +33,7 @@ namespace Engine
         {
             int         TableRef = 0;
             std::string ScriptPath;
+            Scene*      ScenePtr = nullptr;
         };
 
         bool CallMethod(entt::entity entity, const char* methodName, Timestep ts = Timestep(0.0f));
