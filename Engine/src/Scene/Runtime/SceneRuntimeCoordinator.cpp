@@ -9,6 +9,7 @@
 #include "Scene/SceneEntityIndex.h"
 #include "Scene/Runtime/ResourceLifecycleCoordinator.h"
 #include "Scene/Runtime/RuntimeComponents.h"
+#include "Script/LuaScriptEngine.h"
 #include "Script/NativeScriptComponent.h"
 #include "Script/ScriptableEntity.h"
 #include "Terrain/TerrainMeshGenerator.h"
@@ -47,6 +48,13 @@ namespace Engine
         m_BulletPhysicsWorld = std::make_unique<BulletPhysicsWorld>();
         m_BulletPhysicsWorld->Init();
 
+        m_LuaScriptEngine = std::make_unique<LuaScriptEngine>();
+        if (!m_LuaScriptEngine->Init())
+        {
+            ENGINE_CORE_ERROR("[Lua] LuaScriptEngine init failed; Lua backend will be ignored this run");
+            m_LuaScriptEngine.reset();
+        }
+
         // 在创建物理体之前，确保地形网格数据已生成（Scene::Copy 不拷贝 runtime 组件）
         {
             auto terrainView = m_Registry.view<TransformComponent, TerrainComponent>();
@@ -57,11 +65,11 @@ namespace Engine
                                       m_Registry.get<TerrainRuntimeComponent>(entity).MeshData;
                 if (!hasRuntimeMesh && !tc.HeightmapPath.empty())
                 {
-                    auto meshData = TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale,
-                                                                   tc.LODLevels);
-                    auto& rtc     = m_Registry.get_or_emplace<TerrainRuntimeComponent>(entity);
-                    rtc.MeshData  = std::make_unique<TerrainMeshData>(std::move(meshData));
-                    tc.MeshDirty  = false;
+                    auto meshData =
+                        TerrainMeshGenerator::Generate(tc.HeightmapPath, tc.TerrainSize, tc.HeightScale, tc.LODLevels);
+                    auto& rtc    = m_Registry.get_or_emplace<TerrainRuntimeComponent>(entity);
+                    rtc.MeshData = std::make_unique<TerrainMeshData>(std::move(meshData));
+                    tc.MeshDirty = false;
                 }
             }
         }
@@ -74,6 +82,13 @@ namespace Engine
             for (auto entity : view)
             {
                 auto& nsc = view.get<NativeScriptComponent>(entity);
+                if (nsc.Backend == ScriptBackend::Lua)
+                {
+                    if (m_LuaScriptEngine)
+                        m_LuaScriptEngine->CreateEntityInstance(entity, m_Scene, nsc.ScriptPath);
+                    continue;
+                }
+
                 if (nsc.InstantiateScript)
                 {
                     nsc.InstantiateScript(nsc);
@@ -152,6 +167,13 @@ namespace Engine
             for (auto entity : view)
             {
                 auto& nsc = view.get<NativeScriptComponent>(entity);
+                if (nsc.Backend == ScriptBackend::Lua)
+                {
+                    if (m_LuaScriptEngine)
+                        m_LuaScriptEngine->DestroyEntityInstance(entity);
+                    continue;
+                }
+
                 if (nsc.Instance)
                 {
                     nsc.Instance->OnDestroy();
@@ -165,6 +187,12 @@ namespace Engine
             m_BulletPhysicsWorld->Shutdown();
             m_BulletPhysicsWorld.reset();
         }
+
+        if (m_LuaScriptEngine)
+        {
+            m_LuaScriptEngine->Shutdown();
+            m_LuaScriptEngine.reset();
+        }
     }
 
     void SceneRuntimeCoordinator::OnUpdateRuntime(Timestep ts, SceneRenderer* renderer)
@@ -175,8 +203,15 @@ namespace Engine
             for (auto entity : view)
             {
                 auto& nsc = view.get<NativeScriptComponent>(entity);
-                if (nsc.Instance)
+                if (nsc.Backend == ScriptBackend::Lua)
+                {
+                    if (m_LuaScriptEngine)
+                        m_LuaScriptEngine->UpdateEntity(entity, ts);
+                }
+                else if (nsc.Instance)
+                {
                     nsc.Instance->OnUpdate(ts);
+                }
             }
         }
 
@@ -265,6 +300,10 @@ namespace Engine
                     return;
 
                 auto& nsc = m_Registry.get<NativeScriptComponent>(selfEntity);
+
+                if (nsc.Backend == ScriptBackend::Lua)
+                    return;
+
                 if (!nsc.Instance)
                     return;
 
