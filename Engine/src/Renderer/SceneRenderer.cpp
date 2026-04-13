@@ -119,10 +119,9 @@ namespace Engine
             m_FullscreenQuadVAO->SetIndexBuffer(ib);
         }
 
-        m_PassQueue.push_back({"LightCollect", [this](RenderContext& ctx) {
-                                   m_LightEnv =
-                                       LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache);
-                               }});
+        m_PassQueue.push_back(
+            {"LightCollect", [this](RenderContext& ctx)
+             { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache); }});
 
         m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx)
                                {
@@ -427,7 +426,7 @@ namespace Engine
                                            (emitter.CurrentPreset == FluidEmitterComponent::Preset::FaucetWater);
                                        if (continuousEmit)
                                        {
-                                           system->Emit(transform.Translation, emitter);
+                                           system->Emit(worldPos, emitter);
                                        }
                                        else if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
                                        {
