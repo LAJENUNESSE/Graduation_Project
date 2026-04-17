@@ -427,18 +427,29 @@ namespace Engine
                              *ctx.Registry, firstEntity, *ctx.EntityIndex, ctx.TransformCache);
                          glm::vec3 worldPos0 = glm::vec3(worldMat0[3]);
                          uint32_t  eid0      = static_cast<uint32_t>(firstEntity);
+                         glm::vec3 camPos(0.0f), camFwd(0.0f, 0.0f, -1.0f);
+                         float     distToEmitter = -1.0f;
+                         if (ctx.Camera)
+                         {
+                             camPos        = ctx.Camera->GetPosition();
+                             camFwd        = ctx.Camera->GetForwardDirection();
+                             distToEmitter = glm::length(worldPos0 - camPos);
+                         }
                          ENGINE_WARN("[FluidPass][diag] frame={} entities={} eid0={} "
                                      "worldPos=({:.3f},{:.3f},{:.3f}) particleCount={} "
                                      "radius={:.4f} preset={} useBoundary={} "
                                      "bMin=({:.2f},{:.2f},{:.2f}) bMax=({:.2f},{:.2f},{:.2f}) "
-                                     "emitted={} viewport={}x{}",
+                                     "emitted={} viewport={}x{} "
+                                     "camPos=({:.3f},{:.3f},{:.3f}) camFwd=({:.3f},{:.3f},{:.3f}) "
+                                     "distToEmitter={:.3f}",
                                      s_FluidPassFrame, entityCount, eid0, worldPos0.x, worldPos0.y, worldPos0.z,
                                      emitter0.ParticleCount, emitter0.ParticleRadius,
                                      static_cast<int>(emitter0.CurrentPreset), emitter0.UseBoundary ? 1 : 0,
                                      emitter0.BoundaryMin.x, emitter0.BoundaryMin.y, emitter0.BoundaryMin.z,
                                      emitter0.BoundaryMax.x, emitter0.BoundaryMax.y, emitter0.BoundaryMax.z,
                                      m_FluidEmitted.find(eid0) != m_FluidEmitted.end() ? 1 : 0, ctx.ViewportWidth,
-                                     ctx.ViewportHeight);
+                                     ctx.ViewportHeight, camPos.x, camPos.y, camPos.z, camFwd.x, camFwd.y, camFwd.z,
+                                     distToEmitter);
                      }
                  }
 

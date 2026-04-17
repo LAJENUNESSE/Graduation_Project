@@ -193,31 +193,54 @@ namespace Engine
         emptyVAO->Bind();
         RenderCommand::DrawArraysInstanced(6, particleCount);
 
-        // [DIAG] 首次运行时读回 R32F depth 纹理 5 个采样点（中心 + 四角偏内）
-        // < 1e9 表示有粒子覆盖；= 1e10 表示该点未被任何粒子覆盖
+        // [DIAG] 首次运行时扫描整张 R32F depth 纹理，统计 coverage/min/max
+        // 并按 2x2 象限报告 bounding box，判断粒子云落在屏幕哪个区域
         static bool s_DepthReadbackLogged = false;
         if (!s_DepthReadbackLogged)
         {
             s_DepthReadbackLogged = true;
-            // 仍绑定在 m_DepthFBO 上，直接 glReadPixels 读取 attachment 0 (R32F)
             glReadBuffer(GL_COLOR_ATTACHMENT0);
-            float pixels[5] = {0};
-            int   cx        = static_cast<int>(m_Width) / 2;
-            int   cy        = static_cast<int>(m_Height) / 2;
-            int   qx        = static_cast<int>(m_Width) / 4;
-            int   qy        = static_cast<int>(m_Height) / 4;
-            glReadPixels(cx, cy, 1, 1, GL_RED, GL_FLOAT, &pixels[0]);
-            glReadPixels(qx, qy, 1, 1, GL_RED, GL_FLOAT, &pixels[1]);
-            glReadPixels(cx + qx, qy, 1, 1, GL_RED, GL_FLOAT, &pixels[2]);
-            glReadPixels(qx, cy + qy, 1, 1, GL_RED, GL_FLOAT, &pixels[3]);
-            glReadPixels(cx + qx, cy + qy, 1, 1, GL_RED, GL_FLOAT, &pixels[4]);
-            int coveredCount = 0;
-            for (float p : pixels)
-                if (p < 1e9f)
-                    coveredCount++;
-            ENGINE_WARN("[FluidRenderer][diag] depth readback: center={:.4f} q1={:.4f} q2={:.4f} "
-                        "q3={:.4f} q4={:.4f} coveredPoints={}/5 (< 1e9 = 有粒子)",
-                        pixels[0], pixels[1], pixels[2], pixels[3], pixels[4], coveredCount);
+            const int          W = static_cast<int>(m_Width);
+            const int          H = static_cast<int>(m_Height);
+            std::vector<float> buf(static_cast<size_t>(W) * H, 0.0f);
+            glReadPixels(0, 0, W, H, GL_RED, GL_FLOAT, buf.data());
+
+            uint32_t coverage = 0;
+            float    minZ     = 1e10f;
+            float    maxZ     = -1e10f;
+            int      minX = W, minY = H, maxX = -1, maxY = -1;
+            // 4 象限 coverage（像素计数）
+            uint32_t q[4] = {0, 0, 0, 0}; // TL, TR, BL, BR
+            for (int y = 0; y < H; ++y)
+            {
+                for (int x = 0; x < W; ++x)
+                {
+                    float v = buf[static_cast<size_t>(y) * W + x];
+                    if (v < 1e9f)
+                    {
+                        ++coverage;
+                        if (v < minZ)
+                            minZ = v;
+                        if (v > maxZ)
+                            maxZ = v;
+                        if (x < minX)
+                            minX = x;
+                        if (y < minY)
+                            minY = y;
+                        if (x > maxX)
+                            maxX = x;
+                        if (y > maxY)
+                            maxY = y;
+                        int qi = (x < W / 2 ? 0 : 1) + (y < H / 2 ? 0 : 2);
+                        ++q[qi];
+                    }
+                }
+            }
+            float coveragePct = 100.0f * static_cast<float>(coverage) / (static_cast<float>(W) * H);
+            ENGINE_WARN("[FluidRenderer][diag] depth scan (full {}x{}): coverage={} px ({:.3f}%) "
+                        "viewZ range=[{:.3f},{:.3f}] bbox=({}..{}, {}..{}) "
+                        "quadPx TL={} TR={} BL={} BR={}",
+                        W, H, coverage, coveragePct, minZ, maxZ, minX, maxX, minY, maxY, q[0], q[1], q[2], q[3]);
         }
 
         m_DepthFBO->Unbind();
