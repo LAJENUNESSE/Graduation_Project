@@ -174,8 +174,30 @@ namespace Engine
         // ================================================================
         // Pass 1: Depth — sphere impostor rendering to R32F
         // ================================================================
+        // [DIAG] 清除历史 GL error
+        static bool s_DepthPipelineDiagLogged = false;
+        if (!s_DepthPipelineDiagLogged)
+        {
+            while (glGetError() != GL_NO_ERROR)
+            {
+            }
+        }
+
         m_DepthFBO->Bind();
         RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+
+        // [DIAG] Depth FBO 绑定后检查 completeness + error
+        if (!s_DepthPipelineDiagLogged)
+        {
+            GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            GLint  curFBO = 0, curViewport[4] = {0};
+            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &curFBO);
+            glGetIntegerv(GL_VIEWPORT, curViewport);
+            ENGINE_WARN("[FluidRenderer][diag] after DepthFBO->Bind: status=0x{:X} (COMPLETE=0x8CD5) "
+                        "curFBO={} viewport=({},{},{},{}) glErr=0x{:X}",
+                        fboStatus, curFBO, curViewport[0], curViewport[1], curViewport[2], curViewport[3],
+                        glGetError());
+        }
 
         // Clear depth FBO to far value (1e10)
         glClearColor(1e10f, 0.0f, 0.0f, 0.0f);
@@ -190,8 +212,58 @@ namespace Engine
         m_DepthShader->SetMat4("u_Projection", projection);
         m_DepthShader->SetFloat("u_ParticleRadius", particleRadius);
 
+        // [DIAG] shader bind 后：读取 program ID + SSBO binding point 0 的实际 buffer
+        if (!s_DepthPipelineDiagLogged)
+        {
+            GLint curProgram = 0, ssbo0 = 0, ssbo0Size = 0;
+            glGetIntegerv(GL_CURRENT_PROGRAM, &curProgram);
+            glGetIntegeri_v(GL_SHADER_STORAGE_BUFFER_BINDING, 0, &ssbo0);
+            if (ssbo0 != 0)
+            {
+                glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo0);
+                GLint64 s64 = 0;
+                glGetBufferParameteri64v(GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &s64);
+                ssbo0Size = static_cast<GLint>(s64);
+                glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            }
+            GLint programLinked = 0;
+            if (curProgram != 0)
+                glGetProgramiv(curProgram, GL_LINK_STATUS, &programLinked);
+            ENGINE_WARN("[FluidRenderer][diag] after DepthShader->Bind: program={} linked={} "
+                        "ssboBinding0.buffer={} ssboBinding0.size={} bytes glErr=0x{:X}",
+                        curProgram, programLinked, ssbo0, ssbo0Size, glGetError());
+        }
+
         emptyVAO->Bind();
+
+        // [DIAG] VAO + 状态
+        if (!s_DepthPipelineDiagLogged)
+        {
+            GLint curVAO = 0;
+            glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &curVAO);
+            GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
+            GLboolean cullFace  = glIsEnabled(GL_CULL_FACE);
+            GLboolean blend     = glIsEnabled(GL_BLEND);
+            GLint     cullMode = 0, frontFace = 0, depthMask = 0, depthFunc = 0;
+            glGetIntegerv(GL_CULL_FACE_MODE, &cullMode);
+            glGetIntegerv(GL_FRONT_FACE, &frontFace);
+            glGetIntegerv(GL_DEPTH_WRITEMASK, &depthMask);
+            glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
+            ENGINE_WARN("[FluidRenderer][diag] before Draw: VAO={} depthTest={} depthMask={} depthFunc=0x{:X} "
+                        "cullFace={} cullMode=0x{:X} frontFace=0x{:X} blend={} glErr=0x{:X}",
+                        curVAO, static_cast<int>(depthTest), depthMask, depthFunc, static_cast<int>(cullFace), cullMode,
+                        frontFace, static_cast<int>(blend), glGetError());
+        }
+
         RenderCommand::DrawArraysInstanced(6, particleCount);
+
+        // [DIAG] Draw 之后查 error
+        if (!s_DepthPipelineDiagLogged)
+        {
+            ENGINE_WARN("[FluidRenderer][diag] after DrawArraysInstanced(6, {}): glErr=0x{:X}", particleCount,
+                        glGetError());
+            s_DepthPipelineDiagLogged = true;
+        }
 
         // [DIAG] 首次运行时扫描整张 R32F depth 纹理，统计 coverage/min/max
         // 并按 2x2 象限报告 bounding box，判断粒子云落在屏幕哪个区域
