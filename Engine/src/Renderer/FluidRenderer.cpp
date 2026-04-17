@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Renderer/FluidRenderer.h"
+#include "Core/Log.h"
 #include "Renderer/Buffer.h"
 #include "Renderer/RenderCommand.h"
 #include "Scene/Components.h"
@@ -154,6 +155,16 @@ namespace Engine
         GLfloat savedClearColor[4];
         glGetFloatv(GL_COLOR_CLEAR_VALUE, savedClearColor);
 
+        // [DIAG] 首次运行时打印 FluidRenderer 的 FBO 尺寸和 callerFBO ID
+        static bool s_FluidRenderLogged = false;
+        if (!s_FluidRenderLogged)
+        {
+            s_FluidRenderLogged = true;
+            ENGINE_WARN("[FluidRenderer][diag] first Render(): size={}x{} callerFBO={} particleCount={} "
+                        "radius={:.4f} smoothIter={}",
+                        m_Width, m_Height, callerFBO, particleCount, particleRadius, emitter.SmoothIterations);
+        }
+
         // Bind particle buffer for instanced draw
         particleBuffer->Bind(0);
 
@@ -181,6 +192,33 @@ namespace Engine
 
         emptyVAO->Bind();
         RenderCommand::DrawArraysInstanced(6, particleCount);
+
+        // [DIAG] 首次运行时读回 R32F depth 纹理 5 个采样点（中心 + 四角偏内）
+        // < 1e9 表示有粒子覆盖；= 1e10 表示该点未被任何粒子覆盖
+        static bool s_DepthReadbackLogged = false;
+        if (!s_DepthReadbackLogged)
+        {
+            s_DepthReadbackLogged = true;
+            // 仍绑定在 m_DepthFBO 上，直接 glReadPixels 读取 attachment 0 (R32F)
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+            float pixels[5] = {0};
+            int   cx        = static_cast<int>(m_Width) / 2;
+            int   cy        = static_cast<int>(m_Height) / 2;
+            int   qx        = static_cast<int>(m_Width) / 4;
+            int   qy        = static_cast<int>(m_Height) / 4;
+            glReadPixels(cx, cy, 1, 1, GL_RED, GL_FLOAT, &pixels[0]);
+            glReadPixels(qx, qy, 1, 1, GL_RED, GL_FLOAT, &pixels[1]);
+            glReadPixels(cx + qx, qy, 1, 1, GL_RED, GL_FLOAT, &pixels[2]);
+            glReadPixels(qx, cy + qy, 1, 1, GL_RED, GL_FLOAT, &pixels[3]);
+            glReadPixels(cx + qx, cy + qy, 1, 1, GL_RED, GL_FLOAT, &pixels[4]);
+            int coveredCount = 0;
+            for (float p : pixels)
+                if (p < 1e9f)
+                    coveredCount++;
+            ENGINE_WARN("[FluidRenderer][diag] depth readback: center={:.4f} q1={:.4f} q2={:.4f} "
+                        "q3={:.4f} q4={:.4f} coveredPoints={}/5 (< 1e9 = 有粒子)",
+                        pixels[0], pixels[1], pixels[2], pixels[3], pixels[4], coveredCount);
+        }
 
         m_DepthFBO->Unbind();
 
@@ -304,6 +342,45 @@ namespace Engine
         m_CompositeShader->SetFloat("u_RefractiveIndex", 1.333f);
 
         RenderFullscreenQuad();
+
+        // [DIAG] 首次运行 Composite 后读回 HDR FBO attachment 0 中心像素 + 场景颜色 copy 中心像素
+        // 若两者一致 → Composite 走了 early-return 分支；若不同 → Composite 实际写入了流体颜色
+        static bool s_CompositeReadbackLogged = false;
+        if (!s_CompositeReadbackLogged)
+        {
+            s_CompositeReadbackLogged = true;
+            int   cx                  = static_cast<int>(m_Width) / 2;
+            int   cy                  = static_cast<int>(m_Height) / 2;
+            float hdrPixel[4]         = {0};
+            float copyPixel[4]        = {0};
+
+            // 当前绑定在 callerFBO (HDR)；读 attachment 0
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+            glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_FLOAT, hdrPixel);
+
+            // 读 m_SceneColorCopyTex（通过临时 FBO 绑定）以对比
+            GLuint tmpFBO = 0;
+            glGenFramebuffers(1, &tmpFBO);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, tmpFBO);
+            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_SceneColorCopyTex, 0);
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+            glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_FLOAT, copyPixel);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            glDeleteFramebuffers(1, &tmpFBO);
+
+            // 恢复 callerFBO 绑定
+            RenderCommand::BindFramebufferByID(callerFBO);
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+            float diff = std::abs(hdrPixel[0] - copyPixel[0]) + std::abs(hdrPixel[1] - copyPixel[1]) +
+                         std::abs(hdrPixel[2] - copyPixel[2]);
+            ENGINE_WARN("[FluidRenderer][diag] composite readback @ center ({}x{}): "
+                        "hdrAfter=({:.4f},{:.4f},{:.4f},{:.4f}) "
+                        "sceneCopy=({:.4f},{:.4f},{:.4f},{:.4f}) diff={:.4f} "
+                        "(diff>0.001 → composite 写入了不同颜色)",
+                        cx, cy, hdrPixel[0], hdrPixel[1], hdrPixel[2], hdrPixel[3], copyPixel[0], copyPixel[1],
+                        copyPixel[2], copyPixel[3], diff);
+        }
 
         // Restore draw buffers for HDR FBO (attachment 0 + attachment 1)
         GLenum drawBuffers[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};

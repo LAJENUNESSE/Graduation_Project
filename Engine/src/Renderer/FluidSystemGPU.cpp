@@ -440,6 +440,29 @@ namespace Engine
         PerformanceMonitor::Get().GetFluidComputeGPUTimer().End();
 
         PerformanceMonitor::Get().SetFluidActive(true);
+
+        // [DIAG] 首个完整 Update 完成后回读前 4 粒子数据用于诊断
+        // 判断 Emit/SPH/Simulate 管线是否产出合理的粒子位置
+        static bool s_FluidReadbackLogged = false;
+        if (!s_FluidReadbackLogged && m_ParticleCount >= 4)
+        {
+            s_FluidReadbackLogged = true;
+            std::vector<FluidGPUParticle> sample(4);
+            m_ParticleBuffer->GetData(sample.data(), static_cast<uint32_t>(4 * sizeof(FluidGPUParticle)), 0);
+
+            ENGINE_WARN("[FluidSystemGPU][diag] first Update done, emitterPos=({:.3f},{:.3f},{:.3f}) "
+                        "dt={:.4f} pcisph={} particleCount={}",
+                        emitterPos.x, emitterPos.y, emitterPos.z, clampedDt, emitter.PCISPHEnabled ? 1 : 0,
+                        m_ParticleCount);
+            for (int i = 0; i < 4; i++)
+            {
+                const auto& p = sample[i];
+                ENGINE_WARN("[FluidSystemGPU][diag]   p{}: pos=({:.3f},{:.3f},{:.3f}) life={:.3f} "
+                            "vel=({:.3f},{:.3f},{:.3f}) density={:.3f} pressure={:.3f}",
+                            i, p.posAndLife.x, p.posAndLife.y, p.posAndLife.z, p.posAndLife.w, p.velAndMaxLife.x,
+                            p.velAndMaxLife.y, p.velAndMaxLife.z, p.params.z, p.params.w);
+            }
+        }
     }
 
 } // namespace Engine
