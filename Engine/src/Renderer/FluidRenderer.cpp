@@ -155,16 +155,6 @@ namespace Engine
         GLfloat savedClearColor[4];
         glGetFloatv(GL_COLOR_CLEAR_VALUE, savedClearColor);
 
-        // [DIAG] 首次运行时打印 FluidRenderer 的 FBO 尺寸和 callerFBO ID
-        static bool s_FluidRenderLogged = false;
-        if (!s_FluidRenderLogged)
-        {
-            s_FluidRenderLogged = true;
-            ENGINE_WARN("[FluidRenderer][diag] first Render(): size={}x{} callerFBO={} particleCount={} "
-                        "radius={:.4f} smoothIter={}",
-                        m_Width, m_Height, callerFBO, particleCount, particleRadius, emitter.SmoothIterations);
-        }
-
         // Bind particle buffer for instanced draw
         particleBuffer->Bind(0);
 
@@ -174,30 +164,8 @@ namespace Engine
         // ================================================================
         // Pass 1: Depth — sphere impostor rendering to R32F
         // ================================================================
-        // [DIAG] 清除历史 GL error
-        static bool s_DepthPipelineDiagLogged = false;
-        if (!s_DepthPipelineDiagLogged)
-        {
-            while (glGetError() != GL_NO_ERROR)
-            {
-            }
-        }
-
         m_DepthFBO->Bind();
         RenderCommand::SetViewport(0, 0, m_Width, m_Height);
-
-        // [DIAG] Depth FBO 绑定后检查 completeness + error
-        if (!s_DepthPipelineDiagLogged)
-        {
-            GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-            GLint  curFBO = 0, curViewport[4] = {0};
-            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &curFBO);
-            glGetIntegerv(GL_VIEWPORT, curViewport);
-            ENGINE_WARN("[FluidRenderer][diag] after DepthFBO->Bind: status=0x{:X} (COMPLETE=0x8CD5) "
-                        "curFBO={} viewport=({},{},{},{}) glErr=0x{:X}",
-                        fboStatus, curFBO, curViewport[0], curViewport[1], curViewport[2], curViewport[3],
-                        glGetError());
-        }
 
         // Clear depth FBO to far value (1e10)
         glClearColor(1e10f, 0.0f, 0.0f, 0.0f);
@@ -207,113 +175,26 @@ namespace Engine
         RenderCommand::SetDepthFunc(DepthFunc::Less);
         RenderCommand::SetDepthMask(true);
 
+        // 关键修复：depth pass 的 fragment shader 输出 `out float FragDepth` 写入 R32F，
+        // alpha 通道未定义（NVIDIA 驱动可能为 0）。若上游 pass 把 GL_BLEND 开着且 func 为
+        // SRC_ALPHA/ONE_MINUS_SRC_ALPHA，会导致 final.r = FragDepth*0 + clear*1 = 1e10，
+        // 整张 depth 纹理永远保持 clear 值，composite shader 全屏走 early-return 看不见流体。
+        // 在 depth pass 内强制禁用 blend，Pass 结束后恢复。
+        GLboolean prevBlend = glIsEnabled(GL_BLEND);
+        if (prevBlend)
+            glDisable(GL_BLEND);
+
         m_DepthShader->Bind();
         m_DepthShader->SetMat4("u_View", view);
         m_DepthShader->SetMat4("u_Projection", projection);
         m_DepthShader->SetFloat("u_ParticleRadius", particleRadius);
 
-        // [DIAG] shader bind 后：读取 program ID + SSBO binding point 0 的实际 buffer
-        if (!s_DepthPipelineDiagLogged)
-        {
-            GLint curProgram = 0, ssbo0 = 0, ssbo0Size = 0;
-            glGetIntegerv(GL_CURRENT_PROGRAM, &curProgram);
-            glGetIntegeri_v(GL_SHADER_STORAGE_BUFFER_BINDING, 0, &ssbo0);
-            if (ssbo0 != 0)
-            {
-                glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo0);
-                GLint64 s64 = 0;
-                glGetBufferParameteri64v(GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &s64);
-                ssbo0Size = static_cast<GLint>(s64);
-                glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-            }
-            GLint programLinked = 0;
-            if (curProgram != 0)
-                glGetProgramiv(curProgram, GL_LINK_STATUS, &programLinked);
-            ENGINE_WARN("[FluidRenderer][diag] after DepthShader->Bind: program={} linked={} "
-                        "ssboBinding0.buffer={} ssboBinding0.size={} bytes glErr=0x{:X}",
-                        curProgram, programLinked, ssbo0, ssbo0Size, glGetError());
-        }
-
         emptyVAO->Bind();
-
-        // [DIAG] VAO + 状态
-        if (!s_DepthPipelineDiagLogged)
-        {
-            GLint curVAO = 0;
-            glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &curVAO);
-            GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
-            GLboolean cullFace  = glIsEnabled(GL_CULL_FACE);
-            GLboolean blend     = glIsEnabled(GL_BLEND);
-            GLint     cullMode = 0, frontFace = 0, depthMask = 0, depthFunc = 0;
-            glGetIntegerv(GL_CULL_FACE_MODE, &cullMode);
-            glGetIntegerv(GL_FRONT_FACE, &frontFace);
-            glGetIntegerv(GL_DEPTH_WRITEMASK, &depthMask);
-            glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
-            ENGINE_WARN("[FluidRenderer][diag] before Draw: VAO={} depthTest={} depthMask={} depthFunc=0x{:X} "
-                        "cullFace={} cullMode=0x{:X} frontFace=0x{:X} blend={} glErr=0x{:X}",
-                        curVAO, static_cast<int>(depthTest), depthMask, depthFunc, static_cast<int>(cullFace), cullMode,
-                        frontFace, static_cast<int>(blend), glGetError());
-        }
-
         RenderCommand::DrawArraysInstanced(6, particleCount);
 
-        // [DIAG] Draw 之后查 error
-        if (!s_DepthPipelineDiagLogged)
-        {
-            ENGINE_WARN("[FluidRenderer][diag] after DrawArraysInstanced(6, {}): glErr=0x{:X}", particleCount,
-                        glGetError());
-            s_DepthPipelineDiagLogged = true;
-        }
-
-        // [DIAG] 首次运行时扫描整张 R32F depth 纹理，统计 coverage/min/max
-        // 并按 2x2 象限报告 bounding box，判断粒子云落在屏幕哪个区域
-        static bool s_DepthReadbackLogged = false;
-        if (!s_DepthReadbackLogged)
-        {
-            s_DepthReadbackLogged = true;
-            glReadBuffer(GL_COLOR_ATTACHMENT0);
-            const int          W = static_cast<int>(m_Width);
-            const int          H = static_cast<int>(m_Height);
-            std::vector<float> buf(static_cast<size_t>(W) * H, 0.0f);
-            glReadPixels(0, 0, W, H, GL_RED, GL_FLOAT, buf.data());
-
-            uint32_t coverage = 0;
-            float    minZ     = 1e10f;
-            float    maxZ     = -1e10f;
-            int      minX = W, minY = H, maxX = -1, maxY = -1;
-            // 4 象限 coverage（像素计数）
-            uint32_t q[4] = {0, 0, 0, 0}; // TL, TR, BL, BR
-            for (int y = 0; y < H; ++y)
-            {
-                for (int x = 0; x < W; ++x)
-                {
-                    float v = buf[static_cast<size_t>(y) * W + x];
-                    if (v < 1e9f)
-                    {
-                        ++coverage;
-                        if (v < minZ)
-                            minZ = v;
-                        if (v > maxZ)
-                            maxZ = v;
-                        if (x < minX)
-                            minX = x;
-                        if (y < minY)
-                            minY = y;
-                        if (x > maxX)
-                            maxX = x;
-                        if (y > maxY)
-                            maxY = y;
-                        int qi = (x < W / 2 ? 0 : 1) + (y < H / 2 ? 0 : 2);
-                        ++q[qi];
-                    }
-                }
-            }
-            float coveragePct = 100.0f * static_cast<float>(coverage) / (static_cast<float>(W) * H);
-            ENGINE_WARN("[FluidRenderer][diag] depth scan (full {}x{}): coverage={} px ({:.3f}%) "
-                        "viewZ range=[{:.3f},{:.3f}] bbox=({}..{}, {}..{}) "
-                        "quadPx TL={} TR={} BL={} BR={}",
-                        W, H, coverage, coveragePct, minZ, maxZ, minX, maxX, minY, maxY, q[0], q[1], q[2], q[3]);
-        }
+        // 恢复 blend 状态（depth pass 前临时禁用的）
+        if (prevBlend)
+            glEnable(GL_BLEND);
 
         m_DepthFBO->Unbind();
 
@@ -323,6 +204,15 @@ namespace Engine
         uint32_t smoothInput = m_DepthFBO->GetColorAttachmentRendererID(0);
 
         int smoothIterations = std::max(emitter.SmoothIterations, 1);
+
+        // 关键修复：禁用 blend + scissor + 全开 color mask，防止上游 pass（尤其是上一帧的 thickness
+        // pass ONE/ONE blend）留下的 GL state 污染 smooth pass 的 R32F FBO 写入。R32F 没 alpha 通道，
+        // 若 blend 开启且 func 为 SRC_ALPHA/ONE_MINUS_SRC_ALPHA，alpha=0 会让 shader 输出被完全屏蔽，
+        // smooth FBO 保持 driver 初值 0，下游 composite shader 走 early-return 看不见流体。
+        glDisable(GL_BLEND);
+        glDisable(GL_SCISSOR_TEST);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
         for (int i = 0; i < smoothIterations; i++)
         {
             // Horizontal pass
@@ -437,45 +327,6 @@ namespace Engine
         m_CompositeShader->SetFloat("u_RefractiveIndex", 1.333f);
 
         RenderFullscreenQuad();
-
-        // [DIAG] 首次运行 Composite 后读回 HDR FBO attachment 0 中心像素 + 场景颜色 copy 中心像素
-        // 若两者一致 → Composite 走了 early-return 分支；若不同 → Composite 实际写入了流体颜色
-        static bool s_CompositeReadbackLogged = false;
-        if (!s_CompositeReadbackLogged)
-        {
-            s_CompositeReadbackLogged = true;
-            int   cx                  = static_cast<int>(m_Width) / 2;
-            int   cy                  = static_cast<int>(m_Height) / 2;
-            float hdrPixel[4]         = {0};
-            float copyPixel[4]        = {0};
-
-            // 当前绑定在 callerFBO (HDR)；读 attachment 0
-            glReadBuffer(GL_COLOR_ATTACHMENT0);
-            glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_FLOAT, hdrPixel);
-
-            // 读 m_SceneColorCopyTex（通过临时 FBO 绑定）以对比
-            GLuint tmpFBO = 0;
-            glGenFramebuffers(1, &tmpFBO);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, tmpFBO);
-            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_SceneColorCopyTex, 0);
-            glReadBuffer(GL_COLOR_ATTACHMENT0);
-            glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_FLOAT, copyPixel);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-            glDeleteFramebuffers(1, &tmpFBO);
-
-            // 恢复 callerFBO 绑定
-            RenderCommand::BindFramebufferByID(callerFBO);
-            glReadBuffer(GL_COLOR_ATTACHMENT0);
-
-            float diff = std::abs(hdrPixel[0] - copyPixel[0]) + std::abs(hdrPixel[1] - copyPixel[1]) +
-                         std::abs(hdrPixel[2] - copyPixel[2]);
-            ENGINE_WARN("[FluidRenderer][diag] composite readback @ center ({}x{}): "
-                        "hdrAfter=({:.4f},{:.4f},{:.4f},{:.4f}) "
-                        "sceneCopy=({:.4f},{:.4f},{:.4f},{:.4f}) diff={:.4f} "
-                        "(diff>0.001 → composite 写入了不同颜色)",
-                        cx, cy, hdrPixel[0], hdrPixel[1], hdrPixel[2], hdrPixel[3], copyPixel[0], copyPixel[1],
-                        copyPixel[2], copyPixel[3], diff);
-        }
 
         // Restore draw buffers for HDR FBO (attachment 0 + attachment 1)
         GLenum drawBuffers[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
