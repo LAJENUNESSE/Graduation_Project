@@ -97,6 +97,13 @@ for arg in "$@"; do
     esac
 done
 
+# 始终在项目根执行，保证 --preset / 相对路径行为稳定。
+if [[ "$PWD" != "$ROOT" ]]; then
+    info "切换工作目录到项目根: $ROOT"
+fi
+pushd "$ROOT" >/dev/null
+trap 'popd >/dev/null || true' EXIT
+
 # ── Step 0: 前置检查 ─────────────────────────────────────────────────────────
 step "Step 0 / 5: 前置检查"
 
@@ -153,19 +160,13 @@ fi
 SETUP_SRC="$DIST_DIR/GameEngineEditor-Setup-0.1.0.exe"
 ZIP_SRC="$BUILD_DIR/GameEngineEditor-0.1.0-win64.zip"
 
-if [[ -f "$SETUP_SRC" ]]; then
-    cp "$SETUP_SRC" "$PACKAGE_DIR/"
-    ok "安装器 (setup.exe) -> $PACKAGE_DIR/$(basename "$SETUP_SRC")"
-else
-    warn "未找到 setup.exe 原位置: $SETUP_SRC"
-fi
+[[ -f "$SETUP_SRC" ]] || die "未找到 setup.exe 原位置: $SETUP_SRC"
+cp "$SETUP_SRC" "$PACKAGE_DIR/"
+ok "安装器 (setup.exe) -> $PACKAGE_DIR/$(basename "$SETUP_SRC")"
 
-if [[ -f "$ZIP_SRC" ]]; then
-    cp "$ZIP_SRC" "$PACKAGE_DIR/"
-    ok "便携 ZIP       -> $PACKAGE_DIR/$(basename "$ZIP_SRC")"
-else
-    warn "未找到 ZIP 原位置: $ZIP_SRC"
-fi
+[[ -f "$ZIP_SRC" ]] || die "未找到 ZIP 原位置: $ZIP_SRC"
+cp "$ZIP_SRC" "$PACKAGE_DIR/"
+ok "便携 ZIP       -> $PACKAGE_DIR/$(basename "$ZIP_SRC")"
 
 # ── 完成 ─────────────────────────────────────────────────────────────────────
 step "打包完成"

@@ -99,11 +99,17 @@ install(FILES
 )
 
 # vendor 子项目（glfw / bullet / assimp 等）默认会 install 头文件和静态库到
-# include/ 与 lib/，对终端用户完全无用。这里在 install 阶段末尾清理掉。
+# include/ 与 lib/，对终端用户完全无用。
+# 仅在 CPack staging 目录中清理，避免用户 `cmake --install` 到自定义前缀时误删外部文件。
 install(CODE [[
-    message(STATUS "[CPack] Cleaning vendor dev artifacts (include/, lib/)")
-    file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/include")
-    file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/lib")
+    string(REPLACE "\\" "/" _engine_install_prefix_norm "${CMAKE_INSTALL_PREFIX}")
+    if(_engine_install_prefix_norm MATCHES "/_CPack_Packages/")
+        message(STATUS "[CPack] Cleaning vendor dev artifacts (include/, lib/) from staging")
+        file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/include")
+        file(REMOVE_RECURSE "${CMAKE_INSTALL_PREFIX}/lib")
+    else()
+        message(STATUS "[Install] Skip cleaning include/lib for non-CPack prefix: ${CMAKE_INSTALL_PREFIX}")
+    endif()
 ]])
 
 # ─── CPack 配置 ───
