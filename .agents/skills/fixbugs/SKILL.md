@@ -1,8 +1,8 @@
 ---
 name: fixbugs
 description: 批量验证并修复 bug 清单，完整执行 验证→修复→构建→提交 管线
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent
-argument-hint: "提供 bug 清单（编号列表、文件路径或 docs/ 下的 bug 文档）"
+metadata:
+  short-description: 批量修复 bug 完整管线
 ---
 
 批量修复 bug 管线。**必须实施实际代码修复，禁止止步于计划、分析或验证文档。**
@@ -29,7 +29,7 @@ argument-hint: "提供 bug 清单（编号列表、文件路径或 docs/ 下的 
 将已确认的 bug 按模块/文件分批，**每批不超过 5 个**，确保构建验证颗粒度合理。
 
 对每批：
-1. **实施代码修复**（Edit 工具）——偏好最小上游修复，而不是下游绕行；单行修改足够时不要过度工程化
+1. **实施代码修复**——偏好最小上游修复，而不是下游绕行；单行修改足够时不要过度工程化
 2. **格式化修改的文件**（排除 vendor/）：
    ```bash
    git diff --name-only --diff-filter=d HEAD | grep -E '\.(h|cpp)$' | grep -v '^vendor/' | xargs -r "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe" -i
@@ -54,5 +54,4 @@ argument-hint: "提供 bug 清单（编号列表、文件路径或 docs/ 下的 
 - **遇到不确定信息必须向用户提问**（复现步骤、期望行为、运行参数等），禁止猜测或脑补。
 - **偏好最小上游修复**，避免下游绕行；优先定位并修正根因而不是症状。
 - **保留或加强测试**；未经用户明确许可禁止删除或弱化测试。必要时为回归加新测试，但保持实现最小。
-- 如果 bug 数量 > 10，使用 Agent 工具并行验证以加速分诊。
 - 修复完成后如果有单元测试，运行测试确认无回归。
