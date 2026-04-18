@@ -23,6 +23,8 @@
 namespace Engine
 {
 
+    ImFont* ImGuiLayer::s_CodeFont = nullptr;
+
     ImGuiLayer::ImGuiLayer() : Layer("ImGuiLayer") {}
 
     void ImGuiLayer::OnAttach()
@@ -37,7 +39,7 @@ namespace Engine
         // which adds ~14ms vsync stall to the ImGui CPU timing, distorting perf data.
         // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-        // 加载中文字体
+        // 加载 UI 默认字体：NotoSansSC，用于界面中文文字
         const std::string fontPath =
             PathUtils::ResolvePath((PathUtils::GetEditorAssetRoot() / "fonts" / "NotoSansSC-Regular.ttf")).string();
         ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 18.0f, nullptr,
@@ -46,6 +48,36 @@ namespace Engine
         {
             ENGINE_CORE_WARN("Failed to load Chinese font, falling back to default font");
             io.Fonts->AddFontDefault();
+        }
+
+        // 加载代码等宽字体栈：JetBrains Mono（拉丁）+ Sarasa Mono SC（CJK，严格 2×ASCII 宽）
+        // 由 ScriptEditorPanel 等代码编辑面板通过 ImGuiLayer::GetCodeFont() 获取；字号 16.0f 与 VS Code / JetBrains IDE 一致
+        const std::string jbmonoPath =
+            PathUtils::ResolvePath((PathUtils::GetEditorAssetRoot() / "fonts" / "JetBrainsMono-Regular.ttf")).string();
+        const std::string sarasaPath =
+            PathUtils::ResolvePath((PathUtils::GetEditorAssetRoot() / "fonts" / "SarasaMonoSC-Regular.ttf")).string();
+
+        ImFont* codeFont = io.Fonts->AddFontFromFileTTF(jbmonoPath.c_str(), 16.0f);
+        if (codeFont)
+        {
+            ImFontConfig cfg;
+            cfg.MergeMode  = true;
+            cfg.PixelSnapH = true;
+            ImFont* sarasaFont =
+                io.Fonts->AddFontFromFileTTF(sarasaPath.c_str(), 16.0f, &cfg,
+                                             io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+            if (!sarasaFont)
+            {
+                ENGINE_CORE_WARN("Failed to load code CJK font (SarasaMonoSC-Regular.ttf); "
+                                 "code editor will show CJK characters as tofu boxes");
+            }
+            s_CodeFont = codeFont;
+        }
+        else
+        {
+            ENGINE_CORE_WARN("Failed to load code font (JetBrainsMono-Regular.ttf); "
+                             "script editor will fallback to default UI font");
+            s_CodeFont = nullptr;
         }
 
         ImGui::StyleColorsDark();
@@ -188,6 +220,9 @@ namespace Engine
         }
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
+
+        // 字体由 ImGui context 拥有，context 销毁后指针已失效
+        s_CodeFont = nullptr;
     }
 
     void ImGuiLayer::OnEvent(Event& event)

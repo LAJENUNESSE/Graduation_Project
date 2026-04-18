@@ -64,6 +64,16 @@ temp/
 # other Repositories
 vendor/
 
+# 允许 Cascade 等工具读写 vendor 下项目自己维护的文件（非 submodule）
+!vendor/CMakeLists.txt
+!vendor/stb_image_impl.cpp
+!vendor/glad-generated/
+!vendor/glad-generated/**
+!vendor/tinyfiledialogs/
+!vendor/tinyfiledialogs/**
+!vendor/ImGuiColorTextEdit/
+!vendor/ImGuiColorTextEdit/**
+
 # test
 assets/scenes/
 temp/

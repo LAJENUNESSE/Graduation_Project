@@ -98,6 +98,20 @@ target_include_directories(imguizmo PUBLIC
 )
 target_link_libraries(imguizmo PUBLIC imgui)
 
+# ── ImGuiColorTextEdit ────────────────────────────────────────────────────────
+# 原版 BalazsJako 的单头单源实现，仅依赖 imgui + std::regex，无其他依赖
+add_library(ImGuiColorTextEdit STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiColorTextEdit/TextEditor.cpp
+)
+target_include_directories(ImGuiColorTextEdit PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiColorTextEdit
+)
+target_link_libraries(ImGuiColorTextEdit PUBLIC imgui)
+# MSVC 下 TextEditor.cpp 包含大量 UTF-8 中文注释/字符串，需要 /utf-8
+if(MSVC)
+    target_compile_options(ImGuiColorTextEdit PRIVATE /utf-8)
+endif()
+
 # ── Assimp ──────────────────────────────────────────────────────────────────
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)

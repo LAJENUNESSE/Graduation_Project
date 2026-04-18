@@ -120,6 +120,7 @@ target_link_libraries(Engine PUBLIC
     yaml-cpp
     stb_image
     imguizmo
+    ImGuiColorTextEdit
     tinyfiledialogs
     assimp
     BulletDynamics
