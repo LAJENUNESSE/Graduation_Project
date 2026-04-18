@@ -3,6 +3,10 @@ build/
 cmake-build-*/
 out/
 
+# Skill 目录中的 build 子目录不被上面的 build/ 规则覆盖
+!.agents/skills/build/
+!.claude/skills/build/
+
 # IDE
 .vscode/
 .idea/
