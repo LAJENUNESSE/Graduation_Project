@@ -1,6 +1,7 @@
 #include "EditorViewportController.h"
 
 #include "Core/Application.h"
+#include "Debug/PerformanceMonitor.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Scene/Scene.h"
 
@@ -119,6 +120,23 @@ namespace Engine
         uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID(0);
         ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)), ImVec2(imageSize.x, imageSize.y),
                      ImVec2(0, 1), ImVec2(1, 0));
+
+        // Draw FPS overlay
+        auto& pm = PerformanceMonitor::Get();
+        ImVec2 overlayPos = ImVec2(imageScreenPos.x + 10.0f, imageScreenPos.y + 10.0f);
+        
+        ImGui::SetNextWindowPos(overlayPos);
+        ImGui::SetNextWindowBgAlpha(0.3f);
+        ImGuiWindowFlags overlayFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | 
+                                        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | 
+                                        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+        
+        if (ImGui::Begin("FPS Overlay", nullptr, overlayFlags))
+        {
+            ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "FPS: %.1f", pm.GetFPS());
+            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "%.2f ms", pm.GetFrameTimeMs());
+        }
+        ImGui::End();
 
         return m_Context;
     }

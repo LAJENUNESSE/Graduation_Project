@@ -128,10 +128,6 @@ namespace Engine
 
         ImGui::Begin("性能监控", &m_ShowStatsPanel);
 
-        ImGui::Text("FPS: %.1f", pm.GetFPS());
-        ImGui::Text("帧时间: %.2f ms", pm.GetFrameTimeMs());
-
-        ImGui::Separator();
         ImGui::Text("CPU 耗时:");
         ImGui::Text("  阴影Pass:  %.3f ms", pm.GetShadowPassCpuMs());
         ImGui::Text("  场景渲染:  %.3f ms", pm.GetSceneRenderCpuMs());

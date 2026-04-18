@@ -61,6 +61,7 @@ namespace Engine
         Ref<Scene>                          m_ActiveScene;
         std::optional<EditorRenderSettings> m_PrePlayRenderSettings;
         float                               m_AutosaveTimer  = 0.0f;
+        bool                                m_LayoutLocked   = false;
         static constexpr float              AutosaveInterval = 300.0f; // 5 分钟
     };
 

@@ -21,6 +21,7 @@ namespace Engine
         std::string RedoDescription;
         bool        ShowStatsPanel = true;
         bool        IsDirty        = false;
+        bool        IsLayoutLocked = false;
     };
 
     struct EditorShellActions
@@ -34,6 +35,8 @@ namespace Engine
         bool RequestUndo             = false;
         bool RequestRedo             = false;
         bool ToggleStatsPanel        = false;
+        bool RequestResetLayout      = false;
+        bool ToggleLayoutLock        = false;
         bool RequestCloseApplication = false;
     };
 
@@ -43,8 +46,11 @@ namespace Engine
         EditorShellActions Draw(const EditorShellState& state);
         EditorShellActions OnKeyPressed(const KeyPressedEvent& e, const EditorShellState& state) const;
 
+        void RequestResetLayout() { m_ResetLayoutRequested = true; }
+
     private:
         bool               m_DockspaceOpen  = true;
+        bool               m_ResetLayoutRequested = false;
         ImGuiDockNodeFlags m_DockspaceFlags = ImGuiDockNodeFlags_None;
     };
 

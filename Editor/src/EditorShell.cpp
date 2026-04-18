@@ -3,6 +3,8 @@
 #include "Core/Input.h"
 #include "Core/KeyCodes.h"
 
+#include <imgui_internal.h>
+
 namespace Engine
 {
 
@@ -28,7 +30,45 @@ namespace Engine
         if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
         {
             ImGuiID dockspaceId = ImGui::GetID("MyDockSpace");
-            ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), m_DockspaceFlags);
+            
+            ImGuiDockNodeFlags dockspaceFlags = m_DockspaceFlags;
+            if (state.IsLayoutLocked)
+            {
+                // To lock the layout, we disable splitting and resizing. Note: this applies to the root dockspace node,
+                // and child nodes inherit it, but some individual windows might need NoMove flags as well.
+                dockspaceFlags |= ImGuiDockNodeFlags_NoSplit | ImGuiDockNodeFlags_NoResize;
+            }
+
+            if (m_ResetLayoutRequested)
+            {
+                m_ResetLayoutRequested = false;
+                ImGui::DockBuilderRemoveNode(dockspaceId);
+                ImGui::DockBuilderAddNode(dockspaceId, dockspaceFlags | ImGuiDockNodeFlags_DockSpace);
+                ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
+
+                auto dockMainId = dockspaceId;
+                auto dockRightId = ImGui::DockBuilderSplitNode(dockMainId, ImGuiDir_Right, 0.25f, nullptr, &dockMainId);
+                auto dockBottomId = ImGui::DockBuilderSplitNode(dockMainId, ImGuiDir_Down, 0.30f, nullptr, &dockMainId);
+                auto dockRightBottomId = ImGui::DockBuilderSplitNode(dockRightId, ImGuiDir_Down, 0.50f, nullptr, &dockRightId);
+
+                // Main Area -> Viewport
+                ImGui::DockBuilderDockWindow("\xe8\xa7\x86\xe5\x8f\xa3", dockMainId); // 视口
+
+                // Right Top -> Hierarchy
+                ImGui::DockBuilderDockWindow("\xe5\x9c\xba\xe6\x99\xaf\xe5\xb1\x82\xe7\xba\xa7", dockRightId); // 场景层级
+
+                // Right Bottom -> Properties, Render Settings
+                ImGui::DockBuilderDockWindow("\xe5\xb1\x9e\xe6\x80\xa7", dockRightBottomId); // 属性
+                ImGui::DockBuilderDockWindow("\xe6\xb8\xb2\xe6\x9f\x93\xe8\xae\xbe\xe7\xbd\xae", dockRightBottomId); // 渲染设置
+
+                // Bottom -> Asset Browser, Console
+                ImGui::DockBuilderDockWindow("\xe8\xb5\x84\xe4\xba\xa7\xe6\xb5\x8f\xe8\xa7\x88\xe5\x99\xa8", dockBottomId); // 资产浏览器
+                ImGui::DockBuilderDockWindow("\xe6\x8e\xa7\xe5\x88\xb6\xe5\x8f\xb0", dockBottomId); // 控制台
+
+                ImGui::DockBuilderFinish(dockspaceId);
+            }
+
+            ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockspaceFlags);
         }
 
         if (ImGui::BeginMenuBar())
@@ -67,6 +107,14 @@ namespace Engine
 
             if (ImGui::BeginMenu("视图"))
             {
+                if (ImGui::MenuItem("恢复默认布局 (UE风格)"))
+                    actions.RequestResetLayout = true;
+                
+                if (ImGui::MenuItem("锁定面板布局", nullptr, state.IsLayoutLocked))
+                    actions.ToggleLayoutLock = true;
+                
+                ImGui::Separator();
+
                 if (ImGui::MenuItem("性能监控", nullptr, state.ShowStatsPanel))
                     actions.ToggleStatsPanel = true;
                 ImGui::EndMenu();

@@ -291,6 +291,10 @@ namespace Engine
             m_Boot->GetCommandHistory().RedoCommand();
         if (actions.ToggleStatsPanel)
             m_Boot->PanelCoordinator().ToggleStatsPanelVisible();
+        if (actions.ToggleLayoutLock)
+            m_LayoutLocked = !m_LayoutLocked;
+        if (actions.RequestResetLayout)
+            m_Boot->Shell().RequestResetLayout();
         if (actions.RequestCloseApplication)
         {
             if (PromptSaveIfDirty())
@@ -310,6 +314,7 @@ namespace Engine
         state.RedoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetRedoDescription() : "";
         state.ShowStatsPanel  = m_Boot->PanelCoordinator().IsStatsPanelVisible();
         state.IsDirty         = m_Boot->SceneSession().IsDirty();
+        state.IsLayoutLocked  = m_LayoutLocked;
         return state;
     }
 
