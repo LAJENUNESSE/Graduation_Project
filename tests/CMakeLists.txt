@@ -55,6 +55,7 @@ target_link_libraries(EngineTestCore PUBLIC spdlog)
 # EngineTests — 主测试可执行文件
 # ---------------------------------------------------------------------------
 add_executable(EngineTests
+    src/TestMain.cpp
     src/TestAssetHandle.cpp
     src/TestSlotMap.cpp
     src/TestTimestep.cpp
@@ -84,7 +85,7 @@ target_include_directories(EngineTests PRIVATE
 )
 
 target_link_libraries(EngineTests PRIVATE
-    gtest_main
+    gtest
     EngineTestCore
     spdlog
 )
