@@ -12,6 +12,7 @@
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
 #include "Scene/Systems/MeshRenderSystem.h"
+#include "Scene/WorldTransformService.h"
 
 #include <glad/gl.h>
 #include <random>
@@ -351,8 +352,12 @@ namespace Engine
 
                  for (auto entity : view)
                  {
-                     auto& transform = view.get<TransformComponent>(entity);
-                     auto& emitter   = view.get<ParticleEmitterComponent>(entity);
+                     auto& emitter = view.get<ParticleEmitterComponent>(entity);
+
+                     // 计算世界坐标（子实体的 Translation 是局部坐标，需变换到世界空间）
+                     glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                         *ctx.Registry, entity, *ctx.EntityIndex, ctx.TransformCache);
+                     glm::vec3 worldPos = glm::vec3(worldMat[3]);
 
                      uint32_t eid    = static_cast<uint32_t>(entity);
                      auto&    system = m_ParticleSystems[eid];
@@ -363,7 +368,7 @@ namespace Engine
                          system->Init();
                      }
 
-                     system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
+                     system->Update(ctx.DeltaTime, worldPos, emitter, ctx.Registry);
 
                      if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
                          RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
@@ -386,20 +391,16 @@ namespace Engine
                                        return;
 
                                    auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
-
-                                   // 一次性诊断：报告 FluidEmitter 实体数量
-                                   static bool s_FluidPassLogged = false;
-                                   if (!s_FluidPassLogged)
-                                   {
-                                       s_FluidPassLogged = true;
-                                       ENGINE_WARN("[FluidPass] First execution: found {} FluidEmitter entities",
-                                                   static_cast<int>(fluidView.size_hint()));
-                                   }
+                                   m_MeshSDFFrameStats = {};
 
                                    for (auto entity : fluidView)
                                    {
-                                       auto& transform = fluidView.get<TransformComponent>(entity);
-                                       auto& emitter   = fluidView.get<FluidEmitterComponent>(entity);
+                                       auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
+
+                                       // 计算世界坐标（子实体的 Translation 是局部坐标，需变换到世界空间）
+                                       glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                                           *ctx.Registry, entity, *ctx.EntityIndex, ctx.TransformCache);
+                                       glm::vec3 worldPos = glm::vec3(worldMat[3]);
 
                                        uint32_t eid    = static_cast<uint32_t>(entity);
                                        auto&    system = m_FluidSystems[eid];
@@ -411,15 +412,35 @@ namespace Engine
                                            m_FluidEmitted.erase(eid); // 重建后需要重新发射
                                        }
 
-                                       // 首次发射
-                                       if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
+                                       // 发射策略：水龙头预设持续发射，其他预设保持一次性发射
+                                       const bool continuousEmit =
+                                           (emitter.CurrentPreset == FluidEmitterComponent::Preset::FaucetWater);
+                                       if (continuousEmit)
                                        {
-                                           system->Emit(transform.Translation, emitter);
+                                           system->Emit(worldPos, emitter);
+                                       }
+                                       else if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
+                                       {
+                                           system->Emit(worldPos, emitter);
                                            m_FluidEmitted.insert(eid);
                                        }
 
                                        // 每帧模拟
-                                       system->Update(ctx.DeltaTime, transform.Translation, emitter, ctx.Registry);
+                                       system->Update(ctx.DeltaTime, worldPos, emitter, ctx.Registry);
+
+                                       const auto& meshStats = system->GetMeshSDFDebugStats();
+                                       if (meshStats.Enabled)
+                                       {
+                                           ++m_MeshSDFFrameStats.ActiveEmitters;
+                                           m_MeshSDFFrameStats.BodyCount += meshStats.BodyCount;
+                                           m_MeshSDFFrameStats.VoxelCount += meshStats.VoxelCount;
+                                           m_MeshSDFFrameStats.EstimatedSamples += meshStats.EstimatedSamples;
+                                           m_MeshSDFFrameStats.Resolution =
+                                               std::max(m_MeshSDFFrameStats.Resolution, meshStats.Resolution);
+                                           m_MeshSDFFrameStats.Band =
+                                               std::max(m_MeshSDFFrameStats.Band, meshStats.Band);
+                                           m_MeshSDFFrameStats.BuildCpuMs += meshStats.LastBuildCpuMs;
+                                       }
 
                                        // Screen-Space Fluid 渲染
                                        m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(),

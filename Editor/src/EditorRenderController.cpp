@@ -8,7 +8,10 @@
 #include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderInput.h"
 #include "Renderer/SceneRenderer.h"
+#include "Scene/Components.h"
 #include "Scene/Scene.h"
+
+#include <vector>
 
 namespace Engine
 {
@@ -18,7 +21,8 @@ namespace Engine
           m_PostProcessingSettings(dependencies.PostProcessingSettingsRef),
           m_ViewportController(dependencies.ViewportController), m_PanelCoordinator(dependencies.PanelCoordinator),
           m_PhysicsDebugDraw(dependencies.PhysicsDebugDrawRef),
-          m_ShowPhysicsColliders(dependencies.ShowPhysicsColliders)
+          m_ShowPhysicsColliders(dependencies.ShowPhysicsColliders),
+          m_ShowMeshSDFBounds(dependencies.ShowMeshSDFBounds)
     {}
 
     void EditorRenderController::Attach()
@@ -35,10 +39,43 @@ namespace Engine
         m_SceneRenderer.SetDebugDrawCallback(
             [this]()
             {
-                if (!m_ActiveScene || !m_ShowPhysicsColliders)
+                if (!m_ActiveScene)
                     return;
 
-                m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController.GetCamera());
+                if (!m_ShowPhysicsColliders && !m_ShowMeshSDFBounds)
+                    return;
+
+                if (m_ShowPhysicsColliders)
+                    m_PhysicsDebugDraw.DrawColliders(m_ActiveScene->GetRegistry(), m_ViewportController.GetCamera());
+
+                if (!m_ShowMeshSDFBounds)
+                    return;
+
+                std::vector<PhysicsDebugDraw::MeshSDFDebugBounds> bounds;
+                auto fluidView = m_ActiveScene->GetRegistry().view<FluidEmitterComponent, TransformComponent>();
+                for (auto entity : fluidView)
+                {
+                    auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
+                    if (!emitter.MeshSDFCoupling)
+                        continue;
+
+                    auto it = m_SceneRenderer.GetFluidSystems().find(static_cast<uint32_t>(entity));
+                    if (it == m_SceneRenderer.GetFluidSystems().end() || !it->second)
+                        continue;
+
+                    for (const auto& body : it->second->GetMeshSDFDebugBodies())
+                    {
+                        PhysicsDebugDraw::MeshSDFDebugBounds b{};
+                        b.Center = body.Center;
+                        b.HalfExtents = body.HalfExtents;
+                        b.Rotation = body.Rotation;
+                        b.Color = glm::vec3(0.65f, 0.25f, 1.0f);
+                        bounds.push_back(b);
+                    }
+                }
+
+                if (!bounds.empty())
+                    m_PhysicsDebugDraw.DrawMeshSDFBounds(bounds, m_ViewportController.GetCamera());
             });
 
         SyncHDRFramebufferBindings();

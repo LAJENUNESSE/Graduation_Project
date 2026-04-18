@@ -53,7 +53,8 @@ namespace Engine
         // RenderSettingsPanel 初始 context（需要 m_ActiveScene，所以在 BootstrapDefaultScene 之后）
         m_Boot->GetRenderSettingsPanel().SetContext(
             &m_Boot->RenderController().GetSceneRenderer(), m_Boot->RenderController().GetPostProcessingSettings(),
-            m_Boot->ViewportController().GetHDRFramebuffer(), m_ActiveScene, &m_Boot->ShowPhysicsColliders());
+            m_Boot->ViewportController().GetHDRFramebuffer(), m_ActiveScene, &m_Boot->ShowPhysicsColliders(),
+            &m_Boot->ShowMeshSDFBounds());
 
         ApplyActiveSceneContext(false);
 

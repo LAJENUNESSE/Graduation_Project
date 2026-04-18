@@ -17,6 +17,7 @@ namespace Engine
     class CommandHistory;
     class Entity;
     class Framebuffer;
+    class SceneRenderer;
 
     class EditorPanelCoordinator
     {
@@ -31,6 +32,7 @@ namespace Engine
         void ApplyScene(const Ref<Scene>& scene, bool clearCommandHistory);
         void RenderPanels();
         void SetHDRFramebuffer(const Ref<Framebuffer>& framebuffer);
+        void SetSceneRenderer(SceneRenderer* sceneRenderer) { m_SceneRenderer = sceneRenderer; }
         void SetPanelsReadOnly(bool readOnly);
         void SetSceneModifiedCallback(std::function<void()> cb);
 
@@ -53,6 +55,7 @@ namespace Engine
         AssetBrowserPanel*   m_AssetBrowserPanel   = nullptr;
         RenderSettingsPanel* m_RenderSettingsPanel = nullptr;
         CommandHistory*      m_CommandHistory      = nullptr;
+        SceneRenderer*       m_SceneRenderer       = nullptr;
         bool                 m_ShowStatsPanel      = true;
     };
 

@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Renderer/FluidRenderer.h"
+#include "Core/Log.h"
 #include "Renderer/Buffer.h"
 #include "Renderer/RenderCommand.h"
 #include "Scene/Components.h"
@@ -174,6 +175,15 @@ namespace Engine
         RenderCommand::SetDepthFunc(DepthFunc::Less);
         RenderCommand::SetDepthMask(true);
 
+        // 关键修复：depth pass 的 fragment shader 输出 `out float FragDepth` 写入 R32F，
+        // alpha 通道未定义（NVIDIA 驱动可能为 0）。若上游 pass 把 GL_BLEND 开着且 func 为
+        // SRC_ALPHA/ONE_MINUS_SRC_ALPHA，会导致 final.r = FragDepth*0 + clear*1 = 1e10，
+        // 整张 depth 纹理永远保持 clear 值，composite shader 全屏走 early-return 看不见流体。
+        // 在 depth pass 内强制禁用 blend，Pass 结束后恢复。
+        GLboolean prevBlend = glIsEnabled(GL_BLEND);
+        if (prevBlend)
+            glDisable(GL_BLEND);
+
         m_DepthShader->Bind();
         m_DepthShader->SetMat4("u_View", view);
         m_DepthShader->SetMat4("u_Projection", projection);
@@ -181,6 +191,10 @@ namespace Engine
 
         emptyVAO->Bind();
         RenderCommand::DrawArraysInstanced(6, particleCount);
+
+        // 恢复 blend 状态（depth pass 前临时禁用的）
+        if (prevBlend)
+            glEnable(GL_BLEND);
 
         m_DepthFBO->Unbind();
 
@@ -190,6 +204,15 @@ namespace Engine
         uint32_t smoothInput = m_DepthFBO->GetColorAttachmentRendererID(0);
 
         int smoothIterations = std::max(emitter.SmoothIterations, 1);
+
+        // 关键修复：禁用 blend + scissor + 全开 color mask，防止上游 pass（尤其是上一帧的 thickness
+        // pass ONE/ONE blend）留下的 GL state 污染 smooth pass 的 R32F FBO 写入。R32F 没 alpha 通道，
+        // 若 blend 开启且 func 为 SRC_ALPHA/ONE_MINUS_SRC_ALPHA，alpha=0 会让 shader 输出被完全屏蔽，
+        // smooth FBO 保持 driver 初值 0，下游 composite shader 走 early-return 看不见流体。
+        glDisable(GL_BLEND);
+        glDisable(GL_SCISSOR_TEST);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
         for (int i = 0; i < smoothIterations; i++)
         {
             // Horizontal pass
@@ -290,11 +313,9 @@ namespace Engine
         m_CompositeShader->SetInt("u_SceneColor", 2);
 
         RenderCommand::BindTextureUnit(3, sceneDepthTexID);
-        m_CompositeShader->SetInt("u_SceneDepth", 3);
 
         // Uniforms
         m_CompositeShader->SetMat4("u_InvProjection", invProjection);
-        m_CompositeShader->SetMat4("u_InvView", invView);
         m_CompositeShader->SetFloat2("u_ScreenSize", glm::vec2(m_Width, m_Height));
 
         m_CompositeShader->SetFloat3("u_FluidColor", emitter.FluidColor);
@@ -303,6 +324,7 @@ namespace Engine
         m_CompositeShader->SetFloat("u_FresnelPower", emitter.FresnelPower);
         m_CompositeShader->SetFloat("u_RefractionStrength", emitter.RefractionStrength);
         m_CompositeShader->SetFloat("u_Reflectivity", emitter.Reflectivity);
+        m_CompositeShader->SetFloat("u_RefractiveIndex", 1.333f);
 
         RenderFullscreenQuad();
 

@@ -8,6 +8,7 @@
 #include "Scene/Components.h"
 
 #include <cmath>
+#include <chrono>
 #include <glad/gl.h>
 
 #include "Debug/PerformanceMonitor.h"
@@ -103,6 +104,14 @@ namespace Engine
         m_RigidBodyBuffer = ShaderStorageBuffer::Create(MAX_RIGID_BODIES * sizeof(GPURigidBodyData), 3);
     }
 
+    void FluidSystemGPU::InitMeshSDFBuffer()
+    {
+        if (m_MeshSDFMetaBuffer && m_MeshSDFVoxelBuffer)
+            return;
+        m_MeshSDFMetaBuffer  = ShaderStorageBuffer::Create(MAX_MESH_SDF_BODIES * sizeof(GPUMeshSDFData), 10);
+        m_MeshSDFVoxelBuffer = ShaderStorageBuffer::Create(MAX_MESH_SDF_VOXELS * sizeof(float), 11);
+    }
+
     void FluidSystemGPU::Emit(const glm::vec3& emitterPos, const FluidEmitterComponent& emitter)
     {
         if (!m_Initialized)
@@ -115,7 +124,7 @@ namespace Engine
         m_EmitShader->SetFloat3("u_EmitExtents", emitter.EmitExtents);
         m_EmitShader->SetFloat3("u_InitialVelocity", emitter.InitialVelocity);
         m_EmitShader->SetInt("u_ParticleCount", static_cast<int>(m_ParticleCount));
-        m_EmitShader->SetFloat("u_Time", 0.0f);
+        m_EmitShader->SetFloat("u_Time", m_TotalTime);
 
         uint32_t groups = (m_ParticleCount + 63) / 64;
         RenderCommand::DispatchCompute(groups);
@@ -178,16 +187,70 @@ namespace Engine
             InitPCISPH();
 
             uint32_t rigidBodyCount = 0;
+            uint32_t meshSDFCount   = 0;
+            uint32_t meshSDFVoxels  = 0;
+            float    meshSDFBuildMs = 0.0f;
             if (emitter.RigidBodyCoupling && registry)
             {
                 InitRigidBodyBuffer();
                 rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
                                                            RigidBodyUploadFilter::AllColliders);
+
+                if (emitter.MeshSDFCoupling)
+                {
+                    InitMeshSDFBuffer();
+                    auto                      uploadStart = std::chrono::high_resolution_clock::now();
+                    const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
+                        registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
+                        static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
+                        emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
+                    auto uploadEnd = std::chrono::high_resolution_clock::now();
+                    meshSDFCount   = upload.BodyCount;
+                    meshSDFVoxels  = upload.VoxelCount;
+                    meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
+                }
             }
+
+            m_MeshSDFDebugBodies.clear();
+            if (meshSDFCount > 0 && m_MeshSDFMetaBuffer)
+            {
+                std::vector<GPUMeshSDFData> metaReadback(meshSDFCount);
+                m_MeshSDFMetaBuffer->GetData(metaReadback.data(),
+                                             static_cast<uint32_t>(meshSDFCount * sizeof(GPUMeshSDFData)), 0);
+                m_MeshSDFDebugBodies.reserve(meshSDFCount);
+                for (const auto& meta : metaReadback)
+                {
+                    MeshSDFDebugBody dbg{};
+                    dbg.Center                  = glm::vec3(meta.posAndType);
+                    dbg.Rotation                = glm::eulerAngles(glm::quat_cast(
+                        glm::mat3(glm::vec3(meta.rotCol0), glm::vec3(meta.rotCol1), glm::vec3(meta.rotCol2))));
+                    const glm::vec3 invScale    = glm::vec3(meta.invScaleAndBlend);
+                    const glm::vec3 scale       = glm::max(glm::abs(1.0f / invScale), glm::vec3(1e-4f));
+                    const glm::vec3 worldExtent = glm::vec3(meta.localExtent) * scale;
+                    dbg.HalfExtents             = 0.5f * worldExtent;
+                    dbg.Resolution              = static_cast<uint32_t>(std::max(meta.gridParams.x, 0.0f));
+                    dbg.VoxelCount              = static_cast<uint32_t>(std::max(meta.gridParams.z, 0.0f));
+                    dbg.Band                    = meta.gridParams.w;
+                    dbg.Blend                   = meta.invScaleAndBlend.w;
+                    m_MeshSDFDebugBodies.push_back(dbg);
+                }
+            }
+
+            m_MeshSDFDebugStats.Enabled          = emitter.MeshSDFCoupling;
+            m_MeshSDFDebugStats.BodyCount        = meshSDFCount;
+            m_MeshSDFDebugStats.VoxelCount       = meshSDFVoxels;
+            m_MeshSDFDebugStats.EstimatedSamples = meshSDFCount * m_ParticleCount;
+            m_MeshSDFDebugStats.Resolution       = static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 0));
+            m_MeshSDFDebugStats.Band             = emitter.MeshSDFBand;
+            m_MeshSDFDebugStats.LastBuildCpuMs   = meshSDFBuildMs;
 
             m_PCISPHBuffer->Bind(1);
             if (m_RigidBodyBuffer)
                 m_RigidBodyBuffer->Bind(3);
+            if (m_MeshSDFMetaBuffer)
+                m_MeshSDFMetaBuffer->Bind(10);
+            if (m_MeshSDFVoxelBuffer)
+                m_MeshSDFVoxelBuffer->Bind(11);
             m_SurfaceNormalBuffer->Bind(8); // Akinci 表面法线（density pass 已写入）
 
             // PCISPH Init
@@ -214,14 +277,10 @@ namespace Engine
                 // 迭代 1+：用预测位置重建空间哈希 grid
                 if (iter > 0)
                 {
-                    m_PCISPHBuffer->Bind(9); // binding 9: PCISPHData for predicted pos
                     m_Grid.Build(m_ParticleCount, true);
-                    // 重新绑定 PCISPH 使用的 buffer slots
-                    m_ParticleBuffer->Bind(0);
-                    m_AliveList->Bind(2);
+                    // Grid.Build() 将 CellHash 绑定到 slot 1，覆盖了 PCISPHBuffer
+                    // 必须恢复，否则后续 PCISPH shader（Predict/Density/Force）读不到正确的 PCISPHData
                     m_PCISPHBuffer->Bind(1);
-                    if (m_RigidBodyBuffer)
-                        m_RigidBodyBuffer->Bind(3);
                 }
 
                 // Predict: x* = pos + dt * v*
@@ -238,9 +297,8 @@ namespace Engine
                 m_SPHShaders.PCISPHDensity->SetFloat("u_ParticleMass", emitter.ParticleMass);
                 m_SPHShaders.PCISPHDensity->SetFloat("u_RestDensity", emitter.RestDensity);
                 m_SPHShaders.PCISPHDensity->SetFloat(
-                    "u_PCISPHDelta",
-                    SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
-                                                      emitter.RestDensity, clampedDt));
+                    "u_PCISPHDelta", SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
+                                                                       emitter.RestDensity, clampedDt));
                 m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
                 m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
                 m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
@@ -257,6 +315,8 @@ namespace Engine
                 m_SPHShaders.PCISPHForce->SetInt("u_GridSize", gridSize);
                 m_SPHShaders.PCISPHForce->SetFloat("u_CellSize", cellSize);
                 m_SPHShaders.PCISPHForce->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
+                m_SPHShaders.PCISPHForce->SetInt("u_MeshSDFCount", static_cast<int>(meshSDFCount));
+                m_SPHShaders.PCISPHForce->SetInt("u_MeshSDFVoxelCount", static_cast<int>(meshSDFVoxels));
                 m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
                 m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
                 m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
@@ -287,14 +347,68 @@ namespace Engine
             m_SPHShaders.ForceShader->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
 
             uint32_t rigidBodyCount = 0;
+            uint32_t meshSDFCount   = 0;
+            uint32_t meshSDFVoxels  = 0;
+            float    meshSDFBuildMs = 0.0f;
             if (emitter.RigidBodyCoupling && registry)
             {
                 InitRigidBodyBuffer();
                 rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
                                                            RigidBodyUploadFilter::AllColliders);
                 m_RigidBodyBuffer->Bind(3);
+
+                if (emitter.MeshSDFCoupling)
+                {
+                    InitMeshSDFBuffer();
+                    auto                      uploadStart = std::chrono::high_resolution_clock::now();
+                    const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
+                        registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
+                        static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
+                        emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
+                    auto uploadEnd = std::chrono::high_resolution_clock::now();
+                    meshSDFCount   = upload.BodyCount;
+                    meshSDFVoxels  = upload.VoxelCount;
+                    meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
+                    m_MeshSDFMetaBuffer->Bind(10);
+                    m_MeshSDFVoxelBuffer->Bind(11);
+                }
             }
+
+            m_MeshSDFDebugBodies.clear();
+            if (meshSDFCount > 0 && m_MeshSDFMetaBuffer)
+            {
+                std::vector<GPUMeshSDFData> metaReadback(meshSDFCount);
+                m_MeshSDFMetaBuffer->GetData(metaReadback.data(),
+                                             static_cast<uint32_t>(meshSDFCount * sizeof(GPUMeshSDFData)), 0);
+                m_MeshSDFDebugBodies.reserve(meshSDFCount);
+                for (const auto& meta : metaReadback)
+                {
+                    MeshSDFDebugBody dbg{};
+                    dbg.Center                  = glm::vec3(meta.posAndType);
+                    dbg.Rotation                = glm::eulerAngles(glm::quat_cast(
+                        glm::mat3(glm::vec3(meta.rotCol0), glm::vec3(meta.rotCol1), glm::vec3(meta.rotCol2))));
+                    const glm::vec3 invScale    = glm::vec3(meta.invScaleAndBlend);
+                    const glm::vec3 scale       = glm::max(glm::abs(1.0f / invScale), glm::vec3(1e-4f));
+                    const glm::vec3 worldExtent = glm::vec3(meta.localExtent) * scale;
+                    dbg.HalfExtents             = 0.5f * worldExtent;
+                    dbg.Resolution              = static_cast<uint32_t>(std::max(meta.gridParams.x, 0.0f));
+                    dbg.VoxelCount              = static_cast<uint32_t>(std::max(meta.gridParams.z, 0.0f));
+                    dbg.Band                    = meta.gridParams.w;
+                    dbg.Blend                   = meta.invScaleAndBlend.w;
+                    m_MeshSDFDebugBodies.push_back(dbg);
+                }
+            }
+
+            m_MeshSDFDebugStats.Enabled          = emitter.MeshSDFCoupling;
+            m_MeshSDFDebugStats.BodyCount        = meshSDFCount;
+            m_MeshSDFDebugStats.VoxelCount       = meshSDFVoxels;
+            m_MeshSDFDebugStats.EstimatedSamples = meshSDFCount * m_ParticleCount;
+            m_MeshSDFDebugStats.Resolution       = static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 0));
+            m_MeshSDFDebugStats.Band             = emitter.MeshSDFBand;
+            m_MeshSDFDebugStats.LastBuildCpuMs   = meshSDFBuildMs;
             m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
+            m_SPHShaders.ForceShader->SetInt("u_MeshSDFCount", static_cast<int>(meshSDFCount));
+            m_SPHShaders.ForceShader->SetInt("u_MeshSDFVoxelCount", static_cast<int>(meshSDFVoxels));
             m_SPHShaders.ForceShader->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
             m_SPHShaders.ForceShader->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
 

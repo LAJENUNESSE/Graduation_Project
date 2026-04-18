@@ -1,6 +1,6 @@
-# Graduation Project — 3D Game Engine & Editor
+# 3D Game Engine & Editor
 
-湖北第二师范学院毕业设计：基于 C++20 / OpenGL 4.3 的 3D 游戏引擎与可视化编辑器。
+基于 C++20 / OpenGL 4.3 的 3D 游戏引擎与可视化编辑器。
 
 ## Features
 
@@ -56,7 +56,7 @@
 
 配置完成后重启终端，然后运行下方构建命令。
 
-> **首次构建提示**：项目依赖 10 个 Git 子模块 + 2 个 vcpkg 包（FFmpeg、OpenAL Soft），首次构建需下载约 1\~2 GB 依赖源码并编译，建议使用高速网络或代理。后续增量构建不再重复下载。
+> **首次构建提示**：项目依赖 10 个 Git 子模块 + 3 个 vcpkg 包（FFmpeg、OpenAL Soft、Lua），首次构建需下载约 1\~2 GB 依赖源码并编译，建议使用高速网络或代理。后续增量构建不再重复下载。
 
 ### Windows 一键构建
 
@@ -64,14 +64,13 @@
 # 基本构建（自动处理子模块、vcpkg、CMake 配置与构建）
 ./build.ps1
 
-# 启用 CUDA 加速
-./build.ps1 -Cuda
-
 # 指定构建配置
 ./build.ps1 -Config Debug
 ```
 
 脚本会自动检测 vcpkg 和 CMake，找不到时自动安装 vcpkg。
+
+> **说明**：当前 `CMakePresets.json` 未提供 `vs2022-cuda` 预设，因此 `./build.ps1 -Cuda` 在默认仓库配置下不可用。
 
 ### 手动构建
 
@@ -79,7 +78,7 @@
 
 ```bash
 # 1. 克隆项目（推荐浅克隆子模块，节省时间和带宽）
-git clone --recursive --shallow-submodules https://github.com/LAJENUNESSE/Graduation_Project.git
+git clone --recursive --shallow-submodules <repo-url>
 
 # 已克隆的项目初始化子模块
 git submodule update --init --recursive
@@ -88,7 +87,11 @@ git submodule update --init --recursive
 git clone https://github.com/microsoft/vcpkg.git <路径>
 <路径>/bootstrap-vcpkg.bat                              # Windows
 <路径>/bootstrap-vcpkg.sh                               # Linux
-<路径>/vcpkg install ffmpeg openal-soft --triplet x64-windows  # 或 x64-linux
+
+# 在项目根目录执行（读取 vcpkg.json manifest）
+cd <repo-folder>
+<路径>/vcpkg install --triplet x64-windows              # Windows
+<路径>/vcpkg install --triplet x64-linux                # Linux
 ```
 
 > **需要完整子模块历史？** 如需调试某个 vendor 库的历史版本，运行：
@@ -99,9 +102,8 @@ git clone https://github.com/microsoft/vcpkg.git <路径>
 项目提供了 CMake Presets，按需选择：
 
 ```bash
-# 配置（二选一）
-cmake --preset default          # 无 CUDA
-cmake --preset vs2022-cuda      # 有 CUDA（需安装 NVIDIA CUDA Toolkit）
+# 配置
+cmake --preset default
 
 # 构建
 cmake --build build --config RelWithDebInfo --target Editor
@@ -110,9 +112,11 @@ cmake --build build --config RelWithDebInfo --target Editor
 #### Linux（Ninja + vcpkg）
 
 ```bash
-# 配置（二选一）
-cmake --preset linux-default    # 无 CUDA
-cmake --preset linux-cuda       # 有 CUDA
+# 配置（常用）
+cmake --preset linux-default
+
+# 可选：启用 ASAN/UBSAN 质量检查
+cmake --preset linux-sanitize
 
 # 构建
 cmake --build build --target Editor
@@ -130,12 +134,11 @@ cmake --build build --target Editor
 
 编辑器可从任意目录启动，会自动检测项目根目录。
 
-### CUDA 加速（可选）
+### CUDA 路径说明（可选）
 
-启用 CUDA 加速需要：
+当前仓库默认预设（`default`、`linux-default`、`linux-sanitize`、`linux-system`）不包含 CUDA 一键配置，README 中的默认构建流程以 OpenGL Compute 路径为准。
 
-1. **NVIDIA CUDA Toolkit** — 安装后使用 `--preset vs2022-cuda`（Windows）或 `--preset linux-cuda`（Linux）配置
-2. **NVIDIA 驱动版本须与 CUDA Toolkit 兼容** — 若运行时日志出现 `the provided PTX was compiled with an unsupported toolchain`，说明驱动版本过旧，无法执行当前 Toolkit 编译的 PTX 代码。此时引擎会自动回退到 OpenGL Compute 路径，更新驱动到最新版本即可恢复 CUDA 加速
+若你使用自定义 CUDA 构建配置，仍需保证驱动与 Toolkit 版本兼容。运行时日志若出现 `the provided PTX was compiled with an unsupported toolchain`，说明驱动版本过旧；此时引擎会自动回退到 OpenGL Compute 路径，更新驱动后可恢复 CUDA 路径。
 
 > CUDA Toolkit 与驱动的版本对应关系见 [NVIDIA 官方文档](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-toolkit-major-component-versions)。
 
@@ -157,6 +160,7 @@ cmake --build build --target Editor
 | [tinyfiledialogs](https://sourceforge.net/projects/tinyfiledialogs/) | 文件对话框 |
 | [FFmpeg](https://ffmpeg.org/) | 视频解码（vcpkg） |
 | [OpenAL Soft](https://github.com/kcat/openal-soft) | 音频引擎（vcpkg） |
+| [Lua](https://www.lua.org/) | 脚本运行时（vcpkg） |
 | [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) | GPU 加速（可选） |
 
 ## Architecture
@@ -231,9 +235,10 @@ docs/                       技术调研报告
 
 GitHub Actions 自动化流程：
 
-- **构建验证**：Windows (MSVC) + Linux (GCC) + Linux + CUDA，ccache 加速增量构建
-- **跨平台验证**（每周 + 手动触发）：macOS (AppleClang ARM64) + Fedora 40 (GCC) + Alpine 3.20 (musl + GCC)
-- **安全分析**：CodeQL 每周定时扫描（不阻塞 push/PR）
+- **Windows 构建**：`default` 预设，分别构建 `Engine` 与 `Editor`
+- **Linux 构建矩阵**：`linux-default` 与 `linux-sanitize`（ASAN/UBSAN）
+- **测试执行**：在 `linux-sanitize` 任务中构建 `EngineTests` 并运行 CTest
+- **构建加速**：ccache/sccache + vcpkg 缓存
 
 ## Platform Support
 
@@ -241,11 +246,10 @@ GitHub Actions 自动化流程：
 |------|------|------|
 | **Windows 10/11** (MSVC) | 主开发平台 | 完整功能，含可选 CUDA 加速 |
 | **Ubuntu LTS** (GCC) | CI 验证 | 完整功能 |
-| **Fedora 最新版** (GCC) | CI 验证 | RHEL/CentOS 兼容层 |
-| **Alpine** (musl + GCC) | CI 验证 | musl libc 编译验证 |
-| **macOS** (AppleClang ARM64) | 仅编译验证 | macOS 仅支持 OpenGL 4.1，本引擎需要 4.3，**无法运行** |
+| **其他 Linux 发行版** | 社区自行验证 | 推荐优先保证 Ubuntu LTS 兼容性 |
+| **macOS** (AppleClang ARM64) | 不支持运行 | macOS 仅支持 OpenGL 4.1，本引擎需要 4.3 |
 
-> **Linux 支持策略**：优先保证 Ubuntu LTS 和 Fedora 最新版，其他发行版欢迎提 PR。
+> **Linux 支持策略**：优先保证 Ubuntu LTS，其他发行版欢迎提 PR。
 >
 > **macOS 用户**：由于 Apple 已弃用 OpenGL 且最高仅支持 4.1，本引擎无法在 macOS 上运行。
 > 如需体验，推荐使用 [CrossOver](https://www.codeweavers.com/crossover) 或 [Parallels Desktop](https://www.parallels.com/) 运行 Windows 版本。

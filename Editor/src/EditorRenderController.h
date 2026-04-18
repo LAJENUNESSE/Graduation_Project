@@ -27,6 +27,7 @@ namespace Engine
             EditorPanelCoordinator& PanelCoordinator;
             PhysicsDebugDraw& PhysicsDebugDrawRef;
             bool& ShowPhysicsColliders;
+            bool& ShowMeshSDFBounds;
         };
 
         explicit EditorRenderController(const Dependencies& dependencies);
@@ -56,6 +57,7 @@ namespace Engine
         EditorPanelCoordinator& m_PanelCoordinator;
         PhysicsDebugDraw& m_PhysicsDebugDraw;
         bool& m_ShowPhysicsColliders;
+        bool& m_ShowMeshSDFBounds;
         Scene* m_ActiveScene = nullptr;
     };
 

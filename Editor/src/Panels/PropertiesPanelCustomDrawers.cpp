@@ -15,6 +15,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <algorithm>
+#include <filesystem>
 
 namespace Engine
 {
@@ -640,6 +642,70 @@ namespace Engine
             return changed;
         }
 
+        bool DrawFluidEmitterInspector(FluidEmitterComponent& component)
+        {
+            bool        changed       = false;
+            const char* presetNames[] = {"自定义", "水龙头水流", "泥浆流", "山体喷发"};
+            int         presetIdx     = static_cast<int>(component.CurrentPreset);
+            if (ImGui::Combo("预设", &presetIdx, presetNames, 4))
+            {
+                auto preset = static_cast<FluidEmitterComponent::Preset>(presetIdx);
+                if (preset != FluidEmitterComponent::Preset::Custom)
+                    FluidEmitterComponent::ApplyPreset(component, preset);
+                else
+                    component.CurrentPreset = FluidEmitterComponent::Preset::Custom;
+                changed = true;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("发射参数");
+            int particleCount = static_cast<int>(component.ParticleCount);
+            if (ImGui::DragInt("粒子数量", &particleCount, 100.0f, 100, 300000))
+            {
+                component.ParticleCount = static_cast<uint32_t>(std::max(particleCount, 100));
+                changed                 = true;
+            }
+            changed |= ImGui::DragFloat("粒子半径", &component.ParticleRadius, 0.001f, 0.001f, 0.2f, "%.3f");
+            changed |= DrawVec3Control("发射半尺寸", component.EmitExtents);
+            changed |= DrawVec3Control("初始速度", component.InitialVelocity);
+
+            ImGui::Separator();
+            ImGui::Text("动力学");
+            changed |= ImGui::DragFloat("静止密度", &component.RestDensity, 5.0f, 100.0f, 5000.0f, "%.1f");
+            changed |= ImGui::DragFloat("气体常数", &component.GasConstant, 1.0f, 1.0f, 500.0f, "%.1f");
+            changed |= ImGui::DragFloat("粘度", &component.Viscosity, 0.1f, 0.0f, 100.0f, "%.2f");
+            changed |= ImGui::DragFloat("核半径", &component.SmoothingRadius, 0.001f, 0.01f, 0.5f, "%.3f");
+            changed |= ImGui::DragFloat("粒子质量", &component.ParticleMass, 0.001f, 0.001f, 1.0f, "%.3f");
+            changed |= DrawVec3Control("重力", component.Gravity);
+            changed |= ImGui::DragFloat("阻尼", &component.Damping, 0.001f, 0.9f, 1.0f, "%.3f");
+
+            ImGui::Separator();
+            ImGui::Text("Mesh SDF 碰撞");
+            changed |= ImGui::Checkbox("刚体耦合", &component.RigidBodyCoupling);
+            changed |= ImGui::Checkbox("Mesh SDF 耦合", &component.MeshSDFCoupling);
+            changed |= ImGui::DragInt("SDF 分辨率", &component.MeshSDFResolution, 1.0f, 8, 64);
+            changed |= ImGui::DragFloat("SDF 带宽", &component.MeshSDFBand, 0.001f, 0.0f, 0.5f, "%.3f");
+            changed |= ImGui::DragFloat("边界刚度", &component.BoundaryStiffness, 100.0f, 0.0f, 50000.0f, "%.0f");
+            changed |= ImGui::DragFloat("边界阻尼", &component.BoundaryDamping, 0.01f, 0.0f, 1.0f, "%.2f");
+
+            ImGui::Separator();
+            ImGui::Text("渲染参数");
+            changed |= ImGui::ColorEdit3("流体颜色", glm::value_ptr(component.FluidColor));
+            changed |= ImGui::ColorEdit3("吸收颜色", glm::value_ptr(component.AbsorptionColor));
+            changed |= ImGui::DragFloat("吸收强度", &component.AbsorptionScale, 0.05f, 0.0f, 20.0f, "%.2f");
+            changed |= ImGui::DragFloat("Fresnel 幂", &component.FresnelPower, 0.1f, 0.0f, 10.0f, "%.2f");
+            changed |= ImGui::DragFloat("折射强度", &component.RefractionStrength, 0.001f, 0.0f, 1.0f, "%.3f");
+            changed |= ImGui::DragFloat("反射率", &component.Reflectivity, 0.001f, 0.0f, 1.0f, "%.3f");
+            changed |= ImGui::SliderInt("平滑迭代", &component.SmoothIterations, 1, 8);
+            changed |= ImGui::DragFloat("平滑半径", &component.SmoothFilterRadius, 0.1f, 0.1f, 12.0f, "%.2f");
+            changed |= ImGui::DragFloat("深度衰减", &component.SmoothDepthFalloff, 1.0f, 1.0f, 300.0f, "%.1f");
+
+            if (changed && component.CurrentPreset != FluidEmitterComponent::Preset::Custom)
+                component.CurrentPreset = FluidEmitterComponent::Preset::Custom;
+
+            return changed;
+        }
+
         bool DrawAudioSourceInspector(AudioSourceComponent& component, const AudioRuntimeState* runtimeState)
         {
             bool modified = false;
@@ -757,6 +823,77 @@ namespace Engine
         bool DrawNativeScriptInspector(NativeScriptComponent& component)
         {
             bool        modified    = false;
+            const char* backendName = component.Backend == ScriptBackend::Lua ? "Lua" : "Native C++";
+            if (ImGui::BeginCombo("脚本后端", backendName))
+            {
+                bool nativeSelected = component.Backend == ScriptBackend::NativeCpp;
+                if (ImGui::Selectable("Native C++", nativeSelected))
+                {
+                    component.Backend = ScriptBackend::NativeCpp;
+                    component.ScriptPath.clear();
+                    modified = true;
+                }
+                if (ImGui::Selectable("Lua", component.Backend == ScriptBackend::Lua))
+                {
+                    component.Backend = ScriptBackend::Lua;
+                    component.ScriptName.clear();
+                    component.InstantiateScript = nullptr;
+                    component.DestroyScript     = nullptr;
+                    if (component.Instance)
+                        component.Instance.reset();
+                    modified = true;
+                }
+                ImGui::EndCombo();
+            }
+
+            if (component.Backend == ScriptBackend::Lua)
+            {
+                char pathBuf[256];
+                memset(pathBuf, 0, sizeof(pathBuf));
+                std::strncpy(pathBuf, component.ScriptPath.c_str(), sizeof(pathBuf) - 1);
+                if (ImGui::InputText("Lua 脚本", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    std::string normalizedPath;
+                    if (TryNormalizeProjectAssetPath(pathBuf, "Lua 脚本", normalizedPath))
+                    {
+                        ScriptRegistry::Instance().BindLua(component, normalizedPath);
+                        modified = true;
+                    }
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("浏览##LuaScript"))
+                {
+                    std::string relStr;
+                    if (TrySelectProjectAssetPath("*.lua", "Lua 脚本", "Lua 脚本", relStr))
+                    {
+                        ScriptRegistry::Instance().BindLua(component, relStr);
+                        modified = true;
+                    }
+                }
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload =
+                            ImGui::AcceptDragDropPayload(GetEditorAssetDescriptor(AssetType::None).PayloadType))
+                    {
+                        std::string droppedPath(static_cast<const char*>(payload->Data));
+                        if (std::filesystem::path(droppedPath).extension() == ".lua")
+                        {
+                            std::string normalizedPath;
+                            if (TryNormalizeProjectAssetPath(droppedPath, "Lua 脚本", normalizedPath, false))
+                            {
+                                ScriptRegistry::Instance().BindLua(component, normalizedPath);
+                                modified = true;
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                return modified;
+            }
+
             auto&       scripts     = ScriptRegistry::Instance().GetAll();
             const char* currentName = component.ScriptName.empty() ? "(无)" : component.ScriptName.c_str();
 
@@ -774,7 +911,9 @@ namespace Engine
 
             if (ImGui::Selectable("(无)", component.ScriptName.empty()))
             {
+                component.Backend = ScriptBackend::NativeCpp;
                 component.ScriptName.clear();
+                component.ScriptPath.clear();
                 component.InstantiateScript = nullptr;
                 component.DestroyScript     = nullptr;
                 if (component.Instance)
@@ -787,6 +926,7 @@ namespace Engine
                 bool selected = (name == component.ScriptName);
                 if (ImGui::Selectable(entry.DisplayName, selected))
                 {
+                    component.Backend = ScriptBackend::NativeCpp;
                     component.Instance.reset();
                     ScriptRegistry::Instance().Bind(component, name);
                     modified = true;

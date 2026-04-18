@@ -17,8 +17,17 @@ namespace Engine
     class PhysicsDebugDraw
     {
     public:
+        struct MeshSDFDebugBounds
+        {
+            glm::vec3 Center      = glm::vec3(0.0f);
+            glm::vec3 HalfExtents = glm::vec3(0.0f);
+            glm::vec3 Rotation    = glm::vec3(0.0f);
+            glm::vec3 Color       = glm::vec3(0.7f, 0.3f, 1.0f);
+        };
+
         void Init();
         void DrawColliders(entt::registry& reg, const EditorCamera& camera);
+        void DrawMeshSDFBounds(const std::vector<MeshSDFDebugBounds>& bounds, const EditorCamera& camera);
 
     private:
         void DrawLine(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color);

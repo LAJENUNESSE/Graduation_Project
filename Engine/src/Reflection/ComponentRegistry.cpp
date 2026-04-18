@@ -156,6 +156,10 @@ namespace Engine
 
     ENGINE_COMPONENT(FluidEmitterComponent, "流体发射器")
 
+    static const char* s_FluidPresetNames[] = {"自定义", "水龙头水流", "泥浆流", "山体喷发"};
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, CurrentPreset, "预设", Enum, hints.EnumNames = s_FluidPresetNames;
+                       hints.EnumCount = 4)
+
     // 发射参数
     ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleCount, "粒子数量", UInt32, hints.Speed = 100.0f;
                        hints.Min = 100.0f;
@@ -204,6 +208,18 @@ namespace Engine
 
     // 刚体耦合
     ENGINE_PROPERTY(FluidEmitterComponent, RigidBodyCoupling, "刚体耦合", Bool)
+    ENGINE_PROPERTY(FluidEmitterComponent, MeshSDFCoupling, "Mesh SDF 耦合", Bool)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, MeshSDFResolution, "Mesh SDF 分辨率", Int, hints.Speed = 1.0f;
+                       hints.Min = 8.0f;
+                       hints.Max = 64.0f)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, MeshSDFBand, "Mesh SDF 带宽", Float, hints.Speed = 0.005f;
+                       hints.Min    = 0.0f;
+                       hints.Max    = 0.5f;
+                       hints.Format = "%.3f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, MeshSDFBlend, "Mesh SDF 混合", Float, hints.Speed = 0.01f;
+                       hints.Min    = 0.0f;
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
     ENGINE_PROPERTY_EX(FluidEmitterComponent, BoundaryStiffness, "边界刚度", Float, hints.Speed = 100.0f;
                        hints.Min    = 0.0f;
                        hints.Max    = 50000.0f;
@@ -246,6 +262,8 @@ namespace Engine
                        hints.Format = "%.0f")
 
     REGISTER_COMPONENT_BEGIN(FluidEmitterComponent)
+    REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, CurrentPreset)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleCount)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleRadius)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, EmitExtents)
@@ -262,6 +280,10 @@ namespace Engine
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, PCISPHDelta)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SurfaceTension)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, RigidBodyCoupling)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, MeshSDFCoupling)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, MeshSDFResolution)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, MeshSDFBand)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, MeshSDFBlend)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryStiffness)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, BoundaryDamping)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, UseBoundary)

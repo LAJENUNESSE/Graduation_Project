@@ -15,6 +15,7 @@ namespace Engine
     class ResourceLifecycleCoordinator;
     class SceneRenderer;
     class BulletPhysicsWorld;
+    class LuaScriptEngine;
     struct CollisionEvent;
 
     class SceneRuntimeCoordinator
@@ -46,6 +47,7 @@ namespace Engine
         Scene*                        m_Scene; // 非所有权，用于构造 Entity{handle, scene}
 
         std::unique_ptr<BulletPhysicsWorld> m_BulletPhysicsWorld;
+        std::unique_ptr<LuaScriptEngine>    m_LuaScriptEngine;
 
         void ProcessCollisionParticleBursts(const std::vector<CollisionEvent>&       events,
                                             std::set<std::pair<uint32_t, uint32_t>>& processedPairs);

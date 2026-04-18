@@ -34,20 +34,23 @@ namespace Engine
                                          PostProcessingSettings* postProcessingSettings,
                                          Ref<Framebuffer>        hdrFramebuffer,
                                          Ref<Scene>              scene,
-                                         bool*                   showPhysicsColliders)
+                                         bool*                   showPhysicsColliders,
+                                         bool*                   showMeshSDFBounds)
     {
         m_SceneRenderer          = sceneRenderer;
         m_PostProcessingSettings = postProcessingSettings;
         m_HDRFramebuffer         = hdrFramebuffer;
         m_Scene                  = scene;
         m_ShowPhysicsColliders   = showPhysicsColliders;
+        m_ShowMeshSDFBounds      = showMeshSDFBounds;
     }
 
     void RenderSettingsPanel::OnImGuiRender()
     {
         ImGui::Begin("渲染设置");
 
-        if (!m_Scene || !m_SceneRenderer || !m_PostProcessingSettings || !m_HDRFramebuffer || !m_ShowPhysicsColliders)
+        if (!m_Scene || !m_SceneRenderer || !m_PostProcessingSettings || !m_HDRFramebuffer || !m_ShowPhysicsColliders ||
+            !m_ShowMeshSDFBounds)
         {
             ImGui::TextDisabled("渲染设置上下文未就绪");
             ImGui::End();
@@ -270,6 +273,7 @@ namespace Engine
             ImGui::TextDisabled("物理后端: Bullet3");
         }
         ImGui::Checkbox("显示碰撞体", m_ShowPhysicsColliders);
+        ImGui::Checkbox("显示 Mesh SDF 体素边界", m_ShowMeshSDFBounds);
 
         if (m_ReadOnly)
             ImGui::EndDisabled();
