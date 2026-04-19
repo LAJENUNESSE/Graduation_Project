@@ -4,6 +4,7 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <functional>
 #include <unordered_set>
 #include <unordered_map>
 #include <map>
@@ -132,6 +133,8 @@ public:
 	typedef std::unordered_set<int> Breakpoints;
 	typedef std::array<ImU32, (unsigned)PaletteIndex::Max> Palette;
 	typedef uint8_t Char;
+	typedef std::function<void(ImWchar)> CharTypedCallback;
+	typedef std::function<bool(ImGuiKey, bool, bool, bool)> KeyPressedCallback;
 
 	struct Glyph
 	{
@@ -197,6 +200,7 @@ public:
 	void Render(const char* aTitle, const ImVec2& aSize = ImVec2(), bool aBorder = false);
 	void SetText(const std::string& aText);
 	std::string GetText() const;
+	std::string GetText(const Coordinates& aStart, const Coordinates& aEnd) const;
 
 	void SetTextLines(const std::vector<std::string>& aLines);
 	std::vector<std::string> GetTextLines() const;
@@ -216,7 +220,12 @@ public:
 	void SetColorizerEnable(bool aValue);
 
 	Coordinates GetCursorPosition() const { return GetActualCursorCoordinates(); }
+	ImVec2 GetCursorScreenPosition() const { return mCursorScreenPosition; }
+	float GetLineHeight() const { return mCharAdvance.y; }
+	bool IsFocused() const { return mLastWindowFocused; }
 	void SetCursorPosition(const Coordinates& aPosition);
+	void SetCharTypedCallback(CharTypedCallback cb) { mCharTypedCallback = std::move(cb); }
+	void SetKeyPressedCallback(KeyPressedCallback cb) { mKeyPressedCallback = std::move(cb); }
 
 	inline void SetHandleMouseInputs    (bool aValue){ mHandleMouseInputs    = aValue;}
 	inline bool IsHandleMouseInputsEnabled() const { return mHandleKeyboardInputs; }
@@ -318,7 +327,6 @@ private:
 	float TextDistanceToLineStart(const Coordinates& aFrom) const;
 	void EnsureCursorVisible();
 	int GetPageSize() const;
-	std::string GetText(const Coordinates& aStart, const Coordinates& aEnd) const;
 	Coordinates GetActualCursorCoordinates() const;
 	Coordinates SanitizeCoordinates(const Coordinates& aValue) const;
 	void Advance(Coordinates& aCoordinates) const;
@@ -381,9 +389,13 @@ private:
 	Breakpoints mBreakpoints;
 	ErrorMarkers mErrorMarkers;
 	ImVec2 mCharAdvance;
+	ImVec2 mCursorScreenPosition;
 	Coordinates mInteractiveStart, mInteractiveEnd;
 	std::string mLineBuffer;
 	uint64_t mStartTime;
 
 	float mLastClick;
+	bool mLastWindowFocused;
+	CharTypedCallback mCharTypedCallback;
+	KeyPressedCallback mKeyPressedCallback;
 };

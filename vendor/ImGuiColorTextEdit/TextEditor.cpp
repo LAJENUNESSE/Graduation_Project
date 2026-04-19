@@ -42,10 +42,12 @@ TextEditor::TextEditor()
 	, mSelectionMode(SelectionMode::Normal)
 	, mCheckComments(true)
 	, mLastClick(-1.0f)
+	, mLastWindowFocused(false)
 	, mHandleKeyboardInputs(true)
 	, mHandleMouseInputs(true)
 	, mIgnoreImGuiChild(false)
 	, mShowWhitespaces(true)
+	, mCursorScreenPosition(0.0f, 0.0f)
 	, mStartTime(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
 {
 	SetPalette(GetDarkPalette());
@@ -703,6 +705,11 @@ void TextEditor::HandleKeyboardInputs()
 
 	if (ImGui::IsWindowFocused())
 	{
+		auto consumeKey = [&](ImGuiKey key)
+		{
+			return ImGui::IsKeyPressed(key) && mKeyPressedCallback && mKeyPressedCallback(key, ctrl, shift, alt);
+		};
+
 		if (ImGui::IsWindowHovered())
 			ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
 		//ImGui::CaptureKeyboardFromApp(true);
@@ -710,7 +717,14 @@ void TextEditor::HandleKeyboardInputs()
 		io.WantCaptureKeyboard = true;
 		io.WantTextInput = true;
 
-		if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Z))
+		if (consumeKey(ImGuiKey_Escape) || consumeKey(ImGuiKey_UpArrow) || consumeKey(ImGuiKey_DownArrow) ||
+			consumeKey(ImGuiKey_LeftArrow) || consumeKey(ImGuiKey_RightArrow) || consumeKey(ImGuiKey_PageUp) ||
+			consumeKey(ImGuiKey_PageDown) || consumeKey(ImGuiKey_Home) || consumeKey(ImGuiKey_End) ||
+			consumeKey(ImGuiKey_Enter) || consumeKey(ImGuiKey_Tab) || consumeKey(ImGuiKey_Space))
+		{
+			io.InputQueueCharacters.resize(0);
+		}
+		else if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Z))
 			Undo();
 		else if (!IsReadOnly() && !ctrl && !shift && alt && ImGui::IsKeyPressed(ImGuiKey_Backspace))
 			Undo();
@@ -963,6 +977,29 @@ void TextEditor::Render()
 			if (mState.mCursorPosition.mLine == lineNo)
 			{
 				auto focused = ImGui::IsWindowFocused();
+				float width = 1.0f;
+				auto cindex = GetCharacterIndex(mState.mCursorPosition);
+				float cx = TextDistanceToLineStart(mState.mCursorPosition);
+
+				if (mOverwrite && cindex < (int)line.size())
+				{
+					auto c = line[cindex].mChar;
+					if (c == '\t')
+					{
+						auto x = (1.0f + std::floor((1.0f + cx) / (float(mTabSize) * spaceSize))) * (float(mTabSize) * spaceSize);
+						width = x - cx;
+					}
+					else
+					{
+						char buf2[2];
+						buf2[0] = line[cindex].mChar;
+						buf2[1] = '\0';
+						width = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, buf2).x;
+					}
+				}
+				ImVec2 cstart(textScreenPos.x + cx, lineStartScreenPos.y);
+				ImVec2 cend(textScreenPos.x + cx + width, lineStartScreenPos.y + mCharAdvance.y);
+				mCursorScreenPosition = cstart;
 
 				// Highlight the current line (where the cursor is)
 				if (!HasSelection())
@@ -979,28 +1016,6 @@ void TextEditor::Render()
 					auto elapsed = timeEnd - mStartTime;
 					if (elapsed > 400)
 					{
-						float width = 1.0f;
-						auto cindex = GetCharacterIndex(mState.mCursorPosition);
-						float cx = TextDistanceToLineStart(mState.mCursorPosition);
-
-						if (mOverwrite && cindex < (int)line.size())
-						{
-							auto c = line[cindex].mChar;
-							if (c == '\t')
-							{
-								auto x = (1.0f + std::floor((1.0f + cx) / (float(mTabSize) * spaceSize))) * (float(mTabSize) * spaceSize);
-								width = x - cx;
-							}
-							else
-							{
-								char buf2[2];
-								buf2[0] = line[cindex].mChar;
-								buf2[1] = '\0';
-								width = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, buf2).x;
-							}
-						}
-						ImVec2 cstart(textScreenPos.x + cx, lineStartScreenPos.y);
-						ImVec2 cend(textScreenPos.x + cx + width, lineStartScreenPos.y + mCharAdvance.y);
 						drawList->AddRectFilled(cstart, cend, mPalette[(int)PaletteIndex::Cursor]);
 						if (elapsed > 800)
 							mStartTime = timeEnd;
@@ -1127,6 +1142,7 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 	if (!mIgnoreImGuiChild)
 		ImGui::BeginChild(aTitle, aSize, aBorder, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar | ImGuiWindowFlags_NoMove);
+	mLastWindowFocused = ImGui::IsWindowFocused();
 
 	if (mHandleKeyboardInputs)
 	{
@@ -1381,6 +1397,8 @@ void TextEditor::EnterCharacter(ImWchar aChar, bool aShift)
 
 	Colorize(coord.mLine - 1, 3);
 	EnsureCursorVisible();
+	if (mCharTypedCallback)
+		mCharTypedCallback(aChar);
 }
 
 void TextEditor::SetReadOnly(bool aValue)
