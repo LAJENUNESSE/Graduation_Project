@@ -49,6 +49,7 @@ docs/
 !docs/
 docs/*
 !docs/lua-script-editor-completion-plan-b.md
+!docs/vulkan-migration-roadmap.md
 
 # Scripts (build scripts, ignored)
 scripts/
