@@ -4,7 +4,6 @@
 #include "Renderer/RendererAPI.h"
 
 #include <cmath>
-#include <glad/gl.h>
 
 namespace Engine
 {
@@ -53,8 +52,7 @@ namespace Engine
         m_BlockSums->Bind(4);
 
         // Clear CellCount to zero (GPU-side, no CPU allocation or upload)
-        GLuint zero = 0;
-        glClearNamedBufferData(m_CellCount->GetRendererID(), GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+        m_CellCount->ClearToZero();
 
         // ---- Pass A: Hash + Atomic Scatter Count ----
         m_HashShader->Bind();
