@@ -14,7 +14,6 @@
 #include "Scene/Systems/MeshRenderSystem.h"
 #include "Scene/WorldTransformService.h"
 
-#include <glad/gl.h>
 #include <random>
 
 namespace Engine
@@ -92,13 +91,14 @@ namespace Engine
                 ssaoNoise.push_back(noise);
             }
 
-            glGenTextures(1, &m_SSAONoiseTexID);
-            glBindTexture(GL_TEXTURE_2D, m_SSAONoiseTexID);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 4, 4, 0, GL_RGB, GL_FLOAT, ssaoNoise.data());
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            TextureSpecification noiseSpec;
+            noiseSpec.Format       = TextureFormat::RGBA16F;
+            noiseSpec.MinFilter    = TextureFilter::Nearest;
+            noiseSpec.MagFilter    = TextureFilter::Nearest;
+            noiseSpec.WrapS        = TextureWrap::Repeat;
+            noiseSpec.WrapT        = TextureWrap::Repeat;
+            noiseSpec.UploadLayout = TextureDataLayout::RGB_Float;
+            m_SSAONoiseTex = Texture2D::Create(ssaoNoise.data(), 4, 4, noiseSpec);
         }
 
         // 全屏四边形 VAO（供 SSAO pass 使用）
@@ -214,7 +214,7 @@ namespace Engine
                                    m_SSAOShader->SetInt("u_DepthTexture", 0);
 
                                    // 绑定噪声纹理
-                                   RenderCommand::BindTextureUnit(1, m_SSAONoiseTexID);
+                                   m_SSAONoiseTex->Bind(1);
                                    m_SSAOShader->SetInt("u_NoiseTexture", 1);
 
                                    m_SSAOShader->SetMat4("u_Projection", ctx.Camera->GetProjection());
@@ -466,11 +466,7 @@ namespace Engine
         m_BoundRegistry = nullptr;
 
         // 清理 SSAO 噪声纹理
-        if (m_SSAONoiseTexID)
-        {
-            glDeleteTextures(1, &m_SSAONoiseTexID);
-            m_SSAONoiseTexID = 0;
-        }
+        m_SSAONoiseTex.reset();
     }
 
     void SceneRenderer::BeginScene(const EditorCamera& camera, const SceneRenderInput& input)
