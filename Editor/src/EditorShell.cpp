@@ -148,26 +148,11 @@ namespace Engine
         const float     winHeight    = ImGui::GetWindowHeight();
         const float     centerY      = (winHeight - buttonHeight) * 0.5f;
 
-        // ---- 左组：模式占位 ----
-        ImGui::SetCursorPosY(centerY);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
-        ImGui::Button("\xe9\x80\x89\xe6\x8b\xa9\xe6\xa8\xa1\xe5\xbc\x8f \xe2\x96\xbc", ImVec2(96.0f, buttonHeight));
-        ImGui::PopStyleColor(3);
-
-        ImGui::SameLine();
-        ImGui::SetCursorPosY(centerY);
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
-
-        // ---- 中组：播放 / 停止（居中）----
-        const float     playBtnWidth = 88.0f;
-        const float     windowWidth  = ImGui::GetWindowContentRegionMax().x;
-        const float     centerX      = (windowWidth - playBtnWidth) * 0.5f;
-        constexpr float kLeftGroupW  = 96.0f + 8.0f + 1.0f + 8.0f; // 近似左组宽度
-        const float     finalX       = centerX > kLeftGroupW ? centerX : kLeftGroupW + 8.0f;
-        ImGui::SetCursorPosX(finalX);
+        // ---- 播放 / 停止（居中）----
+        const float playBtnWidth = 88.0f;
+        const float windowWidth  = ImGui::GetWindowContentRegionMax().x;
+        const float centerX      = (windowWidth - playBtnWidth) * 0.5f;
+        ImGui::SetCursorPosX(centerX > 0.0f ? centerX : 0.0f);
         ImGui::SetCursorPosY(centerY);
 
         if (state.CurrentSceneState == SceneState::Edit)
@@ -188,20 +173,6 @@ namespace Engine
                 actions.RequestStop = true;
             ImGui::PopStyleColor(3);
         }
-
-        // ---- 右组：设置占位 ----
-        ImGui::SameLine();
-        const float settingsBtnWidth = 64.0f;
-        ImGui::SetCursorPosX(windowWidth - settingsBtnWidth - 4.0f);
-        ImGui::SetCursorPosY(centerY);
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
-        ImGui::SetCursorPosY(centerY);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
-        ImGui::Button("\xe8\xae\xbe\xe7\xbd\xae \xe2\x96\xbc", ImVec2(settingsBtnWidth, buttonHeight));
-        ImGui::PopStyleColor(3);
 
         ImGui::PopStyleVar(3);
         ImGui::End();
