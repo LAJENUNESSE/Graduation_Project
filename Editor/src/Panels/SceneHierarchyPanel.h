@@ -33,16 +33,19 @@ namespace Engine
         bool                       IsSelected(Entity entity) const;
 
     private:
-        void DrawEntityNode(Entity entity, Entity& entityToDelete);
-        void SelectEntity(Entity entity, bool ctrlHeld);
-        void PruneInvalidSelection();
-        bool IsEntityValid(Entity entity) const;
+        void        DrawEntityNode(Entity entity, Entity& entityToDelete);
+        void        SelectEntity(Entity entity, bool ctrlHeld);
+        void        PruneInvalidSelection();
+        bool        IsEntityValid(Entity entity) const;
+        bool        EntityMatchesFilter(Entity entity) const;
+        const char* GetEntityTypeLabel(Entity entity) const;
 
     private:
         Ref<Scene>          m_Context;
         std::vector<Entity> m_SelectedEntities;
         CommandHistory*     m_CommandHistory = nullptr;
         bool                m_ReadOnly       = false;
+        char                m_SearchFilter[128]{};
     };
 
 } // namespace Engine

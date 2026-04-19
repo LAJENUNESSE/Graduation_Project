@@ -137,39 +137,73 @@ namespace Engine
 
         ImGui::End();
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(4.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
 
-        ImGui::Begin("##工具栏", nullptr,
+        ImGui::Begin("##toolbar", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-        float           windowWidth  = ImGui::GetWindowContentRegionMax().x;
-        constexpr float buttonWidth  = 80.0f;
-        constexpr float buttonHeight = 28.0f;
+        constexpr float buttonHeight = 32.0f;
+        const float     winHeight    = ImGui::GetWindowHeight();
+        const float     centerY      = (winHeight - buttonHeight) * 0.5f;
 
-        ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
-        ImGui::SetCursorPosY((ImGui::GetWindowHeight() - buttonHeight) * 0.5f);
+        // ---- 左组：模式占位 ----
+        ImGui::SetCursorPosY(centerY);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+        ImGui::Button("\xe9\x80\x89\xe6\x8b\xa9\xe6\xa8\xa1\xe5\xbc\x8f \xe2\x96\xbc", ImVec2(96.0f, buttonHeight));
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(centerY);
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // ---- 中组：播放 / 停止（居中）----
+        const float     playBtnWidth = 88.0f;
+        const float     windowWidth  = ImGui::GetWindowContentRegionMax().x;
+        const float     centerX      = (windowWidth - playBtnWidth) * 0.5f;
+        constexpr float kLeftGroupW  = 96.0f + 8.0f + 1.0f + 8.0f; // 近似左组宽度
+        const float     finalX       = centerX > kLeftGroupW ? centerX : kLeftGroupW + 8.0f;
+        ImGui::SetCursorPosX(finalX);
+        ImGui::SetCursorPosY(centerY);
 
         if (state.CurrentSceneState == SceneState::Edit)
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.5f, 0.15f, 1.0f));
-            if (ImGui::Button("▶ 播放", ImVec2(buttonWidth, buttonHeight)))
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.50f, 0.16f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.62f, 0.22f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.40f, 0.12f, 1.0f));
+            if (ImGui::Button("\xe2\x96\xb6 \xe6\x92\xad\xe6\x94\xbe", ImVec2(playBtnWidth, buttonHeight)))
                 actions.RequestPlay = true;
             ImGui::PopStyleColor(3);
         }
         else if (state.CurrentSceneState == SceneState::Play)
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
-            if (ImGui::Button("■ 停止", ImVec2(buttonWidth, buttonHeight)))
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.16f, 0.16f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.72f, 0.22f, 0.22f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.12f, 0.12f, 1.0f));
+            if (ImGui::Button("\xe2\x96\xa0 \xe5\x81\x9c\xe6\xad\xa2", ImVec2(playBtnWidth, buttonHeight)))
                 actions.RequestStop = true;
             ImGui::PopStyleColor(3);
         }
 
-        ImGui::PopStyleVar(2);
+        // ---- 右组：设置占位 ----
+        ImGui::SameLine();
+        const float settingsBtnWidth = 64.0f;
+        ImGui::SetCursorPosX(windowWidth - settingsBtnWidth - 4.0f);
+        ImGui::SetCursorPosY(centerY);
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(centerY);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+        ImGui::Button("\xe8\xae\xbe\xe7\xbd\xae \xe2\x96\xbc", ImVec2(settingsBtnWidth, buttonHeight));
+        ImGui::PopStyleColor(3);
+
+        ImGui::PopStyleVar(3);
         ImGui::End();
 
         return actions;

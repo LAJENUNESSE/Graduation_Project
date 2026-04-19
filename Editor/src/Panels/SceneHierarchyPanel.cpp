@@ -7,6 +7,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cstring>
 
 namespace Engine
 {
@@ -81,6 +82,10 @@ namespace Engine
         if (m_Context)
         {
             PruneInvalidSelection();
+
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint("##entity_search", "Search Entities...", m_SearchFilter, sizeof(m_SearchFilter));
+            ImGui::Separator();
 
             Entity entityToDelete;
 
@@ -198,6 +203,9 @@ namespace Engine
     {
         auto& tag = entity.GetComponent<TagComponent>().Tag;
 
+        if (m_SearchFilter[0] != '\0' && !EntityMatchesFilter(entity))
+            return;
+
         // 检查是否有子节点
         bool hasChildren = false;
         if (entity.HasComponent<RelationshipComponent>())
@@ -205,6 +213,9 @@ namespace Engine
             auto& rel   = entity.GetComponent<RelationshipComponent>();
             hasChildren = !rel.Children.empty();
         }
+
+        if (m_SearchFilter[0] != '\0')
+            ImGui::SetNextItemOpen(true, ImGuiCond_Always);
 
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 
@@ -218,6 +229,17 @@ namespace Engine
 
         bool opened = ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<uint64_t>(static_cast<uint32_t>(entity))),
                                         flags, "%s", tag.c_str());
+
+        {
+            const char* typeLabel = GetEntityTypeLabel(entity);
+            ImVec2      itemMin   = ImGui::GetItemRectMin();
+            ImVec2      itemMax   = ImGui::GetItemRectMax();
+            ImVec2      textSize  = ImGui::CalcTextSize(typeLabel);
+            float       textX     = itemMax.x - textSize.x - 6.0f;
+            float       textY     = itemMin.y + (itemMax.y - itemMin.y - textSize.y) * 0.5f;
+            if (textX > itemMin.x + 60.0f)
+                ImGui::GetWindowDrawList()->AddText(ImVec2(textX, textY), IM_COL32(120, 120, 120, 200), typeLabel);
+        }
 
         if (ImGui::IsItemClicked())
         {
@@ -309,5 +331,54 @@ namespace Engine
     bool SceneHierarchyPanel::IsEntityValid(Entity entity) const
     {
         return m_Context && entity && m_Context->GetRegistry().valid(static_cast<entt::entity>(entity));
+    }
+    bool SceneHierarchyPanel::EntityMatchesFilter(Entity entity) const
+    {
+        if (m_SearchFilter[0] == '\0')
+            return true;
+        auto& tag = entity.GetComponent<TagComponent>().Tag;
+        if (strstr(tag.c_str(), m_SearchFilter) != nullptr)
+            return true;
+        auto children = m_Context->GetChildren(entity);
+        for (auto& child : children)
+        {
+            if (EntityMatchesFilter(child))
+                return true;
+        }
+        return false;
+    }
+
+    const char* SceneHierarchyPanel::GetEntityTypeLabel(Entity entity) const
+    {
+        if (entity.HasComponent<CameraComponent>())
+            return "Camera";
+        if (entity.HasComponent<LightComponent>())
+        {
+            auto& light = entity.GetComponent<LightComponent>();
+            switch (light.Type)
+            {
+            case LightComponent::LightType::Point:
+                return "PointLight";
+            case LightComponent::LightType::Spot:
+                return "SpotLight";
+            default:
+                return "DirLight";
+            }
+        }
+        if (entity.HasComponent<FluidEmitterComponent>())
+            return "Fluid";
+        if (entity.HasComponent<ParticleEmitterComponent>())
+            return "Particle";
+        if (entity.HasComponent<TerrainComponent>())
+            return "Terrain";
+        if (entity.HasComponent<AudioSourceComponent>())
+            return "Audio";
+        if (entity.HasComponent<VideoPlayerComponent>())
+            return "Video";
+        if (entity.HasComponent<MeshRendererComponent>())
+            return "Mesh";
+        if (entity.HasComponent<RigidBodyComponent>())
+            return "RigidBody";
+        return "Entity";
     }
 } // namespace Engine
