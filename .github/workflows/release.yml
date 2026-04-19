@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    name: Windows Release
+    runs-on: windows-latest
+
+    env:
+      VCPKG_ROOT: C:/vcpkg
+      BUILD_CONFIG: RelWithDebInfo
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Initialize submodules (shallow)
+        run: git submodule update --init --recursive --depth 1
+
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tagVersion = "${{ github.ref_name }}".TrimStart("v")
+
+          $cmake = Get-Content "CMakeLists.txt" -Raw
+          $major = [regex]::Match($cmake, 'set\(CPACK_PACKAGE_VERSION_MAJOR "([^"]+)"\)').Groups[1].Value
+          $minor = [regex]::Match($cmake, 'set\(CPACK_PACKAGE_VERSION_MINOR "([^"]+)"\)').Groups[1].Value
+          $patch = [regex]::Match($cmake, 'set\(CPACK_PACKAGE_VERSION_PATCH "([^"]+)"\)').Groups[1].Value
+          if (-not $major -or -not $minor -or -not $patch) {
+            throw "Failed to read CPACK_PACKAGE_VERSION from CMakeLists.txt"
+          }
+          $cmakeVersion = "$major.$minor.$patch"
+
+          $iss = Get-Content "installer/Editor.iss" -Raw
+          $issVersion = [regex]::Match($iss, '#define MyAppVersion "([^"]+)"').Groups[1].Value
+          if (-not $issVersion) {
+            throw "Failed to read MyAppVersion from installer/Editor.iss"
+          }
+
+          if ($tagVersion -ne $cmakeVersion) {
+            throw "Tag version ($tagVersion) != CPack version ($cmakeVersion)."
+          }
+          if ($tagVersion -ne $issVersion) {
+            throw "Tag version ($tagVersion) != Inno version ($issVersion)."
+          }
+
+          Write-Host "Version check passed: $tagVersion"
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-windows-release-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset default
+
+      - name: Build Editor
+        run: cmake --build build --config ${{ env.BUILD_CONFIG }} --target Editor
+
+      - name: Package portable ZIP with CPack
+        run: cpack --config build/CPackConfig.cmake -G ZIP -C ${{ env.BUILD_CONFIG }} -B build
+
+      - name: Download VC++ redistributable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "installer/redist" | Out-Null
+          Invoke-WebRequest `
+            -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" `
+            -OutFile "installer/redist/VC_redist.x64.exe"
+
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          choco install innosetup --yes --no-progress
+
+      - name: Build setup installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\Editor.iss"
+
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "temp/package" | Out-Null
+          Copy-Item "dist/GameEngineEditor-Setup-*.exe" "temp/package/" -Force
+          Copy-Item "build/GameEngineEditor-*-win64.zip" "temp/package/" -Force
+          Get-ChildItem "temp/package" | Select-Object Name, Length
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            temp/package/GameEngineEditor-Setup-*.exe
+            temp/package/GameEngineEditor-*-win64.zip
+          fail_on_unmatched_files: true
+          generate_release_notes: true
