@@ -1,6 +1,8 @@
 #include "Panels/ConsolePanel.h"
 #include "Core/Log.h"
 
+#include "ImGui/ImGuiLayer.h"
+
 #include <imgui.h>
 #include <spdlog/pattern_formatter.h>
 
@@ -162,6 +164,10 @@ namespace Engine
         // 日志内容区域
         ImGui::BeginChild("ConsoleScrollRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 
+        ImFont* codeFont = ImGuiLayer::GetCodeFont();
+        if (codeFont)
+            ImGui::PushFont(codeFont);
+
         // 仅在日志有变化时拷贝
         uint64_t currentVersion = m_Sink->GetVersion();
         if (currentVersion != m_CachedVersion)
@@ -210,31 +216,38 @@ namespace Engine
                     continue;
             }
 
-            // 颜色编码
+            ImVec4      backgroundColor(0.0f, 0.0f, 0.0f, 0.0f);
+            ImVec4      accentColor(0.0f, 0.0f, 0.0f, 0.0f);
             ImVec4      color;
             const char* levelTag;
             switch (entry.Level)
             {
             case spdlog::level::trace:
             case spdlog::level::debug:
-                color    = ImVec4(0.6f, 0.6f, 0.6f, 1.0f); // 灰色
+                color    = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
                 levelTag = "[TRACE]";
                 break;
             case spdlog::level::info:
-                color    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // 白色
+                color    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
                 levelTag = "[INFO] ";
                 break;
             case spdlog::level::warn:
-                color    = ImVec4(1.0f, 0.9f, 0.3f, 1.0f); // 黄色
-                levelTag = "[WARN] ";
+                backgroundColor = ImVec4(0.50f, 0.38f, 0.05f, 0.34f);
+                accentColor     = ImVec4(0.95f, 0.78f, 0.08f, 0.95f);
+                color           = ImVec4(1.0f, 0.9f, 0.3f, 1.0f);
+                levelTag        = "[WARN] ";
                 break;
             case spdlog::level::err:
-                color    = ImVec4(1.0f, 0.3f, 0.3f, 1.0f); // 红色
-                levelTag = "[ERROR]";
+                backgroundColor = ImVec4(0.52f, 0.10f, 0.10f, 0.42f);
+                accentColor     = ImVec4(1.0f, 0.28f, 0.28f, 0.98f);
+                color           = ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
+                levelTag        = "[ERROR]";
                 break;
             case spdlog::level::critical:
-                color    = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // 亮红
-                levelTag = "[CRIT] ";
+                backgroundColor = ImVec4(0.68f, 0.05f, 0.05f, 0.52f);
+                accentColor     = ImVec4(1.0f, 0.12f, 0.12f, 1.0f);
+                color           = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+                levelTag        = "[CRIT] ";
                 break;
             default:
                 color    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -242,10 +255,32 @@ namespace Engine
                 break;
             }
 
+            const std::string lineText = "[" + entry.Timestamp + "] " + levelTag + " " + entry.Message;
+            if (backgroundColor.w > 0.0f)
+            {
+                ImDrawList*  drawList   = ImGui::GetWindowDrawList();
+                const ImVec2 lineStart  = ImGui::GetCursorScreenPos();
+                const float  rowHeight  = ImGui::GetTextLineHeightWithSpacing();
+                const float  availWidth = ImGui::GetContentRegionAvail().x;
+                const float  rectWidth  = std::max(ImGui::CalcTextSize(lineText.c_str()).x + 10.0f, availWidth);
+                const ImVec2 rectMin(lineStart.x - 3.0f, lineStart.y);
+                const ImVec2 rectMax(rectMin.x + rectWidth, lineStart.y + rowHeight);
+                drawList->AddRectFilled(rectMin, rectMax, ImGui::ColorConvertFloat4ToU32(backgroundColor), 4.0f);
+
+                if (accentColor.w > 0.0f)
+                {
+                    const ImVec2 accentMax(rectMin.x + 4.0f, rectMax.y);
+                    drawList->AddRectFilled(rectMin, accentMax, ImGui::ColorConvertFloat4ToU32(accentColor), 2.0f);
+                }
+            }
+
             ImGui::PushStyleColor(ImGuiCol_Text, color);
-            ImGui::TextUnformatted(("[" + entry.Timestamp + "] " + levelTag + " " + entry.Message).c_str());
+            ImGui::TextUnformatted(lineText.c_str());
             ImGui::PopStyleColor();
         }
+
+        if (codeFont)
+            ImGui::PopFont();
 
         // 自动滚动到底部
         if (m_AutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 10.0f)
