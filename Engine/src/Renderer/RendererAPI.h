@@ -8,6 +8,8 @@
 namespace Engine
 {
 
+    struct RendererCapabilities;
+
     enum class DepthFunc
     {
         Less,
@@ -81,6 +83,9 @@ namespace Engine
         // Blend / Depth
         virtual void SetDepthMask(bool enable)                      = 0;
         virtual void SetBlendFunc(BlendFactor src, BlendFactor dst) = 0;
+
+        // Capabilities
+        virtual void QueryCapabilities(RendererCapabilities& caps) = 0;
 
         static API GetAPI() { return s_API; }
 

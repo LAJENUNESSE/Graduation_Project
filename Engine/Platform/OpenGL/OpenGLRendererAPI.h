@@ -32,6 +32,7 @@ namespace Engine
         void DrawArraysIndirect(uint32_t bufferID) override;
         void SetDepthMask(bool enable) override;
         void SetBlendFunc(BlendFactor src, BlendFactor dst) override;
+        void QueryCapabilities(RendererCapabilities& caps) override;
     };
 
 } // namespace Engine

@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLRendererAPI.h"
 #include "Core/Assert.h"
+#include "Renderer/RendererCapabilities.h"
 
 #include <glad/gl.h>
 
@@ -177,6 +178,19 @@ namespace Engine
     void OpenGLRendererAPI::SetBlendFunc(BlendFactor src, BlendFactor dst)
     {
         glBlendFunc(BlendFactorToGL(src), BlendFactorToGL(dst));
+    }
+
+    void OpenGLRendererAPI::QueryCapabilities(RendererCapabilities& caps)
+    {
+        glGetIntegerv(GL_MAJOR_VERSION, &caps.MajorVersion);
+        glGetIntegerv(GL_MINOR_VERSION, &caps.MinorVersion);
+        caps.SupportsComputeShaders =
+            (caps.MajorVersion > 4) || (caps.MajorVersion == 4 && caps.MinorVersion >= 3);
+
+        const char* vendor   = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        caps.VendorString    = vendor ? vendor : "";
+        caps.RendererString  = renderer ? renderer : "";
     }
 
 } // namespace Engine

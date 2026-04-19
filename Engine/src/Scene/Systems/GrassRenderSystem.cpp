@@ -63,9 +63,8 @@ namespace Engine
         m_EmptyVAO = VertexArray::Create();
 
         // VMware 兼容检测
-        const char* vendor       = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-        const char* renderer     = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-        bool        vmwareDriver = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
+        auto& caps           = RendererCapabilities::Get();
+        bool  vmwareDriver   = ContainsToken(caps.VendorString.c_str(), "VMware") || ContainsToken(caps.RendererString.c_str(), "SVGA3D");
 
         const char* forceDirect    = std::getenv("ENGINE_GRASS_DIRECT_DRAW");
         bool        envForceDirect = forceDirect && forceDirect[0] == '1';

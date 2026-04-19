@@ -1,14 +1,17 @@
 #pragma once
 #include <cstdint>
+#include <string>
 
 namespace Engine
 {
 
     struct RendererCapabilities
     {
-        int  GLMajorVersion         = 0;
-        int  GLMinorVersion         = 0;
-        bool SupportsComputeShaders = false; // 需要 GL >= 4.3
+        int         MajorVersion         = 0;
+        int         MinorVersion         = 0;
+        bool        SupportsComputeShaders = false;
+        std::string VendorString;
+        std::string RendererString;
 
         void Query();
 

@@ -5,6 +5,7 @@
 #include "Core/Log.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
+#include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
 
 #include <glad/gl.h>
@@ -384,11 +385,10 @@ namespace Engine
         glBufferData(GL_COPY_WRITE_BUFFER, sizeof(CounterData), nullptr, GL_STREAM_READ);
         glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 
-        const char* vendor   = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-        const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        auto& caps = RendererCapabilities::Get();
 
         // VMware SVGA has known instability with advanced compute/indirect paths.
-        bool vmwareDriver  = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
+        bool vmwareDriver  = ContainsToken(caps.VendorString.c_str(), "VMware") || ContainsToken(caps.RendererString.c_str(), "SVGA3D");
         m_VMwareCompatMode = vmwareDriver;
 
         const char* forceDirect    = std::getenv("ENGINE_PARTICLE_DIRECT_DRAW");

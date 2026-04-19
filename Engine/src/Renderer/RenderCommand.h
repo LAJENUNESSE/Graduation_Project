@@ -91,6 +91,8 @@ namespace Engine
 
         static void SetBlendFunc(BlendFactor src, BlendFactor dst) { s_RendererAPI->SetBlendFunc(src, dst); }
 
+        static void QueryCapabilities(RendererCapabilities& caps) { s_RendererAPI->QueryCapabilities(caps); }
+
     private:
         static Scope<RendererAPI> s_RendererAPI;
     };
