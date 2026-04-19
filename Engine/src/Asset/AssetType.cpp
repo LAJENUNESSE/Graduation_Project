@@ -33,6 +33,8 @@ namespace Engine
         {".mp4", AssetType::Video},
         {".avi", AssetType::Video},
         {".mkv", AssetType::Video},
+        // 脚本
+        {".lua", AssetType::Script},
     };
 
     AssetType AssetTypeFromPath(const std::filesystem::path& path)
@@ -75,6 +77,8 @@ namespace Engine
             return "Audio";
         case AssetType::Video:
             return "Video";
+        case AssetType::Script:
+            return "Script";
         default:
             return "None";
         }

@@ -26,6 +26,10 @@ namespace Engine
         using SceneOpenCallback = std::function<void(const std::string&)>;
         void SetSceneOpenCallback(SceneOpenCallback callback) { m_OnSceneOpen = std::move(callback); }
 
+        // 设置双击 Lua 脚本文件的回调（由 EditorLayer 设置以在内置编辑器中打开）
+        using ScriptOpenCallback = std::function<void(const std::string&)>;
+        void SetScriptOpenCallback(ScriptOpenCallback callback) { m_OnScriptOpen = std::move(callback); }
+
         void OnImGuiRender();
 
     private:
@@ -61,9 +65,10 @@ namespace Engine
         std::filesystem::path m_RootDirectory;
         std::filesystem::path m_CurrentDirectory;
 
-        Ref<Scene>        m_Scene;
-        SceneOpenCallback m_OnSceneOpen;
-        std::string       m_LastFilesystemError;
+        Ref<Scene>         m_Scene;
+        SceneOpenCallback  m_OnSceneOpen;
+        ScriptOpenCallback m_OnScriptOpen;
+        std::string        m_LastFilesystemError;
 
         // 目录缓存（按路径键值，1 秒过期）
         std::unordered_map<std::string, std::vector<std::filesystem::directory_entry>> m_DirectoryCache;

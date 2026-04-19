@@ -15,7 +15,8 @@ namespace Engine
         Scene,
         Shader,
         Audio,
-        Video
+        Video,
+        Script
     };
 
     // 根据文件路径的扩展名推断 AssetType（替代各种 IsXxxFile()）

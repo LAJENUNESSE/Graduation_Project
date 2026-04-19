@@ -97,6 +97,14 @@ namespace Engine
             m_ScriptEditorPanel->ToggleVisible();
     }
 
+    void EditorPanelCoordinator::OpenScript(const std::string& path)
+    {
+        if (!m_ScriptEditorPanel)
+            return;
+        m_ScriptEditorPanel->SetVisible(true);
+        m_ScriptEditorPanel->OpenFile(path);
+    }
+
     void EditorPanelCoordinator::SetHDRFramebuffer(const Ref<Framebuffer>& framebuffer)
     {
         if (m_RenderSettingsPanel)

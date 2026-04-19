@@ -545,6 +545,13 @@ namespace Engine
                 ENGINE_INFO("双击场景文件: {0}", path.string());
             break;
 
+        case AssetType::Script:
+            if (m_OnScriptOpen)
+                m_OnScriptOpen(PathUtils::ToProjectRelativeOrAbsolute(path));
+            else
+                ENGINE_INFO("双击脚本文件: {0}", path.string());
+            break;
+
         case AssetType::Texture2D:
             m_ShowImagePreview = true;
             ClearImagePreview();

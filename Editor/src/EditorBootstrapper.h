@@ -37,6 +37,7 @@ namespace Engine
 
         // 回调设置（捕获 EditorLayer::this 的回调必须由 EditorLayer 在 Assemble 后设置）
         void SetSceneOpenCallback(std::function<void(const std::string&)> callback);
+        void SetScriptOpenCallback(std::function<void(const std::string&)> callback);
         void SetMSAAChangedCallback(std::function<void(uint32_t)> callback);
         void SetModifiedCallback(std::function<void()> callback);
 

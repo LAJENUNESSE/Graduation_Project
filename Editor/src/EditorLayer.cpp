@@ -45,6 +45,7 @@ namespace Engine
 
         // 这些回调捕获 EditorLayer::this，必须在 Assemble 之后设置
         m_Boot->SetSceneOpenCallback([this](const std::string& path) { OpenScene(path); });
+        m_Boot->SetScriptOpenCallback([this](const std::string& path) { m_Boot->PanelCoordinator().OpenScript(path); });
         m_Boot->SetMSAAChangedCallback([this](uint32_t samples)
                                        { m_Boot->RenderController().ApplyMSAASamples(samples); });
 

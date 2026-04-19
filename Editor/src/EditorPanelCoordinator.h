@@ -51,6 +51,7 @@ namespace Engine
         bool IsScriptEditorVisible() const;
         void SetScriptEditorVisible(bool visible);
         void ToggleScriptEditorVisible();
+        void OpenScript(const std::string& path);
 
     private:
         void RenderStatsPanel();

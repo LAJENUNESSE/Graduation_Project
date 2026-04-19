@@ -92,6 +92,11 @@ namespace Engine
         m_AssetBrowserPanel->SetSceneOpenCallback(std::move(callback));
     }
 
+    void EditorBootstrapper::SetScriptOpenCallback(std::function<void(const std::string&)> callback)
+    {
+        m_AssetBrowserPanel->SetScriptOpenCallback(std::move(callback));
+    }
+
     void EditorBootstrapper::SetMSAAChangedCallback(std::function<void(uint32_t)> callback)
     {
         m_RenderSettingsPanel->SetMSAAChangedCallback(std::move(callback));
