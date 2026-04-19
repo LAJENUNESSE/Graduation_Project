@@ -51,10 +51,10 @@ namespace Engine
         BootstrapDefaultScene();
 
         // RenderSettingsPanel 初始 context（需要 m_ActiveScene，所以在 BootstrapDefaultScene 之后）
-        m_Boot->GetRenderSettingsPanel().SetContext(
-            &m_Boot->RenderController().GetSceneRenderer(), m_Boot->RenderController().GetPostProcessingSettings(),
-            m_Boot->ViewportController().GetHDRFramebuffer(), m_ActiveScene, &m_Boot->ShowPhysicsColliders(),
-            &m_Boot->ShowMeshSDFBounds());
+        m_Boot->GetRenderSettingsPanel().SetContext(&m_Boot->RenderController().GetSceneRenderer(),
+                                                    m_Boot->RenderController().GetPostProcessingSettings(),
+                                                    m_Boot->ViewportController().GetHDRFramebuffer(), m_ActiveScene,
+                                                    &m_Boot->ShowPhysicsColliders(), &m_Boot->ShowMeshSDFBounds());
 
         ApplyActiveSceneContext(false);
 
@@ -291,6 +291,8 @@ namespace Engine
             m_Boot->GetCommandHistory().RedoCommand();
         if (actions.ToggleStatsPanel)
             m_Boot->PanelCoordinator().ToggleStatsPanelVisible();
+        if (actions.ToggleScriptEditorPanel)
+            m_Boot->PanelCoordinator().ToggleScriptEditorVisible();
         if (actions.ToggleLayoutLock)
             m_LayoutLocked = !m_LayoutLocked;
         if (actions.RequestResetLayout)
@@ -310,11 +312,12 @@ namespace Engine
         state.CanSave                        = allowHistoryActions;
         state.CanUndo                        = allowHistoryActions && m_Boot->GetCommandHistory().CanUndo();
         state.CanRedo                        = allowHistoryActions && m_Boot->GetCommandHistory().CanRedo();
-        state.UndoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetUndoDescription() : "";
-        state.RedoDescription = allowHistoryActions ? m_Boot->GetCommandHistory().GetRedoDescription() : "";
-        state.ShowStatsPanel  = m_Boot->PanelCoordinator().IsStatsPanelVisible();
-        state.IsDirty         = m_Boot->SceneSession().IsDirty();
-        state.IsLayoutLocked  = m_LayoutLocked;
+        state.UndoDescription       = allowHistoryActions ? m_Boot->GetCommandHistory().GetUndoDescription() : "";
+        state.RedoDescription       = allowHistoryActions ? m_Boot->GetCommandHistory().GetRedoDescription() : "";
+        state.ShowStatsPanel        = m_Boot->PanelCoordinator().IsStatsPanelVisible();
+        state.ShowScriptEditorPanel = m_Boot->PanelCoordinator().IsScriptEditorVisible();
+        state.IsDirty               = m_Boot->SceneSession().IsDirty();
+        state.IsLayoutLocked        = m_LayoutLocked;
         return state;
     }
 

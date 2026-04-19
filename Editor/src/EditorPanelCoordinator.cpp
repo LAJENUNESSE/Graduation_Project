@@ -6,6 +6,7 @@
 #include "Panels/PropertiesPanel.h"
 #include "Panels/RenderSettingsPanel.h"
 #include "Panels/SceneHierarchyPanel.h"
+#include "Panels/ScriptEditorPanel.h"
 #include "Renderer/Framebuffer.h"
 #include "Renderer/ParticleSystemGPU.h"
 #include "Renderer/SceneRenderer.h"
@@ -29,6 +30,7 @@ namespace Engine
                                             ConsolePanel*        consolePanel,
                                             AssetBrowserPanel*   assetBrowserPanel,
                                             RenderSettingsPanel* renderSettingsPanel,
+                                            ScriptEditorPanel*   scriptEditorPanel,
                                             CommandHistory*      commandHistory)
     {
         m_HierarchyPanel      = hierarchyPanel;
@@ -36,6 +38,7 @@ namespace Engine
         m_ConsolePanel        = consolePanel;
         m_AssetBrowserPanel   = assetBrowserPanel;
         m_RenderSettingsPanel = renderSettingsPanel;
+        m_ScriptEditorPanel   = scriptEditorPanel;
         m_CommandHistory      = commandHistory;
 
         if (m_PropertiesPanel)
@@ -71,8 +74,27 @@ namespace Engine
             m_AssetBrowserPanel->OnImGuiRender();
         if (m_RenderSettingsPanel)
             m_RenderSettingsPanel->OnImGuiRender();
+        if (m_ScriptEditorPanel)
+            m_ScriptEditorPanel->OnImGuiRender();
 
         RenderStatsPanel();
+    }
+
+    bool EditorPanelCoordinator::IsScriptEditorVisible() const
+    {
+        return m_ScriptEditorPanel ? m_ScriptEditorPanel->IsVisible() : false;
+    }
+
+    void EditorPanelCoordinator::SetScriptEditorVisible(bool visible)
+    {
+        if (m_ScriptEditorPanel)
+            m_ScriptEditorPanel->SetVisible(visible);
+    }
+
+    void EditorPanelCoordinator::ToggleScriptEditorVisible()
+    {
+        if (m_ScriptEditorPanel)
+            m_ScriptEditorPanel->ToggleVisible();
     }
 
     void EditorPanelCoordinator::SetHDRFramebuffer(const Ref<Framebuffer>& framebuffer)

@@ -19,9 +19,10 @@ namespace Engine
         bool        CanRedo           = false;
         std::string UndoDescription;
         std::string RedoDescription;
-        bool        ShowStatsPanel = true;
-        bool        IsDirty        = false;
-        bool        IsLayoutLocked = false;
+        bool        ShowStatsPanel        = true;
+        bool        ShowScriptEditorPanel = true;
+        bool        IsDirty               = false;
+        bool        IsLayoutLocked        = false;
     };
 
     struct EditorShellActions
@@ -35,6 +36,7 @@ namespace Engine
         bool RequestUndo             = false;
         bool RequestRedo             = false;
         bool ToggleStatsPanel        = false;
+        bool ToggleScriptEditorPanel = false;
         bool RequestResetLayout      = false;
         bool ToggleLayoutLock        = false;
         bool RequestCloseApplication = false;
@@ -49,9 +51,9 @@ namespace Engine
         void RequestResetLayout() { m_ResetLayoutRequested = true; }
 
     private:
-        bool               m_DockspaceOpen  = true;
+        bool               m_DockspaceOpen        = true;
         bool               m_ResetLayoutRequested = false;
-        ImGuiDockNodeFlags m_DockspaceFlags = ImGuiDockNodeFlags_None;
+        ImGuiDockNodeFlags m_DockspaceFlags       = ImGuiDockNodeFlags_None;
     };
 
 } // namespace Engine

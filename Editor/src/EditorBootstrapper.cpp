@@ -11,6 +11,7 @@
 #include "Panels/PropertiesPanel.h"
 #include "Panels/RenderSettingsPanel.h"
 #include "Panels/SceneHierarchyPanel.h"
+#include "Panels/ScriptEditorPanel.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "Renderer/PostProcessing.h"
 #include "Renderer/SceneRenderer.h"
@@ -38,6 +39,7 @@ namespace Engine
         m_ConsolePanel        = CreateScope<ConsolePanel>();
         m_AssetBrowserPanel   = CreateScope<AssetBrowserPanel>();
         m_RenderSettingsPanel = CreateScope<RenderSettingsPanel>();
+        m_ScriptEditorPanel   = CreateScope<ScriptEditorPanel>();
 
         // 控制器
         m_SceneSession             = CreateScope<EditorSceneSession>(*m_SceneRenderer);
@@ -63,7 +65,8 @@ namespace Engine
         // 面板配置
         m_HierarchyPanel->SetCommandHistory(m_CommandHistory.get());
         m_PanelCoordinator->Initialize(m_HierarchyPanel.get(), m_PropertiesPanel.get(), m_ConsolePanel.get(),
-                                       m_AssetBrowserPanel.get(), m_RenderSettingsPanel.get(), m_CommandHistory.get());
+                                       m_AssetBrowserPanel.get(), m_RenderSettingsPanel.get(),
+                                       m_ScriptEditorPanel.get(), m_CommandHistory.get());
         m_PanelCoordinator->SetSceneRenderer(m_SceneRenderer.get());
         m_SelectionGizmoController->Initialize(m_PanelCoordinator.get(), m_CommandHistory.get());
 

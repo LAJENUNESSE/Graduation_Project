@@ -23,6 +23,7 @@ namespace Engine
     class ConsolePanel;
     class AssetBrowserPanel;
     class RenderSettingsPanel;
+    class ScriptEditorPanel;
     class CommandHistory;
 
     class EditorBootstrapper
@@ -67,6 +68,7 @@ namespace Engine
         Scope<ConsolePanel>        m_ConsolePanel;
         Scope<AssetBrowserPanel>   m_AssetBrowserPanel;
         Scope<RenderSettingsPanel> m_RenderSettingsPanel;
+        Scope<ScriptEditorPanel>   m_ScriptEditorPanel;
 
         // 控制器（依赖基础设施）
         Scope<EditorSceneSession>             m_SceneSession;

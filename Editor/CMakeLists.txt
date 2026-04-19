@@ -15,6 +15,7 @@ set(EDITOR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/PropertiesPanelCustomDrawers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/RenderSettingsPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/SceneHierarchyPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/ScriptEditorPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/CollisionTestScript.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/PlayerController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Scripts/RotateScript.cpp
