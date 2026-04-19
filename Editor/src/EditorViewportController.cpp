@@ -121,22 +121,58 @@ namespace Engine
         ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)), ImVec2(imageSize.x, imageSize.y),
                      ImVec2(0, 1), ImVec2(1, 0));
 
-        // Draw FPS overlay
-        auto& pm = PerformanceMonitor::Get();
-        ImVec2 overlayPos = ImVec2(imageScreenPos.x + 10.0f, imageScreenPos.y + 10.0f);
-        
-        ImGui::SetNextWindowPos(overlayPos);
-        ImGui::SetNextWindowBgAlpha(0.3f);
-        ImGuiWindowFlags overlayFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | 
-                                        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | 
-                                        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
-        
-        if (ImGui::Begin("FPS Overlay", nullptr, overlayFlags))
+        // FPS overlay drawn directly on the viewport via ImDrawList (simulated frosted-glass blur)
+        if (m_ShowFpsOverlay && imageSize.x > 0.0f && imageSize.y > 0.0f)
         {
-            ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "FPS: %.1f", pm.GetFPS());
-            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "%.2f ms", pm.GetFrameTimeMs());
+            auto&       pm   = PerformanceMonitor::Get();
+            ImDrawList* dl   = ImGui::GetWindowDrawList();
+            ImFont*     font = ImGui::GetFont();
+
+            char fps_buf[32], ms_buf[32];
+            snprintf(fps_buf, sizeof(fps_buf), "FPS: %.1f", pm.GetFPS());
+            snprintf(ms_buf, sizeof(ms_buf), "%.2f ms", pm.GetFrameTimeMs());
+
+            const float fontSize = ImGui::GetFontSize();
+            const float lineGap  = 4.0f;
+            const float padX     = 14.0f;
+            const float padY     = 8.0f;
+            const float rounding = 6.0f;
+
+            ImVec2 szFps = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, fps_buf);
+            ImVec2 szMs  = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, ms_buf);
+
+            float boxW = std::max(szFps.x, szMs.x) + padX * 2.0f;
+            float boxH = szFps.y + lineGap + szMs.y + padY * 2.0f;
+
+            // Anchor: top-left of the rendered image + margin
+            ImVec2 bMin = ImVec2(imageScreenPos.x + 12.0f, imageScreenPos.y + 12.0f);
+            ImVec2 bMax = ImVec2(bMin.x + boxW, bMin.y + boxH);
+
+            // Simulated gaussian blur: draw concentric dilated rects with decreasing opacity
+            for (int i = 5; i >= 1; --i)
+            {
+                float  d   = static_cast<float>(i) * 2.0f;
+                ImVec2 mn  = ImVec2(bMin.x - d, bMin.y - d);
+                ImVec2 mx  = ImVec2(bMax.x + d, bMax.y + d);
+                ImU32  col = IM_COL32(8, 8, 8, static_cast<int>(20 + i * 8));
+                dl->AddRectFilled(mn, mx, col, rounding + d * 0.6f);
+            }
+
+            // Solid core background
+            dl->AddRectFilled(bMin, bMax, IM_COL32(12, 12, 12, 195), rounding);
+            // Subtle inner highlight (top edge)
+            dl->AddRectFilled(bMin, ImVec2(bMax.x, bMin.y + 1.0f), IM_COL32(255, 255, 255, 18), rounding);
+            // Thin border
+            dl->AddRect(bMin, bMax, IM_COL32(80, 80, 80, 90), rounding, 0, 1.0f);
+
+            // Centered FPS text (green)
+            ImVec2 fpsTL = ImVec2(bMin.x + (boxW - szFps.x) * 0.5f, bMin.y + padY);
+            dl->AddText(font, fontSize, fpsTL, IM_COL32(60, 220, 60, 230), fps_buf);
+
+            // Centered ms text (muted)
+            ImVec2 msTL = ImVec2(bMin.x + (boxW - szMs.x) * 0.5f, fpsTL.y + szFps.y + lineGap);
+            dl->AddText(font, fontSize, msTL, IM_COL32(190, 190, 190, 200), ms_buf);
         }
-        ImGui::End();
 
         return m_Context;
     }

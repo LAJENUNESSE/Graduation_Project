@@ -27,6 +27,15 @@
 #include <X11/Xlib.h>
 #endif
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#include <dwmapi.h>
+#endif
+
 namespace Engine
 {
 
@@ -257,6 +266,16 @@ namespace Engine
 
         m_Context = GraphicsContext::Create(m_Window);
         m_Context->Init();
+
+#ifdef _WIN32
+        {
+            HWND hwnd     = glfwGetWin32Window(m_Window);
+            BOOL darkMode = TRUE;
+            // DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (Windows 11+), fall back to 19 (Windows 10)
+            if (FAILED(DwmSetWindowAttribute(hwnd, 20, &darkMode, sizeof(darkMode))))
+                DwmSetWindowAttribute(hwnd, 19, &darkMode, sizeof(darkMode));
+        }
+#endif
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
         SetVSync(false);

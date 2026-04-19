@@ -46,13 +46,17 @@ namespace Engine
         glm::vec2                    GetRenderSize() const { return m_Context.RenderSize; }
         void                         ApplyMSAASamples(uint32_t samples);
 
+        bool IsShowFpsOverlay() const { return m_ShowFpsOverlay; }
+        void ToggleFpsOverlay() { m_ShowFpsOverlay = !m_ShowFpsOverlay; }
+
     private:
         Ref<Framebuffer>      m_Framebuffer;
         Ref<Framebuffer>      m_HDRFramebuffer;
         Ref<Framebuffer>      m_PickingFramebuffer;
         EditorCamera          m_EditorCamera;
         EditorViewportContext m_Context;
-        glm::vec2             m_TargetSize = {1280.0f, 720.0f};
+        glm::vec2             m_TargetSize     = {1280.0f, 720.0f};
+        bool                  m_ShowFpsOverlay = true;
         ResizeCallback        m_OnResize;
     };
 

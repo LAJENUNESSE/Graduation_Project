@@ -294,6 +294,8 @@ namespace Engine
             m_Boot->PanelCoordinator().ToggleStatsPanelVisible();
         if (actions.ToggleScriptEditorPanel)
             m_Boot->PanelCoordinator().ToggleScriptEditorVisible();
+        if (actions.ToggleFpsOverlay)
+            m_Boot->ViewportController().ToggleFpsOverlay();
         if (actions.ToggleLayoutLock)
             m_LayoutLocked = !m_LayoutLocked;
         if (actions.RequestResetLayout)
@@ -318,6 +320,7 @@ namespace Engine
         state.ShowStatsPanel        = m_Boot->PanelCoordinator().IsStatsPanelVisible();
         state.ShowScriptEditorPanel = m_Boot->PanelCoordinator().IsScriptEditorVisible();
         state.IsDirty               = m_Boot->SceneSession().IsDirty();
+        state.ShowFpsOverlay        = m_Boot->ViewportController().IsShowFpsOverlay();
         state.IsLayoutLocked        = m_LayoutLocked;
         return state;
     }

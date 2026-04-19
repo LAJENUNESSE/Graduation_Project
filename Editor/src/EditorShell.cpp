@@ -123,6 +123,8 @@ namespace Engine
 
                 ImGui::Separator();
 
+                if (ImGui::MenuItem("FPS 叠加显示", nullptr, state.ShowFpsOverlay))
+                    actions.ToggleFpsOverlay = true;
                 if (ImGui::MenuItem("性能监控", nullptr, state.ShowStatsPanel))
                     actions.ToggleStatsPanel = true;
                 if (ImGui::MenuItem("脚本编辑器", nullptr, state.ShowScriptEditorPanel))
