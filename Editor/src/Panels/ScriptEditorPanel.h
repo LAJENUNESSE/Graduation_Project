@@ -38,20 +38,42 @@ namespace Engine
         void ToggleVisible() { m_Visible = !m_Visible; }
 
     private:
+        struct CompletionSession
+        {
+            bool                  Visible            = false;
+            int                   SelectedIndex      = 0;
+            int                   LastScrollIndex    = -1;
+            uint8_t               ContextId          = 0;
+            int                   ReplaceLine        = 0;
+            int                   ReplaceColumnStart = 0;
+            int                   ReplaceColumnEnd   = 0;
+            std::string           Prefix;
+            std::vector<int>      CandidateIndices;
+            std::vector<uint32_t> PendingTypedChars;
+            bool                  RequestManualTrigger = false;
+            bool                  RequestAccept        = false;
+            bool                  RequestClose         = false;
+        };
+
         struct Document
         {
             std::filesystem::path Path;        // 空 = 未命名（从未保存过）
             std::string           DisplayName; // tab 上显示的名字
             Scope<TextEditor>     Editor;
+            CompletionSession     Completion;
             bool                  Dirty      = false;
             bool                  WindowOpen = true; // ImGui TabItem p_open，点 x 变 false
             uint32_t              StableId   = 0;    // 稳定 ID，用于 ImGui TabItem 无歧义标识
         };
 
-        int  FindDocumentByPath(const std::filesystem::path& path) const;
-        bool LoadFileContent(const std::filesystem::path& path, std::string& outContent) const;
-        bool WriteFileContent(const std::filesystem::path& path, const std::string& content) const;
-        void EmplaceDocument(const std::filesystem::path& path, const std::string& content);
+        Document* FindDocumentByStableId(uint32_t stableId);
+        int       FindDocumentByPath(const std::filesystem::path& path) const;
+        bool      LoadFileContent(const std::filesystem::path& path, std::string& outContent) const;
+        bool      WriteFileContent(const std::filesystem::path& path, const std::string& content) const;
+        void      EmplaceDocument(const std::filesystem::path& path, const std::string& content);
+        void      BindDocumentCallbacks(Document& doc);
+        void      HandleEditorChar(uint32_t stableId, uint32_t codepoint);
+        bool      HandleEditorKey(uint32_t stableId, int key, bool ctrl, bool shift, bool alt);
 
         // 保存指定索引的 Document；Path 为空则弹另存为对话框
         // 返回 true 表示保存成功；false 表示 IO 失败或用户取消了另存为
@@ -63,6 +85,11 @@ namespace Engine
 
         void RenderToolbar();
         void RenderTabBar();
+        void ProcessCompletion(Document& doc);
+        void RenderCompletionPopup(Document& doc);
+        void TriggerCompletion(Document& doc, bool manualTrigger);
+        void AcceptCompletion(Document& doc);
+        void CloseCompletion(Document& doc);
 
     private:
         std::vector<Document> m_Documents;
