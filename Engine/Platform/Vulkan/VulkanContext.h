@@ -2,6 +2,7 @@
 
 #include "Renderer/GraphicsContext.h"
 
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
@@ -20,6 +21,20 @@ namespace Engine
 
         void Init() override;
         void SwapBuffers() override;
+
+        void QueueDrawArrays(uint32_t count, uint32_t firstVertex = 0);
+        void QueueDrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t firstVertex = 0);
+        void QueueDrawIndexed(uint32_t indexCount, uint32_t firstIndex = 0, int32_t vertexOffset = 0);
+        void QueueDrawLines(uint32_t count, uint32_t firstVertex = 0);
+
+        void SetClearColor(const glm::vec4& color) { m_ClearColor = color; }
+        void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+        {
+            m_ViewportX      = x;
+            m_ViewportY      = y;
+            m_ViewportWidth  = width;
+            m_ViewportHeight = height;
+        }
 
         // Singleton accessor (set during Init, cleared on destruction)
         static VulkanContext* Get() { return s_Instance; }
@@ -53,6 +68,8 @@ namespace Engine
         void CreateCommandPool();
         void CreateSyncObjects();
         void CreateImGuiRenderPass();
+        void CreateDebugDrawResources();
+        void DestroyDebugDrawResources();
 
         // Swapchain recreation
         void CleanupSwapchain();
@@ -77,10 +94,37 @@ namespace Engine
         uint32_t m_PresentQueueFamily  = 0;
 
         // Swapchain
-        VkSwapchainKHR       m_Swapchain = VK_NULL_HANDLE;
-        VkFormat             m_SwapchainFormat;
-        VkExtent2D           m_SwapchainExtent;
-        std::vector<VkImage> m_SwapchainImages;
+        VkSwapchainKHR           m_Swapchain = VK_NULL_HANDLE;
+        VkFormat                 m_SwapchainFormat;
+        VkExtent2D               m_SwapchainExtent;
+        std::vector<VkImage>     m_SwapchainImages;
+        std::vector<VkImageView> m_SwapchainImageViews;
+        glm::vec4                m_ClearColor     = {0.392f, 0.584f, 0.929f, 1.0f};
+        uint32_t                 m_ViewportX      = 0;
+        uint32_t                 m_ViewportY      = 0;
+        uint32_t                 m_ViewportWidth  = 0;
+        uint32_t                 m_ViewportHeight = 0;
+
+        enum class DebugPrimitiveType : uint8_t
+        {
+            Triangles = 0,
+            Lines     = 1
+        };
+
+        struct PendingDrawCall
+        {
+            uint32_t           VertexCount   = 0;
+            uint32_t           FirstVertex   = 0;
+            uint32_t           InstanceCount = 1;
+            DebugPrimitiveType Primitive     = DebugPrimitiveType::Triangles;
+        };
+        std::vector<PendingDrawCall> m_PendingDrawCalls;
+
+        VkRenderPass               m_DebugRenderPass     = VK_NULL_HANDLE;
+        VkPipelineLayout           m_DebugPipelineLayout = VK_NULL_HANDLE;
+        VkPipeline                 m_DebugPipeline       = VK_NULL_HANDLE;
+        VkPipeline                 m_DebugLinePipeline   = VK_NULL_HANDLE;
+        std::vector<VkFramebuffer> m_DebugFramebuffers;
 
         // Per-frame command resources
         VkCommandPool                m_CommandPool = VK_NULL_HANDLE;

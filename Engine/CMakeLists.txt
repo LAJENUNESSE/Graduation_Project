@@ -87,7 +87,12 @@ set(ENGINE_SOURCES
 # Vulkan platform sources (conditional)
 if(ENGINE_ENABLE_VULKAN)
     list(APPEND ENGINE_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanCommandBuffer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanPipeline.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRenderPass.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSynchronization.cpp
     )
 endif()
 
@@ -150,6 +155,7 @@ target_link_libraries(Engine PUBLIC
     OpenAL::OpenAL
     $<$<BOOL:${ENGINE_ENABLE_VULKAN}>:Vulkan::Vulkan>
 )
+
 
 target_link_directories(Engine PUBLIC ${FFMPEG_LIBRARY_DIRS})
 
