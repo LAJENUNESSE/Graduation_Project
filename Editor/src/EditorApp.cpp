@@ -1,4 +1,5 @@
 #include "EditorLayer.h"
+#include "VulkanSmokeLayer.h"
 #include "Engine.h"
 
 #include "Core/EntryPoint.h"
@@ -11,11 +12,14 @@ namespace Engine
     public:
         EditorApplication()
         {
-            // Vulkan backend: skip EditorLayer until rendering pipeline is ready
+            // Vulkan backend: run smoke layer until full editor rendering pipeline is ready
             if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
                 PushLayer(CreateScope<EditorLayer>());
             else
-                ENGINE_CORE_INFO("[Vulkan] Running minimal clear-color loop (EditorLayer skipped)");
+            {
+                ENGINE_CORE_INFO("[Vulkan] Running smoke draw loop (EditorLayer skipped)");
+                PushLayer(CreateScope<VulkanSmokeLayer>());
+            }
         }
 
         ~EditorApplication() override = default;

@@ -9,6 +9,7 @@ set(EDITOR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorSelectionGizmoController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorShell.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorViewportController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/VulkanSmokeLayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/AssetBrowserPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/ConsolePanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/PropertiesPanel.cpp
