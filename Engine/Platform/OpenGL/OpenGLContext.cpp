@@ -8,7 +8,6 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
-#include "Renderer/RendererCapabilities.h"
 
 namespace Engine
 {
@@ -28,8 +27,6 @@ namespace Engine
         ENGINE_CORE_INFO("  Vendor:   {0}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
         ENGINE_CORE_INFO("  Renderer: {0}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
         ENGINE_CORE_INFO("  Version:  {0}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
-
-        RendererCapabilities::Get().Query();
     }
 
     void OpenGLContext::SwapBuffers()
