@@ -72,19 +72,21 @@
 **目标**: 实现 `RendererAPI` 接口的 Vulkan 版本。
 
 - `VulkanRendererAPI.h/cpp` — Init/Clear/SetViewport/Draw*/SetDepthTest/...
-- `VulkanCommandBuffer.h/cpp` — 命令录制抽象
-- `VulkanRenderPass.h/cpp` — 基础 render pass 创建
-- `VulkanPipeline.h/cpp` — Graphics pipeline 创建（PSO）
-- `VulkanSynchronization.h/cpp` — Fence/Semaphore 管理
+- ✅ Draw 路径补齐（最小骨架）：`DrawArrays` / `DrawArraysInstanced` / `DrawIndexed(fallback)` / `DrawLines` 已入队到 `VulkanContext`
+- ✅ Debug Draw 线段路径：`QueueDrawLines` + `VK_PRIMITIVE_TOPOLOGY_LINE_LIST` pipeline
+- ✅ `VulkanCommandBuffer.h/cpp` — 命令录制抽象（最小骨架已接入 `VulkanContext::SwapBuffers()`）
+- ✅ `VulkanRenderPass.h/cpp` — 基础 render pass 创建（最小 color-only 工厂已接入 ImGui/Debug pass）
+- ✅ `VulkanPipeline.h/cpp` — Graphics pipeline 创建（PSO）（最小工厂已接入 debug pipeline）
+- ✅ `VulkanSynchronization.h/cpp` — Fence/Semaphore 管理（最小工厂已接入 Create/Cleanup）
 
 ### Phase 4: Shader 管线
 
 **目标**: 现有 GLSL 着色器能被 Vulkan 消费。
 
-- 集成 `glslang` 或 `shaderc` 做运行时 GLSL→SPIR-V 编译
-- 修改 `Shader::Create()` 工厂：根据 API 选择 OpenGL/Vulkan 路径
-- `VulkanShader.h/cpp` — SPIR-V 模块创建 + 反射（descriptor set layout）
-- Shader pragma 解析（`#type vertex/fragment/compute`）复用现有逻辑
+- ✅ 集成 `glslang` 或 `shaderc` 做运行时 GLSL→SPIR-V 编译（最小 `shaderc` 可选链路已接入，缺失时安全降级）
+- ✅ 修改 `Shader::Create()` 工厂：根据 API 选择 OpenGL/Vulkan 路径（Vulkan 分支已接入）
+- ✅ `VulkanShader.h/cpp` — SPIR-V 模块创建 + 反射（descriptor set layout）（最小骨架 + 运行时编译接入，模块创建/反射待后续）
+- ✅ Shader pragma 解析（`#type vertex/fragment/compute`）复用现有逻辑
 
 ### Phase 5: 资源抽象
 
