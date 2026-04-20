@@ -80,9 +80,22 @@ namespace Engine
         // Indirect Draw
         virtual void DrawArraysIndirect(uint32_t bufferID) = 0;
 
-        // Blend / Depth
+        // Blend / Depth / State
         virtual void SetDepthMask(bool enable)                      = 0;
         virtual void SetBlendFunc(BlendFactor src, BlendFactor dst) = 0;
+        virtual void SetBlend(bool enable)                          = 0;
+        virtual bool GetBlendEnabled()                              = 0;
+        virtual void SetScissorTest(bool enable)                    = 0;
+        virtual void SetColorMask(bool r, bool g, bool b, bool a)   = 0;
+
+        // Clear color
+        virtual glm::vec4 GetClearColor() = 0;
+
+        // FBO read/write
+        virtual void SetReadBuffer(uint32_t attachment)                                        = 0;
+        virtual void SetDrawBuffer(uint32_t attachment)                                        = 0;
+        virtual void SetDrawBuffers(uint32_t count, const uint32_t* attachments)               = 0;
+        virtual void CopyFramebufferToTexture(uint32_t texID, uint32_t width, uint32_t height) = 0;
 
         // Capabilities
         virtual void QueryCapabilities(RendererCapabilities& caps) = 0;

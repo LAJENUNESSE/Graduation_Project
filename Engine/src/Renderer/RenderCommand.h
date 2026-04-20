@@ -90,6 +90,23 @@ namespace Engine
         static void SetDepthMask(bool enable) { s_RendererAPI->SetDepthMask(enable); }
 
         static void SetBlendFunc(BlendFactor src, BlendFactor dst) { s_RendererAPI->SetBlendFunc(src, dst); }
+        static void SetBlend(bool enable) { s_RendererAPI->SetBlend(enable); }
+        static bool GetBlendEnabled() { return s_RendererAPI->GetBlendEnabled(); }
+        static void SetScissorTest(bool enable) { s_RendererAPI->SetScissorTest(enable); }
+        static void SetColorMask(bool r, bool g, bool b, bool a) { s_RendererAPI->SetColorMask(r, g, b, a); }
+
+        static glm::vec4 GetClearColor() { return s_RendererAPI->GetClearColor(); }
+
+        static void SetReadBuffer(uint32_t attachment) { s_RendererAPI->SetReadBuffer(attachment); }
+        static void SetDrawBuffer(uint32_t attachment) { s_RendererAPI->SetDrawBuffer(attachment); }
+        static void SetDrawBuffers(uint32_t count, const uint32_t* attachments)
+        {
+            s_RendererAPI->SetDrawBuffers(count, attachments);
+        }
+        static void CopyFramebufferToTexture(uint32_t texID, uint32_t width, uint32_t height)
+        {
+            s_RendererAPI->CopyFramebufferToTexture(texID, width, height);
+        }
 
         static void QueryCapabilities(RendererCapabilities& caps) { s_RendererAPI->QueryCapabilities(caps); }
 

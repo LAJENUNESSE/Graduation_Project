@@ -32,6 +32,18 @@ namespace Engine
         void DrawArraysIndirect(uint32_t bufferID) override;
         void SetDepthMask(bool enable) override;
         void SetBlendFunc(BlendFactor src, BlendFactor dst) override;
+        void SetBlend(bool enable) override;
+        bool GetBlendEnabled() override;
+        void SetScissorTest(bool enable) override;
+        void SetColorMask(bool r, bool g, bool b, bool a) override;
+
+        glm::vec4 GetClearColor() override;
+
+        void SetReadBuffer(uint32_t attachment) override;
+        void SetDrawBuffer(uint32_t attachment) override;
+        void SetDrawBuffers(uint32_t count, const uint32_t* attachments) override;
+        void CopyFramebufferToTexture(uint32_t texID, uint32_t width, uint32_t height) override;
+
         void QueryCapabilities(RendererCapabilities& caps) override;
     };
 

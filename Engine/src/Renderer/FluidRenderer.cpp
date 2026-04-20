@@ -5,8 +5,6 @@
 #include "Renderer/RenderCommand.h"
 #include "Scene/Components.h"
 
-#include <glad/gl.h>
-
 namespace Engine
 {
 
@@ -87,16 +85,16 @@ namespace Engine
         }
 
         // Scene color copy texture (RGBA16F)
-        glGenTextures(1, &m_SceneColorCopyTex);
-        glBindTexture(GL_TEXTURE_2D, m_SceneColorCopyTex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        m_SceneColorCopyWidth  = width;
-        m_SceneColorCopyHeight = height;
+        {
+            TextureSpecification spec;
+            spec.Format         = TextureFormat::RGBA16F;
+            spec.MinFilter      = TextureFilter::Linear;
+            spec.MagFilter      = TextureFilter::Linear;
+            spec.WrapS          = TextureWrap::ClampToEdge;
+            spec.WrapT          = TextureWrap::ClampToEdge;
+            spec.UploadLayout   = TextureDataLayout::RGBA_Float;
+            m_SceneColorCopyTex = Texture2D::Create(width, height, spec);
+        }
 
         m_Initialized = true;
     }
@@ -116,24 +114,22 @@ namespace Engine
         m_SmoothFBO[1]->Resize(width, height);
         m_ThicknessFBO->Resize(width, height);
 
-        // Resize scene color copy texture
-        if (width != m_SceneColorCopyWidth || height != m_SceneColorCopyHeight)
+        // Recreate scene color copy texture at new size
         {
-            glBindTexture(GL_TEXTURE_2D, m_SceneColorCopyTex);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            m_SceneColorCopyWidth  = width;
-            m_SceneColorCopyHeight = height;
+            TextureSpecification spec;
+            spec.Format         = TextureFormat::RGBA16F;
+            spec.MinFilter      = TextureFilter::Linear;
+            spec.MagFilter      = TextureFilter::Linear;
+            spec.WrapS          = TextureWrap::ClampToEdge;
+            spec.WrapT          = TextureWrap::ClampToEdge;
+            spec.UploadLayout   = TextureDataLayout::RGBA_Float;
+            m_SceneColorCopyTex = Texture2D::Create(width, height, spec);
         }
     }
 
     void FluidRenderer::Shutdown()
     {
-        if (m_SceneColorCopyTex)
-        {
-            glDeleteTextures(1, &m_SceneColorCopyTex);
-            m_SceneColorCopyTex = 0;
-        }
+        m_SceneColorCopyTex.reset();
         m_Initialized = false;
     }
 
@@ -151,9 +147,8 @@ namespace Engine
             return;
 
         // Save caller's FBO and GL state
-        int     callerFBO = RenderCommand::GetBoundFramebufferID();
-        GLfloat savedClearColor[4];
-        glGetFloatv(GL_COLOR_CLEAR_VALUE, savedClearColor);
+        int       callerFBO       = RenderCommand::GetBoundFramebufferID();
+        glm::vec4 savedClearColor = RenderCommand::GetClearColor();
 
         // Bind particle buffer for instanced draw
         particleBuffer->Bind(0);
@@ -168,8 +163,8 @@ namespace Engine
         RenderCommand::SetViewport(0, 0, m_Width, m_Height);
 
         // Clear depth FBO to far value (1e10)
-        glClearColor(1e10f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        RenderCommand::SetClearColor({1e10f, 0.0f, 0.0f, 0.0f});
+        RenderCommand::Clear();
 
         RenderCommand::SetDepthTest(true);
         RenderCommand::SetDepthFunc(DepthFunc::Less);
@@ -180,9 +175,9 @@ namespace Engine
         // SRC_ALPHA/ONE_MINUS_SRC_ALPHA，会导致 final.r = FragDepth*0 + clear*1 = 1e10，
         // 整张 depth 纹理永远保持 clear 值，composite shader 全屏走 early-return 看不见流体。
         // 在 depth pass 内强制禁用 blend，Pass 结束后恢复。
-        GLboolean prevBlend = glIsEnabled(GL_BLEND);
+        bool prevBlend = RenderCommand::GetBlendEnabled();
         if (prevBlend)
-            glDisable(GL_BLEND);
+            RenderCommand::SetBlend(false);
 
         m_DepthShader->Bind();
         m_DepthShader->SetMat4("u_View", view);
@@ -194,7 +189,7 @@ namespace Engine
 
         // 恢复 blend 状态（depth pass 前临时禁用的）
         if (prevBlend)
-            glEnable(GL_BLEND);
+            RenderCommand::SetBlend(true);
 
         m_DepthFBO->Unbind();
 
@@ -209,9 +204,9 @@ namespace Engine
         // pass ONE/ONE blend）留下的 GL state 污染 smooth pass 的 R32F FBO 写入。R32F 没 alpha 通道，
         // 若 blend 开启且 func 为 SRC_ALPHA/ONE_MINUS_SRC_ALPHA，alpha=0 会让 shader 输出被完全屏蔽，
         // smooth FBO 保持 driver 初值 0，下游 composite shader 走 early-return 看不见流体。
-        glDisable(GL_BLEND);
-        glDisable(GL_SCISSOR_TEST);
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        RenderCommand::SetBlend(false);
+        RenderCommand::SetScissorTest(false);
+        RenderCommand::SetColorMask(true, true, true, true);
 
         for (int i = 0; i < smoothIterations; i++)
         {
@@ -258,8 +253,8 @@ namespace Engine
         m_ThicknessFBO->Bind();
         RenderCommand::SetViewport(0, 0, m_Width, m_Height);
 
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 0.0f});
+        RenderCommand::ClearColorOnly();
 
         RenderCommand::SetDepthTest(false);
         RenderCommand::SetDepthMask(false);
@@ -286,16 +281,14 @@ namespace Engine
         // Bind caller's FBO (HDR FBO) as read source, then copy its color attachment
         // ================================================================
         RenderCommand::BindFramebufferByID(callerFBO);
-        glReadBuffer(GL_COLOR_ATTACHMENT0);
-        glBindTexture(GL_TEXTURE_2D, m_SceneColorCopyTex);
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, m_Width, m_Height);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        RenderCommand::SetReadBuffer(0);
+        RenderCommand::CopyFramebufferToTexture(m_SceneColorCopyTex->GetRendererID(), m_Width, m_Height);
 
         // ================================================================
         // Pass 4: Composite — final fluid surface rendering
         // Only write to color attachment 0 to avoid corrupting Entity ID (attachment 1)
         // ================================================================
-        glDrawBuffer(GL_COLOR_ATTACHMENT0);
+        RenderCommand::SetDrawBuffer(0);
 
         RenderCommand::SetViewport(0, 0, m_Width, m_Height);
         RenderCommand::SetDepthTest(false);
@@ -309,7 +302,7 @@ namespace Engine
         RenderCommand::BindTextureUnit(1, m_ThicknessFBO->GetColorAttachmentRendererID(0));
         m_CompositeShader->SetInt("u_FluidThickness", 1);
 
-        RenderCommand::BindTextureUnit(2, m_SceneColorCopyTex);
+        m_SceneColorCopyTex->Bind(2);
         m_CompositeShader->SetInt("u_SceneColor", 2);
 
         RenderCommand::BindTextureUnit(3, sceneDepthTexID);
@@ -329,12 +322,12 @@ namespace Engine
         RenderFullscreenQuad();
 
         // Restore draw buffers for HDR FBO (attachment 0 + attachment 1)
-        GLenum drawBuffers[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-        glDrawBuffers(2, drawBuffers);
+        uint32_t drawBuffers[] = {0, 1};
+        RenderCommand::SetDrawBuffers(2, drawBuffers);
 
         // Restore all GL state
         RenderCommand::SetDepthTest(true);
-        glClearColor(savedClearColor[0], savedClearColor[1], savedClearColor[2], savedClearColor[3]);
+        RenderCommand::SetClearColor(savedClearColor);
     }
 
 } // namespace Engine
