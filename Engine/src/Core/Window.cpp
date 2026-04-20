@@ -14,10 +14,8 @@
 
 #include "Debug/PerformanceMonitor.h"
 
-// clang-format off
-#include <glad/gl.h>
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-// clang-format on
 #include <imgui_impl_glfw.h>
 
 #include <algorithm>

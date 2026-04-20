@@ -9,7 +9,6 @@
 
 #include <cmath>
 #include <chrono>
-#include <glad/gl.h>
 
 #include "Debug/PerformanceMonitor.h"
 
