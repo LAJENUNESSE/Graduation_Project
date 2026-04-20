@@ -8,8 +8,6 @@
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
 
-#include <glad/gl.h>
-
 #include <chrono>
 #include <cctype>
 #include <cmath>
@@ -249,10 +247,7 @@ namespace Engine
     ParticleSystemGPU::~ParticleSystemGPU()
     {
         // CudaImpl 析构函数处理 CUDA 资源清理
-        if (m_ReadbackFence)
-            glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
-        if (m_ReadbackBuffer)
-            glDeleteBuffers(1, &m_ReadbackBuffer);
+        // m_Readback via Ref<GPUAsyncReadback> auto-destructs
     }
 
     ParticleSystemGPU::ABConfigSnapshot ParticleSystemGPU::GetABConfigSnapshot()
@@ -380,15 +375,13 @@ namespace Engine
         m_EmptyVAO = VertexArray::Create();
 
         // 异步回读缓冲：用于避免 glGetBufferSubData 的同步阻塞
-        glGenBuffers(1, &m_ReadbackBuffer);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, m_ReadbackBuffer);
-        glBufferData(GL_COPY_WRITE_BUFFER, sizeof(CounterData), nullptr, GL_STREAM_READ);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        m_Readback = GPUAsyncReadback::Create(sizeof(CounterData));
 
         auto& caps = RendererCapabilities::Get();
 
         // VMware SVGA has known instability with advanced compute/indirect paths.
-        bool vmwareDriver  = ContainsToken(caps.VendorString.c_str(), "VMware") || ContainsToken(caps.RendererString.c_str(), "SVGA3D");
+        bool vmwareDriver =
+            ContainsToken(caps.VendorString.c_str(), "VMware") || ContainsToken(caps.RendererString.c_str(), "SVGA3D");
         m_VMwareCompatMode = vmwareDriver;
 
         const char* forceDirect    = std::getenv("ENGINE_PARTICLE_DIRECT_DRAW");
@@ -581,9 +574,8 @@ namespace Engine
                     if (emitter.SPH.RigidBodyCoupling && registry)
                     {
                         InitRigidBodyBuffer();
-                        rigidBodyCount =
-                            UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                                      RigidBodyUploadFilter::RequireRigidBodyComponent);
+                        rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                                   RigidBodyUploadFilter::RequireRigidBodyComponent);
                     }
 
                     m_PCISPHBuffer->Bind(1);
@@ -694,9 +686,8 @@ namespace Engine
                     if (emitter.SPH.RigidBodyCoupling && registry)
                     {
                         InitRigidBodyBuffer();
-                        rigidBodyCount =
-                            UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                                      RigidBodyUploadFilter::RequireRigidBodyComponent);
+                        rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                                   RigidBodyUploadFilter::RequireRigidBodyComponent);
                         m_RigidBodyBuffer->Bind(3);
                     }
                     m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
@@ -744,84 +735,49 @@ namespace Engine
         {
             if (abConfig.DisableCounterReadback)
             {
-                // AB: 关闭回读时，确保清理历史 fence/pending，避免资源泄漏与隐性等待
-                if (m_ReadbackFence)
-                {
-                    glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
-                    m_ReadbackFence = nullptr;
-                }
-                m_ReadbackPending    = false;
+                m_Readback->Reset();
                 counterReadbackCpuMs = 0.0f;
             }
             else
             {
                 const auto readbackStart = std::chrono::high_resolution_clock::now();
 
-                // ---- 先收上一帧的结果（零等待） ----
-                if (m_ReadbackPending && m_ReadbackFence)
+                // Collect previous frame's result (non-blocking)
+                if (m_Readback->IsPending() && m_Readback->IsReady())
                 {
-                    GLenum result =
-                        glClientWaitSync(static_cast<GLsync>(m_ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+                    CounterData counters{};
+                    m_Readback->GetData(&counters, sizeof(CounterData));
 
-                    if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED)
+                    CounterData sanitized = counters;
+                    bool        corrected = false;
+
+                    if (sanitized.deadCount > m_MaxParticles)
                     {
-                        // GPU 已完成，无阻塞读取回读缓冲
-                        CounterData counters{};
-                        glBindBuffer(GL_COPY_READ_BUFFER, m_ReadbackBuffer);
-                        glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(CounterData), &counters);
-                        glBindBuffer(GL_COPY_READ_BUFFER, 0);
-
-                        CounterData sanitized = counters;
-                        bool        corrected = false;
-
-                        if (sanitized.deadCount > m_MaxParticles)
-                        {
-                            sanitized.deadCount = m_MaxParticles;
-                            corrected           = true;
-                        }
-                        if (sanitized.aliveCount > m_MaxParticles)
-                        {
-                            sanitized.aliveCount = m_MaxParticles;
-                            corrected            = true;
-                        }
-
-                        if (corrected)
-                        {
-                            ENGINE_WARN(
-                                "[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); clamping to "
-                                "safe range.",
-                                counters.deadCount, counters.aliveCount, m_MaxParticles);
-                            m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
-                        }
-
-                        // 始终更新存活数，用于下一帧 simulate dispatch 和 SPH
-                        m_LastAliveCount = sanitized.aliveCount;
-
-                        if (!m_UseIndirectDraw)
-                            m_AliveCountForDirectDraw = sanitized.aliveCount;
-
-                        m_ReadbackPending = false;
+                        sanitized.deadCount = m_MaxParticles;
+                        corrected           = true;
                     }
-                    // GL_TIMEOUT_EXPIRED: GPU 还没完成，跳过本帧回读，用旧值
+                    if (sanitized.aliveCount > m_MaxParticles)
+                    {
+                        sanitized.aliveCount = m_MaxParticles;
+                        corrected            = true;
+                    }
+
+                    if (corrected)
+                    {
+                        ENGINE_WARN("[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); clamping to "
+                                    "safe range.",
+                                    counters.deadCount, counters.aliveCount, m_MaxParticles);
+                        m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
+                    }
+
+                    m_LastAliveCount = sanitized.aliveCount;
+
+                    if (!m_UseIndirectDraw)
+                        m_AliveCountForDirectDraw = sanitized.aliveCount;
                 }
 
-                // ---- 发起本帧的异步拷贝 ----
-                if (m_ReadbackFence)
-                {
-                    glDeleteSync(static_cast<GLsync>(m_ReadbackFence));
-                    m_ReadbackFence = nullptr;
-                }
-
-                // 将 Counter SSBO 拷贝到回读缓冲
-                glBindBuffer(GL_COPY_READ_BUFFER, m_CounterBuffer->GetRendererID());
-                glBindBuffer(GL_COPY_WRITE_BUFFER, m_ReadbackBuffer);
-                glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(CounterData));
-                glBindBuffer(GL_COPY_READ_BUFFER, 0);
-                glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-
-                // 插入栅栏：下一帧检查时拷贝已完成
-                m_ReadbackFence   = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-                m_ReadbackPending = true;
+                // Initiate this frame's async copy
+                m_Readback->CopyFrom(m_CounterBuffer, sizeof(CounterData));
 
                 counterReadbackCpuMs =
                     std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - readbackStart)

@@ -4,6 +4,7 @@
 #include "Renderer/Shader.h"
 #include "Renderer/SPHCommon.h"
 #include "Renderer/SpatialHashGrid.h"
+#include "Renderer/GPUAsyncReadback.h"
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/VertexArray.h"
 
@@ -115,10 +116,8 @@ namespace Engine
         // 上一帧的活跃粒子数（用于 SPH dispatch）
         uint32_t m_LastAliveCount = 0;
 
-        // 异步回读（避免 glGetBufferSubData 同步阻塞）
-        uint32_t m_ReadbackBuffer  = 0;       // GL buffer for async copy
-        void*    m_ReadbackFence   = nullptr; // GLsync fence
-        bool     m_ReadbackPending = false;
+        // 异步回读（避免同步阻塞）
+        Ref<GPUAsyncReadback> m_Readback;
 
         // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
         struct CudaImpl;

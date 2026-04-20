@@ -15,7 +15,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <glad/gl.h>
 
 namespace Engine
 {
@@ -63,8 +62,9 @@ namespace Engine
         m_EmptyVAO = VertexArray::Create();
 
         // VMware 兼容检测
-        auto& caps           = RendererCapabilities::Get();
-        bool  vmwareDriver   = ContainsToken(caps.VendorString.c_str(), "VMware") || ContainsToken(caps.RendererString.c_str(), "SVGA3D");
+        auto& caps = RendererCapabilities::Get();
+        bool  vmwareDriver =
+            ContainsToken(caps.VendorString.c_str(), "VMware") || ContainsToken(caps.RendererString.c_str(), "SVGA3D");
 
         const char* forceDirect    = std::getenv("ENGINE_GRASS_DIRECT_DRAW");
         bool        envForceDirect = forceDirect && forceDirect[0] == '1';
@@ -81,10 +81,8 @@ namespace Engine
         // 清理异步回读资源
         for (auto& [eid, inst] : m_Instances)
         {
-            if (inst.ReadbackFence)
-                glDeleteSync(static_cast<GLsync>(inst.ReadbackFence));
-            if (inst.ReadbackBuffer)
-                glDeleteBuffers(1, &inst.ReadbackBuffer);
+            if (inst.Readback)
+                inst.Readback->Reset();
         }
         m_Instances.clear();
         m_Cache.clear();
@@ -108,10 +106,8 @@ namespace Engine
                 auto it = m_Instances.find(eid);
                 if (it != m_Instances.end())
                 {
-                    if (it->second.ReadbackFence)
-                        glDeleteSync(static_cast<GLsync>(it->second.ReadbackFence));
-                    if (it->second.ReadbackBuffer)
-                        glDeleteBuffers(1, &it->second.ReadbackBuffer);
+                    if (it->second.Readback)
+                        it->second.Readback->Reset();
                     m_Instances.erase(it);
                 }
                 m_Cache.erase(eid);
@@ -150,24 +146,15 @@ namespace Engine
         {
             for (auto& [eid, inst] : m_Instances)
             {
-                if (!inst.ReadbackPending || !inst.ReadbackFence)
+                if (!inst.Readback || !inst.Readback->IsPending())
                     continue;
 
-                GLenum result =
-                    glClientWaitSync(static_cast<GLsync>(inst.ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
-
-                if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED)
+                if (inst.Readback->IsReady())
                 {
-                    // GPU 已完成，无阻塞读取回读缓冲
                     GrassCounterData readback{0};
-                    glBindBuffer(GL_COPY_READ_BUFFER, inst.ReadbackBuffer);
-                    glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(GrassCounterData), &readback);
-                    glBindBuffer(GL_COPY_READ_BUFFER, 0);
-
-                    inst.GrassCount      = readback.grassCount;
-                    inst.ReadbackPending = false;
+                    inst.Readback->GetData(&readback, sizeof(GrassCounterData));
+                    inst.GrassCount = readback.grassCount;
                 }
-                // GL_TIMEOUT_EXPIRED: GPU 还没完成，使用上一帧的 GrassCount
             }
         }
     }
@@ -192,10 +179,6 @@ namespace Engine
             auto it = m_Instances.find(eid);
             if (it != m_Instances.end())
             {
-                if (it->second.ReadbackFence)
-                    glDeleteSync(static_cast<GLsync>(it->second.ReadbackFence));
-                if (it->second.ReadbackBuffer)
-                    glDeleteBuffers(1, &it->second.ReadbackBuffer);
                 m_Instances.erase(it);
             }
             return;
@@ -247,30 +230,10 @@ namespace Engine
         // ---- 异步回读 grassCount（避免 glGetBufferSubData 同步阻塞） ----
         if (!m_UseIndirectDraw)
         {
-            // 清理旧的回读资源
-            if (inst.ReadbackFence)
-            {
-                glDeleteSync(static_cast<GLsync>(inst.ReadbackFence));
-                inst.ReadbackFence = nullptr;
-            }
-            if (!inst.ReadbackBuffer)
-            {
-                glGenBuffers(1, &inst.ReadbackBuffer);
-                glBindBuffer(GL_COPY_WRITE_BUFFER, inst.ReadbackBuffer);
-                glBufferData(GL_COPY_WRITE_BUFFER, sizeof(GrassCounterData), nullptr, GL_STREAM_READ);
-                glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-            }
+            if (!inst.Readback)
+                inst.Readback = GPUAsyncReadback::Create(sizeof(GrassCounterData));
 
-            // 发起异步拷贝：Counter SSBO → 回读 PBO
-            glBindBuffer(GL_COPY_READ_BUFFER, inst.CounterBuffer->GetRendererID());
-            glBindBuffer(GL_COPY_WRITE_BUFFER, inst.ReadbackBuffer);
-            glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(GrassCounterData));
-            glBindBuffer(GL_COPY_READ_BUFFER, 0);
-            glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-
-            // 插入栅栏
-            inst.ReadbackFence   = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-            inst.ReadbackPending = true;
+            inst.Readback->CopyFrom(inst.CounterBuffer, sizeof(GrassCounterData));
         }
     }
 
