@@ -84,6 +84,13 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Terrain/TerrainMeshGenerator.cpp
 )
 
+# Vulkan platform sources (conditional)
+if(ENGINE_ENABLE_VULKAN)
+    list(APPEND ENGINE_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
+    )
+endif()
+
 add_library(Engine STATIC ${ENGINE_SOURCES})
 
 target_compile_features(Engine PUBLIC cxx_std_20)
@@ -103,6 +110,13 @@ find_package(Lua REQUIRED)
 
 # OpenAL (vcpkg)
 find_package(OpenAL CONFIG REQUIRED)
+
+# Vulkan (optional)
+if(ENGINE_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
+    target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN)
+    target_include_directories(Engine PRIVATE ${Vulkan_INCLUDE_DIRS})
+endif()
 
 target_include_directories(Engine
     PUBLIC
@@ -134,6 +148,7 @@ target_link_libraries(Engine PUBLIC
     ${FFMPEG_LIBRARIES}
     ${LUA_LIBRARIES}
     OpenAL::OpenAL
+    $<$<BOOL:${ENGINE_ENABLE_VULKAN}>:Vulkan::Vulkan>
 )
 
 target_link_directories(Engine PUBLIC ${FFMPEG_LIBRARY_DIRS})

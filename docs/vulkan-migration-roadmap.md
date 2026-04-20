@@ -38,7 +38,7 @@
 
 ## 迁移阶段
 
-### Phase 1: 封堵抽象泄漏 ⬅️ 当前
+### Phase 1: 封堵抽象泄漏 ✅ 已完成
 
 **目标**: 把所有 `gl*` 调用收敛到 `Engine/Platform/` 内，`Engine/src/` 零 GL 依赖。
 
@@ -51,7 +51,7 @@
 
 **验收标准**: `Engine/src/` 下零 `#include <glad/gl.h>`，构建通过。
 
-### Phase 2: Vulkan 基础设施
+### Phase 2: Vulkan 基础设施 ⬅️ 当前
 
 **目标**: 窗口出现 Vulkan 上下文，能 clear 一个颜色。
 

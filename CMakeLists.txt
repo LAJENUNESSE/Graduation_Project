@@ -17,6 +17,7 @@ option(ENGINE_ENABLE_ASAN "Enable AddressSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project targets" OFF)
 option(ENGINE_ENABLE_COMPILER_CACHE "Enable compiler cache launcher when available" ON)
 option(ENGINE_ENABLE_MSVC_MP "Enable /MP for MSVC C/C++ compilation" ON)
+option(ENGINE_ENABLE_VULKAN "Enable Vulkan rendering backend" OFF)
 
 # Detect and enable compiler cache launcher (sccache/ccache) for local builds.
 if(ENGINE_ENABLE_COMPILER_CACHE)

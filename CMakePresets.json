@@ -43,11 +43,25 @@
     {
       "name": "windows-vs2022",
       "hidden": true,
-      "inherits": ["quality-defaults", "vcpkg-base"],
+      "inherits": [
+        "quality-defaults",
+        "vcpkg-base"
+      ],
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build"
     },
-{
+    {
+      "name": "vs2022-vulkan",
+      "displayName": "Windows (VS 2022 + vcpkg + Vulkan)",
+      "inherits": "windows-vs2022",
+      "environment": {
+        "VULKAN_SDK": "C:/Dev/Environments/VulkanSDK/1.4.341.1"
+      },
+      "cacheVariables": {
+        "ENGINE_ENABLE_VULKAN": "ON"
+      }
+    },
+    {
       "name": "default",
       "displayName": "Windows (VS 2022 + vcpkg)",
       "description": "默认 Windows 开发/CI 预设：启用严格 warning 与 warnings-as-errors。",
@@ -57,32 +71,51 @@
       "name": "linux-default",
       "displayName": "Linux (Ninja + vcpkg)",
       "description": "Linux CI 预设：vcpkg + RelWithDebInfo + 严格 warning。",
-      "inherits": ["quality-defaults", "vcpkg-base", "ninja-relwithdebinfo"]
+      "inherits": [
+        "quality-defaults",
+        "vcpkg-base",
+        "ninja-relwithdebinfo"
+      ]
     },
-
     {
       "name": "linux-sanitize",
       "displayName": "Linux (Ninja + vcpkg + ASAN/UBSAN)",
       "description": "Linux 质量门槛预设：AddressSanitizer + UndefinedBehaviorSanitizer。",
-      "inherits": ["quality-defaults", "quality-sanitizers", "vcpkg-base", "ninja-relwithdebinfo"]
+      "inherits": [
+        "quality-defaults",
+        "quality-sanitizers",
+        "vcpkg-base",
+        "ninja-relwithdebinfo"
+      ]
     },
     {
       "name": "linux-system",
       "displayName": "Linux (Ninja, system deps)",
       "description": "Linux 编译验证预设：使用系统 FFmpeg/OpenAL，启用严格 warning。",
-      "inherits": ["quality-defaults", "system-deps-base", "ninja-relwithdebinfo"]
+      "inherits": [
+        "quality-defaults",
+        "system-deps-base",
+        "ninja-relwithdebinfo"
+      ]
     },
     {
       "name": "macos-default",
       "displayName": "macOS (Ninja, system deps)",
       "description": "macOS CI 预设：仅做编译验证；运行时仍受 OpenGL 4.1 上限约束。",
-      "inherits": ["quality-defaults", "system-deps-base", "ninja-relwithdebinfo"]
+      "inherits": [
+        "quality-defaults",
+        "system-deps-base",
+        "ninja-relwithdebinfo"
+      ]
     },
     {
       "name": "clion-debug",
       "displayName": "CLion (Ninja + vcpkg + Debug)",
       "description": "CLion 调试预设：Debug + 严格 warning。",
-      "inherits": ["quality-defaults", "vcpkg-base"],
+      "inherits": [
+        "quality-defaults",
+        "vcpkg-base"
+      ],
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/cmake-build-debug",
       "warnings": {
@@ -96,7 +129,10 @@
       "name": "clion-release",
       "displayName": "CLion (Ninja + vcpkg + RelWithDebInfo)",
       "description": "CLion 发布预设：RelWithDebInfo + 严格 warning。",
-      "inherits": ["quality-defaults", "vcpkg-base"],
+      "inherits": [
+        "quality-defaults",
+        "vcpkg-base"
+      ],
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/cmake-build-release",
       "warnings": {
@@ -108,4 +144,3 @@
     }
   ]
 }
-
