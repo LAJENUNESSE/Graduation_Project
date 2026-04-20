@@ -4,7 +4,9 @@
 #include "Core/Application.h"
 #include "Core/CrashHandler.h"
 #include "Core/Log.h"
+#include "Renderer/RendererAPI.h"
 
+#include <cstring>
 #include <filesystem>
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -59,6 +61,16 @@ int main(int argc, char** argv)
     InitializeProjectRootFromExecutable();
     Engine::CrashHandler::Install();
     ENGINE_CORE_INFO("Initialized Log!");
+
+    // Parse command-line: --vulkan selects Vulkan backend
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::strcmp(argv[i], "--vulkan") == 0)
+        {
+            Engine::RendererAPI::SetAPI(Engine::RendererAPI::API::Vulkan);
+            ENGINE_CORE_INFO("Renderer API set to Vulkan via command-line");
+        }
+    }
 
     auto app = Engine::CreateApplication();
     app->Run();

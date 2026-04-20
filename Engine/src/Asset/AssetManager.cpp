@@ -5,6 +5,7 @@
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/RendererAPI.h"
 #include "Renderer/Texture.h"
 
 namespace Engine
@@ -34,7 +35,10 @@ namespace Engine
         s_AsyncQueue  = CreateScope<AsyncLoadQueue>();
         s_FileWatcher = CreateScope<FileWatcher>();
 
-        RegisterBuiltins();
+        if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
+            RegisterBuiltins();
+        else
+            ENGINE_CORE_WARN("[Vulkan] Skipping builtin asset registration (not yet implemented)");
 
         ENGINE_CORE_INFO("AssetManager initialized");
     }
@@ -65,12 +69,15 @@ namespace Engine
     {
         // Builtin white texture (1x1 white)
         {
-            auto     tex   = Texture2D::Create(1, 1);
-            uint32_t white = 0xFFFFFFFF;
-            tex->SetData(&white, sizeof(uint32_t));
-            AssetHandle h                       = s_Textures.Insert(tex, "builtin:white");
-            s_TexturePathIndex["builtin:white"] = h;
-            s_HandleTypes[h]                    = AssetType::Texture2D;
+            auto tex = Texture2D::Create(1, 1);
+            if (tex)
+            {
+                uint32_t white = 0xFFFFFFFF;
+                tex->SetData(&white, sizeof(uint32_t));
+                AssetHandle h                       = s_Textures.Insert(tex, "builtin:white");
+                s_TexturePathIndex["builtin:white"] = h;
+                s_HandleTypes[h]                    = AssetType::Texture2D;
+            }
         }
 
         // Builtin meshes
@@ -291,11 +298,11 @@ namespace Engine
             uint32_t gray        = 0xFF808080;
             placeholder->SetData(&gray, sizeof(uint32_t));
 
-            h                        = s_Textures.Insert(placeholder, path);
-            s_TexturePathIndex[path] = h;
-            s_HandleTypes[h]         = AssetType::Texture2D;
+            h                         = s_Textures.Insert(placeholder, path);
+            s_TexturePathIndex[path]  = h;
+            s_HandleTypes[h]          = AssetType::Texture2D;
             s_PendingAsyncLoads[path] = h;
-            needSubmit               = true;
+            needSubmit                = true;
         }
 
         // Submit outside lock (SubmitTexture is thread-safe)

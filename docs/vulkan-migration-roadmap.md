@@ -51,19 +51,23 @@
 
 **验收标准**: `Engine/src/` 下零 `#include <glad/gl.h>`，构建通过。
 
-### Phase 2: Vulkan 基础设施 ⬅️ 当前
+### Phase 2: Vulkan 基础设施 ✅ 已完成
 
 **目标**: 窗口出现 Vulkan 上下文，能 clear 一个颜色。
 
-- 引入 Vulkan SDK 依赖（vcpkg: `vulkan`/`vulkan-headers`）
+**已完成内容**:
+- CMake 预设 `vs2022-vulkan`（`ENGINE_ENABLE_VULKAN=ON`，链接 Vulkan SDK）
 - `Engine/Platform/Vulkan/` 目录：
-  - `VulkanContext.h/cpp` — Instance, Physical/Logical Device, Queue
-  - `VulkanSwapchain.h/cpp` — Surface, Swapchain, ImageViews
-  - `VulkanAllocator.h/cpp` — VMA (Vulkan Memory Allocator) 封装
-- GLFW 窗口改为 `glfwCreateWindowSurface()` 可选路径
-- 运行时通过 `RendererAPI::SetAPI()` 切换 OpenGL/Vulkan
+  - `VulkanContext.h/cpp` — Instance, Debug Messenger, Surface, Physical/Logical Device, Swapchain, CommandPool, SyncObjects, ImGui RenderPass
+  - `VulkanRendererAPI.h` — 全接口 stub（Phase 3 填充）
+  - 其他 stub 头文件（Buffer, Framebuffer, Shader, Texture, StorageBuffer, UniformBuffer）
+- GLFW 窗口 `glfwCreateWindowSurface()` 可选路径（`Window.cpp` + `GraphicsContext::Create`）
+- 运行时 `--vulkan` 命令行参数 → `RendererAPI::SetAPI(Vulkan)` + `RenderCommand` 延迟初始化
+- 所有工厂函数（Shader/Texture/VertexArray/IBLGenerator/GPUAsyncReadback 等）添加 `case Vulkan` 安全返回
+- ImGui Vulkan 后端初始化（`ImGui_ImplVulkan_Init` + ImGui RenderPass）
+- **验收**: `Editor.exe --vulkan` 启动显示矢车菊蓝清屏，swapchain resize 正常，干净退出
 
-### Phase 3: VulkanRendererAPI 核心
+### Phase 3: VulkanRendererAPI 核心 ⬅️ 当前
 
 **目标**: 实现 `RendererAPI` 接口的 Vulkan 版本。
 
@@ -91,13 +95,14 @@
 - `VulkanTexture.h/cpp` — Image + ImageView + Sampler
 - `VulkanFramebuffer.h/cpp` — 等价于 Vulkan RenderPass + Framebuffer + attachments
 
-### Phase 6: ImGui 集成
+### Phase 6: ImGui 集成 (部分完成)
 
 **目标**: Editor UI 在 Vulkan 下正常显示。
 
-- 替换 `imgui_impl_opengl3` → `imgui_impl_vulkan`
-- ImGui 需要自己的 descriptor pool / render pass
-- `ImGuiLayer` 根据后端 API 选择初始化路径
+- ✅ `ImGuiLayer` 根据后端 API 选择 `imgui_impl_opengl3` / `imgui_impl_vulkan` 初始化路径
+- ✅ ImGui RenderPass + 自动 descriptor pool 创建
+- ⬜ `VulkanContext::RenderImGui()` 实际渲染 ImGui draw data（当前 stub）
+- ⬜ ImGui viewports 支持
 
 ### Phase 7: Compute 迁移
 

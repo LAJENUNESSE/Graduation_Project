@@ -52,6 +52,7 @@ namespace Engine
         void CreateSwapchain();
         void CreateCommandPool();
         void CreateSyncObjects();
+        void CreateImGuiRenderPass();
 
         // Swapchain recreation
         void CleanupSwapchain();
@@ -70,8 +71,8 @@ namespace Engine
         VkDevice                 m_Device         = VK_NULL_HANDLE;
 
         // Queues
-        VkQueue  m_GraphicsQueue      = VK_NULL_HANDLE;
-        VkQueue  m_PresentQueue       = VK_NULL_HANDLE;
+        VkQueue  m_GraphicsQueue       = VK_NULL_HANDLE;
+        VkQueue  m_PresentQueue        = VK_NULL_HANDLE;
         uint32_t m_GraphicsQueueFamily = 0;
         uint32_t m_PresentQueueFamily  = 0;
 
@@ -82,7 +83,7 @@ namespace Engine
         std::vector<VkImage> m_SwapchainImages;
 
         // Per-frame command resources
-        VkCommandPool              m_CommandPool = VK_NULL_HANDLE;
+        VkCommandPool                m_CommandPool = VK_NULL_HANDLE;
         std::vector<VkCommandBuffer> m_CommandBuffers;
 
         // Synchronization (one set per MAX_FRAMES_IN_FLIGHT)
@@ -95,7 +96,7 @@ namespace Engine
         bool m_FramebufferResized = false;
 
         // ImGui render pass (created lazily)
-        VkRenderPass m_ImGuiRenderPass = VK_NULL_HANDLE;
+        VkRenderPass  m_ImGuiRenderPass = VK_NULL_HANDLE;
         SwapchainInfo m_SwapchainInfo;
 
         static VulkanContext* s_Instance;

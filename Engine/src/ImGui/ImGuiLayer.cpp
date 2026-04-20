@@ -165,7 +165,7 @@ namespace Engine
             auto* vkContext = VulkanContext::Get();
             ENGINE_CORE_RELEASE_ASSERT(vkContext, "VulkanContext must be initialized before ImGuiLayer");
 
-            ImGui_ImplGlfw_InitForVulkan(window, true);
+            ImGui_ImplGlfw_InitForVulkan(window, false);
 
             ImGui_ImplVulkan_InitInfo initInfo = {};
             initInfo.ApiVersion                = VK_API_VERSION_1_2;

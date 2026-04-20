@@ -18,6 +18,9 @@ namespace Engine
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLShader>(filepath);
+        case RendererAPI::API::Vulkan:
+            ENGINE_CORE_WARN("[Vulkan] Shader not yet implemented, returning nullptr");
+            return nullptr;
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -33,6 +36,9 @@ namespace Engine
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLShader>(name, vertexSrc, fragmentSrc);
+        case RendererAPI::API::Vulkan:
+            ENGINE_CORE_WARN("[Vulkan] Shader not yet implemented, returning nullptr");
+            return nullptr;
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");

@@ -26,9 +26,9 @@ namespace Engine
     static const std::vector<const char*> s_DeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
-                                                               VkDebugUtilsMessageTypeFlagsEXT             type,
-                                                               const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
-                                                               void*                                       userData)
+                                                              VkDebugUtilsMessageTypeFlagsEXT             type,
+                                                              const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+                                                              void*                                       userData)
     {
         (void)type;
         (void)userData;
@@ -93,6 +93,7 @@ namespace Engine
         CreateSwapchain();
         CreateCommandPool();
         CreateSyncObjects();
+        CreateImGuiRenderPass();
 
         s_Instance = this;
 
@@ -110,9 +111,8 @@ namespace Engine
 
         // Acquire next swapchain image
         uint32_t imageIndex = 0;
-        VkResult result =
-            vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX,
-                                  m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+        VkResult result     = vkAcquireNextImageKHR(
+            m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -155,7 +155,7 @@ namespace Engine
         }
 
         // Clear to cornflower blue
-        VkClearColorValue clearColor = {{0.392f, 0.584f, 0.929f, 1.0f}};
+        VkClearColorValue       clearColor = {{0.392f, 0.584f, 0.929f, 1.0f}};
         VkImageSubresourceRange range{};
         range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
         range.baseMipLevel   = 0;
@@ -190,8 +190,8 @@ namespace Engine
 
         // Submit
         VkSemaphore          waitSemaphores[]   = {m_ImageAvailableSemaphores[m_CurrentFrame]};
-        VkPipelineStageFlags waitStages[]        = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        VkSemaphore          signalSemaphores[]  = {m_RenderFinishedSemaphores[m_CurrentFrame]};
+        VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        VkSemaphore          signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -263,8 +263,8 @@ namespace Engine
         appInfo.apiVersion         = VK_API_VERSION_1_2;
 
         // Required extensions: GLFW surface + debug utils
-        uint32_t     glfwExtCount = 0;
-        const char** glfwExts     = glfwGetRequiredInstanceExtensions(&glfwExtCount);
+        uint32_t                 glfwExtCount = 0;
+        const char**             glfwExts     = glfwGetRequiredInstanceExtensions(&glfwExtCount);
         std::vector<const char*> extensions(glfwExts, glfwExts + glfwExtCount);
 
         if (s_EnableValidation)
@@ -282,9 +282,9 @@ namespace Engine
             createInfo.enabledLayerCount   = static_cast<uint32_t>(s_ValidationLayers.size());
             createInfo.ppEnabledLayerNames = s_ValidationLayers.data();
 
-            debugCreateInfo.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                              VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            debugCreateInfo.messageSeverity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
             debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
@@ -308,9 +308,9 @@ namespace Engine
             return;
 
         VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-        createInfo.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        createInfo.messageSeverity =
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                  VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                  VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
@@ -541,8 +541,8 @@ namespace Engine
         m_SwapchainImages.resize(actualCount);
         vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &actualCount, m_SwapchainImages.data());
 
-        m_SwapchainFormat = surfaceFormat.format;
-        m_SwapchainExtent = extent;
+        m_SwapchainFormat          = surfaceFormat.format;
+        m_SwapchainExtent          = extent;
         m_SwapchainInfo.ImageCount = actualCount;
 
         ENGINE_CORE_INFO("Vulkan swapchain created ({}x{}, {} images, format {})", extent.width, extent.height,
@@ -603,6 +603,52 @@ namespace Engine
     }
 
     // =========================================================================
+    // ImGui Render Pass
+    // =========================================================================
+
+    void VulkanContext::CreateImGuiRenderPass()
+    {
+        VkAttachmentDescription colorAttachment{};
+        colorAttachment.format         = m_SwapchainFormat;
+        colorAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+        colorAttachment.loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD;
+        colorAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.initialLayout  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference colorAttachmentRef{};
+        colorAttachmentRef.attachment = 0;
+        colorAttachmentRef.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments    = &colorAttachmentRef;
+
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass    = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass    = 0;
+        dependency.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        VkRenderPassCreateInfo renderPassInfo{};
+        renderPassInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = 1;
+        renderPassInfo.pAttachments    = &colorAttachment;
+        renderPassInfo.subpassCount    = 1;
+        renderPassInfo.pSubpasses      = &subpass;
+        renderPassInfo.dependencyCount = 1;
+        renderPassInfo.pDependencies   = &dependency;
+
+        VkResult result = vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_ImGuiRenderPass);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create ImGui render pass!");
+    }
+
+    // =========================================================================
     // Swapchain recreation
     // =========================================================================
 
@@ -660,14 +706,17 @@ namespace Engine
         if (m_CommandPool != VK_NULL_HANDLE)
             vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
 
+        if (m_ImGuiRenderPass != VK_NULL_HANDLE)
+            vkDestroyRenderPass(m_Device, m_ImGuiRenderPass, nullptr);
+
         CleanupSwapchain();
 
         vkDestroyDevice(m_Device, nullptr);
         m_Device = VK_NULL_HANDLE;
 
         if constexpr (s_EnableValidation)
-        if (m_DebugMessenger != VK_NULL_HANDLE)
-            DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
+            if (m_DebugMessenger != VK_NULL_HANDLE)
+                DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
 
         if (m_Surface != VK_NULL_HANDLE)
             vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
