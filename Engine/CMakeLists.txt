@@ -92,6 +92,7 @@ if(ENGINE_ENABLE_VULKAN)
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanPipeline.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRenderPass.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanShader.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSynchronization.cpp
     )
 endif()
@@ -121,6 +122,13 @@ if(ENGINE_ENABLE_VULKAN)
     find_package(Vulkan REQUIRED)
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN)
     target_include_directories(Engine PRIVATE ${Vulkan_INCLUDE_DIRS})
+
+    if(TARGET Vulkan::shaderc_combined)
+        target_compile_definitions(Engine PRIVATE ENGINE_VULKAN_HAS_SHADERC=1)
+        message(STATUS "[Engine] Vulkan runtime shader compilation enabled via Vulkan::shaderc_combined")
+    else()
+        message(WARNING "[Engine] Vulkan::shaderc_combined not found; VulkanShader runtime GLSL->SPIR-V compile disabled")
+    endif()
 endif()
 
 target_include_directories(Engine
@@ -156,6 +164,9 @@ target_link_libraries(Engine PUBLIC
     $<$<BOOL:${ENGINE_ENABLE_VULKAN}>:Vulkan::Vulkan>
 )
 
+if(ENGINE_ENABLE_VULKAN AND TARGET Vulkan::shaderc_combined)
+    target_link_libraries(Engine PUBLIC Vulkan::shaderc_combined)
+endif()
 
 target_link_directories(Engine PUBLIC ${FFMPEG_LIBRARY_DIRS})
 

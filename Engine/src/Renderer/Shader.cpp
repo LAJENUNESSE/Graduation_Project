@@ -4,6 +4,9 @@
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Platform/OpenGL/OpenGLShader.h"
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanShader.h"
+#endif
 #include "Renderer/RendererAPI.h"
 
 namespace Engine
@@ -19,8 +22,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLShader>(filepath);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] Shader not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanShader>(filepath);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -37,8 +44,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLShader>(name, vertexSrc, fragmentSrc);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] Shader not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanShader>(name, vertexSrc, fragmentSrc);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
