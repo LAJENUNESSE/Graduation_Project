@@ -1,97 +1,122 @@
 #include "engpch.h"
-#include "Scene/Systems/SkyboxSystem.h"
+#include "Platform/OpenGL/OpenGLIBLGenerator.h"
 #include "Core/Log.h"
-#include "Renderer/Buffer.h"
 #include "Renderer/RenderCommand.h"
-#include "Renderer/RendererCapabilities.h"
+
+#include <glad/gl.h>
+
+#include <cmath>
+#include <cstring>
+#include <vector>
 
 namespace Engine
 {
 
-    void SkyboxSystem::Init()
+    OpenGLIBLGenerator::~OpenGLIBLGenerator()
     {
-        m_SkyboxShader = Shader::Create("assets/shaders/Skybox.glsl");
+        Shutdown();
+    }
 
-        // Skybox cube VAO (36 vertices, positions only)
-        float skyboxVertices[] = {
-            -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,
-            -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f,
-            1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,
-            1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f,
-            1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f,
-            -1.0f, 1.0f,  -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
-            -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f,
-            -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,
+    bool OpenGLIBLGenerator::Init()
+    {
+        m_BRDFLutShader    = Shader::Create("assets/shaders/IBL_BRDF_LUT.glsl");
+        m_IrradianceShader = Shader::Create("assets/shaders/IBL_Irradiance.glsl");
+        m_PrefilterShader  = Shader::Create("assets/shaders/IBL_Prefilter.glsl");
+
+        // Validate IBL shader compilation
+        auto validateShader = [](const Ref<Shader>& shader, const char* name)
+        {
+            if (!shader)
+            {
+                ENGINE_CORE_ERROR("IBL: {} shader is null!", name);
+                return false;
+            }
+            shader->Bind();
+            GLenum err = glGetError();
+            if (err != GL_NO_ERROR)
+            {
+                ENGINE_CORE_ERROR("IBL: {} shader bind failed (GL error: 0x{:04X})", name, err);
+                return false;
+            }
+            return true;
         };
 
-        auto skyboxVB = VertexBuffer::Create(skyboxVertices, sizeof(skyboxVertices));
-        skyboxVB->SetLayout({{ShaderDataType::Float3, "a_Position"}});
+        bool allShadersValid = true;
+        allShadersValid &= validateShader(m_BRDFLutShader, "BRDF_LUT");
+        allShadersValid &= validateShader(m_IrradianceShader, "Irradiance");
+        allShadersValid &= validateShader(m_PrefilterShader, "Prefilter");
 
-        m_SkyboxVAO = VertexArray::Create();
-        m_SkyboxVAO->AddVertexBuffer(skyboxVB);
-
-        // 预计算 BRDF LUT（只需一次，与 skybox 无关）
-        if (RendererCapabilities::Get().SupportsComputeShaders)
+        if (allShadersValid)
         {
-            m_IBL = IBLGenerator::Create();
-            if (!m_IBL->Init())
-                m_IBL.reset();
+            ENGINE_CORE_INFO("IBL: All compute shaders compiled successfully");
+            GenerateBRDFLut();
+            return true;
         }
+
+        ENGINE_CORE_ERROR("IBL: Shader compilation failed, IBL disabled");
+        m_BRDFLutShader.reset();
+        m_IrradianceShader.reset();
+        m_PrefilterShader.reset();
+        return false;
     }
 
-    void SkyboxSystem::Render(const glm::mat4& viewMatrix, const glm::mat4& projection)
+    void OpenGLIBLGenerator::Shutdown()
     {
-        if (!m_SkyboxTexture)
-            return;
-
-        RenderCommand::SetDepthFunc(DepthFunc::LEqual);
-
-        m_SkyboxShader->Bind();
-        glm::mat4 viewNoTranslation = glm::mat4(glm::mat3(viewMatrix));
-        m_SkyboxShader->SetMat4("u_ViewProjection", projection * viewNoTranslation);
-        m_SkyboxShader->SetInt("u_Skybox", 0);
-        m_SkyboxTexture->Bind(0);
-
-        m_SkyboxVAO->Bind();
-        RenderCommand::DrawArrays(36);
-
-        RenderCommand::SetDepthFunc(DepthFunc::Less);
-    }
-
-    void SkyboxSystem::LoadSkybox(const std::vector<std::string>& facePaths)
-    {
-        if (facePaths.size() != 6)
+        Clear();
+        if (m_BRDFLutID)
         {
-            ENGINE_CORE_ERROR("Skybox requires exactly 6 face paths");
-            return;
+            glDeleteTextures(1, &m_BRDFLutID);
+            m_BRDFLutID = 0;
         }
-        m_FacePaths     = facePaths;
-        m_SkyboxTexture = TextureCubemap::Create(facePaths);
-
-        // 加载天空盒后生成 IBL 资源（需要 shader 有效）
-        if (m_IBL)
-            m_IBL->Generate(m_SkyboxTexture);
+        m_BRDFLutShader.reset();
+        m_IrradianceShader.reset();
+        m_PrefilterShader.reset();
     }
 
-    void SkyboxSystem::ClearSkybox()
+    void OpenGLIBLGenerator::Clear()
     {
-        m_SkyboxTexture.reset();
-        m_FacePaths.clear();
-
-        if (m_IBL)
-            m_IBL->Clear();
+        if (m_IrradianceMapID)
+        {
+            glDeleteTextures(1, &m_IrradianceMapID);
+            m_IrradianceMapID = 0;
+        }
+        if (m_PrefilterMapID)
+        {
+            glDeleteTextures(1, &m_PrefilterMapID);
+            m_PrefilterMapID = 0;
+        }
+        m_IBLReady = false;
     }
 
-} // namespace Engine
-
-#if 0 // Dead code — moved to Platform/OpenGL/OpenGLIBLGenerator.cpp
-    void REMOVED()
+    void OpenGLIBLGenerator::GenerateBRDFLut()
     {
-        // 将 cubemap 6 面读到 CPU，创建横向排列的 2D atlas 纹理
-        // 用 sampler2D 采样 atlas 替代 samplerCube，绕开 compute shader 中
-        // texture(samplerCube) 在某些驱动上返回全零的问题
-        uint32_t envMapID = m_SkyboxTexture->GetRendererID();
-        int      faceSize = static_cast<int>(m_SkyboxTexture->GetWidth());
+        if (m_BRDFLutID)
+            glDeleteTextures(1, &m_BRDFLutID);
+
+        // BRDF LUT (RG16F) -- immutable storage
+        glGenTextures(1, &m_BRDFLutID);
+        glBindTexture(GL_TEXTURE_2D, m_BRDFLutID);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RG16F, BRDF_LUT_SIZE, BRDF_LUT_SIZE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        m_BRDFLutShader->Bind();
+        glBindImageTexture(0, m_BRDFLutID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RG16F);
+
+        uint32_t groupsX = (BRDF_LUT_SIZE + 15) / 16;
+        uint32_t groupsY = (BRDF_LUT_SIZE + 15) / 16;
+        RenderCommand::DispatchCompute(groupsX, groupsY, 1);
+        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | 0x00000020); // GL_TEXTURE_FETCH_BARRIER_BIT
+
+        ENGINE_CORE_INFO("IBL: BRDF LUT generated ({}x{})", BRDF_LUT_SIZE, BRDF_LUT_SIZE);
+    }
+
+    uint32_t OpenGLIBLGenerator::CreateEnvAtlas(const Ref<TextureCubemap>& skybox)
+    {
+        uint32_t envMapID = skybox->GetRendererID();
+        int      faceSize = static_cast<int>(skybox->GetWidth());
 
         std::vector<uint8_t> atlasPixels(faceSize * 6 * faceSize * 4, 0);
 
@@ -110,7 +135,7 @@ namespace Engine
         }
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
-        // 创建 atlas — 使用 immutable storage（imageLoad 要求）
+        // Atlas -- immutable storage (imageLoad requires it)
         uint32_t atlasID;
         glGenTextures(1, &atlasID);
         glBindTexture(GL_TEXTURE_2D, atlasID);
@@ -126,19 +151,19 @@ namespace Engine
         return atlasID;
     }
 
-    void SkyboxSystem::GenerateIBL()
+    void OpenGLIBLGenerator::Generate(const Ref<TextureCubemap>& skybox)
     {
-        if (!m_SkyboxTexture)
+        if (!skybox)
             return;
 
         ENGINE_CORE_INFO("IBL: Generating IBL resources...");
 
-        // ★ 解绑当前 FBO，compute shader 的 imageStore 在有 FBO 绑定时可能无法写入
+        // Unbind current FBO -- compute shader imageStore may fail with FBO bound
         GLint prevFBO = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        // 清空纹理单元残留
+        // Clear residual texture unit bindings
         for (int unit = 0; unit < 4; unit++)
         {
             glActiveTexture(GL_TEXTURE0 + unit);
@@ -146,8 +171,8 @@ namespace Engine
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
         }
 
-        // ★ 创建 2D atlas 替代 samplerCube（绕开 compute shader 中 cubemap 采样返回零的问题）
-        uint32_t envAtlas = CreateEnvAtlas();
+        // Create 2D atlas from cubemap (workaround for compute shader cubemap sampling issues)
+        uint32_t envAtlas = CreateEnvAtlas(skybox);
 
         // ---- 1. Irradiance Map ----
         {
@@ -168,7 +193,7 @@ namespace Engine
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
-            // 临时 2D 输出纹理（6 面横向排列）— immutable storage
+            // Temp 2D output texture (6 faces horizontal) -- immutable storage
             uint32_t irradTemp;
             glGenTextures(1, &irradTemp);
             glBindTexture(GL_TEXTURE_2D, irradTemp);
@@ -177,11 +202,11 @@ namespace Engine
 
             m_IrradianceShader->Bind();
 
-            int envFaceSize = static_cast<int>(m_SkyboxTexture->GetWidth());
+            int envFaceSize = static_cast<int>(skybox->GetWidth());
             m_IrradianceShader->SetInt("u_FaceSize", IRRADIANCE_SIZE);
             m_IrradianceShader->SetInt("u_EnvFaceSize", envFaceSize);
 
-            // ★ binding=0 输出，binding=1 atlas 输入（用 imageLoad 替代 texture）
+            // binding=0 output, binding=1 atlas input (imageLoad instead of texture)
             glBindImageTexture(0, irradTemp, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
             glBindImageTexture(1, envAtlas, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
 
@@ -191,7 +216,7 @@ namespace Engine
             glMemoryBarrier(GL_ALL_BARRIER_BITS);
             glFinish();
 
-            // 读回并写入 cubemap
+            // Read back and write into cubemap
             std::vector<float> pixels(IRRADIANCE_SIZE * 6 * IRRADIANCE_SIZE * 4);
             glBindTexture(GL_TEXTURE_2D, irradTemp);
             glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixels.data());
@@ -254,12 +279,12 @@ namespace Engine
 
                 m_PrefilterShader->Bind();
 
-                int envFaceSize = static_cast<int>(m_SkyboxTexture->GetWidth());
+                int envFaceSize = static_cast<int>(skybox->GetWidth());
                 m_PrefilterShader->SetInt("u_FaceSize", mipSize);
                 m_PrefilterShader->SetInt("u_EnvFaceSize", envFaceSize);
                 m_PrefilterShader->SetFloat("u_Roughness", roughness);
 
-                // ★ binding=0 输出，binding=1 atlas 输入（用 imageLoad 替代 texture）
+                // binding=0 output, binding=1 atlas input (imageLoad instead of texture)
                 glBindImageTexture(0, prefilterTemp, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
                 glBindImageTexture(1, envAtlas, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
 
@@ -269,13 +294,13 @@ namespace Engine
                 glMemoryBarrier(GL_ALL_BARRIER_BITS);
                 glFinish();
 
-                // 读回像素
+                // Read back pixels
                 std::vector<float> pixels(mipSize * 6 * mipSize * 4);
                 glBindTexture(GL_TEXTURE_2D, prefilterTemp);
                 glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixels.data());
                 glBindTexture(GL_TEXTURE_2D, 0);
 
-                // NaN/Inf 清理
+                // NaN/Inf cleanup
                 for (size_t pi = 0; pi < pixels.size(); pi++)
                 {
                     if (std::isnan(pixels[pi]) || std::isinf(pixels[pi]))
@@ -304,10 +329,10 @@ namespace Engine
                              PREFILTER_MIP_LEVELS);
         }
 
-        // 清理 atlas
+        // Cleanup atlas
         glDeleteTextures(1, &envAtlas);
 
-        // 恢复状态
+        // Restore state
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
@@ -316,4 +341,5 @@ namespace Engine
         m_IBLReady = true;
         ENGINE_CORE_INFO("IBL: All resources ready");
     }
-#endif
+
+} // namespace Engine

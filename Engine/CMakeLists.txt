@@ -6,6 +6,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLRendererAPI.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLShader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLAsyncReadback.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLIBLGenerator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLStorageBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLTexture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLUniformBuffer.cpp
@@ -56,6 +57,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SpatialHashGrid.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SPHCommon.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/GPUAsyncReadback.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/IBLGenerator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/StorageBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Texture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/UniformBuffer.cpp
