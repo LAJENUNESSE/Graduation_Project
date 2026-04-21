@@ -325,7 +325,8 @@ namespace Engine
 
         // Uniforms
         m_CompositeShader->SetMat4("u_InvProjection", invProjection);
-        m_CompositeShader->SetFloat2("u_ScreenSize", glm::vec2(m_Width, m_Height));
+        // u_ScreenSize 用于法线重建的邻域采样，必须匹配深度纹理的实际分辨率
+        m_CompositeShader->SetFloat2("u_ScreenSize", glm::vec2(fluidW, fluidH));
 
         m_CompositeShader->SetFloat3("u_FluidColor", emitter.FluidColor);
         m_CompositeShader->SetFloat3("u_AbsorptionColor", emitter.AbsorptionColor);
