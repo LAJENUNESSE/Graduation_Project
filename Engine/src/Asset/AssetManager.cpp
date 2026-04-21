@@ -291,11 +291,11 @@ namespace Engine
             uint32_t gray        = 0xFF808080;
             placeholder->SetData(&gray, sizeof(uint32_t));
 
-            h                        = s_Textures.Insert(placeholder, path);
-            s_TexturePathIndex[path] = h;
-            s_HandleTypes[h]         = AssetType::Texture2D;
+            h                         = s_Textures.Insert(placeholder, path);
+            s_TexturePathIndex[path]  = h;
+            s_HandleTypes[h]          = AssetType::Texture2D;
             s_PendingAsyncLoads[path] = h;
-            needSubmit               = true;
+            needSubmit                = true;
         }
 
         // Submit outside lock (SubmitTexture is thread-safe)
@@ -311,23 +311,19 @@ namespace Engine
 
     // ---- Get specializations ----
 
+    // 注意：s_HandleTypes 是全局单一映射，而 Texture/Mesh/Cubemap 各有独立 SlotMap，
+    // 不同 SlotMap 可产出相同的 {Index, Generation}，导致 s_HandleTypes 碰撞。
+    // 因此此处不做类型断言，依赖 SlotMap::Get() 自身的 generation check 保证安全。
     template <> Texture2D* AssetManager::Get<Texture2D>(AssetHandle h)
     {
-        ENGINE_CORE_ASSERT(!h.IsValid() || (s_HandleTypes.count(h) != 0 && s_HandleTypes[h] == AssetType::Texture2D),
-                           "AssetHandle type mismatch: expected Texture2D");
         return s_Textures.Get(h);
     }
     template <> Mesh* AssetManager::Get<Mesh>(AssetHandle h)
     {
-        ENGINE_CORE_ASSERT(!h.IsValid() || (s_HandleTypes.count(h) != 0 && s_HandleTypes[h] == AssetType::Mesh),
-                           "AssetHandle type mismatch: expected Mesh");
         return s_Meshes.Get(h);
     }
     template <> TextureCubemap* AssetManager::Get<TextureCubemap>(AssetHandle h)
     {
-        ENGINE_CORE_ASSERT(!h.IsValid() ||
-                               (s_HandleTypes.count(h) != 0 && s_HandleTypes[h] == AssetType::TextureCubemap),
-                           "AssetHandle type mismatch: expected TextureCubemap");
         return s_Cubemaps.Get(h);
     }
 
