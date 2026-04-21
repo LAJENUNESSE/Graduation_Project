@@ -94,9 +94,11 @@
 
 - ✅ `VulkanBuffer.h/cpp` — VBO/IBO via VMA（最小创建/上传/销毁路径已接入）
 - ✅ `VulkanAllocator.h/cpp` — VMA allocator 生命周期接入 `VulkanContext`
-- `VulkanStorageBuffer.h/cpp` — SSBO 等价
-- `VulkanTexture.h/cpp` — Image + ImageView + Sampler
-- `VulkanFramebuffer.h/cpp` — 等价于 Vulkan RenderPass + Framebuffer + attachments
+- ✅ `VulkanStorageBuffer` — SSBO 等价（6 种构造变体 + SetData/GetData/ClearToZero via VMA）
+- ✅ `VulkanUniformBuffer` — UBO via VMA（构造/析构/SetData）
+- ✅ `VulkanTexture2D` — VMA Image + ImageView + Sampler + staging upload（5 种构造变体）
+- ⬜ `VulkanTextureCubemap` — stub（warn only）
+- ✅ `VulkanFramebuffer` — VMA color/depth images + VkRenderPass + VkFramebuffer（ReadPixel/MSAA stub）
 
 ### Phase 6: ImGui 集成 (部分完成)
 
