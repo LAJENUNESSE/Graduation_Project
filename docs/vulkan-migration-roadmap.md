@@ -67,7 +67,7 @@
 - ImGui Vulkan 后端初始化（`ImGui_ImplVulkan_Init` + ImGui RenderPass）
 - **验收**: `Editor.exe --vulkan` 启动显示矢车菊蓝清屏，swapchain resize 正常，干净退出
 
-### Phase 3: VulkanRendererAPI 核心 ⬅️ 当前
+### Phase 3: VulkanRendererAPI 核心 ✅ 已完成
 
 **目标**: 实现 `RendererAPI` 接口的 Vulkan 版本。
 
@@ -88,11 +88,12 @@
 - ✅ `VulkanShader.h/cpp` — SPIR-V 模块创建 + 反射（descriptor set layout）（最小骨架 + 运行时编译接入，模块创建/反射待后续）
 - ✅ Shader pragma 解析（`#type vertex/fragment/compute`）复用现有逻辑
 
-### Phase 5: 资源抽象
+### Phase 5: 资源抽象 ⬅️ 当前
 
 **目标**: Buffer/Texture/Framebuffer 的 Vulkan 实现。
 
-- `VulkanBuffer.h/cpp` — VBO/IBO via VMA
+- ✅ `VulkanBuffer.h/cpp` — VBO/IBO via VMA（最小创建/上传/销毁路径已接入）
+- ✅ `VulkanAllocator.h/cpp` — VMA allocator 生命周期接入 `VulkanContext`
 - `VulkanStorageBuffer.h/cpp` — SSBO 等价
 - `VulkanTexture.h/cpp` — Image + ImageView + Sampler
 - `VulkanFramebuffer.h/cpp` — 等价于 Vulkan RenderPass + Framebuffer + attachments

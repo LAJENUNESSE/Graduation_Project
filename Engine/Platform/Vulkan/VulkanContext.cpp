@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Platform/Vulkan/VulkanContext.h"
 #include "Platform/Vulkan/VulkanCommandBuffer.h"
+#include "Platform/Vulkan/VulkanAllocator.h"
 #include "Platform/Vulkan/VulkanPipeline.h"
 #include "Platform/Vulkan/VulkanRenderPass.h"
 #include "Platform/Vulkan/VulkanSynchronization.h"
@@ -109,6 +110,7 @@ namespace Engine
         CreateSurface();
         PickPhysicalDevice();
         CreateLogicalDevice();
+        VulkanAllocator::Init(m_Instance, m_PhysicalDevice, m_Device);
         CreateSwapchain();
         CreateCommandPool();
         CreateSyncObjects();
@@ -1029,6 +1031,8 @@ namespace Engine
             vkDestroyRenderPass(m_Device, m_ImGuiRenderPass, nullptr);
 
         CleanupSwapchain();
+
+        VulkanAllocator::Shutdown();
 
         vkDestroyDevice(m_Device, nullptr);
         m_Device = VK_NULL_HANDLE;
