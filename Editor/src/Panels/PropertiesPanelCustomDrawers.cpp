@@ -680,6 +680,25 @@ namespace Engine
             changed |= ImGui::DragFloat("阻尼", &component.Damping, 0.001f, 0.9f, 1.0f, "%.3f");
 
             ImGui::Separator();
+            ImGui::Text("PCISPH");
+            changed |= ImGui::Checkbox("启用 PCISPH", &component.PCISPHEnabled);
+            if (component.PCISPHEnabled)
+            {
+                changed |= ImGui::SliderInt("PCISPH 迭代", &component.PCISPHIterations, 1, 8);
+                changed |= ImGui::DragFloat("PCISPH Delta", &component.PCISPHDelta, 0.01f, 0.01f, 2.0f, "%.3f");
+                changed |= ImGui::DragFloat("表面张力", &component.SurfaceTension, 0.01f, 0.0f, 2.0f, "%.3f");
+            }
+
+            ImGui::Separator();
+            ImGui::Text("边界盒");
+            changed |= ImGui::Checkbox("使用边界", &component.UseBoundary);
+            if (component.UseBoundary)
+            {
+                changed |= DrawVec3Control("边界最小值", component.BoundaryMin);
+                changed |= DrawVec3Control("边界最大值", component.BoundaryMax);
+            }
+
+            ImGui::Separator();
             ImGui::Text("Mesh SDF 碰撞");
             changed |= ImGui::Checkbox("刚体耦合", &component.RigidBodyCoupling);
             changed |= ImGui::Checkbox("Mesh SDF 耦合", &component.MeshSDFCoupling);
