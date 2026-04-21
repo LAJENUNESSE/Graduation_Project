@@ -5,6 +5,10 @@
 #include "Platform/OpenGL/OpenGLTexture.h"
 #include "Renderer/RendererAPI.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanTexture.h"
+#endif
+
 namespace Engine
 {
 
@@ -18,8 +22,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLTexture2D>(width, height);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] Texture2D not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanTexture2D>(width, height);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -36,8 +44,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLTexture2D>(path);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] Texture2D not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanTexture2D>(path);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -54,8 +66,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLTexture2D>(data, width, height);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] Texture2D not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanTexture2D>(data, width, height);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -72,8 +88,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLTexture2D>(width, height, spec);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] Texture2D not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanTexture2D>(width, height, spec);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -91,8 +111,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLTexture2D>(data, width, height, spec);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] Texture2D not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanTexture2D>(data, width, height, spec);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
@@ -109,8 +133,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLTextureCubemap>(facePaths);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] TextureCubemap not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanTextureCubemap>(facePaths);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");

@@ -57,6 +57,11 @@ namespace Engine
 
         void RenderImGui(void* drawData);
 
+        VkCommandBuffer BeginSingleTimeCommands();
+        void            EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+        VkCommandPool GetCommandPool() const { return m_CommandPool; }
+
     private:
         // Setup helpers (called from Init)
         void CreateInstance();
