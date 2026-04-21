@@ -32,13 +32,13 @@ namespace Engine
 
         struct MeshSDFDebugStats
         {
-            uint32_t BodyCount          = 0;
-            uint32_t VoxelCount         = 0;
-            uint32_t EstimatedSamples   = 0;
-            uint32_t Resolution         = 0;
-            float    Band               = 0.0f;
-            float    LastBuildCpuMs     = 0.0f;
-            bool     Enabled            = false;
+            uint32_t BodyCount        = 0;
+            uint32_t VoxelCount       = 0;
+            uint32_t EstimatedSamples = 0;
+            uint32_t Resolution       = 0;
+            float    Band             = 0.0f;
+            float    LastBuildCpuMs   = 0.0f;
+            bool     Enabled          = false;
         };
 
         FluidSystemGPU(uint32_t particleCount);
@@ -51,9 +51,9 @@ namespace Engine
                     const FluidEmitterComponent& emitter,
                     entt::registry*              registry = nullptr);
 
-        uint32_t                 GetParticleCount() const { return m_ParticleCount; }
-        Ref<ShaderStorageBuffer> GetParticleBuffer() const { return m_ParticleBuffer; }
-        Ref<VertexArray>         GetEmptyVAO() const { return m_EmptyVAO; }
+        uint32_t                             GetParticleCount() const { return m_ParticleCount; }
+        Ref<ShaderStorageBuffer>             GetParticleBuffer() const { return m_ParticleBuffer; }
+        Ref<VertexArray>                     GetEmptyVAO() const { return m_EmptyVAO; }
         const std::vector<MeshSDFDebugBody>& GetMeshSDFDebugBodies() const { return m_MeshSDFDebugBodies; }
         const MeshSDFDebugStats&             GetMeshSDFDebugStats() const { return m_MeshSDFDebugStats; }
 
@@ -92,6 +92,11 @@ namespace Engine
         // 调试可视化数据
         std::vector<MeshSDFDebugBody> m_MeshSDFDebugBodies;
         MeshSDFDebugStats             m_MeshSDFDebugStats;
+
+        // MeshSDF 缓存：当碰撞体 Transform 未变化时跳过重建
+        size_t              m_MeshSDFCacheHash = 0;
+        MeshSDFUploadResult m_CachedMeshSDFResult;
+        bool                m_MeshSDFCacheValid = false;
 
         void InitSPH(float smoothingRadius);
         void InitPCISPH();

@@ -699,6 +699,7 @@ namespace Engine
             changed |= ImGui::SliderInt("平滑迭代", &component.SmoothIterations, 1, 8);
             changed |= ImGui::DragFloat("平滑半径", &component.SmoothFilterRadius, 0.1f, 0.1f, 12.0f, "%.2f");
             changed |= ImGui::DragFloat("深度衰减", &component.SmoothDepthFalloff, 1.0f, 1.0f, 300.0f, "%.1f");
+            changed |= ImGui::SliderFloat("渲染分辨率", &component.RenderScale, 0.25f, 1.0f, "%.2f");
 
             if (changed && component.CurrentPreset != FluidEmitterComponent::Preset::Custom)
                 component.CurrentPreset = FluidEmitterComponent::Preset::Custom;

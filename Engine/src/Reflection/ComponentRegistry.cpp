@@ -260,6 +260,9 @@ namespace Engine
                        hints.Min    = 1.0f;
                        hints.Max    = 500.0f;
                        hints.Format = "%.0f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, RenderScale, "渲染分辨率", Float, hints.Speed = 0.01f; hints.Min = 0.25f;
+                       hints.Max    = 1.0f;
+                       hints.Format = "%.2f")
 
     REGISTER_COMPONENT_BEGIN(FluidEmitterComponent)
     REGISTER_COMPONENT_FLAGS(ComponentMeta::CustomUI)
@@ -298,6 +301,7 @@ namespace Engine
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothIterations)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothFilterRadius)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, SmoothDepthFalloff)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, RenderScale)
     REGISTER_COMPONENT_END(FluidEmitterComponent)
 
     // ---- AudioSourceComponent 反射 ----

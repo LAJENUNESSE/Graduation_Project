@@ -517,6 +517,7 @@ namespace Engine
         int       SmoothIterations   = 2;
         float     SmoothFilterRadius = 5.0f;
         float     SmoothDepthFalloff = 100.0f;
+        float     RenderScale        = 0.5f;
 
         FluidEmitterComponent()                             = default;
         FluidEmitterComponent(const FluidEmitterComponent&) = default;

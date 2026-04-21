@@ -111,10 +111,8 @@ namespace Engine
         m_Width  = width;
         m_Height = height;
 
-        m_DepthFBO->Resize(width, height);
-        m_SmoothFBO[0]->Resize(width, height);
-        m_SmoothFBO[1]->Resize(width, height);
-        m_ThicknessFBO->Resize(width, height);
+        // 中间 FBO (Depth/Smooth/Thickness) 由 Render() 按 RenderScale 按需 resize，
+        // 此处只更新全分辨率资源（scene color copy texture）。
 
         // Resize scene color copy texture
         if (width != m_SceneColorCopyWidth || height != m_SceneColorCopyHeight)
@@ -161,11 +159,22 @@ namespace Engine
         glm::mat4 invProjection = glm::inverse(projection);
         glm::mat4 invView       = glm::inverse(view);
 
+        // 可配置分辨率：Depth/Smooth/Thickness 在缩放分辨率下执行
+        float    renderScale = std::clamp(emitter.RenderScale, 0.25f, 1.0f);
+        uint32_t fluidW      = std::max(1u, static_cast<uint32_t>(m_Width * renderScale));
+        uint32_t fluidH      = std::max(1u, static_cast<uint32_t>(m_Height * renderScale));
+
+        // 按需 resize 中间 FBO
+        m_DepthFBO->Resize(fluidW, fluidH);
+        m_SmoothFBO[0]->Resize(fluidW, fluidH);
+        m_SmoothFBO[1]->Resize(fluidW, fluidH);
+        m_ThicknessFBO->Resize(fluidW, fluidH);
+
         // ================================================================
         // Pass 1: Depth — sphere impostor rendering to R32F
         // ================================================================
         m_DepthFBO->Bind();
-        RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+        RenderCommand::SetViewport(0, 0, fluidW, fluidH);
 
         // Clear depth FBO to far value (1e10)
         glClearColor(1e10f, 0.0f, 0.0f, 0.0f);
@@ -217,14 +226,14 @@ namespace Engine
         {
             // Horizontal pass
             m_SmoothFBO[0]->Bind();
-            RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+            RenderCommand::SetViewport(0, 0, fluidW, fluidH);
             RenderCommand::SetDepthTest(false);
 
             m_SmoothShader->Bind();
             RenderCommand::BindTextureUnit(0, smoothInput);
             m_SmoothShader->SetInt("u_DepthTexture", 0);
             m_SmoothShader->SetInt("u_Horizontal", 1);
-            m_SmoothShader->SetFloat2("u_ScreenSize", glm::vec2(m_Width, m_Height));
+            m_SmoothShader->SetFloat2("u_ScreenSize", glm::vec2(fluidW, fluidH));
             m_SmoothShader->SetFloat("u_FilterRadius", emitter.SmoothFilterRadius);
             m_SmoothShader->SetFloat("u_DepthFalloff", emitter.SmoothDepthFalloff);
             RenderFullscreenQuad();
@@ -233,13 +242,13 @@ namespace Engine
 
             // Vertical pass
             m_SmoothFBO[1]->Bind();
-            RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+            RenderCommand::SetViewport(0, 0, fluidW, fluidH);
 
             m_SmoothShader->Bind();
             RenderCommand::BindTextureUnit(0, m_SmoothFBO[0]->GetColorAttachmentRendererID(0));
             m_SmoothShader->SetInt("u_DepthTexture", 0);
             m_SmoothShader->SetInt("u_Horizontal", 0);
-            m_SmoothShader->SetFloat2("u_ScreenSize", glm::vec2(m_Width, m_Height));
+            m_SmoothShader->SetFloat2("u_ScreenSize", glm::vec2(fluidW, fluidH));
             m_SmoothShader->SetFloat("u_FilterRadius", emitter.SmoothFilterRadius);
             m_SmoothShader->SetFloat("u_DepthFalloff", emitter.SmoothDepthFalloff);
             RenderFullscreenQuad();
@@ -256,7 +265,7 @@ namespace Engine
         // Pass 3: Thickness — additive blending
         // ================================================================
         m_ThicknessFBO->Bind();
-        RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+        RenderCommand::SetViewport(0, 0, fluidW, fluidH);
 
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);

@@ -419,7 +419,7 @@ namespace Engine
 
         // Grid cell size = 2 * smoothing radius (保证邻域在 3x3x3 cell 内)
         float    cellSize = 2.0f * smoothingRadius;
-        uint32_t gridSize = 64;
+        uint32_t gridSize = (m_MaxParticles <= 8000) ? 16 : (m_MaxParticles <= 30000) ? 32 : 64;
 
         m_Grid.Init(m_MaxParticles, gridSize, cellSize);
         m_SPHInitialized = true;
@@ -581,9 +581,8 @@ namespace Engine
                     if (emitter.SPH.RigidBodyCoupling && registry)
                     {
                         InitRigidBodyBuffer();
-                        rigidBodyCount =
-                            UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                                      RigidBodyUploadFilter::RequireRigidBodyComponent);
+                        rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                                   RigidBodyUploadFilter::RequireRigidBodyComponent);
                     }
 
                     m_PCISPHBuffer->Bind(1);
@@ -639,22 +638,9 @@ namespace Engine
                     m_SPHShaders.PCISPHForce->SetFloat("u_WarmupTime", SPH_WARMUP_TIME);
 
                     // 单帧内完成所有 PCISPH 迭代（与 FluidSystemGPU 一致）
-                    // 自适应 grid 策略：迭代 0 复用原始 grid，迭代 1+ 用预测位置重建
+                    // 所有迭代复用初始 grid（性能优化：省去迭代 1+ 的网格重建开销）
                     for (int iter = 0; iter < iterations; iter++)
                     {
-                        // 迭代 1+：用预测位置重建空间哈希 grid
-                        if (iter > 0)
-                        {
-                            m_PCISPHBuffer->Bind(9); // binding 9: PCISPHData for predicted pos
-                            m_Grid.Build(m_LastAliveCount, true);
-                            // 重新绑定 PCISPH 使用的 buffer slots
-                            m_ParticleBuffer->Bind(0);
-                            m_AliveList->Bind(2);
-                            m_PCISPHBuffer->Bind(1);
-                            if (m_RigidBodyBuffer)
-                                m_RigidBodyBuffer->Bind(3);
-                        }
-
                         m_SPHShaders.PCISPHPredict->Bind();
                         RenderCommand::DispatchCompute(sphGroups);
                         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
@@ -694,9 +680,8 @@ namespace Engine
                     if (emitter.SPH.RigidBodyCoupling && registry)
                     {
                         InitRigidBodyBuffer();
-                        rigidBodyCount =
-                            UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
-                                                      RigidBodyUploadFilter::RequireRigidBodyComponent);
+                        rigidBodyCount = UploadRigidBodiesToBuffer(registry, m_RigidBodyBuffer, MAX_RIGID_BODIES,
+                                                                   RigidBodyUploadFilter::RequireRigidBodyComponent);
                         m_RigidBodyBuffer->Bind(3);
                     }
                     m_SPHShaders.ForceShader->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
