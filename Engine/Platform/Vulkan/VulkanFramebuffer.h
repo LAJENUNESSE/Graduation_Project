@@ -1,8 +1,12 @@
 #pragma once
 
-// Stub — Vulkan framebuffer implementation will be added in Phase 5.
-
 #include "Renderer/Framebuffer.h"
+
+#include <vector>
+#include <vulkan/vulkan.h>
+
+struct VmaAllocation_T;
+typedef VmaAllocation_T* VmaAllocation;
 
 namespace Engine
 {
@@ -10,25 +14,50 @@ namespace Engine
     class VulkanFramebuffer : public Framebuffer
     {
     public:
-        VulkanFramebuffer(const FramebufferSpecification& spec) : m_Spec(spec) {}
-        ~VulkanFramebuffer() override = default;
+        VulkanFramebuffer(const FramebufferSpecification& spec);
+        ~VulkanFramebuffer() override;
 
-        void Bind() override {}
-        void Unbind() override {}
-        void Resize(uint32_t width, uint32_t height) override { m_Spec.Width = width; m_Spec.Height = height; }
+        void Bind() override;
+        void Unbind() override;
+        void Resize(uint32_t width, uint32_t height) override;
 
-        int                            ReadPixel(uint32_t attachmentIndex, int x, int y) override { (void)attachmentIndex; (void)x; (void)y; return -1; }
-        void                           ClearAttachment(uint32_t index, int value) override { (void)index; (void)value; }
-        uint32_t                       GetColorAttachmentRendererID(uint32_t index = 0) const override { (void)index; return 0; }
-        uint32_t                       GetDepthAttachmentRendererID() const override { return 0; }
+        int  ReadPixel(uint32_t attachmentIndex, int x, int y) override;
+        void ClearAttachment(uint32_t index, int value) override;
+
+        uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const override;
+        uint32_t GetDepthAttachmentRendererID() const override;
+
         const FramebufferSpecification& GetSpecification() const override { return m_Spec; }
 
-        void BindMSAA() override {}
-        void BlitMSAA() override {}
+        void BindMSAA() override;
+        void BlitMSAA() override;
         bool IsMSAAEnabled() const override { return false; }
+
+        VkRenderPass  GetRenderPass() const { return m_RenderPass; }
+        VkFramebuffer GetFramebuffer() const { return m_Framebuffer; }
+
+    private:
+        void Invalidate();
+        void Destroy();
 
     private:
         FramebufferSpecification m_Spec;
+
+        struct AttachmentResource
+        {
+            VkImage       Image      = VK_NULL_HANDLE;
+            VmaAllocation Allocation = nullptr;
+            VkImageView   ImageView  = VK_NULL_HANDLE;
+            VkFormat      Format     = VK_FORMAT_UNDEFINED;
+        };
+
+        std::vector<AttachmentResource>              m_ColorAttachments;
+        AttachmentResource                           m_DepthAttachment{};
+        std::vector<FramebufferTextureSpecification> m_ColorAttachmentSpecs;
+        FramebufferTextureSpecification              m_DepthAttachmentSpec = FramebufferTextureFormat::None;
+
+        VkRenderPass  m_RenderPass  = VK_NULL_HANDLE;
+        VkFramebuffer m_Framebuffer = VK_NULL_HANDLE;
     };
 
 } // namespace Engine
