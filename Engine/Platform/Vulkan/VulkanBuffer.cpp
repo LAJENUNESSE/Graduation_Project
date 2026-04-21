@@ -199,4 +199,21 @@ namespace Engine
         }
     }
 
+    VulkanUniformBuffer::VulkanUniformBuffer(uint32_t size, uint32_t binding) : m_Size(size), m_Binding(binding)
+    {
+        CreateBuffer(m_Buffer, m_Allocation, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, nullptr);
+    }
+
+    VulkanUniformBuffer::~VulkanUniformBuffer()
+    {
+        if (m_Buffer != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
+            vmaDestroyBuffer(VulkanAllocator::GetAllocator(), m_Buffer, m_Allocation);
+    }
+
+    void VulkanUniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
+    {
+        ENGINE_CORE_ASSERT(offset + size <= m_Size, "UniformBuffer::SetData out of bounds");
+        UploadToAllocation(m_Allocation, data, size, offset);
+    }
+
 } // namespace Engine

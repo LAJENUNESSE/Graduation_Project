@@ -98,19 +98,18 @@ namespace Engine
     class VulkanUniformBuffer : public UniformBuffer
     {
     public:
-        VulkanUniformBuffer(uint32_t size, uint32_t binding)
-        {
-            (void)size;
-            (void)binding;
-        }
-        ~VulkanUniformBuffer() override = default;
+        VulkanUniformBuffer(uint32_t size, uint32_t binding);
+        ~VulkanUniformBuffer() override;
 
-        void SetData(const void* data, uint32_t size, uint32_t offset = 0) override
-        {
-            (void)data;
-            (void)size;
-            (void)offset;
-        }
+        void SetData(const void* data, uint32_t size, uint32_t offset = 0) override;
+
+        VkBuffer GetBuffer() const { return m_Buffer; }
+
+    private:
+        VkBuffer      m_Buffer     = VK_NULL_HANDLE;
+        VmaAllocation m_Allocation = nullptr;
+        uint32_t      m_Size       = 0;
+        uint32_t      m_Binding    = 0;
     };
 
 } // namespace Engine
