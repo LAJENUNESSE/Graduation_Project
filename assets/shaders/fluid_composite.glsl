@@ -122,6 +122,18 @@ void main()
         return;
     }
 
+    // 场景深度遮挡：将 depth buffer [0,1] 转为 view-space Z，与流体深度比较
+    float sceneDepthRaw = texture(u_SceneDepth, v_TexCoord).r;
+    float ndcZ          = sceneDepthRaw * 2.0 - 1.0; // OpenGL [0,1] → NDC [-1,1]
+    vec4  sceneClip     = u_InvProjection * vec4(0.0, 0.0, ndcZ, 1.0);
+    float sceneViewZ    = sceneClip.z / sceneClip.w;
+    // fluidDepth 和 sceneViewZ 都是 view-space 负值，更负 = 更远
+    if (fluidDepth < sceneViewZ)
+    {
+        FragColor = sceneColor;
+        return;
+    }
+
     float rawThickness = texture(u_FluidThickness, v_TexCoord).r;
     if (rawThickness <= 1e-6 || isnan(rawThickness) || isinf(rawThickness))
     {

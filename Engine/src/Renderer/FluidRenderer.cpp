@@ -322,6 +322,7 @@ namespace Engine
         m_CompositeShader->SetInt("u_SceneColor", 2);
 
         RenderCommand::BindTextureUnit(3, sceneDepthTexID);
+        m_CompositeShader->SetInt("u_SceneDepth", 3);
 
         // Uniforms
         m_CompositeShader->SetMat4("u_InvProjection", invProjection);
