@@ -412,20 +412,26 @@ namespace Engine
                                            m_FluidEmitted.erase(eid); // 重建后需要重新发射
                                        }
 
-                                       // 发射策略：水龙头预设持续发射，其他预设保持一次性发射
-                                       const bool continuousEmit =
-                                           (emitter.CurrentPreset == FluidEmitterComponent::Preset::FaucetWater);
-                                       if (continuousEmit)
+                                       // 发射策略：lifetime 模式由 Update 内部处理连续发射，
+                                       // 否则保持原有一次性/持续发射逻辑
+                                       const bool lifetimeMode =
+                                           (emitter.EmitRate > 0.0f && emitter.ParticleLifetime > 0.0f);
+                                       if (!lifetimeMode)
                                        {
-                                           system->Emit(worldPos, emitter);
-                                       }
-                                       else if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
-                                       {
-                                           system->Emit(worldPos, emitter);
-                                           m_FluidEmitted.insert(eid);
+                                           const bool continuousEmit =
+                                               (emitter.CurrentPreset == FluidEmitterComponent::Preset::FaucetWater);
+                                           if (continuousEmit)
+                                           {
+                                               system->Emit(worldPos, emitter);
+                                           }
+                                           else if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
+                                           {
+                                               system->Emit(worldPos, emitter);
+                                               m_FluidEmitted.insert(eid);
+                                           }
                                        }
 
-                                       // 每帧模拟
+                                       // 每帧模拟 (lifetime 模式下 emit 在 Update 内部执行)
                                        system->Update(ctx.DeltaTime, worldPos, emitter, ctx.Registry);
 
                                        const auto& meshStats = system->GetMeshSDFDebugStats();

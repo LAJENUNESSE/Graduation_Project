@@ -84,20 +84,38 @@ namespace Engine
         // Fluid-specific shaders
         m_EmitShader     = Shader::Create("assets/shaders/fluid_emit.glsl");
         m_SimulateShader = Shader::Create("assets/shaders/fluid_simulate.glsl");
+        m_CompactShader  = Shader::Create("assets/shaders/fluid_compact.glsl");
 
         // Reuse existing SPH shaders
         m_SPHShaders = SPHShaderSet::Load();
 
         // Particle buffer: zero-initialized, 80 bytes per particle
+        // posAndLife.w = 0 means dead (for lifetime mode all start dead)
         uint32_t             totalBytes = m_ParticleCount * sizeof(FluidGPUParticle);
         std::vector<uint8_t> zeroData(totalBytes, 0);
         m_ParticleBuffer = ShaderStorageBuffer::CreateGPUDynamic(zeroData.data(), totalBytes, 0);
 
-        // Identity alive list: [0, 1, 2, ..., N-1]
-        std::vector<uint32_t> aliveIndices(m_ParticleCount);
+        // Alive list (will be rebuilt by compact pass in lifetime mode)
+        std::vector<uint32_t> identityIndices(m_ParticleCount);
         for (uint32_t i = 0; i < m_ParticleCount; i++)
-            aliveIndices[i] = i;
-        m_AliveList = ShaderStorageBuffer::CreateGPUDynamic(aliveIndices.data(), m_ParticleCount * sizeof(uint32_t), 2);
+            identityIndices[i] = i;
+        m_AliveList =
+            ShaderStorageBuffer::CreateGPUDynamic(identityIndices.data(), m_ParticleCount * sizeof(uint32_t), 2);
+
+        // Dead list: initially all particles are dead (for lifetime mode)
+        m_DeadList =
+            ShaderStorageBuffer::CreateGPUDynamic(identityIndices.data(), m_ParticleCount * sizeof(uint32_t), 12);
+
+        // Counter buffer: {deadCount, aliveCount, emitCount, pad}
+        struct CounterData
+        {
+            uint32_t deadCount;
+            uint32_t aliveCount;
+            uint32_t emitCount;
+            uint32_t pad;
+        };
+        CounterData initCounters{m_ParticleCount, 0, 0, 0};
+        m_CounterBuffer = ShaderStorageBuffer::CreateGPUDynamic(&initCounters, sizeof(CounterData), 13);
 
         // Empty VAO for instanced draw
         m_EmptyVAO = VertexArray::Create();
@@ -148,7 +166,11 @@ namespace Engine
         if (!m_Initialized)
             return;
 
+        const bool lifetimeMode = (emitter.EmitRate > 0.0f && emitter.ParticleLifetime > 0.0f);
+
         m_ParticleBuffer->Bind(0);
+        m_DeadList->Bind(12);
+        m_CounterBuffer->Bind(13);
 
         m_EmitShader->Bind();
         m_EmitShader->SetFloat3("u_EmitterPos", emitterPos);
@@ -156,6 +178,8 @@ namespace Engine
         m_EmitShader->SetFloat3("u_InitialVelocity", emitter.InitialVelocity);
         m_EmitShader->SetInt("u_ParticleCount", static_cast<int>(m_ParticleCount));
         m_EmitShader->SetFloat("u_Time", m_TotalTime);
+        m_EmitShader->SetFloat("u_ParticleLifetime", emitter.ParticleLifetime);
+        m_EmitShader->SetInt("u_UseLifetime", lifetimeMode ? 1 : 0);
 
         uint32_t groups = (m_ParticleCount + 63) / 64;
         RenderCommand::DispatchCompute(groups);
@@ -173,12 +197,61 @@ namespace Engine
         float clampedDt = std::min(dt, 0.008f);
         m_TotalTime += dt;
 
+        const bool lifetimeMode = (emitter.EmitRate > 0.0f && emitter.ParticleLifetime > 0.0f);
+
         // Lazy init SPH grid
         if (!m_SPHInitialized)
             InitSPH(emitter.SmoothingRadius);
 
         // CPU-side kernel constant precomputation
         SPHKernelParams kp = SPHKernelParams::Compute(emitter.SmoothingRadius);
+
+        // ---- Lifetime: emit rate accumulation + emit + compact ----
+        if (lifetimeMode)
+        {
+            float emitDt = std::min(dt, 0.05f);
+            m_EmitAccumulator += emitter.EmitRate * emitDt;
+            uint32_t emitCount = static_cast<uint32_t>(m_EmitAccumulator);
+            m_EmitAccumulator -= static_cast<float>(emitCount);
+            emitCount = std::min(emitCount, m_ParticleCount);
+
+            if (emitCount > 0)
+            {
+                // Write emitCount to counter buffer
+                m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8); // offset 8 = emitCount field
+
+                // Emit from dead list
+                Emit(emitterPos, emitter);
+            }
+
+            // Compact pass: rebuild alive/dead lists for SPH
+            struct CounterZero
+            {
+                uint32_t deadCount;
+                uint32_t aliveCount;
+                uint32_t emitCount;
+                uint32_t pad;
+            };
+            CounterZero zero{0, 0, 0, 0};
+            m_CounterBuffer->SetData(&zero, sizeof(CounterZero), 0);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+            m_ParticleBuffer->Bind(0);
+            m_AliveList->Bind(2);
+            m_DeadList->Bind(12);
+            m_CounterBuffer->Bind(13);
+
+            m_CompactShader->Bind();
+            m_CompactShader->SetInt("u_MaxParticles", static_cast<int>(m_ParticleCount));
+            uint32_t compactGroups = (m_ParticleCount + 255) / 256;
+            RenderCommand::DispatchCompute(compactGroups);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+            // Read alive count from compact pass for this frame's SPH
+            uint32_t aliveAfterCompact = 0;
+            m_CounterBuffer->GetData(&aliveAfterCompact, sizeof(uint32_t), 4); // offset 4 = aliveCount
+            m_LastAliveCount = aliveAfterCompact;
+        }
 
         // ---- GL Compute 路径 ----
         PerformanceMonitor::Get().GetFluidComputeGPUTimer().Begin();
@@ -187,17 +260,20 @@ namespace Engine
         m_ParticleBuffer->Bind(0);
         m_AliveList->Bind(2);
 
+        // Use alive count for SPH dispatch
+        uint32_t sphParticleCount = lifetimeMode ? std::max(m_LastAliveCount, 1u) : m_ParticleCount;
+
         // --- SPH Pipeline ---
         float cellSize = m_Grid.GetCellSize();
         int   gridSize = static_cast<int>(m_Grid.GetGridSize());
 
         // Build spatial hash grid
-        m_Grid.Build(m_ParticleCount);
+        m_Grid.Build(sphParticleCount);
 
         // SPH Density
         m_SurfaceNormalBuffer->Bind(8);
         m_SPHShaders.DensityShader->Bind();
-        m_SPHShaders.DensityShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+        m_SPHShaders.DensityShader->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
         m_SPHShaders.DensityShader->SetFloat("u_SmoothingRadius", kp.h);
         m_SPHShaders.DensityShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
         m_SPHShaders.DensityShader->SetFloat("u_RestDensity", emitter.RestDensity);
@@ -208,7 +284,7 @@ namespace Engine
         m_SPHShaders.DensityShader->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
         m_SPHShaders.DensityShader->SetFloat("u_SurfaceTension", emitter.SurfaceTension);
 
-        uint32_t sphGroups = (m_ParticleCount + 255) / 256;
+        uint32_t sphGroups = (sphParticleCount + 255) / 256;
         RenderCommand::DispatchCompute(sphGroups);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
@@ -268,7 +344,7 @@ namespace Engine
 
             // PCISPH Init
             m_SPHShaders.PCISPHInit->Bind();
-            m_SPHShaders.PCISPHInit->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+            m_SPHShaders.PCISPHInit->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
             m_SPHShaders.PCISPHInit->SetFloat("u_SmoothingRadius", kp.h);
             m_SPHShaders.PCISPHInit->SetFloat("u_ParticleMass", emitter.ParticleMass);
             m_SPHShaders.PCISPHInit->SetFloat("u_Viscosity", emitter.Viscosity);
@@ -290,14 +366,14 @@ namespace Engine
             {
                 // Predict: x* = pos + dt * v*
                 m_SPHShaders.PCISPHPredict->Bind();
-                m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
                 m_SPHShaders.PCISPHPredict->SetFloat("u_DeltaTime", clampedDt);
                 RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
                 // Density: 在预测位置上计算密度和压力
                 m_SPHShaders.PCISPHDensity->Bind();
-                m_SPHShaders.PCISPHDensity->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                m_SPHShaders.PCISPHDensity->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
                 m_SPHShaders.PCISPHDensity->SetFloat("u_SmoothingRadius", kp.h);
                 m_SPHShaders.PCISPHDensity->SetFloat("u_ParticleMass", emitter.ParticleMass);
                 m_SPHShaders.PCISPHDensity->SetFloat("u_RestDensity", emitter.RestDensity);
@@ -313,7 +389,7 @@ namespace Engine
 
                 // Force: 压力梯度力 + 刚体边界力 → v* += a_pressure * dt
                 m_SPHShaders.PCISPHForce->Bind();
-                m_SPHShaders.PCISPHForce->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+                m_SPHShaders.PCISPHForce->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
                 m_SPHShaders.PCISPHForce->SetFloat("u_SmoothingRadius", kp.h);
                 m_SPHShaders.PCISPHForce->SetFloat("u_ParticleMass", emitter.ParticleMass);
                 m_SPHShaders.PCISPHForce->SetFloat("u_DeltaTime", clampedDt);
@@ -335,14 +411,14 @@ namespace Engine
 
             // 最终 Predict: 用最终 v* 重新计算 x*，确保 x*-v* 一致
             m_SPHShaders.PCISPHPredict->Bind();
-            m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+            m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
             m_SPHShaders.PCISPHPredict->SetFloat("u_DeltaTime", clampedDt);
             RenderCommand::DispatchCompute(sphGroups);
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
             // Apply: 将最终预测速度写回粒子（每帧都执行）
             m_SPHShaders.PCISPHApply->Bind();
-            m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+            m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
             m_SPHShaders.PCISPHApply->SetFloat("u_MaxSpeed", kp.h / clampedDt);
             RenderCommand::DispatchCompute(sphGroups);
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
@@ -352,7 +428,7 @@ namespace Engine
             // --- WCSPH path ---
             m_SurfaceNormalBuffer->Bind(8); // Akinci 表面法线（density pass 已写入）
             m_SPHShaders.ForceShader->Bind();
-            m_SPHShaders.ForceShader->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+            m_SPHShaders.ForceShader->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
             m_SPHShaders.ForceShader->SetFloat("u_SmoothingRadius", kp.h);
             m_SPHShaders.ForceShader->SetFloat("u_ParticleMass", emitter.ParticleMass);
             m_SPHShaders.ForceShader->SetFloat("u_Viscosity", emitter.Viscosity);
@@ -418,7 +494,25 @@ namespace Engine
         m_ParticleBuffer->Bind(0);
         m_AliveList->Bind(2);
 
-        // --- Simulate: integrate position/velocity + boundary ---
+        // --- Simulate: integrate position/velocity + boundary + lifetime ---
+        if (lifetimeMode)
+        {
+            // Zero counters before simulate (simulate rebuilds alive/dead lists)
+            struct CounterZero
+            {
+                uint32_t deadCount;
+                uint32_t aliveCount;
+                uint32_t emitCount;
+                uint32_t pad;
+            };
+            CounterZero zero{0, 0, 0, 0};
+            m_CounterBuffer->SetData(&zero, sizeof(CounterZero), 0);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+            m_DeadList->Bind(12);
+            m_CounterBuffer->Bind(13);
+        }
+
         glm::vec3 simGravity = emitter.PCISPHEnabled ? glm::vec3(0.0f) : emitter.Gravity;
 
         m_SimulateShader->Bind();
@@ -431,10 +525,20 @@ namespace Engine
         m_SimulateShader->SetInt("u_UseBoundary", emitter.UseBoundary ? 1 : 0);
         m_SimulateShader->SetInt("u_PCISPHMode", emitter.PCISPHEnabled ? 1 : 0);
         m_SimulateShader->SetFloat("u_MaxSpeed", kp.h / clampedDt);
+        m_SimulateShader->SetInt("u_UseLifetime", lifetimeMode ? 1 : 0);
 
         uint32_t simGroups = (m_ParticleCount + 255) / 256;
         RenderCommand::DispatchCompute(simGroups);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
+        // Lifetime: read back alive count for next frame's SPH dispatch
+        if (lifetimeMode)
+        {
+            // Use GPU counter from simulate pass (1-frame delay is acceptable)
+            uint32_t aliveCount = 0;
+            m_CounterBuffer->GetData(&aliveCount, sizeof(uint32_t), 4); // offset 4 = aliveCount
+            m_LastAliveCount = aliveCount;
+        }
 
         PerformanceMonitor::Get().GetFluidComputeGPUTimer().End();
 

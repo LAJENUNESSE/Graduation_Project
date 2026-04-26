@@ -1,7 +1,7 @@
 #type compute
 #version 430 core
 
-// 流体粒子积分 — 位置/速度更新 + 边界约束
+// 流体粒子积分 — 位置/速度更新 + 边界约束 + 寿命管理
 // SPH 力已经在之前的 pass 中写入了 velocity
 
 layout(local_size_x = 256) in;
@@ -15,7 +15,15 @@ struct GPUParticle
     vec4 params;
 };
 
-layout(std430, binding = 0) buffer ParticlePool { GPUParticle particles[]; };
+layout(std430, binding = 0)  buffer ParticlePool { GPUParticle particles[]; };
+layout(std430, binding = 2)  buffer AliveList    { uint aliveIndices[];     };
+layout(std430, binding = 12) buffer DeadList     { uint deadIndices[];      };
+layout(std430, binding = 13) buffer Counters {
+    uint deadCount;
+    uint aliveCount;
+    uint emitCount;
+    uint pad;
+};
 
 uniform float u_DeltaTime;
 uniform vec3  u_Gravity;
@@ -26,11 +34,42 @@ uniform vec3  u_BoundaryMax;
 uniform int   u_UseBoundary;
 uniform int   u_PCISPHMode;  // 0=标准WCSPH, 1=PCISPH（位置已由 apply 写入）
 uniform float u_MaxSpeed;    // CFL 速度上限 = h / dt
+uniform int   u_UseLifetime; // 0=legacy（不管理 life）, 1=lifetime 模式
 
 void main()
 {
     uint idx = gl_GlobalInvocationID.x;
     if (idx >= uint(u_ParticleCount)) return;
+
+    float life = particles[idx].posAndLife.w;
+
+    if (u_UseLifetime != 0)
+    {
+        // 已经死亡的粒子 → push dead list，跳过积分
+        if (life <= 0.0)
+        {
+            uint slot = atomicAdd(deadCount, 1u);
+            if (slot < uint(u_ParticleCount))
+                deadIndices[slot] = idx;
+            return;
+        }
+
+        // 递减寿命
+        life -= u_DeltaTime;
+
+        if (life <= 0.0)
+        {
+            // 刚死亡 → 移至墓地，push dead list
+            particles[idx].posAndLife    = vec4(1e5, 1e5, 1e5, 0.0);
+            particles[idx].velAndMaxLife.xyz = vec3(0.0);
+            uint slot = atomicAdd(deadCount, 1u);
+            if (slot < uint(u_ParticleCount))
+                deadIndices[slot] = idx;
+            return;
+        }
+
+        particles[idx].posAndLife.w = life;
+    }
 
     vec3 vel = particles[idx].velAndMaxLife.xyz;
 
@@ -83,4 +122,12 @@ void main()
 
     particles[idx].posAndLife.xyz = pos;
     particles[idx].velAndMaxLife.xyz = vel;
+
+    // Lifetime 模式下维护 alive list（供下一帧 emit 使用）
+    if (u_UseLifetime != 0)
+    {
+        uint slot = atomicAdd(aliveCount, 1u);
+        if (slot < uint(u_ParticleCount))
+            aliveIndices[slot] = idx;
+    }
 }

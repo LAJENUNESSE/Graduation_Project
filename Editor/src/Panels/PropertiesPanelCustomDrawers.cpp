@@ -668,6 +668,10 @@ namespace Engine
             changed |= ImGui::DragFloat("粒子半径", &component.ParticleRadius, 0.001f, 0.001f, 0.2f, "%.3f");
             changed |= DrawVec3Control("发射半尺寸", component.EmitExtents);
             changed |= DrawVec3Control("初始速度", component.InitialVelocity);
+            changed |= ImGui::DragFloat("发射速率 (个/秒)", &component.EmitRate, 100.0f, 0.0f, 50000.0f, "%.0f");
+            changed |= ImGui::DragFloat("粒子寿命 (秒)", &component.ParticleLifetime, 0.1f, 0.0f, 30.0f, "%.1f");
+            if (component.EmitRate > 0.0f && component.ParticleLifetime > 0.0f)
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Lifetime mode active");
 
             ImGui::Separator();
             ImGui::Text("动力学");

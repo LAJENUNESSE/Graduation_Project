@@ -30,6 +30,17 @@ const vec2 quadOffsets[6] = vec2[](
 void main()
 {
     uint particleIdx = gl_InstanceID;
+
+    // 跳过死亡粒子（life <= 0）
+    float life = particles[particleIdx].posAndLife.w;
+    if (life <= 0.0)
+    {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // off-screen
+        v_ViewPos   = vec3(0.0);
+        v_TexCoord  = vec2(0.0);
+        return;
+    }
+
     vec3 worldPos = particles[particleIdx].posAndLife.xyz;
 
     vec4 viewPos = u_View * vec4(worldPos, 1.0);

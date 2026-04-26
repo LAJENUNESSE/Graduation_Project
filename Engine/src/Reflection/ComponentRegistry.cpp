@@ -170,6 +170,12 @@ namespace Engine
                        hints.Format = "%.3f")
     ENGINE_PROPERTY(FluidEmitterComponent, EmitExtents, "发射区域半尺寸", Vec3)
     ENGINE_PROPERTY(FluidEmitterComponent, InitialVelocity, "初始速度", Vec3)
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, EmitRate, "发射速率", Float, hints.Speed = 100.0f; hints.Min = 0.0f;
+                       hints.Max    = 50000.0f;
+                       hints.Format = "%.0f")
+    ENGINE_PROPERTY_EX(FluidEmitterComponent, ParticleLifetime, "粒子寿命", Float, hints.Speed = 0.1f; hints.Min = 0.0f;
+                       hints.Max    = 30.0f;
+                       hints.Format = "%.1f")
 
     // SPH 参数
     ENGINE_PROPERTY_EX(FluidEmitterComponent, RestDensity, "静止密度", Float, hints.Speed = 1.0f; hints.Min = 1.0f;
@@ -271,6 +277,8 @@ namespace Engine
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleRadius)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, EmitExtents)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, InitialVelocity)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, EmitRate)
+    REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, ParticleLifetime)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, RestDensity)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, GasConstant)
     REGISTER_COMPONENT_PROPERTY(FluidEmitterComponent, Viscosity)

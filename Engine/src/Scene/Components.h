@@ -471,10 +471,12 @@ namespace Engine
         Preset CurrentPreset = Preset::Custom;
 
         // 发射参数
-        uint32_t  ParticleCount   = 5000;
-        float     ParticleRadius  = 0.02f;
-        glm::vec3 EmitExtents     = {0.3f, 0.3f, 0.3f};
-        glm::vec3 InitialVelocity = {0.0f, 0.0f, 0.0f};
+        uint32_t  ParticleCount    = 5000;
+        float     ParticleRadius   = 0.02f;
+        glm::vec3 EmitExtents      = {0.3f, 0.3f, 0.3f};
+        glm::vec3 InitialVelocity  = {0.0f, 0.0f, 0.0f};
+        float     EmitRate         = 0.0f; // particles/sec (0 = one-shot)
+        float     ParticleLifetime = 0.0f; // seconds       (0 = infinite)
 
         // SPH 参数
         float     RestDensity     = 1000.0f;
@@ -533,6 +535,8 @@ namespace Engine
                 emitter.ParticleRadius     = 0.018f;
                 emitter.EmitExtents        = {0.03f, 0.03f, 0.03f};
                 emitter.InitialVelocity    = {0.0f, -5.5f, 0.0f};
+                emitter.EmitRate           = 4000.0f;
+                emitter.ParticleLifetime   = 3.0f;
                 emitter.RestDensity        = 1000.0f;
                 emitter.GasConstant        = 65.0f;
                 emitter.Viscosity          = 2.0f;

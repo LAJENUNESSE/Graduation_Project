@@ -62,11 +62,14 @@ namespace Engine
 
         // GPU buffers
         Ref<ShaderStorageBuffer> m_ParticleBuffer; // binding 0
-        Ref<ShaderStorageBuffer> m_AliveList;      // binding 2 (identity: [0,1,...,N-1])
+        Ref<ShaderStorageBuffer> m_AliveList;      // binding 2
+        Ref<ShaderStorageBuffer> m_DeadList;       // binding 12
+        Ref<ShaderStorageBuffer> m_CounterBuffer;  // binding 13 {deadCount, aliveCount, emitCount, pad}
 
         // Fluid-specific shaders
         Ref<Shader> m_EmitShader;
         Ref<Shader> m_SimulateShader;
+        Ref<Shader> m_CompactShader;
 
         // SPH shaders (共享结构体)
         SPHShaderSet m_SPHShaders;
@@ -80,6 +83,10 @@ namespace Engine
         bool  m_Initialized    = false;
         bool  m_SPHInitialized = false;
         float m_TotalTime      = 0.0f;
+
+        // Lifetime mode state
+        float    m_EmitAccumulator = 0.0f;
+        uint32_t m_LastAliveCount  = 0;
 
         // PCISPH
         Ref<ShaderStorageBuffer> m_PCISPHBuffer;        // 48B/particle
