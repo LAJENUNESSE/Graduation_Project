@@ -416,10 +416,11 @@ namespace Engine
             RenderCommand::DispatchCompute(sphGroups);
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-            // Apply: 将最终预测速度写回粒子（每帧都执行）
+            // Apply: 将最终预测速度写回粒子 + 刚体穿透硬约束
             m_SPHShaders.PCISPHApply->Bind();
             m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(sphParticleCount));
             m_SPHShaders.PCISPHApply->SetFloat("u_MaxSpeed", kp.h / clampedDt);
+            m_SPHShaders.PCISPHApply->SetInt("u_RigidBodyCount", static_cast<int>(rigidBodyCount));
             RenderCommand::DispatchCompute(sphGroups);
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
         }

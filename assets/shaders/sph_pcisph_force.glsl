@@ -226,6 +226,18 @@ void main()
             vec3 rbVel = rigidBodies[rb].linearVel.xyz
                        + cross(rigidBodies[rb].angularVel.xyz, posI - rbPos);
             vec3 velRel = pcisphData[gid].predictedVelAndDensity.xyz - rbVel;
+
+            if (sdf < 0.0)
+            {
+                // Hard projection: push predicted position back to surface
+                posI += (-sdf + 0.001) * worldNormal;
+                pcisphData[gid].predictedPosAndPressure.xyz = posI;
+                // Kill inward velocity component
+                float vn = dot(velRel, worldNormal);
+                if (vn < 0.0)
+                    pcisphData[gid].predictedVelAndDensity.xyz -= vn * worldNormal;
+            }
+
             float penetration = max(0.0, u_SmoothingRadius - sdf);
             fBoundary += u_BoundaryStiffness * penetration * worldNormal
                        - u_BoundaryDamping * dot(velRel, worldNormal) * worldNormal;
@@ -253,6 +265,16 @@ void main()
             vec3 mbVel = vec3(0.0);
             float blend = clamp(meshSDFBodies[mb].invScaleAndBlend.w, 0.0, 1.0);
             vec3 velRel = pcisphData[gid].predictedVelAndDensity.xyz - mbVel;
+
+            if (sdf < 0.0)
+            {
+                posI += (-sdf + 0.001) * worldNormal;
+                pcisphData[gid].predictedPosAndPressure.xyz = posI;
+                float vn = dot(velRel, worldNormal);
+                if (vn < 0.0)
+                    pcisphData[gid].predictedVelAndDensity.xyz -= vn * worldNormal;
+            }
+
             float penetration = max(0.0, u_SmoothingRadius - sdf);
             vec3 f = u_BoundaryStiffness * penetration * worldNormal
                    - u_BoundaryDamping * dot(velRel, worldNormal) * worldNormal;
@@ -266,8 +288,9 @@ void main()
     float age     = maxLife - life;
     float warmup  = (u_WarmupTime > 0.0) ? clamp(age / u_WarmupTime, 0.0, 1.0) : 1.0;
 
-    // 压力加速度（fPressure 已是加速度量级，fBoundary 仍需除密度）
-    vec3 a_pressure = fPressure * warmup + fBoundary / densityI;
+    // 压力加速度 (fPressure 已是加速度量级)
+    // fBoundary 作为直接加速度，不除密度——保证碰撞力足够抵抗高速粒子
+    vec3 a_pressure = fPressure * warmup + fBoundary;
 
     // 安全限幅
     float maxAccel = 500.0;

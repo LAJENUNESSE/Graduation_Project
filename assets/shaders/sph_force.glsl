@@ -232,6 +232,21 @@ void main()
             vec3 rbVel = rigidBodies[rb].linearVel.xyz
                        + cross(rigidBodies[rb].angularVel.xyz, posI - rbPos);
             vec3 velRel = velI - rbVel;
+
+            if (sdf < 0.0)
+            {
+                // Hard projection: push position back to surface
+                posI += (-sdf + 0.001) * worldNormal;
+                particles[myParticleIdx].posAndLife.xyz = posI;
+                // Kill inward velocity component
+                float vn = dot(velRel, worldNormal);
+                if (vn < 0.0)
+                {
+                    velI -= vn * worldNormal;
+                    particles[myParticleIdx].velAndMaxLife.xyz = velI;
+                }
+            }
+
             float penetration = max(0.0, h - sdf);
             fBoundary += u_BoundaryStiffness * penetration * worldNormal
                        - u_BoundaryDamping * dot(velRel, worldNormal) * worldNormal;
@@ -259,6 +274,19 @@ void main()
             vec3 mbVel = vec3(0.0);
             float blend = clamp(meshSDFBodies[mb].invScaleAndBlend.w, 0.0, 1.0);
             vec3 velRel = velI - mbVel;
+
+            if (sdf < 0.0)
+            {
+                posI += (-sdf + 0.001) * worldNormal;
+                particles[myParticleIdx].posAndLife.xyz = posI;
+                float vn = dot(velRel, worldNormal);
+                if (vn < 0.0)
+                {
+                    velI -= vn * worldNormal;
+                    particles[myParticleIdx].velAndMaxLife.xyz = velI;
+                }
+            }
+
             float penetration = max(0.0, h - sdf);
             vec3 f = u_BoundaryStiffness * penetration * worldNormal
                    - u_BoundaryDamping * dot(velRel, worldNormal) * worldNormal;
@@ -272,9 +300,9 @@ void main()
     float age     = maxLife - life;
     float warmup  = (u_WarmupTime > 0.0) ? clamp(age / u_WarmupTime, 0.0, 1.0) : 1.0;
 
-    // 总 SPH 加速度 = (fPressure * warmup + fViscosity + fSurfaceTension + fBoundary) / ρ_i
-    // 仅对压力力施加 warmup，粘性力和边界力保持全强度（它们有助于稳定）
-    vec3 sphAccel = (fPressure * warmup + fViscosity + fSurfaceTension + fBoundary) / densityI;
+    // SPH 加速度 = (fPressure * warmup + fViscosity + fSurfaceTension) / ρ_i
+    // fBoundary 作为直接加速度，不除密度——保证碰撞力足够抵抗高速粒子
+    vec3 sphAccel = (fPressure * warmup + fViscosity + fSurfaceTension) / densityI + fBoundary;
 
     // 安全限幅：防止参数极端时数值爆炸
     float maxAccel = 500.0;
