@@ -325,6 +325,9 @@ namespace Engine
                 m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
                 m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
                 m_SPHShaders.PCISPHForce->SetInt("u_UsePredictedPos", 0);
+                m_SPHShaders.PCISPHForce->SetFloat3("u_BoundaryMin", emitter.BoundaryMin + emitterPos);
+                m_SPHShaders.PCISPHForce->SetFloat3("u_BoundaryMax", emitter.BoundaryMax + emitterPos);
+                m_SPHShaders.PCISPHForce->SetInt("u_UseBoundary", emitter.UseBoundary ? 1 : 0);
                 RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
             }

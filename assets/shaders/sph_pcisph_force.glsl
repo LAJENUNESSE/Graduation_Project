@@ -68,6 +68,9 @@ uniform float u_BoundaryDamping;
 uniform float u_SpikyCoeff;         // -45 / (π * h^6), CPU 预计算
 uniform float u_WarmupTime;         // SPH warm-up 时间 (秒), 新粒子逐步受 SPH 约束
 uniform int   u_UsePredictedPos;   // 0=原始位置，1=预测位置（与 grid 构建策略一致）
+uniform vec3  u_BoundaryMin;       // AABB box 边界下限（世界坐标）
+uniform vec3  u_BoundaryMax;       // AABB box 边界上限（世界坐标）
+uniform int   u_UseBoundary;       // 是否启用 box 边界力
 
 // Spiky kernel gradient: ∇W_spiky = u_SpikyCoeff * (h - |r|)² * (r/|r|)
 vec3 spikyGrad(vec3 diff, float dist, float h)
@@ -152,8 +155,35 @@ void main()
         }
     }
 
-    // --- 刚体 SDF 边界力 ---
+    // --- Box AABB 边界力 ---
     vec3 fBoundary = vec3(0.0);
+    if (u_UseBoundary != 0)
+    {
+        vec3 pv = pcisphData[gid].predictedVelAndDensity.xyz;
+        float d;
+
+        // 下界面 (法线: +x, +y, +z)
+        d = posI.x - u_BoundaryMin.x;
+        if (d < h) fBoundary.x += u_BoundaryStiffness * (h - d) - u_BoundaryDamping * pv.x;
+
+        d = posI.y - u_BoundaryMin.y;
+        if (d < h) fBoundary.y += u_BoundaryStiffness * (h - d) - u_BoundaryDamping * pv.y;
+
+        d = posI.z - u_BoundaryMin.z;
+        if (d < h) fBoundary.z += u_BoundaryStiffness * (h - d) - u_BoundaryDamping * pv.z;
+
+        // 上界面 (法线: -x, -y, -z)
+        d = u_BoundaryMax.x - posI.x;
+        if (d < h) fBoundary.x -= u_BoundaryStiffness * (h - d) + u_BoundaryDamping * pv.x;
+
+        d = u_BoundaryMax.y - posI.y;
+        if (d < h) fBoundary.y -= u_BoundaryStiffness * (h - d) + u_BoundaryDamping * pv.y;
+
+        d = u_BoundaryMax.z - posI.z;
+        if (d < h) fBoundary.z -= u_BoundaryStiffness * (h - d) + u_BoundaryDamping * pv.z;
+    }
+
+    // --- 刚体 SDF 边界力 ---
     for (int rb = 0; rb < u_RigidBodyCount; rb++)
     {
         vec3 rbPos = rigidBodies[rb].posAndType.xyz;
