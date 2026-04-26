@@ -69,6 +69,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 2483917560428173952
     TagComponent:
       Tag: 崖壁后
@@ -89,6 +93,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 9156382047519263841
     TagComponent:
       Tag: 崖壁左
@@ -109,6 +117,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 6728149305218473926
     TagComponent:
       Tag: 崖壁右
@@ -129,6 +141,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 4392817560123948571
     TagComponent:
       Tag: 导流槽
@@ -149,6 +165,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 1847293605172839456
     TagComponent:
       Tag: 接水潭底
@@ -169,6 +189,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 8561723904628173495
     TagComponent:
       Tag: 潭壁左
@@ -189,6 +213,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 3729481560321847293
     TagComponent:
       Tag: 潭壁右
@@ -209,6 +237,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 5174829360521738492
     TagComponent:
       Tag: 潭壁前
@@ -229,6 +261,10 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 7182934605271839456
     TagComponent:
       Tag: 潭壁后
@@ -249,19 +285,23 @@ Entities:
       MetallicTexturePath: ""
       RoughnessTexturePath: ""
       AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
   - Entity: 9483726150427183956
     TagComponent:
       Tag: 流体
     TransformComponent:
-      Translation: [0, 3.3, 0.5]
+      Translation: [0, 3.2, 0.2]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     FluidEmitterComponent:
       CurrentPreset: 1
       ParticleCount: 15000
       ParticleRadius: 0.025
-      EmitExtents: [0.5, 0.05, 0.15]
-      InitialVelocity: [0, -5.5, 0]
+      EmitExtents: [0.4, 0.05, 0.05]
+      InitialVelocity: [0, -1.0, -4.0]
       EmitRate: 5000
       ParticleLifetime: 3.0
       RestDensity: 1000
@@ -280,9 +320,9 @@ Entities:
       MeshSDFResolution: 28
       MeshSDFBand: 0.035
       MeshSDFBlend: 1
-      BoundaryStiffness: 9000
-      BoundaryDamping: 0.35
-      UseBoundary: true
+      BoundaryStiffness: 50000
+      BoundaryDamping: 0.5
+      UseBoundary: false
       BoundaryMin: [-2.4, -0.1, -2.4]
       BoundaryMax: [2.4, 4.5, 3.6]
       FluidColor: [0.12, 0.52, 0.98]
