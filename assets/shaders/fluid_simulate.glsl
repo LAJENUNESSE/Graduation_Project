@@ -25,6 +25,7 @@ uniform vec3  u_BoundaryMin;
 uniform vec3  u_BoundaryMax;
 uniform int   u_UseBoundary;
 uniform int   u_PCISPHMode;  // 0=标准WCSPH, 1=PCISPH（位置已由 apply 写入）
+uniform float u_MaxSpeed;    // CFL 速度上限 = h / dt
 
 void main()
 {
@@ -39,8 +40,13 @@ void main()
         vel += u_Gravity * u_DeltaTime;
     }
 
-    // 再阻尼（统一与 CUDA FluidSimulateKernel 顺序：先力后阻尼）
-    vel *= u_Damping;
+    // 帧率无关阻尼：pow(damping, dt/0.016667) 使不同帧率行为一致
+    vel *= pow(u_Damping, u_DeltaTime / 0.016667);
+
+    // CFL 速度安全限幅
+    float speed = length(vel);
+    if (speed > u_MaxSpeed)
+        vel *= u_MaxSpeed / speed;
 
     vec3 pos;
     if (u_PCISPHMode == 0)

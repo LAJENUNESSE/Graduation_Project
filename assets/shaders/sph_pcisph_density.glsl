@@ -109,4 +109,6 @@ void main()
 
     // 累加压力: P += δ * max(0, ρ* - ρ₀)
     pcisphData[gid].predictedPosAndPressure.w += u_PCISPHDelta * max(0.0, density - u_RestDensity);
+    // 压力安全上限，防止多次迭代数值发散
+    pcisphData[gid].predictedPosAndPressure.w = min(pcisphData[gid].predictedPosAndPressure.w, 50000.0);
 }

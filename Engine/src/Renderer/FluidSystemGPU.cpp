@@ -170,7 +170,7 @@ namespace Engine
         if (!m_Initialized)
             return;
 
-        float clampedDt = std::min(dt, 0.05f);
+        float clampedDt = std::min(dt, 0.008f);
         m_TotalTime += dt;
 
         // Lazy init SPH grid
@@ -278,6 +278,7 @@ namespace Engine
             m_SPHShaders.PCISPHInit->SetFloat3("u_Gravity", emitter.Gravity);
             m_SPHShaders.PCISPHInit->SetFloat("u_SurfaceTension", emitter.SurfaceTension);
             m_SPHShaders.PCISPHInit->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
+            m_SPHShaders.PCISPHInit->SetFloat("u_RestDensity", emitter.RestDensity);
             RenderCommand::DispatchCompute(sphGroups);
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
@@ -332,9 +333,17 @@ namespace Engine
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
             }
 
+            // 最终 Predict: 用最终 v* 重新计算 x*，确保 x*-v* 一致
+            m_SPHShaders.PCISPHPredict->Bind();
+            m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+            m_SPHShaders.PCISPHPredict->SetFloat("u_DeltaTime", clampedDt);
+            RenderCommand::DispatchCompute(sphGroups);
+            RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
+
             // Apply: 将最终预测速度写回粒子（每帧都执行）
             m_SPHShaders.PCISPHApply->Bind();
             m_SPHShaders.PCISPHApply->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
+            m_SPHShaders.PCISPHApply->SetFloat("u_MaxSpeed", kp.h / clampedDt);
             RenderCommand::DispatchCompute(sphGroups);
             RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
         }
@@ -421,6 +430,7 @@ namespace Engine
         m_SimulateShader->SetFloat3("u_BoundaryMax", emitterPos + emitter.BoundaryMax);
         m_SimulateShader->SetInt("u_UseBoundary", emitter.UseBoundary ? 1 : 0);
         m_SimulateShader->SetInt("u_PCISPHMode", emitter.PCISPHEnabled ? 1 : 0);
+        m_SimulateShader->SetFloat("u_MaxSpeed", kp.h / clampedDt);
 
         uint32_t simGroups = (m_ParticleCount + 255) / 256;
         RenderCommand::DispatchCompute(simGroups);

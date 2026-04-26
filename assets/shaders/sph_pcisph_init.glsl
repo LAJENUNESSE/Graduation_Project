@@ -40,6 +40,7 @@ uniform float u_CellSize;
 uniform vec3  u_Gravity;
 uniform float u_SurfaceTension;    // γ, 0=关闭
 uniform float u_SpikyCoeff;        // -45 / (π * h^6), CPU 预计算
+uniform float u_RestDensity;       // ρ₀, 用于初始化预测密度
 
 const float PI = 3.14159265359;
 
@@ -163,5 +164,5 @@ void main()
     pcisphData[gid].nonPressureAccel.xyz = a_np;
     pcisphData[gid].predictedVelAndDensity.xyz = velI + a_np * u_DeltaTime;  // v*
     pcisphData[gid].predictedPosAndPressure.w = 0.0;   // P = 0
-    pcisphData[gid].predictedVelAndDensity.w = 0.0;    // ρ* = 0 初始化
+    pcisphData[gid].predictedVelAndDensity.w = u_RestDensity;  // ρ* = ρ₀ 初始化，避免首次 Force 除以小密度爆炸
 }

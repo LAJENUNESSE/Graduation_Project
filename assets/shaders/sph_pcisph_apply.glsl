@@ -25,7 +25,8 @@ layout(std430, binding = 0) buffer ParticlePool  { GPUParticle particles[]; };
 layout(std430, binding = 1) readonly buffer PCISPHBuffer  { PCISPHData  pcisphData[]; };
 layout(std430, binding = 2) readonly buffer AliveList     { uint aliveIndices[];      };
 
-uniform int u_AliveCount;
+uniform int   u_AliveCount;
+uniform float u_MaxSpeed;
 
 void main()
 {
@@ -35,7 +36,13 @@ void main()
 
     uint myParticleIdx = aliveIndices[gid];
 
+    // 速度安全限幅 (CFL)
+    vec3 vel = pcisphData[gid].predictedVelAndDensity.xyz;
+    float speed = length(vel);
+    if (speed > u_MaxSpeed)
+        vel *= u_MaxSpeed / speed;
+
     // 将最终预测速度和预测位置写回粒子
-    particles[myParticleIdx].velAndMaxLife.xyz = pcisphData[gid].predictedVelAndDensity.xyz;
+    particles[myParticleIdx].velAndMaxLife.xyz = vel;
     particles[myParticleIdx].posAndLife.xyz    = pcisphData[gid].predictedPosAndPressure.xyz;
 }
