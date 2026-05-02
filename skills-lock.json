@@ -1,10 +1,34 @@
 {
   "version": 1,
   "skills": {
+    "citation-management": {
+      "source": "K-Dense-AI/scientific-agent-skills",
+      "sourceType": "github",
+      "skillPath": "scientific-skills/citation-management/SKILL.md",
+      "computedHash": "9aa10bcc4a0318dce29d75e369b2ef47f04aa1280b123f09f659dbf8442104e9"
+    },
+    "database-lookup": {
+      "source": "K-Dense-AI/scientific-agent-skills",
+      "sourceType": "github",
+      "skillPath": "scientific-skills/database-lookup/SKILL.md",
+      "computedHash": "713b46c83a8765015a5c878d7cb8acc637a1a81abeb3c6ddd358eefa71a3618b"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
       "computedHash": "645b891da1edbae76ab79c7b088d4e73397464f8396edaf773c0e01971ce75d6"
+    },
+    "literature-review": {
+      "source": "K-Dense-AI/scientific-agent-skills",
+      "sourceType": "github",
+      "skillPath": "scientific-skills/literature-review/SKILL.md",
+      "computedHash": "5a0385da6b6675eae659dd1b0ba7de0aa66430364dce3843753eb3339087ff54"
+    },
+    "paper-lookup": {
+      "source": "K-Dense-AI/scientific-agent-skills",
+      "sourceType": "github",
+      "skillPath": "scientific-skills/paper-lookup/SKILL.md",
+      "computedHash": "202cad4316a6cd1989a32dcb54c16b3d27d8cd4f666c54fc8903271ad10d1ae2"
     }
   }
 }

@@ -1,11 +1,14 @@
 # Build
 build/
+build_out.txt
 cmake-build-*/
 out/
 build-ninja/
 
-# Skill 目录中的 build 子目录不被上面的 build/ 规则覆盖
+# Agent skills（通过 npx skills add 安装的第三方技能）
+.agents/skills/*
 !.agents/skills/build/
+.claude/skills/*
 !.claude/skills/build/
 
 # IDE
@@ -49,6 +52,7 @@ docs/
 !docs/
 docs/*
 !docs/lua-script-editor-completion-plan-b.md
+!docs/sph-fluid-paper-reference.md
 
 # Scripts (build scripts, ignored)
 scripts/
