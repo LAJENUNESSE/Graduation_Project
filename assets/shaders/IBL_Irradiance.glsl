@@ -2,6 +2,22 @@
 #version 430 core
 layout(local_size_x = 16, local_size_y = 16) in;
 
+#ifdef VULKAN
+// 输出 irradiance map（6 个面横向排列）
+layout(set = 0, binding = 0, rgba16f) writeonly uniform image2D u_OutputIrradiance;
+// ★ 用 imageLoad 替代 texture() 采样（texture() 在某些驱动的 compute shader 中返回零）
+layout(set = 0, binding = 1, rgba8) readonly uniform image2D u_EnvAtlas;
+
+// uniform 通过 push constant 传递（Vulkan 不允许 free uniform）
+layout(push_constant) uniform PushConstants
+{
+    int u_FaceSize;     // 输出面分辨率
+    int u_EnvFaceSize;  // 环境贴图单面分辨率
+} pc;
+#define u_FaceSize    pc.u_FaceSize
+#define u_EnvFaceSize pc.u_EnvFaceSize
+
+#else
 // ★ 用 imageLoad 替代 texture() 采样（texture() 在某些驱动的 compute shader 中返回零）
 layout(rgba8, binding = 1) readonly uniform image2D u_EnvAtlas;
 uniform int u_EnvFaceSize;  // 环境贴图单面分辨率
@@ -10,6 +26,7 @@ uniform int u_EnvFaceSize;  // 环境贴图单面分辨率
 layout(rgba16f, binding = 0) writeonly uniform image2D u_OutputIrradiance;
 
 uniform int u_FaceSize;  // 输出面分辨率
+#endif
 
 const float PI = 3.14159265359;
 
