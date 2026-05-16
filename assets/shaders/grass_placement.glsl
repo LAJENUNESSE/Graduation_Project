@@ -17,14 +17,19 @@ layout(std430, binding = 0) writeonly buffer GrassPool { GrassBlade blades[]; };
 layout(std430, binding = 1) readonly  buffer HeightMap { float heights[]; };
 layout(std430, binding = 3)           buffer Counter   { uint grassCount; };
 
-uniform int   u_MaxGrass;
-uniform int   u_HeightmapWidth;
-uniform int   u_HeightmapHeight;
-uniform float u_TerrainSize;
-uniform float u_HeightScale;
-uniform float u_GrassHeight;
-uniform float u_GrassWidth;
-uniform float u_GrassWindStrength;
+// std140 UBO，避免 Vulkan 不接受散装 uniform；OpenGL 4.3 用 glBindBufferBase 绑到 binding 2 即可。
+// 顺序按字节排布；int/float 在 std140 中均为 4 字节、无 padding。
+layout(std140, binding = 2) uniform GrassPlacementParams
+{
+    int   u_MaxGrass;
+    int   u_HeightmapWidth;
+    int   u_HeightmapHeight;
+    float u_TerrainSize;
+    float u_HeightScale;
+    float u_GrassHeight;
+    float u_GrassWidth;
+    float u_GrassWindStrength;
+};
 
 // PCG hash
 uint pcg(uint v)
