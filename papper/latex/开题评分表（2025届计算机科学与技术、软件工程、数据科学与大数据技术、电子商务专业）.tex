@@ -1,0 +1,187 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{space}{xeCJK}
+\documentclass[
+]{article}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+  \setmainfont[]{Times New Roman}
+  \setsansfont[]{SimHei}
+  \setmonofont[]{SimKai}
+  \ifXeTeX
+    \usepackage{xeCJK}
+    \setCJKmainfont[]{SimSun}
+  \fi
+  \ifLuaTeX
+    \usepackage[]{luatexja-fontspec}
+    \setmainjfont[]{SimSun}
+  \fi
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{longtable,booktabs,array}
+\newcounter{none} % for unnumbered tables
+\usepackage{multirow}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\ifLuaTeX
+  \usepackage{luacolor}
+  \usepackage[soul]{lua-ul}
+\else
+  \usepackage{soul}
+  \ifXeTeX
+    % soul's \st doesn't work for CJK:
+    \usepackage{xeCJKfntef}
+    \renewcommand{\st}[1]{\sout{#1}}
+  \fi
+\fi
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+\textbf{计算机学院本科毕业论文（设计）开题答辩评分表}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1037}}
+  >{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1338}}
+  >{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1637}}
+  >{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1487}}
+  >{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1785}}
+  >{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1636}}
+  >{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1082}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\centering
+\textbf{姓名}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\textbf{学号}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\textbf{年级}
+\end{minipage} &
+\multicolumn{2}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2717} + 2\tabcolsep}@{}}{%
+\begin{minipage}[b]{\linewidth}\centering
+\end{minipage}} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\textbf{专业} & & \textbf{班级} & & \textbf{指导教师} &
+\multicolumn{2}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2717} + 2\tabcolsep}@{}}{%
+} \\
+\multicolumn{2}{@{}>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2374} + 2\tabcolsep}}{%
+论文(设计)题目} &
+\multicolumn{5}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.7626} + 8\tabcolsep}@{}}{%
+} \\
+\multicolumn{2}{@{}>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2374} + 2\tabcolsep}}{%
+\textbf{评价内容}} &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+\textbf{评价标准}} & \textbf{得分} \\
+\multicolumn{2}{@{}>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2374} + 2\tabcolsep}}{%
+\multirow{4}{=}{\centering\arraybackslash \textbf{设计方案}
+
+\textbf{（30分）}}} &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+优秀（30-27分）：能提出最优的技术方案，考虑安全、健康、法律、文化以及环境等因素，可行性分析论证充分，论证过程完善。}
+& \multirow{4}{=}{\centering\arraybackslash } \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+良好（26-23分）：能提出合理的技术方案，考虑安全、健康、法律、文化以及环境等因素，可行性分析论证充分，过程完整。} \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+及格（22-18）：能提出合理的技术方案，考虑安全、健康、法律、文化以及环境等因素，进行了可行性分析论证。} \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+不及格（17-0）：无技术方案的合理性和可行性论证。} \\
+\multicolumn{2}{@{}>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2374} + 2\tabcolsep}}{%
+\multirow{4}{=}{\centering\arraybackslash \textbf{沟通表达}
+
+\textbf{（30分）}}} &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+优秀（30-27分）：开题报告和文献综述观点鲜明、条理清晰、语言准确、格式规范，答辩陈述清晰，回答问题对答如流。}
+& \multirow{4}{=}{\centering\arraybackslash } \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+良好（26-23）：开题报告和文献综述层次清晰、文字通顺、格式正确，答辩陈述清晰，回答问题准确。} \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+及格（22-18）：开题报告和文献综述结构合理、文字通顺、格式错误少，答辩简洁，能够回答问题。} \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+不及格（17-0）：开题报告和文献综述逻辑不清，格式错误多，陈述不清，不能回答提问。} \\
+\multicolumn{2}{@{}>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2374} + 2\tabcolsep}}{%
+\multirow{4}{=}{\centering\arraybackslash \textbf{自主学习}
+
+\textbf{（40分）}}} &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+优秀（40-36分）：选题涉及技术前沿，自主学习了大量前沿知识和技术，设计方案中很好的运用了新知识新技术。}
+& \multirow{4}{=}{\centering\arraybackslash } \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+良好（35-30）：选题较新颖，结合选题学习了一些新知识新技术，设计方案运用了新知识新技术。} \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+及格（29-24）：选题有新意，结合选题学习了新知识新技术，设计方案中运用了新知识新技术。} \\
+& &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.6544} + 6\tabcolsep}}{%
+不及格（23-0）：选题新意不足，自学能力一般，设计方案较少运用新知识技术。} \\
+\multicolumn{6}{@{}>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.8918} + 10\tabcolsep}}{%
+\textbf{综合得分}} & \\
+\multicolumn{2}{@{}>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.2374} + 2\tabcolsep}}{%
+\textbf{开题答辩小组意见}} &
+\multicolumn{5}{>{\centering\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.7626} + 8\tabcolsep}@{}}{%
+\textbf{\hl{（评语）：}}
+
+评审小组教师签字：\hl{小组成员签名}} \\
+\end{longtable}
+}
+
+\end{document}

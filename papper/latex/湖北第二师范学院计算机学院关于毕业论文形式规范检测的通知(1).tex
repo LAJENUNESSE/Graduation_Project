@@ -1,0 +1,112 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{space}{xeCJK}
+\documentclass[
+]{article}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+  \setmainfont[]{Times New Roman}
+  \setsansfont[]{SimHei}
+  \setmonofont[]{SimKai}
+  \ifXeTeX
+    \usepackage{xeCJK}
+    \setCJKmainfont[]{SimSun}
+  \fi
+  \ifLuaTeX
+    \usepackage[]{luatexja-fontspec}
+    \setmainjfont[]{SimSun}
+  \fi
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+\textbf{关于毕业论文形式规范检测的通知}
+
+毕业论文（设计）是实现学生培养目标的重要教学环节，其质量是衡量教育教学水平、认定学生毕业和学位资格、教学评估的重要依据。毕业论文是形式和内容的统一，毕业论文撰写需遵循学院撰写规范及相关国家标准，教育部要求对本科毕业论文（设计）进行抽检，形式规范也是重要的抽检评议要素。
+
+为培养学生学术规范意识，提升毕业论文规范性，经研究，学院决定继续在2025届毕业设计(论文)工作中开展形式规范符合性检测。凡本学期申请学位的毕业论文在提交导师初审前，即应自行检测、按要求修改错误直至合格并提交``检测合格证明''，答辩及归档等后续环节如有修改，均应重新检测并提交``检测合格证明''，学院会对最终版本进行批量统一检测。现将有关事项通知如下：
+
+一、指导检测依据
+
+\textbf{《计算机学院本科生毕业论文模板》}
+
+《学位论文编写规则》（GB/T7713.1-2006）
+
+《科技文献的章节编号方法》(CY/T 35-2001)
+
+《信息与文献-参考文献著录规则》（GB7714-2015）
+
+《标点符号用法》（GB15834-2011）
+
+《出版物上数字用法》（GB15835-2011）
+
+二、系统操作
+
+系统网址：https://hue.lun51.com/jsj
+
+学生登录：账号为学号，默认密码为姓氏拼音首字母大写加上学号后6位，如张三的学号是2020135247，则默认密码为Z135247（Z是姓的首字母大写，135247是学号后六位），首次登录后请修改密码。
+
+使用方法：学生登录后点击右上角的``提交论文''，选择对应的模板后上传论文即可。如果检测人数较多，系统会自动排队，可以在``检测报告''菜单下载结果。检测合格后，在``检测报告''页面点击``检测合格证明''，下载PDF证明并打印交学院。
+
+每个账号可多次检测一篇论文，首次检测时报告会标明错误内容及位置，同学们可依据报告进行修改；后续检测可查看论文留存错误总数及是否合格。请勿用别人的账号检测，以影响同学检测。
+
+四、检测结果认定及处理
+
+论文规范性自动检测系统是毕业论文的辅助检查手段，检测结果可以作为毕业论文形式审查参考依据。毕业论文原则上不应该存在形式规范错误，学院现以差错率低于万分之五为合格，即每万字留存错误不超过5个为合格。
+
+系统会以提醒的形式指出论文中存疑的部分，提醒不算错误，不计入差错率。同学们应根据具体情况，如系统提醒的问题属实，应进行修改。
+
+五、其他事项
+
+1.``学位论文格式检测机器人-论无忧''系统可以自动分析学位论文格式是否符合学校的撰写规范以及相关的国家标准，支持文本、插图、表格、代码、算法和参考文献等上百个检测项，并将发现的不符合项以批注的形式在原稿中自动标注，可用于指导学生修订相关规范性错误。
+
+2.平台不收录论文，检测报告在平台最多只保留4天，请及时下载。报告下载后学生也可以在平台上实时手动删除。
+
+3.如对检测结果有疑问，请在系统中``检测报告''页面点``订单咨询''，平台客服每天09:00-23:00会逐一解答，常见问题及时回复，疑难问题最迟不超过当天回复。平台使用过程中有任何问题，请咨询官网平台客服，若平台无法解决，可向负责老师反馈。
+
+4.导师和学生如有建议或意见，欢迎向学院反馈。
+
+\end{document}

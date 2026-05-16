@@ -1,0 +1,204 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{space}{xeCJK}
+\documentclass[
+]{article}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+  \setmainfont[]{Times New Roman}
+  \setsansfont[]{SimHei}
+  \setmonofont[]{SimKai}
+  \ifXeTeX
+    \usepackage{xeCJK}
+    \setCJKmainfont[]{SimSun}
+  \fi
+  \ifLuaTeX
+    \usepackage[]{luatexja-fontspec}
+    \setmainjfont[]{SimSun}
+  \fi
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{longtable,booktabs,array}
+\newcounter{none} % for unnumbered tables
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\ifLuaTeX
+  \usepackage{luacolor}
+  \usepackage[soul]{lua-ul}
+\else
+  \usepackage{soul}
+  \ifXeTeX
+    % soul's \st doesn't work for CJK:
+    \usepackage{xeCJKfntef}
+    \renewcommand{\st}[1]{\sout{#1}}
+  \fi
+\fi
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+\textbf{计算机学院本科毕业论文（设计）课程目标完成情况说明}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.1037}}
+  >{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.1190}}
+  >{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.1338}}
+  >{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.1785}}
+  >{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.1785}}
+  >{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.2866}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\centering
+\textbf{姓名}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\textbf{学号}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\textbf{年级}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\textbf{专业} & & \textbf{班级} & & \textbf{指导教师} & \\
+\multicolumn{2}{@{}>{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.2226} + 2\tabcolsep}}{%
+论文(设计)题目} &
+\multicolumn{4}{>{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{0.7774} + 6\tabcolsep}@{}}{%
+} \\
+\multicolumn{6}{@{}>{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{1.0000} + 10\tabcolsep}@{}}{%
+一、阐述说明在选题需求分析中，考虑了安全、健康、法律、文化及环境等因素，设计的技术方案合理并在毕业设计系统中实现该方案。} \\
+\multicolumn{6}{@{}>{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{1.0000} + 10\tabcolsep}@{}}{%
+\textbf{二、}阐述说明在毕业设计系统的设计和开发过程中，采取了何种措施，如何降低系统的功耗，如何提升系统的性能和效率。} \\
+\multicolumn{6}{@{}>{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{1.0000} + 10\tabcolsep}@{}}{%
+三、阐述说明在毕业设计系统的设计和开发过程中，如何保障系统和用户的安全稳定，如何减少系统对环境的不良影响。
+
+四、阐述说明在论文及其相关设计文档（包括但不限于开题报告、文献综述、论文、代码、答辩PPT）中，进行了有效沟通与交流。} \\
+\multicolumn{6}{@{}>{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{1.0000} + 10\tabcolsep}@{}}{%
+五、阐述说明在毕业设计系统的设计与开发过程中，如何运用项目管理知识和经济决策方法，如何使用项目管理工具和方法对时间、成本、效益等进行有效管理。} \\
+\multicolumn{6}{@{}>{\centering\arraybackslash}p{(\linewidth - 10\tabcolsep) * \real{1.0000} + 10\tabcolsep}@{}}{%
+六、阐述说明学习了哪些新技术、新知识，如何将新技术新知识应用于毕业设计系统的设计与开发。} \\
+\end{longtable}
+}
+
+填表要求、举例：
+
+要求：阐述在毕业论文（设计）实践中，如何完成课程目标内容。主要从毕业论文中找到证据，建议按照课程目标完善论文内容。也可以从开题报告、文献综述、毕业设计系统（硬件设计、代码、算法模型）等过程性文档或设计成果中找到证据，证明完成了课程目标要求。
+
+\begin{enumerate}
+\item
+  阐述说明在选题需求分析中，考虑了安全、健康、法律、文化及环境等因素，技术方案设计合理并在毕业设计系统中实现该方案。
+\end{enumerate}
+
+回答举例：
+
+在毕业论文\hl{3.1.2节（具体章节）}中，从安全、健康、法律、文化及环境等因素对研究方案进行了论证。
+
+在开题报告的\hl{1.2.1节（具体章节）}中，从安全、健康、法律、文化及环境等因素分析了以往技术解决方案的优缺点，提出了本次设计采取的技术方案。
+
+在研发的毕业设计系统\hl{******中}，研发的功能包含\hl{******}，进而实现了该技术方案。
+
+\begin{enumerate}
+\setcounter{enumi}{1}
+\item
+  阐述说明在毕业设计系统的设计和开发过程中，采取了何种措施，如何降低系统的功耗，如何提升系统的性能和效率。
+\end{enumerate}
+
+回答举例：
+
+在论文的\hl{3.4.1节（具体章节）}中，分析了系统的功耗、性能需求\hl{（具体描述）}。
+
+在论文的\hl{3.4.1节（具体章节）}采用\hl{***技术或***算法}，实现了将功耗降至\hl{***}，性能提升至\hl{***}。
+
+三、阐述说明在毕业设计系统的设计和开发过程中，如何保障系统和用户的安全稳定，如何减少系统对环境的不良影响。
+
+回答举例：
+
+在研发的毕业设计系统中有相应的安全模块，论文中\hl{5.1.2节（具体章节）}中有系统截图、源代码，描述了采用了\hl{加密的技术手段或算法}，保障系统的安全稳定。
+
+在\hl{论文1.1.2节中，}有对本设计方案的节能减排的需求分析。并在\hl{论文3.1.2节中，}有具体的措施如\hl{******}。\hl{在论文6.1.2节中，提出了减排的优化措施。}
+
+四、阐述说明在论文及其相关设计文档（包括但不限于开题报告、文献综述、论文、代码、答辩PPT）中，进行了有效沟通与交流。
+
+回答举例：
+
+在开题报告\hl{1.2节（具体章节）中，表述国际国内研究现状、发展趋势和研究热点。}
+
+在文献综述报告\hl{2.1节（具体章节）中，详细阐述国际国内研究现状、技术发展脉络、趋势和研究热点。}
+
+开发过程中\hl{采取了****措施规范代码，}
+
+\hl{论文经多次修改，语言表达通顺，格式按照******要求严格执行。}
+
+五、阐述说明在毕业设计系统的设计与开发过程中，如何运用项目管理知识和经济决策方法，如何使用项目管理工具和方法对时间、成本、效益等进行有效管理。
+
+回答举例：
+
+在\hl{论文的1.3.1节（具体章节）中，通过思维导图理清了毕业设计的工作内容}。
+
+在论文的\hl{1.4.2节（具体章节）使用了甘特图对毕业设计的时间安排进行了管理（证据链），使用***对开发成本进行管理，使用***对效益进行管控。}
+
+在毕业设计系统功能开发过程中使用了\hl{（PingCode或Jira或Worktile或Trello或Gitee等，列出具体使用的项目管理软件）对项目进行了***、***方面的管理，在论文的（具体章节或图示）可以体现。}
+
+六、阐述说明学习了哪些新技术、新知识，如何将新技术新知识应用于毕业设计系统的设计与开发。
+
+回答举例：
+
+选题为图像识别领域中的目标检测，自主学习了\hl{目标检测算法的理论，如R-CNN、SPP-Net、Fast
+R-CNN、Faster
+R-CNN和FPN，还包括YOLO、SSD和RetinaNet算法等，还学习了常用的目标检测方法。}
+
+基于以上新知识新技术的学习，在论文\hl{5.3.1节（具体章节）中，毕业论文（设计）提出一种基于弱监督学习的开放世界目标检测方法，包括基于区域的知识蒸馏、基于伪标注框的弱图像级监督和改进的权重传递方式。}
+
+\hl{通过构造模型进行实验测试，在论文5.3.3节（具体章节）中，使用了***新知识新技术构造模型，实现了***功能。实验结果证明了所提方法在多个数据集上的有效性和泛化能力。}
+
+\end{document}
