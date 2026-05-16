@@ -9,6 +9,7 @@
 #include <vector>
 
 struct GLFWwindow;
+struct ImDrawData;
 
 namespace Engine
 {
@@ -73,6 +74,9 @@ namespace Engine
         void CreateCommandPool();
         void CreateSyncObjects();
         void CreateImGuiRenderPass();
+        void CreateImGuiFramebuffers();
+        void DestroyImGuiFramebuffers();
+        void RecordImGuiPass(VkCommandBuffer cmd, uint32_t imageIndex);
         void CreateDebugDrawResources();
         void DestroyDebugDrawResources();
 
@@ -145,8 +149,10 @@ namespace Engine
         bool m_FramebufferResized = false;
 
         // ImGui render pass (created lazily)
-        VkRenderPass  m_ImGuiRenderPass = VK_NULL_HANDLE;
-        SwapchainInfo m_SwapchainInfo;
+        VkRenderPass               m_ImGuiRenderPass = VK_NULL_HANDLE;
+        std::vector<VkFramebuffer> m_ImGuiFramebuffers;
+        ImDrawData*                m_PendingImGuiDrawData = nullptr;
+        SwapchainInfo              m_SwapchainInfo;
 
         static VulkanContext* s_Instance;
 

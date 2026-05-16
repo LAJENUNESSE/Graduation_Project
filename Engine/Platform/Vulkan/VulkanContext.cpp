@@ -15,6 +15,9 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include <imgui.h>
+#include <imgui_impl_vulkan.h>
+
 #include <algorithm>
 #include <set>
 #include <string>
@@ -115,6 +118,7 @@ namespace Engine
         CreateCommandPool();
         CreateSyncObjects();
         CreateImGuiRenderPass();
+        CreateImGuiFramebuffers();
         CreateDebugDrawResources();
 
         s_Instance = this;
@@ -285,12 +289,12 @@ namespace Engine
             vkCmdClearColorImage(cmd, m_SwapchainImages[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor,
                                  1, &range);
 
-            // Transition: TRANSFER_DST -> PRESENT_SRC
+            // Transition: TRANSFER_DST -> COLOR_ATTACHMENT_OPTIMAL (handed off to ImGui pass)
             {
                 VkImageMemoryBarrier barrier{};
                 barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
                 barrier.oldLayout                       = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                barrier.newLayout                       = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+                barrier.newLayout                       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
                 barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
                 barrier.image                           = m_SwapchainImages[imageIndex];
@@ -300,10 +304,10 @@ namespace Engine
                 barrier.subresourceRange.baseArrayLayer = 0;
                 barrier.subresourceRange.layerCount     = 1;
                 barrier.srcAccessMask                   = VK_ACCESS_TRANSFER_WRITE_BIT;
-                barrier.dstAccessMask                   = 0;
+                barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0,
-                                     nullptr, 0, nullptr, 1, &barrier);
+                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                     0, 0, nullptr, 0, nullptr, 1, &barrier);
             }
 
             if (hasPendingDraws)
@@ -318,6 +322,9 @@ namespace Engine
         }
 
         m_PendingDrawCalls.clear();
+
+        // ImGui pass: 始终录制（drawData 为空时只做 layout transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR）
+        RecordImGuiPass(cmd, imageIndex);
 
         commandBuffer.End();
 
@@ -784,7 +791,7 @@ namespace Engine
         desc.LoadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR;
         desc.StoreOp       = VK_ATTACHMENT_STORE_OP_STORE;
         desc.InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        desc.FinalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        desc.FinalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         m_DebugRenderPass = VulkanRenderPass::CreateColorOnly(m_Device, desc);
 
@@ -979,6 +986,7 @@ namespace Engine
 
         vkDeviceWaitIdle(m_Device);
         DestroyDebugDrawResources();
+        DestroyImGuiFramebuffers();
         CleanupSwapchain();
         CreateSwapchain();
 
@@ -988,16 +996,77 @@ namespace Engine
             m_ImGuiRenderPass = VK_NULL_HANDLE;
         }
         CreateImGuiRenderPass();
+        CreateImGuiFramebuffers();
         CreateDebugDrawResources();
+
+        // 防御：若 swapchain image count 变化，同步 ImGui backend
+        ImGui_ImplVulkan_SetMinImageCount(static_cast<uint32_t>(m_SwapchainImages.size()));
     }
 
     // =========================================================================
     // Full cleanup
     // =========================================================================
 
-    void VulkanContext::RenderImGui(void* /*drawData*/)
+    void VulkanContext::RenderImGui(void* drawData)
     {
-        // Stub — ImGui Vulkan rendering will be implemented in Phase 6
+        // 仅缓存 drawData 指针；实际录制在 SwapBuffers 中通过 RecordImGuiPass 完成
+        m_PendingImGuiDrawData = static_cast<ImDrawData*>(drawData);
+    }
+
+    void VulkanContext::RecordImGuiPass(VkCommandBuffer cmd, uint32_t imageIndex)
+    {
+        if (m_ImGuiRenderPass == VK_NULL_HANDLE || imageIndex >= m_ImGuiFramebuffers.size())
+            return;
+
+        VkRenderPassBeginInfo bi{};
+        bi.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        bi.renderPass        = m_ImGuiRenderPass;
+        bi.framebuffer       = m_ImGuiFramebuffers[imageIndex];
+        bi.renderArea.offset = {0, 0};
+        bi.renderArea.extent = m_SwapchainExtent;
+        bi.clearValueCount   = 0; // LOAD_OP_LOAD
+
+        vkCmdBeginRenderPass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
+        if (m_PendingImGuiDrawData && m_PendingImGuiDrawData->CmdListsCount > 0)
+            ImGui_ImplVulkan_RenderDrawData(m_PendingImGuiDrawData, cmd);
+        vkCmdEndRenderPass(cmd);
+
+        m_PendingImGuiDrawData = nullptr;
+    }
+
+    void VulkanContext::CreateImGuiFramebuffers()
+    {
+        DestroyImGuiFramebuffers();
+        if (m_ImGuiRenderPass == VK_NULL_HANDLE || m_SwapchainImageViews.empty())
+            return;
+
+        m_ImGuiFramebuffers.resize(m_SwapchainImageViews.size(), VK_NULL_HANDLE);
+        for (size_t i = 0; i < m_SwapchainImageViews.size(); ++i)
+        {
+            VkImageView attachments[] = {m_SwapchainImageViews[i]};
+
+            VkFramebufferCreateInfo fb{};
+            fb.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            fb.renderPass      = m_ImGuiRenderPass;
+            fb.attachmentCount = 1;
+            fb.pAttachments    = attachments;
+            fb.width           = m_SwapchainExtent.width;
+            fb.height          = m_SwapchainExtent.height;
+            fb.layers          = 1;
+
+            VkResult r = vkCreateFramebuffer(m_Device, &fb, nullptr, &m_ImGuiFramebuffers[i]);
+            ENGINE_CORE_RELEASE_ASSERT(r == VK_SUCCESS, "Failed to create ImGui framebuffer!");
+        }
+    }
+
+    void VulkanContext::DestroyImGuiFramebuffers()
+    {
+        for (VkFramebuffer fb : m_ImGuiFramebuffers)
+        {
+            if (fb != VK_NULL_HANDLE)
+                vkDestroyFramebuffer(m_Device, fb, nullptr);
+        }
+        m_ImGuiFramebuffers.clear();
     }
 
     VkCommandBuffer VulkanContext::BeginSingleTimeCommands()
@@ -1060,6 +1129,8 @@ namespace Engine
             vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
 
         DestroyDebugDrawResources();
+
+        DestroyImGuiFramebuffers();
 
         if (m_ImGuiRenderPass != VK_NULL_HANDLE)
             vkDestroyRenderPass(m_Device, m_ImGuiRenderPass, nullptr);
