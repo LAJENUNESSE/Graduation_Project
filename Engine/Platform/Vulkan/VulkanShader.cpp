@@ -11,6 +11,10 @@
 #include <shaderc/shaderc.hpp>
 #endif
 
+#if defined(ENGINE_VULKAN_HAS_SPIRV_CROSS)
+#include <spirv_cross/spirv_cross.hpp>
+#endif
+
 namespace Engine
 {
 
@@ -215,6 +219,8 @@ namespace Engine
         }
 
         ENGINE_CORE_RELEASE_ASSERT(!m_StageSpirv.empty(), "Vulkan shader compiled to empty SPIR-V outputs");
+
+        ReflectFromSpirv();
 #else
         (void)stageSources;
         (void)debugName;
@@ -224,6 +230,107 @@ namespace Engine
         {
             warnedNoShaderc = true;
             ENGINE_CORE_WARN("[Vulkan] shaderc unavailable; VulkanShader runtime GLSL->SPIR-V compile is disabled");
+        }
+#endif
+    }
+
+    void VulkanShader::ReflectFromSpirv()
+    {
+        m_ReflectedBindings.clear();
+        m_ReflectedPushConstants.clear();
+
+#if defined(ENGINE_VULKAN_HAS_SPIRV_CROSS)
+        auto stageToVk = [](const std::string& stage) -> VkShaderStageFlags
+        {
+            if (stage == "vertex")
+                return VK_SHADER_STAGE_VERTEX_BIT;
+            if (stage == "fragment")
+                return VK_SHADER_STAGE_FRAGMENT_BIT;
+            if (stage == "compute")
+                return VK_SHADER_STAGE_COMPUTE_BIT;
+            return 0;
+        };
+
+        // 同一个 (set, binding) 可能在多个 stage 共享（vertex + fragment 等），按 key 合并 stage flags
+        struct Key
+        {
+            uint32_t set;
+            uint32_t binding;
+            bool     operator==(const Key& o) const { return set == o.set && binding == o.binding; }
+        };
+        struct KeyHash
+        {
+            size_t operator()(const Key& k) const noexcept { return (static_cast<size_t>(k.set) << 32) ^ k.binding; }
+        };
+        std::unordered_map<Key, ReflectedBinding, KeyHash> mergedBindings;
+        VkShaderStageFlags                                 pushConstantStages = 0;
+        uint32_t                                           pushConstantSize   = 0;
+
+        for (const auto& [stage, spirv] : m_StageSpirv)
+        {
+            if (spirv.empty())
+                continue;
+
+            const VkShaderStageFlags stageBit = stageToVk(stage);
+            try
+            {
+                spirv_cross::Compiler        compiler(spirv);
+                spirv_cross::ShaderResources res = compiler.get_shader_resources();
+
+                auto addBinding = [&](const spirv_cross::Resource& r, VkDescriptorType type)
+                {
+                    const spirv_cross::SPIRType& t = compiler.get_type(r.type_id);
+                    Key                          key{compiler.get_decoration(r.id, spv::DecorationDescriptorSet),
+                            compiler.get_decoration(r.id, spv::DecorationBinding)};
+                    auto&                        b = mergedBindings[key];
+                    b.Set                          = key.set;
+                    b.Binding                      = key.binding;
+                    b.Type                         = type;
+                    b.Count                        = t.array.empty() ? 1u : t.array[0];
+                    b.Stages |= stageBit;
+                    if (b.Name.empty())
+                        b.Name = r.name;
+                };
+
+                for (const auto& r : res.uniform_buffers)
+                    addBinding(r, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+                for (const auto& r : res.storage_buffers)
+                    addBinding(r, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                for (const auto& r : res.sampled_images)
+                    addBinding(r, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                for (const auto& r : res.storage_images)
+                    addBinding(r, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+                for (const auto& r : res.separate_images)
+                    addBinding(r, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+                for (const auto& r : res.separate_samplers)
+                    addBinding(r, VK_DESCRIPTOR_TYPE_SAMPLER);
+
+                // Push constants：取所有 stage 中最大 size 作为 range 总长，stage flags 合并
+                for (const auto& pc : res.push_constant_buffers)
+                {
+                    const spirv_cross::SPIRType& t    = compiler.get_type(pc.base_type_id);
+                    const uint32_t               size = static_cast<uint32_t>(compiler.get_declared_struct_size(t));
+                    pushConstantSize                  = std::max(pushConstantSize, size);
+                    pushConstantStages |= stageBit;
+                }
+            }
+            catch (const std::exception& e)
+            {
+                ENGINE_CORE_ERROR("[Vulkan] SPIR-V reflection failed for '{}' stage '{}': {}", m_Name, stage, e.what());
+            }
+        }
+
+        m_ReflectedBindings.reserve(mergedBindings.size());
+        for (auto& [_, b] : mergedBindings)
+            m_ReflectedBindings.push_back(std::move(b));
+
+        if (pushConstantSize > 0)
+        {
+            ReflectedPushConstant pc{};
+            pc.Offset = 0;
+            pc.Size   = pushConstantSize;
+            pc.Stages = pushConstantStages;
+            m_ReflectedPushConstants.push_back(pc);
         }
 #endif
     }

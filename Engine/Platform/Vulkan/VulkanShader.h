@@ -42,11 +42,34 @@ namespace Engine
         // 懒创建并缓存 VkShaderModule（按 stage）；调用方不拥有句柄，由 VulkanShader 析构时统一销毁
         VkShaderModule GetOrCreateShaderModule(VkDevice device, const std::string& stage);
 
+        // 反射：descriptor set binding 信息（从 SPIR-V 提取）
+        struct ReflectedBinding
+        {
+            uint32_t           Set     = 0;
+            uint32_t           Binding = 0;
+            VkDescriptorType   Type    = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+            uint32_t           Count   = 1;
+            VkShaderStageFlags Stages  = 0;
+            std::string        Name;
+        };
+
+        // 反射：push constant range（从 SPIR-V 提取）
+        struct ReflectedPushConstant
+        {
+            uint32_t           Offset = 0;
+            uint32_t           Size   = 0;
+            VkShaderStageFlags Stages = 0;
+        };
+
+        const std::vector<ReflectedBinding>&      GetReflectedBindings() const { return m_ReflectedBindings; }
+        const std::vector<ReflectedPushConstant>& GetReflectedPushConstants() const { return m_ReflectedPushConstants; }
+
     private:
         void CompileFromFile(const std::string& filepath);
         void CompileFromSourceMap(const std::unordered_map<std::string, std::string>& stageSources,
                                   const std::string&                                  debugName);
         void DestroyShaderModules();
+        void ReflectFromSpirv();
 
     private:
         std::string                                            m_Name;
@@ -54,6 +77,8 @@ namespace Engine
         std::unordered_map<std::string, std::vector<uint32_t>> m_StageSpirv;
         std::unordered_map<std::string, VkShaderModule>        m_StageModules;
         VkDevice                                               m_ModuleDevice = VK_NULL_HANDLE;
+        std::vector<ReflectedBinding>                          m_ReflectedBindings;
+        std::vector<ReflectedPushConstant>                     m_ReflectedPushConstants;
     };
 
 } // namespace Engine

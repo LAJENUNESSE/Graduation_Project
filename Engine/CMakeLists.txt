@@ -133,6 +133,27 @@ if(ENGINE_ENABLE_VULKAN)
     else()
         message(WARNING "[Engine] Vulkan::shaderc_combined not found; VulkanShader runtime GLSL->SPIR-V compile disabled")
     endif()
+
+    # spirv-cross：从 SPIR-V 反射 descriptor binding / push constant 信息（Phase 7 compute 必需）
+    # 优先用 Vulkan SDK 自带的 spirv-cross（避免 vcpkg 网络下载），fallback 走 vcpkg 提供的 CONFIG 包
+    find_library(SPIRV_CROSS_CORE_LIB
+        NAMES spirv-cross-core
+        HINTS "$ENV{VULKAN_SDK}/Lib" "$ENV{VULKAN_SDK}/lib"
+    )
+    if(SPIRV_CROSS_CORE_LIB)
+        target_link_libraries(Engine PRIVATE ${SPIRV_CROSS_CORE_LIB})
+        target_compile_definitions(Engine PRIVATE ENGINE_VULKAN_HAS_SPIRV_CROSS=1)
+        message(STATUS "[Engine] Vulkan SPIR-V reflection enabled via Vulkan SDK spirv-cross-core: ${SPIRV_CROSS_CORE_LIB}")
+    else()
+        find_package(spirv_cross_core CONFIG QUIET)
+        if(spirv_cross_core_FOUND)
+            target_link_libraries(Engine PRIVATE spirv-cross-core)
+            target_compile_definitions(Engine PRIVATE ENGINE_VULKAN_HAS_SPIRV_CROSS=1)
+            message(STATUS "[Engine] Vulkan SPIR-V reflection enabled via vcpkg spirv-cross-core")
+        else()
+            message(WARNING "[Engine] spirv-cross-core not found; VulkanShader reflection disabled (compute pipeline will not work)")
+        endif()
+    endif()
 endif()
 
 target_include_directories(Engine
