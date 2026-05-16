@@ -7,12 +7,26 @@
 // u_Mode=2: Propagate — add BlockSums to CellStart (skip block 0)
 layout(local_size_x = 256) in;
 
+#ifdef VULKAN
+layout(std430, set = 0, binding = 5) buffer CellStart { uint cellStart[]; };
+layout(std430, set = 0, binding = 6) buffer CellCount { uint cellCount[]; };
+layout(std430, set = 0, binding = 4) buffer BlockSums { uint blockSums[]; };
+
+layout(push_constant) uniform PushConstants
+{
+    int u_Mode;
+    int u_N;
+} pc;
+#define u_Mode pc.u_Mode
+#define u_N    pc.u_N
+#else
 layout(std430, binding = 5) buffer CellStart { uint cellStart[]; };
 layout(std430, binding = 6) buffer CellCount { uint cellCount[]; };
 layout(std430, binding = 4) buffer BlockSums { uint blockSums[]; };
 
 uniform int u_Mode;
 uniform int u_N;
+#endif
 
 shared uint temp[512];
 
