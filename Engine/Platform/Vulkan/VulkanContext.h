@@ -46,6 +46,9 @@ namespace Engine
         VkDevice         GetDevice() const { return m_Device; }
         uint32_t         GetGraphicsQueueFamily() const { return m_GraphicsQueueFamily; }
         VkQueue          GetGraphicsQueue() const { return m_GraphicsQueue; }
+        uint32_t         GetComputeQueueFamily() const { return m_ComputeQueueFamily; }
+        VkQueue          GetComputeQueue() const { return m_ComputeQueue; }
+        bool             HasDedicatedComputeQueue() const { return m_ComputeQueueFamily != m_GraphicsQueueFamily; }
         VkRenderPass     GetImGuiRenderPass() const { return m_ImGuiRenderPass; }
 
         // Forward-declared; swapchain info for ImGui
@@ -99,8 +102,10 @@ namespace Engine
         // Queues
         VkQueue  m_GraphicsQueue       = VK_NULL_HANDLE;
         VkQueue  m_PresentQueue        = VK_NULL_HANDLE;
+        VkQueue  m_ComputeQueue        = VK_NULL_HANDLE;
         uint32_t m_GraphicsQueueFamily = 0;
         uint32_t m_PresentQueueFamily  = 0;
+        uint32_t m_ComputeQueueFamily  = 0;
 
         // Swapchain
         VkSwapchainKHR           m_Swapchain = VK_NULL_HANDLE;

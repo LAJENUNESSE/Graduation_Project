@@ -495,16 +495,34 @@ namespace Engine
             std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
             vkGetPhysicalDeviceQueueFamilyProperties(dev, &queueFamilyCount, queueFamilies.data());
 
-            bool     hasGraphics = false, hasPresent = false;
-            uint32_t gfxFamily = 0, presentFamily = 0;
+            bool     hasGraphics = false, hasPresent = false, hasCompute = false;
+            uint32_t gfxFamily = 0, presentFamily = 0, computeFamily = 0;
+            bool     computeIsDedicated = false; // 优先 async compute（无 GRAPHICS bit）
 
             for (uint32_t i = 0; i < queueFamilyCount; i++)
             {
-                if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                const VkQueueFlags flags = queueFamilies[i].queueFlags;
+
+                if (flags & VK_QUEUE_GRAPHICS_BIT)
                 {
                     gfxFamily   = i;
                     hasGraphics = true;
                 }
+
+                // Compute family 选择策略：
+                // 1. 优先无 GRAPHICS bit 的（async compute，可与 graphics 并发）
+                // 2. 否则任意带 COMPUTE bit 的（graphics family 必然带 COMPUTE bit）
+                if (flags & VK_QUEUE_COMPUTE_BIT)
+                {
+                    const bool dedicated = !(flags & VK_QUEUE_GRAPHICS_BIT);
+                    if (!hasCompute || (dedicated && !computeIsDedicated))
+                    {
+                        computeFamily      = i;
+                        hasCompute         = true;
+                        computeIsDedicated = dedicated;
+                    }
+                }
+
                 VkBool32 presentSupport = VK_FALSE;
                 vkGetPhysicalDeviceSurfaceSupportKHR(dev, i, m_Surface, &presentSupport);
                 if (presentSupport)
@@ -512,8 +530,6 @@ namespace Engine
                     presentFamily = i;
                     hasPresent    = true;
                 }
-                if (hasGraphics && hasPresent)
-                    break;
             }
 
             // Check device extension support
@@ -526,13 +542,17 @@ namespace Engine
             for (const auto& ext : availableExts)
                 requiredExts.erase(ext.extensionName);
 
-            if (hasGraphics && hasPresent && requiredExts.empty())
+            if (hasGraphics && hasPresent && hasCompute && requiredExts.empty())
             {
                 m_PhysicalDevice      = dev;
                 m_GraphicsQueueFamily = gfxFamily;
                 m_PresentQueueFamily  = presentFamily;
+                m_ComputeQueueFamily  = computeFamily;
 
                 ENGINE_CORE_INFO("Vulkan physical device: {}", props.deviceName);
+                ENGINE_CORE_INFO("Vulkan queue families: graphics={}, present={}, compute={} ({})", gfxFamily,
+                                 presentFamily, computeFamily,
+                                 computeIsDedicated ? "dedicated" : "shared with graphics");
                 return;
             }
         }
@@ -546,7 +566,7 @@ namespace Engine
 
     void VulkanContext::CreateLogicalDevice()
     {
-        std::set<uint32_t>                   uniqueFamilies = {m_GraphicsQueueFamily, m_PresentQueueFamily};
+        std::set<uint32_t> uniqueFamilies = {m_GraphicsQueueFamily, m_PresentQueueFamily, m_ComputeQueueFamily};
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         float                                queuePriority = 1.0f;
 
@@ -581,6 +601,7 @@ namespace Engine
 
         vkGetDeviceQueue(m_Device, m_GraphicsQueueFamily, 0, &m_GraphicsQueue);
         vkGetDeviceQueue(m_Device, m_PresentQueueFamily, 0, &m_PresentQueue);
+        vkGetDeviceQueue(m_Device, m_ComputeQueueFamily, 0, &m_ComputeQueue);
     }
 
     // =========================================================================
