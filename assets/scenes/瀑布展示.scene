@@ -1,4 +1,4 @@
-Scene: Waterfall Demo
+Scene: Untitled
 ShadowSettings:
   Enabled: true
   MapResolution: 2048
@@ -25,315 +25,6 @@ RenderSettings:
 Skybox:
   Faces: [assets/textures/skybox1/right.jpg, assets/textures/skybox1/left.jpg, assets/textures/skybox1/top.jpg, assets/textures/skybox1/bottom.jpg, assets/textures/skybox1/front.jpg, assets/textures/skybox1/back.jpg]
 Entities:
-  - Entity: 7234918506237491520
-    TagComponent:
-      Tag: 方向光
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [-0.6, 0.3, 0]
-      Scale: [1, 1, 1]
-    LightComponent:
-      Type: 0
-      Color: [1, 0.95, 0.85]
-      Intensity: 1.2
-      Constant: 1
-      Linear: 0.09
-      Quadratic: 0.032
-      InnerCutoff: 0.21816616
-      OuterCutoff: 0.30543262
-      CastShadows: true
-  - Entity: 3891725064821937456
-    TagComponent:
-      Tag: 瀑布场景
-    TransformComponent:
-      Translation: [0, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-  - Entity: 5617284930527184639
-    TagComponent:
-      Tag: 崖顶平台
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [0, 3, 2]
-      Rotation: [0, 0, 0]
-      Scale: [4, 0.2, 3]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.55, 0.52, 0.48, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.9
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 2483917560428173952
-    TagComponent:
-      Tag: 崖壁后
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [0, 1.5, 3.5]
-      Rotation: [0, 0, 0]
-      Scale: [4, 3.2, 0.2]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.5, 0.48, 0.44, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.92
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 9156382047519263841
-    TagComponent:
-      Tag: 崖壁左
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [-2, 1.5, 2]
-      Rotation: [0, 0, 0]
-      Scale: [0.2, 3.2, 3]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.5, 0.48, 0.44, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.92
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 6728149305218473926
-    TagComponent:
-      Tag: 崖壁右
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [2, 1.5, 2]
-      Rotation: [0, 0, 0]
-      Scale: [0.2, 3.2, 3]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.5, 0.48, 0.44, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.92
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 4392817560123948571
-    TagComponent:
-      Tag: 导流槽
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [0, 3.15, 0.45]
-      Rotation: [0, 0, 0]
-      Scale: [1.2, 0.1, 0.3]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.45, 0.43, 0.4, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.85
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 1847293605172839456
-    TagComponent:
-      Tag: 接水潭底
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [0, -0.05, -0.5]
-      Rotation: [0, 0, 0]
-      Scale: [5, 0.1, 4]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.55, 0.5, 0.4, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.85
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 8561723904628173495
-    TagComponent:
-      Tag: 潭壁左
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [-2.5, 0.45, -0.5]
-      Rotation: [0, 0, 0]
-      Scale: [0.15, 1, 4]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.5, 0.45, 0.38, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.9
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 3729481560321847293
-    TagComponent:
-      Tag: 潭壁右
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [2.5, 0.45, -0.5]
-      Rotation: [0, 0, 0]
-      Scale: [0.15, 1, 4]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.5, 0.45, 0.38, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.9
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 5174829360521738492
-    TagComponent:
-      Tag: 潭壁前
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [0, 0.45, -2.5]
-      Rotation: [0, 0, 0]
-      Scale: [5, 1, 0.15]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.5, 0.45, 0.38, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.9
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 7182934605271839456
-    TagComponent:
-      Tag: 潭壁后
-    ParentID: 3891725064821937456
-    TransformComponent:
-      Translation: [0, 0.45, 1.5]
-      Rotation: [0, 0, 0]
-      Scale: [5, 1, 0.15]
-    MeshRendererComponent:
-      MeshType: Cube
-      Color: [0.5, 0.45, 0.38, 1]
-      TexturePath: ""
-      Tiling: [1, 1]
-      Shininess: 32
-      NormalMapPath: ""
-      Metallic: 0
-      Roughness: 0.9
-      MetallicTexturePath: ""
-      RoughnessTexturePath: ""
-      AOTexturePath: ""
-    BoxColliderComponent:
-      HalfExtents: [0.5, 0.5, 0.5]
-      Offset: [0, 0, 0]
-      IsTrigger: false
-  - Entity: 9483726150427183956
-    TagComponent:
-      Tag: 流体
-    TransformComponent:
-      Translation: [0, 3.2, 0.2]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    FluidEmitterComponent:
-      CurrentPreset: 1
-      ParticleCount: 15000
-      ParticleRadius: 0.025
-      EmitExtents: [0.4, 0.05, 0.05]
-      InitialVelocity: [0, -1.0, -4.0]
-      EmitRate: 5000
-      ParticleLifetime: 3.0
-      RestDensity: 1000
-      GasConstant: 65
-      Viscosity: 3.5
-      SmoothingRadius: 0.12
-      ParticleMass: 0.025
-      Gravity: [0, -9.81, 0]
-      Damping: 0.998
-      PCISPHEnabled: true
-      PCISPHIterations: 4
-      PCISPHDelta: 0.3
-      SurfaceTension: 0.22
-      RigidBodyCoupling: true
-      MeshSDFCoupling: true
-      MeshSDFResolution: 28
-      MeshSDFBand: 0.035
-      MeshSDFBlend: 1
-      BoundaryStiffness: 50000
-      BoundaryDamping: 0.5
-      UseBoundary: false
-      BoundaryMin: [-2.4, -0.1, -2.4]
-      BoundaryMax: [2.4, 4.5, 3.6]
-      FluidColor: [0.12, 0.52, 0.98]
-      AbsorptionColor: [0.06, 0.09, 0.16]
-      AbsorptionScale: 1
-      FresnelPower: 4.8
-      RefractionStrength: 0.09
-      Reflectivity: 0.16
-      SmoothIterations: 4
-      SmoothFilterRadius: 6
-      SmoothDepthFalloff: 50
   - Entity: 4827193605182734956
     TagComponent:
       Tag: 地形
@@ -377,3 +68,313 @@ Entities:
       GrassWidth: 0.08
       GrassWindStrength: 0.2
       GrassTexture: ""
+  - Entity: 9483726150427183956
+    TagComponent:
+      Tag: 流体
+    TransformComponent:
+      Translation: [0, 3.2, 0.2]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    FluidEmitterComponent:
+      CurrentPreset: 0
+      ParticleCount: 20000
+      ParticleRadius: 0.025
+      EmitExtents: [0.4, 0.05, 0.05]
+      InitialVelocity: [0, -29.9, -4]
+      EmitRate: 1500
+      ParticleLifetime: 1.2
+      RestDensity: 1000
+      GasConstant: 65
+      Viscosity: 3.5
+      SmoothingRadius: 0.12
+      ParticleMass: 0.025
+      Gravity: [0, -9.81, 0]
+      Damping: 0.998
+      PCISPHEnabled: true
+      PCISPHIterations: 4
+      PCISPHDelta: 0.3
+      SurfaceTension: 0.22
+      RigidBodyCoupling: true
+      MeshSDFCoupling: true
+      MeshSDFResolution: 28
+      MeshSDFBand: 0.035
+      MeshSDFBlend: 1
+      BoundaryStiffness: 50000
+      BoundaryDamping: 0.5
+      UseBoundary: false
+      BoundaryMin: [-2.4, -0.1, -2.4]
+      BoundaryMax: [2.4, 4.5, 3.6]
+      FluidColor: [0.12, 0.52, 0.98]
+      AbsorptionColor: [0.06, 0.09, 0.16]
+      AbsorptionScale: 1
+      FresnelPower: 4.8
+      RefractionStrength: 0.09
+      Reflectivity: 0.16
+      SmoothIterations: 4
+      SmoothFilterRadius: 6
+      SmoothDepthFalloff: 50
+      RenderScale: 0.5
+  - Entity: 7182934605271839456
+    TagComponent:
+      Tag: 潭壁后
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [0, 0.45, 1.5]
+      Rotation: [0, 0, 0]
+      Scale: [5, 1, 0.15]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.5, 0.45, 0.38, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.9
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 5174829360521738492
+    TagComponent:
+      Tag: 潭壁前
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [0, 0.45, -2.5]
+      Rotation: [0, 0, 0]
+      Scale: [5, 1, 0.15]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.5, 0.45, 0.38, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.9
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 3729481560321847293
+    TagComponent:
+      Tag: 潭壁右
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [2.5, 0.45, -0.5]
+      Rotation: [0, 0, 0]
+      Scale: [0.15, 1, 4]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.5, 0.45, 0.38, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.9
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 8561723904628173495
+    TagComponent:
+      Tag: 潭壁左
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [-2.5, 0.45, -0.5]
+      Rotation: [0, 0, 0]
+      Scale: [0.15, 1, 4]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.5, 0.45, 0.38, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.9
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 1847293605172839456
+    TagComponent:
+      Tag: 接水潭底
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [0, -0.05, -0.5]
+      Rotation: [0, 0, 0]
+      Scale: [5, 0.1, 4]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.55, 0.5, 0.4, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.85
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 4392817560123948571
+    TagComponent:
+      Tag: 导流槽
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [0, 3.15, 0.45]
+      Rotation: [0, 0, 0]
+      Scale: [1.2, 0.1, 0.3]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.45, 0.43, 0.4, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.85
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 6728149305218473926
+    TagComponent:
+      Tag: 崖壁右
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [2, 1.5, 2]
+      Rotation: [0, 0, 0]
+      Scale: [0.2, 3.2, 3]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.5, 0.48, 0.44, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.92
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 9156382047519263841
+    TagComponent:
+      Tag: 崖壁左
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [-2, 1.5, 2]
+      Rotation: [0, 0, 0]
+      Scale: [0.2, 3.2, 3]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.5, 0.48, 0.44, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.92
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 2483917560428173952
+    TagComponent:
+      Tag: 崖壁后
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [0, 1.5, 3.5]
+      Rotation: [0, 0, 0]
+      Scale: [4, 3.2, 0.2]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.5, 0.48, 0.44, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.92
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 5617284930527184639
+    TagComponent:
+      Tag: 崖顶平台
+    ParentID: 3891725064821937456
+    TransformComponent:
+      Translation: [0, 3, 2]
+      Rotation: [0, 0, 0]
+      Scale: [4, 0.2, 3]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.55, 0.52, 0.48, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.9
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+  - Entity: 3891725064821937456
+    TagComponent:
+      Tag: 瀑布场景
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+  - Entity: 7234918506237491520
+    TagComponent:
+      Tag: 方向光
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [-0.6, 0.3, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 0
+      Color: [1, 0.95, 0.85]
+      Intensity: 1.2
+      Constant: 1
+      Linear: 0.09
+      Quadratic: 0.032
+      InnerCutoff: 0.21816616
+      OuterCutoff: 0.30543262
+      CastShadows: true
