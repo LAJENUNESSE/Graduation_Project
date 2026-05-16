@@ -110,6 +110,71 @@ namespace Engine
         CompileFromSourceMap(stageSources, m_Name);
     }
 
+    VulkanShader::~VulkanShader()
+    {
+        DestroyShaderModules();
+    }
+
+    const std::vector<uint32_t>& VulkanShader::GetSpirv(const std::string& stage) const
+    {
+        static const std::vector<uint32_t> empty;
+        auto                               it = m_StageSpirv.find(stage);
+        return (it != m_StageSpirv.end()) ? it->second : empty;
+    }
+
+    bool VulkanShader::HasStage(const std::string& stage) const
+    {
+        return m_StageSpirv.find(stage) != m_StageSpirv.end();
+    }
+
+    VkShaderModule VulkanShader::GetOrCreateShaderModule(VkDevice device, const std::string& stage)
+    {
+        ENGINE_CORE_RELEASE_ASSERT(device != VK_NULL_HANDLE, "VulkanShader::GetOrCreateShaderModule: device is null");
+
+        // 不允许跨设备复用
+        if (m_ModuleDevice != VK_NULL_HANDLE && m_ModuleDevice != device)
+        {
+            DestroyShaderModules();
+        }
+        m_ModuleDevice = device;
+
+        if (auto it = m_StageModules.find(stage); it != m_StageModules.end())
+            return it->second;
+
+        const auto spirvIt = m_StageSpirv.find(stage);
+        if (spirvIt == m_StageSpirv.end() || spirvIt->second.empty())
+            return VK_NULL_HANDLE;
+
+        VkShaderModuleCreateInfo info{};
+        info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        info.codeSize = spirvIt->second.size() * sizeof(uint32_t);
+        info.pCode    = spirvIt->second.data();
+
+        VkShaderModule module = VK_NULL_HANDLE;
+        VkResult       result = vkCreateShaderModule(device, &info, nullptr, &module);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create VkShaderModule for VulkanShader stage");
+
+        m_StageModules[stage] = module;
+        return module;
+    }
+
+    void VulkanShader::DestroyShaderModules()
+    {
+        if (m_ModuleDevice == VK_NULL_HANDLE)
+        {
+            m_StageModules.clear();
+            return;
+        }
+
+        for (auto& [stage, module] : m_StageModules)
+        {
+            if (module != VK_NULL_HANDLE)
+                vkDestroyShaderModule(m_ModuleDevice, module, nullptr);
+        }
+        m_StageModules.clear();
+        m_ModuleDevice = VK_NULL_HANDLE;
+    }
+
     void VulkanShader::CompileFromFile(const std::string& filepath)
     {
         const std::string shaderSource = ReadShaderFile(filepath);
