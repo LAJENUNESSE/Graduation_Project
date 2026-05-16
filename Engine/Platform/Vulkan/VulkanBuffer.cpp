@@ -100,34 +100,35 @@ namespace Engine
 
     void VulkanIndexBuffer::Unbind() const {}
 
-    VulkanStorageBuffer::VulkanStorageBuffer(uint32_t size, uint32_t binding)
+    VulkanStorageBuffer::VulkanStorageBuffer(uint32_t size, uint32_t binding, ExternalMemoryHint hint)
     {
-        Create(size, binding, nullptr, false, false);
+        Create(size, binding, nullptr, false, false, hint);
     }
 
-    VulkanStorageBuffer::VulkanStorageBuffer(const void* data, uint32_t size, uint32_t binding)
+    VulkanStorageBuffer::VulkanStorageBuffer(const void* data, uint32_t size, uint32_t binding, ExternalMemoryHint hint)
     {
-        Create(size, binding, data, false, false);
+        Create(size, binding, data, false, false, hint);
     }
 
-    VulkanStorageBuffer::VulkanStorageBuffer(uint32_t size, uint32_t binding, bool gpuOnly)
+    VulkanStorageBuffer::VulkanStorageBuffer(uint32_t size, uint32_t binding, bool gpuOnly, ExternalMemoryHint hint)
     {
-        Create(size, binding, nullptr, gpuOnly, false);
+        Create(size, binding, nullptr, gpuOnly, false, hint);
     }
 
-    VulkanStorageBuffer::VulkanStorageBuffer(const void* data, uint32_t size, uint32_t binding, bool gpuOnly)
+    VulkanStorageBuffer::VulkanStorageBuffer(
+        const void* data, uint32_t size, uint32_t binding, bool gpuOnly, ExternalMemoryHint hint)
     {
-        Create(size, binding, data, gpuOnly, false);
+        Create(size, binding, data, gpuOnly, false, hint);
     }
 
     VulkanStorageBuffer::VulkanStorageBuffer(uint32_t size, uint32_t binding, DynamicStorageTag)
     {
-        Create(size, binding, nullptr, false, true);
+        Create(size, binding, nullptr, false, true, ExternalMemoryHint::None);
     }
 
     VulkanStorageBuffer::VulkanStorageBuffer(const void* data, uint32_t size, uint32_t binding, DynamicStorageTag)
     {
-        Create(size, binding, data, false, true);
+        Create(size, binding, data, false, true, ExternalMemoryHint::None);
     }
 
     VulkanStorageBuffer::~VulkanStorageBuffer()
@@ -175,9 +176,19 @@ namespace Engine
         vmaUnmapMemory(VulkanAllocator::GetAllocator(), m_Allocation);
     }
 
-    void VulkanStorageBuffer::Create(
-        uint32_t size, uint32_t binding, const void* initialData, bool gpuOnly, bool dynamicStorage)
+    void VulkanStorageBuffer::Create(uint32_t           size,
+                                     uint32_t           binding,
+                                     const void*        initialData,
+                                     bool               gpuOnly,
+                                     bool               dynamicStorage,
+                                     ExternalMemoryHint hint)
     {
+        // Phase 7.5 占位：CUDA-Vulkan 互操作路径需要 VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR
+        // 创建可导出的 buffer + VkExportMemoryAllocateInfo，搭配 cuImportExternalMemory 实现零拷贝。
+        // Phase 7 仅暴露枚举接口让上层先标注用途，实现留到 Phase 7.5。
+        ENGINE_CORE_RELEASE_ASSERT(hint == ExternalMemoryHint::None,
+                                   "ExternalMemoryHint::CudaInterop is reserved for Phase 7.5; not yet implemented");
+
         m_Size    = size;
         m_Binding = binding;
         m_GPUOnly = gpuOnly;

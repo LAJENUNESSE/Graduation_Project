@@ -64,10 +64,28 @@ namespace Engine
         {
         };
 
-        VulkanStorageBuffer(uint32_t size, uint32_t binding);
-        VulkanStorageBuffer(const void* data, uint32_t size, uint32_t binding);
-        VulkanStorageBuffer(uint32_t size, uint32_t binding, bool gpuOnly);
-        VulkanStorageBuffer(const void* data, uint32_t size, uint32_t binding, bool gpuOnly);
+        // Phase 7.5 占位：未来 CUDA-Vulkan 互操作时 buffer 需用 VK_EXTERNAL_MEMORY_HANDLE_TYPE_*
+        // 创建以导出 Win32/Fd handle 给 CUDA 导入。Phase 7 默认 None；上层透传该枚举即可。
+        enum class ExternalMemoryHint : uint8_t
+        {
+            None        = 0,
+            CudaInterop = 1, // 启用后断言 Phase 7.5 未实现
+        };
+
+        VulkanStorageBuffer(uint32_t size, uint32_t binding, ExternalMemoryHint hint = ExternalMemoryHint::None);
+        VulkanStorageBuffer(const void*        data,
+                            uint32_t           size,
+                            uint32_t           binding,
+                            ExternalMemoryHint hint = ExternalMemoryHint::None);
+        VulkanStorageBuffer(uint32_t           size,
+                            uint32_t           binding,
+                            bool               gpuOnly,
+                            ExternalMemoryHint hint = ExternalMemoryHint::None);
+        VulkanStorageBuffer(const void*        data,
+                            uint32_t           size,
+                            uint32_t           binding,
+                            bool               gpuOnly,
+                            ExternalMemoryHint hint = ExternalMemoryHint::None);
         VulkanStorageBuffer(uint32_t size, uint32_t binding, DynamicStorageTag);
         VulkanStorageBuffer(const void* data, uint32_t size, uint32_t binding, DynamicStorageTag);
         ~VulkanStorageBuffer() override;
@@ -83,7 +101,12 @@ namespace Engine
         VkBuffer GetBuffer() const { return m_Buffer; }
 
     private:
-        void Create(uint32_t size, uint32_t binding, const void* initialData, bool gpuOnly, bool dynamicStorage);
+        void Create(uint32_t           size,
+                    uint32_t           binding,
+                    const void*        initialData,
+                    bool               gpuOnly,
+                    bool               dynamicStorage,
+                    ExternalMemoryHint hint = ExternalMemoryHint::None);
 
     private:
         VkBuffer         m_Buffer      = VK_NULL_HANDLE;
