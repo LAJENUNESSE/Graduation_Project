@@ -107,7 +107,8 @@ namespace Engine
         }
         else if (!ec && !currentExists)
         {
-            SetFilesystemError("当前目录已失效，已回退到 assets 根目录: " + m_CurrentDirectory.string());
+            SetFilesystemError("当前目录已失效，已回退到 assets 根目录: " +
+                               PathUtils::PathToUtf8String(m_CurrentDirectory));
         }
         else if (ec)
         {
@@ -115,7 +116,8 @@ namespace Engine
         }
         else
         {
-            SetFilesystemError("当前目录不可用，已回退到 assets 根目录: " + m_CurrentDirectory.string());
+            SetFilesystemError("当前目录不可用，已回退到 assets 根目录: " +
+                               PathUtils::PathToUtf8String(m_CurrentDirectory));
         }
 
         ec.clear();
@@ -145,14 +147,14 @@ namespace Engine
         }
         if (!exists)
         {
-            SetFilesystemError("目录不存在: " + directory.string());
+            SetFilesystemError("目录不存在: " + PathUtils::PathToUtf8String(directory));
             return false;
         }
 
         if (!std::filesystem::is_directory(directory, ec) || ec)
         {
             SetFilesystemError(ec ? BuildFilesystemError("检查目录类型失败", directory, ec)
-                                  : "路径不是目录: " + directory.string());
+                                  : "路径不是目录: " + PathUtils::PathToUtf8String(directory));
             return false;
         }
 
@@ -279,7 +281,7 @@ namespace Engine
         if (!rootExists || !rootIsDirectory)
         {
             if (m_LastFilesystemError.empty())
-                SetFilesystemError("未找到 assets 目录: " + m_RootDirectory.string());
+                SetFilesystemError("未找到 assets 目录: " + PathUtils::PathToUtf8String(m_RootDirectory));
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", m_LastFilesystemError.c_str());
             ImGui::End();
             return;
@@ -350,7 +352,7 @@ namespace Engine
                 ImGui::SameLine();
                 ImGui::TextUnformatted("/");
                 ImGui::SameLine();
-                if (ImGui::Button(part.string().c_str()))
+                if (ImGui::Button(PathUtils::PathToUtf8String(part).c_str()))
                     m_CurrentDirectory = accumulated;
             }
         }
@@ -358,9 +360,9 @@ namespace Engine
 
     void AssetBrowserPanel::DrawDirectoryTree(const std::filesystem::path& directory)
     {
-        std::string dirName = directory.filename().string();
+        std::string dirName = PathUtils::PathToUtf8String(directory.filename());
         if (dirName.empty())
-            dirName = directory.string();
+            dirName = PathUtils::PathToUtf8String(directory);
 
         std::vector<std::filesystem::directory_entry> entries;
         bool                                          hasSubDirs = false;
@@ -462,7 +464,7 @@ namespace Engine
         for (const auto& entry : entries)
         {
             const auto& path     = entry.path();
-            std::string filename = path.filename().string();
+            std::string filename = PathUtils::PathToUtf8String(path.filename());
             const char* icon     = GetFileIcon(path);
 
             ImGui::PushID(filename.c_str());
@@ -542,14 +544,14 @@ namespace Engine
             if (m_OnSceneOpen)
                 m_OnSceneOpen(PathUtils::ToProjectRelativeOrAbsolute(path));
             else
-                ENGINE_INFO("双击场景文件: {0}", path.string());
+                ENGINE_INFO("双击场景文件: {0}", PathUtils::PathToUtf8String(path));
             break;
 
         case AssetType::Script:
             if (m_OnScriptOpen)
                 m_OnScriptOpen(PathUtils::ToProjectRelativeOrAbsolute(path));
             else
-                ENGINE_INFO("双击脚本文件: {0}", path.string());
+                ENGINE_INFO("双击脚本文件: {0}", PathUtils::PathToUtf8String(path));
             break;
 
         case AssetType::Texture2D:
@@ -565,7 +567,7 @@ namespace Engine
             }
             else
             {
-                ENGINE_WARN("Failed to load preview texture: {0}", path.string());
+                ENGINE_WARN("Failed to load preview texture: {0}", PathUtils::PathToUtf8String(path));
             }
             break;
 
