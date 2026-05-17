@@ -10,7 +10,7 @@
 ## 1. 当前位置
 
 - **进行中阶段**：Phase 7（Compute 迁移）
-- **最近一次 commit**：`5f7c11c docs: 引入任务沉淀机制 — SPEC / checkpoint skill / ADR`
+- **最近一次 commit**：`c7b2c92 phase7: SpatialHashGrid::BuildVulkan 接受外部 cmd buffer`
 - **下一步**：见 [§6 Next Steps](#6-next-steps)
 
 ---
@@ -28,15 +28,17 @@
 - [x] `VulkanCommandBuffer` compute 命令封装（`f547bd0`）
 - [x] `VulkanBarrierUtil` — `BarrierBit::{ShaderStorage,Command,BufferUpdate,All}` → `VkPipelineStage`/`VkAccess` 映射（`6f577a5`）
 - [x] `VulkanStorageBuffer::ExternalMemoryHint` 占位（CUDA 互操作，Phase 7.5 实装）（`2625fa4`）
+- [x] `VulkanContext` 拆 `BeginFrame()` / `EndFrame()` / `GetCurrentFrameCommandBuffer()` + readback fence 信号化 hook（`777de43`）
 
 **子系统迁移**
 - [x] `IBLGenerator` — BRDF LUT / Irradiance / Prefilter 三 compute dispatch（`6ca3cb3`）
 - [x] `GrassRenderSystem` — placement + render_args 两 pass，DrawArraysIndirect 链路（`97750ae`）
 - [x] `SpatialHashGrid` — hash / prefix_sum (三 pass) / scatter（`93b2e2d`）
+- [x] `AsyncReadback` ring buffer — VulkanAsyncReadback 3 槽 + 独立 fence + EndFrame 零 cmd submit 信号化（`ad31c42`）
+- [x] `SpatialHashGrid::BuildVulkan(cmd, ...)` 接受外部 cmd buffer + ResetFrameResources，每帧调用方录主帧 cmd（`c7b2c92`）
 - [ ] `ParticleSystemGPU` — emit / simulate / sort compute
 - [ ] `FluidSystemGPU` + PCISPH — predict / pressure / correct / integrate
 - [ ] `VulkanTextureCubemap` — 解锁 IBL 真实 skybox 像素，目前用占位 env atlas
-- [ ] `AsyncReadback` ring buffer — 替代 `vmaMapMemory` 同步阻塞回读
 
 ### Phase 6 — ImGui 集成（部分完成）
 
@@ -133,6 +135,24 @@
 > **Why**：OpenGL `glDispatchCompute(g)` 是 immediate 全局状态机；Vulkan 需要绑 pipeline + descriptor set + cmd buffer 上下文，强行适配会引入隐藏 cmd buffer + 提交时序歧义，比"迁移时显式重写 dispatch 链路"风险大。
 > **How to apply**：粒子/SPH/流体迁移时 **不要** 调 `RenderCommand::DispatchCompute`，而是显式 lazy pipeline 初始化 + 录制 cmd buffer + barrier 序列；调用 `ResolveBarrierBits(BarrierBit::X)` 拿 stage/access 四元组传给 `cmdBuffer.MemoryBarrier(...)`。
 
+### D-10：`VulkanContext` 拆 BeginFrame/EndFrame 以暴露主帧 cmd buffer
+
+> **Decision**：`SwapBuffers()` 内部 `vkWaitForFences → Acquire → Begin cmd → Record → End → Submit → Present` 拆为三段：`BeginFrame()` 返回 bool 表明本帧能否录制；`EndFrame()` 完成主 submit + 信号化 readback fence + present；`GetCurrentFrameCommandBuffer()` 仅在帧内有效。`SwapBuffers` 退化为 thin wrapper（内部清屏/Debug/ImGui pass 行为零变化）。
+> **Why**：粒子/流体每帧 dispatch 必须录主帧 cmd（D-3），原 SwapBuffers 完全自包含、外部无录制入口。激进路线：一次到位拆 VulkanContext，而非每帧 dispatch 退回 SingleTime。
+> **How to apply**：每帧高级调用方走 `if (ctx->BeginFrame()) { cmd = ctx->GetCurrentFrameCommandBuffer(); ... record ...; ctx->RecordImGuiPass(...); ctx->EndFrame(); }`，绕过 SwapBuffers 默认清屏与 ImGui pass。SmokeLayer 继续走 SwapBuffers。
+
+### D-11：`VulkanAsyncReadback` 3 槽 ring + 独立 fence
+
+> **Decision**：`GPUAsyncReadback` Vulkan 实现用 3 槽 round-robin ring；每槽独立 VMA host-visible persistent-mapped staging buffer + 独立 VkFence。CopyFrom 把 vkCmdCopyBuffer 录入主帧 cmd 并调 `VulkanContext::RegisterReadbackFenceSignal(fence)`；EndFrame 在主 submit 之后追加零 cmd `vkQueueSubmit(fence)` 信号化（队列内顺序保证 copy 已完成）。接口 5 函数（CopyFrom/IsReady/GetData/Reset/IsPending）语义不变。
+> **Why**：(1) 主帧单 submit 只能 signal 1 个 fence —— 不能复用 inFlightFence；(2) 3 槽避免回读对每帧节奏的 stall（粒子 counter 每帧 CopyFrom）。
+> **How to apply**：调用方必须在 BeginFrame~EndFrame 之间调 CopyFrom；前 1~2 帧 IsReady 必为 false（ring 填充期）。ring 满（极端连续 3 帧未消费）回退到 vkWaitForFences 等最老槽，避免 UAF。
+
+### D-12：`SpatialHashGrid::BuildVulkan(cmd, ...)` 接受外部 cmd + 显式 ResetFrameResources
+
+> **Decision**：新增 public `BuildVulkan(VkCommandBuffer cmd, aliveCount, usePredictedPos)` 重载，每帧调用方录入自己主帧 cmd。原 `Build(...)` 通用入口 Vulkan 分支退化为 SingleTime wrapper（IBL/Grass 等低频调用方零修改）。pool reset 从 BuildVulkan 内部移出，调用方每帧首次 dispatch 前显式调 `ResetFrameResources()`。pool 容量从 16 扩到 64（PCISPH 8 × 3 + 余量）。
+> **Why**：PCISPH 1~8 迭代同帧多次调 BuildVulkan + 原内部 Pool->Reset() = 第二次 reset 让第一次的 set 失效（已 BindDescriptorSets 录入 cmd），cmd submit 时 UAF。
+> **How to apply**：每帧首次 `ResetFrameResources()` → `SetExternalBuffers(...)` → `BuildVulkan(cmd, alive, false)` → ... → 同帧后续可多次 `BuildVulkan(cmd, alive, true)` 复用同一 pool 但 alloc 新 set。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -147,6 +167,8 @@
 | P-6 | vcpkg manifest 安装失败 — `curl error 35 SSL connect error` | CMake configure 时 vcpkg 从 GitHub 拉源码 | 见 D-8；优先 Vulkan SDK 自带；必要时换 vcpkg baseline 或加 git mirror |
 | P-7 | `u8"中文"` 在 C++20 报 C2664 类型不匹配 ImGui `const char*` | ImGui::Text / Begin 等 API 传字面量 | 项目用 `/utf-8` 编译，**普通 `"中文"` 即可**，不要加 `u8` 前缀；`char8_t` 与 `char` 是不同类型 |
 | P-8 | Bash 工具 `cd vendor/<submodule>` 后续命令仍在子目录运行 | 子模块内 reset/查 status 后继续工作 | 用 `git -C "<repo-root>" ...` 显式指定主仓库根；或用绝对路径，禁止依赖 cwd 状态 |
+| P-9 | 多次 `SpatialHashGrid::BuildVulkan` 同帧调用，pool Reset() 内置会让前次 set 失效 → cmd submit UAF | PCISPH 8 迭代每次内部 Grid.Build / 同帧粒子+流体共享 Grid | pool reset 移出 BuildVulkan；调用方每帧首次显式 `ResetFrameResources()`；pool 容量扩到 64 |
+| P-10 | 主帧单 submit 只 signal 1 个 fence | AsyncReadback ring 需独立 fence | 不复用 swapchain inFlightFence；EndFrame 在主 submit 之后追加零 cmd submit 信号化 |
 
 ---
 
@@ -165,23 +187,24 @@
 按优先级，自上而下：
 
 1. **`ParticleSystemGPU` 迁移**
-   - 先补 `SpatialHashGrid::SetExternalBuffers` 调用点（D-5）
-   - emit / simulate / sort 三 compute 全 Vulkan 化
-   - 异步回读改 `AsyncReadback` ring（D-4 反例）
-   - 验收：粒子在 `--vulkan` 路径下视觉与 OpenGL 等价
+   - 已具备：VulkanContext::BeginFrame/EndFrame、VulkanAsyncReadback ring、SpatialHashGrid::BuildVulkan(cmd, ...)
+   - 待做：4 shader 加 `#ifdef VULKAN`（emit / compact / simulate / render_args）→ push constant；ParticleSystemGPU::UpdateVulkan(...) 写完 lazy pipeline init + dispatch 录主帧 cmd + 调 SetExternalBuffers + grid build + readback 接通
+   - **注意**：SPH 路径（含 PCISPH 8 迭代）在 Vulkan 下暂跳过（SPH shader 在 Commit C 才迁），写代码时显式 ASSERT 或退回 OpenGL 警告
+   - 验收：粒子在 `--vulkan` 路径下视觉与 OpenGL 等价（非 SPH 模式）
 
 2. **`FluidSystemGPU` + PCISPH 迁移**
-   - 同样依赖 `SpatialHashGrid::SetExternalBuffers`
-   - PCISPH 多次迭代的 barrier 编排是重点（参考 P-1）
+   - sph_density / sph_force / sph_pcisph_{init,predict,density,force,apply} 7 shader 加 #ifdef VULKAN
+   - FluidSystemGPU::UpdateSPHVulkan 把 PCISPH 8 迭代录入同一帧 cmd
+   - 迁完后回头补齐 `ParticleSystemGPU::UpdateVulkan` 的 SPH 分支
    - 验收：waterfall demo 在 `--vulkan` 路径下不崩、密度场可视化一致
 
-3. **`VulkanTextureCubemap` 实装**
+3. **fluid_emit / fluid_simulate + MeshSDFMeta 回读迁 GPUAsyncReadback**
+   - 完成 FluidSystemGPU 全 dispatch Vulkan 化
+   - `grep -n "RenderCommand::DispatchCompute" Engine/src/Renderer/FluidSystemGPU.cpp` 应仅在 OpenGL 分支内出现
+
+4. **`VulkanTextureCubemap` 实装**
    - 6 面 atlas 上传 + view + sampler
    - 解锁 `VulkanIBLGenerator` 真实输入（P-3）
-
-4. **Phase 7.5：每帧 dispatch 不再走 SingleTime**
-   - 把 IBL Init 之外的 dispatch 调用点接入主帧 cmd buffer
-   - 验收：profiler 看不到 `vkQueueWaitIdle` 主线程 stall
 
 5. **Phase 8：Vulkan PBR pass**
    - `VulkanIBLGenerator::GetXxxView()` 接入 PBR 采样
