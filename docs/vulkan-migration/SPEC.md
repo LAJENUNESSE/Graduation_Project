@@ -169,6 +169,9 @@
 | P-8 | Bash 工具 `cd vendor/<submodule>` 后续命令仍在子目录运行 | 子模块内 reset/查 status 后继续工作 | 用 `git -C "<repo-root>" ...` 显式指定主仓库根；或用绝对路径，禁止依赖 cwd 状态 |
 | P-9 | 多次 `SpatialHashGrid::BuildVulkan` 同帧调用，pool Reset() 内置会让前次 set 失效 → cmd submit UAF | PCISPH 8 迭代每次内部 Grid.Build / 同帧粒子+流体共享 Grid | pool reset 移出 BuildVulkan；调用方每帧首次显式 `ResetFrameResources()`；pool 容量扩到 64 |
 | P-10 | 主帧单 submit 只 signal 1 个 fence | AsyncReadback ring 需独立 fence | 不复用 swapchain inFlightFence；EndFrame 在主 submit 之后追加零 cmd submit 信号化 |
+| P-11 | `VulkanIBLGenerator` 在 cubemap 不可用时 `m_IBLReady=true`（仅 BRDF LUT 完成，Irradiance/Prefilter 跳过），但 `GetXxxMapID()` 恒返回 0；`SkyboxSystem::HasIBL()` 在 Vulkan path 下会被误判为 true → 调用方拿到无效句柄 | Vulkan path 接通 SceneRenderer（Phase 8 PBR）时触发；当前 SmokeLayer 无 SceneRenderer 实例不触发 | Phase 8 前二选一：(a) `m_IBLReady` 改语义只有 Irradiance/Prefilter 也就绪才 true；(b) 改用 D-7 中的 `GetXxxView()` 接口，SceneRenderer 按 API 分派 |
+| P-12 | `GrassRenderSystem::Init` 在 Vulkan path 下 `m_UseIndirectDraw=true` 但渲染时调 `RenderCommand::DrawArraysIndirect`（OpenGL-only），渲染将退化或崩 | Vulkan path 接通 Scene 渲染（Phase 8）时触发；当前 grass compute commit 走 SmokeLayer 验证不触发 | Phase 8 前在 GrassRenderSystem Init 内按 `RendererAPI::GetAPI()` 切换；或在 VulkanRendererAPI 实装 DrawArraysIndirect |
+| P-13 | `VulkanShader` push constant 反射强制 offset=0 单段（取 `max(size)`） | 未来 shader 使用 `layout(offset=...)` 多段 push constant | 当前所有迁移 shader 都从 0 起始且单段，约束成立；新增多段 PC 时扩展 `m_ReflectedPushConstants` 为按 range 数组 |
 
 ---
 
