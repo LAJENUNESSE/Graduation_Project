@@ -108,6 +108,7 @@ Always follow this workflow:
 4. Create git commit
 5. Build and verify
 6. Continue
+7. **必要时 `/checkpoint`**：phase 收尾或踩了非显而易见的坑后，调用 `/checkpoint` skill 沉淀决策/陷阱/技术选型到对应位置（任务 SPEC.md / 全局 MEMORY.md / `docs/decisions/` ADR）。不是每次 commit 都要做——只在有"非显而易见的选择"或"长期教训"时触发。
 
 **频繁提交：** 每完成一个小步骤就立即 `git commit`，保存快照。不要攒一大堆改动再提交。
 

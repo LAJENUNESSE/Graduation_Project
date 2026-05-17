@@ -1,5 +1,8 @@
 # Vulkan 后端迁移路线图
 
+> **⚠️ 当前进度请看 [`vulkan-migration/SPEC.md`](vulkan-migration/SPEC.md)**
+> 本文件定义**阶段划分与验收标准**（长期不变），SPEC 文件维护**实时进度与决策**。两者职责分离，避免互相覆盖。
+>
 > **分支**: `feature/vulkan-backend`
 > **状态**: 探索性重构，不影响 main 分支
 > **目标**: 将 OpenGL 4.3 渲染后端逐步迁移到 Vulkan 1.2+

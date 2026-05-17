@@ -10,6 +10,8 @@ build-ninja/
 !.agents/skills/build/
 .claude/skills/*
 !.claude/skills/build/
+!.claude/skills/checkpoint/
+!.claude/skills/checkpoint/**
 
 # IDE
 .vscode/
@@ -53,6 +55,10 @@ docs/
 docs/*
 !docs/lua-script-editor-completion-plan-b.md
 !docs/vulkan-migration-roadmap.md
+!docs/vulkan-migration/
+!docs/vulkan-migration/**
+!docs/decisions/
+!docs/decisions/**
 
 # Scripts (build scripts, ignored)
 scripts/
