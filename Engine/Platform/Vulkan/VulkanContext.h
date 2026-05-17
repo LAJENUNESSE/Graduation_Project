@@ -23,6 +23,12 @@ namespace Engine
         void Init() override;
         void SwapBuffers() override;
 
+        // 高级帧录制接口（GraphicsContext override）— 主循环显式驱动帧边界。
+        // BeginRenderFrame 等价 BeginFrame；EndRenderFrame 录默认 pass（清屏/debug/ImGui）
+        // + EndFrame。SwapBuffers 在 Vulkan path 下退化为 no-op（帧已由主循环结束）。
+        void BeginRenderFrame() override;
+        void EndRenderFrame() override;
+
         void QueueDrawArrays(uint32_t count, uint32_t firstVertex = 0);
         void QueueDrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t firstVertex = 0);
         void QueueDrawIndexed(uint32_t indexCount, uint32_t firstIndex = 0, int32_t vertexOffset = 0);
@@ -111,6 +117,10 @@ namespace Engine
         void DestroyImGuiFramebuffers();
         void CreateDebugDrawResources();
         void DestroyDebugDrawResources();
+
+        // SwapBuffers 内"BeginFrame 之后到 EndFrame 之前"那段（清屏 / debug draw / ImGui pass）
+        // 抽出供 EndRenderFrame 复用。cmd / imageIndex 来自当前帧。
+        void RecordDefaultFramePasses(VkCommandBuffer cmd, uint32_t imageIndex);
 
         // Swapchain recreation
         void CleanupSwapchain();

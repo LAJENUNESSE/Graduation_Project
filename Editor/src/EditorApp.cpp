@@ -1,5 +1,4 @@
 #include "EditorLayer.h"
-#include "VulkanSmokeLayer.h"
 #include "Engine.h"
 
 #include "Core/EntryPoint.h"
@@ -12,14 +11,10 @@ namespace Engine
     public:
         EditorApplication()
         {
-            // Vulkan backend: run smoke layer until full editor rendering pipeline is ready
-            if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
-                PushLayer(CreateScope<EditorLayer>());
-            else
-            {
-                ENGINE_CORE_INFO("[Vulkan] Running smoke draw loop (EditorLayer skipped)");
-                PushLayer(CreateScope<VulkanSmokeLayer>());
-            }
+            // Phase 8: EditorLayer 主路径在 OpenGL/Vulkan 双后端下都接通。
+            // Vulkan 路径下 SceneRenderer + IBL view 分派 + DrawIndexed 在
+            // commit 3 实装完成；不再需要 VulkanSmokeLayer 兜底。
+            PushLayer(CreateScope<EditorLayer>());
         }
 
         ~EditorApplication() override = default;

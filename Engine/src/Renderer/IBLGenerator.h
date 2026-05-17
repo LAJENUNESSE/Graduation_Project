@@ -35,7 +35,15 @@ namespace Engine
         virtual uint32_t GetIrradianceMapID() const = 0;
         virtual uint32_t GetPrefilterMapID() const  = 0;
         virtual uint32_t GetBRDFLutID() const       = 0;
-        virtual bool     IsReady() const             = 0;
+        virtual bool     IsReady() const            = 0;
+
+        // Vulkan path 资源句柄（按 API 分派 — 调用方 if (Vulkan) 走 view，否则走 GetXxxMapID）。
+        // 返回 void* 透传以避免 vulkan.h 泄漏到 Engine/src/（Phase 1 隔离）。
+        // OpenGL 实现默认 nullptr；Vulkan 实现 reinterpret_cast<void*>(VkImageView / VkSampler)。
+        virtual void* GetIrradianceView() const { return nullptr; }
+        virtual void* GetPrefilterView() const { return nullptr; }
+        virtual void* GetBRDFLutView() const { return nullptr; }
+        virtual void* GetIBLSampler() const { return nullptr; }
 
         static Ref<IBLGenerator> Create();
     };

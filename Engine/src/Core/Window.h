@@ -9,6 +9,8 @@
 namespace Engine
 {
 
+    class GraphicsContext;
+
     struct WindowProps
     {
         std::string  Title;
@@ -50,6 +52,11 @@ namespace Engine
         virtual bool       IsRawMouseInputEnabled() const                    = 0;
 
         virtual void* GetNativeWindow() const = 0;
+
+        // 暴露 GraphicsContext 供 Application::Run 显式驱动帧边界
+        // (BeginRenderFrame / EndRenderFrame) — Vulkan 路径需要在 OnUpdate 之前
+        // 开始帧，使粒子/流体 dispatch 能录入主帧 cmd。
+        virtual GraphicsContext* GetGraphicsContext() const = 0;
 
         static Scope<Window> Create(const WindowProps& props = WindowProps());
     };

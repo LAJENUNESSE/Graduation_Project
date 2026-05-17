@@ -23,11 +23,16 @@ namespace Engine
         bool                            HasSkybox() const { return m_SkyboxTexture != nullptr; }
         const std::vector<std::string>& GetFacePaths() const { return m_FacePaths; }
 
-        // IBL 资源访问
+        // IBL 资源访问（OpenGL path 用 ID；Vulkan path 用 view + sampler）
         uint32_t GetIrradianceMapID() const { return m_IBL ? m_IBL->GetIrradianceMapID() : 0; }
         uint32_t GetPrefilterMapID() const { return m_IBL ? m_IBL->GetPrefilterMapID() : 0; }
         uint32_t GetBRDFLutID() const { return m_IBL ? m_IBL->GetBRDFLutID() : 0; }
-        bool     HasIBL() const { return m_IBL && m_IBL->IsReady(); }
+        // Vulkan path 透传（void* 包装 VkImageView / VkSampler，避开 vulkan.h 泄漏）
+        void* GetIrradianceView() const { return m_IBL ? m_IBL->GetIrradianceView() : nullptr; }
+        void* GetPrefilterView() const { return m_IBL ? m_IBL->GetPrefilterView() : nullptr; }
+        void* GetBRDFLutView() const { return m_IBL ? m_IBL->GetBRDFLutView() : nullptr; }
+        void* GetIBLSampler() const { return m_IBL ? m_IBL->GetIBLSampler() : nullptr; }
+        bool  HasIBL() const { return m_IBL && m_IBL->IsReady(); }
 
     private:
         Ref<Shader>              m_SkyboxShader;

@@ -158,6 +158,8 @@ namespace Engine
 
         void* GetNativeWindow() const override { return m_Window; }
 
+        GraphicsContext* GetGraphicsContext() const override { return m_Context.get(); }
+
     private:
         void Init(const WindowProps& props);
         void Shutdown();

@@ -69,9 +69,26 @@ namespace Engine
         virtual void SetLineWidth(float width)                                                       = 0;
         virtual void BindTextureUnit(uint32_t slot, uint32_t textureID)                              = 0;
         virtual void BindCubemapUnit(uint32_t slot, uint32_t textureID)                              = 0;
-        virtual void ClearColorOnly()                                                                = 0;
-        virtual int  GetBoundFramebufferID()                                                         = 0;
-        virtual void BindFramebufferByID(int id)                                                     = 0;
+
+        // Vulkan path 资源绑定（OpenGL 实现默认 warn-once，不应被走到）。
+        // view / sampler 是 void* 透传 (VkImageView / VkSampler)，避免 vulkan.h 泄漏 Engine/src/。
+        // 用于 PBR pass IBL 采样：SceneRenderer 按 RendererAPI::GetAPI() 分派 Bind*Unit vs Bind*View。
+        virtual void BindCubemapView(uint32_t slot, void* view, void* sampler)
+        {
+            (void)slot;
+            (void)view;
+            (void)sampler;
+        }
+        virtual void BindTextureView(uint32_t slot, void* view, void* sampler)
+        {
+            (void)slot;
+            (void)view;
+            (void)sampler;
+        }
+
+        virtual void ClearColorOnly()            = 0;
+        virtual int  GetBoundFramebufferID()     = 0;
+        virtual void BindFramebufferByID(int id) = 0;
 
         // Compute Shader
         virtual void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1) = 0;

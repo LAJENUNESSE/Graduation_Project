@@ -34,17 +34,24 @@ namespace Engine
         void Shutdown() override;
 
         // GetXxxID 在 Vulkan 路径下不再是 OpenGL texture ID。
-        // 当前 PBR 采样链路在 Vulkan 路径暂未接入（EditorApp 走 VulkanSmokeLayer），返回 0 占位。
-        // 后续 Vulkan PBR pass 接入时，应改为返回 VkImageView 句柄的 cast 或换接口。
+        // PBR pass 按 API 分派改走 GetXxxView() 接口（基类 void* 透传，避开 vulkan.h 泄漏 Engine/src/）。
         uint32_t GetIrradianceMapID() const override { return 0; }
         uint32_t GetPrefilterMapID() const override { return 0; }
         uint32_t GetBRDFLutID() const override { return 0; }
         bool     IsReady() const override { return m_IBLReady; }
 
-        // 可选访问器（供未来 Vulkan PBR pass 使用）
-        VkImageView GetBRDFLutView() const { return m_BRDFLutView; }
-        VkImageView GetIrradianceView() const { return m_IrradianceView; }
-        VkImageView GetPrefilterView() const { return m_PrefilterView; }
+        // 基类虚函数 override — 透传 VkImageView / VkSampler 为 void*。
+        // SceneRenderer GeometryPass 按 RendererAPI::GetAPI() 分派调用 ID vs View。
+        void* GetIrradianceView() const override { return reinterpret_cast<void*>(m_IrradianceView); }
+        void* GetPrefilterView() const override { return reinterpret_cast<void*>(m_PrefilterView); }
+        void* GetBRDFLutView() const override { return reinterpret_cast<void*>(m_BRDFLutView); }
+        void* GetIBLSampler() const override { return reinterpret_cast<void*>(m_LinearSampler); }
+
+        // 直接句柄访问（Vulkan 内部使用，避免 cast 来回）
+        VkImageView GetBRDFLutViewHandle() const { return m_BRDFLutView; }
+        VkImageView GetIrradianceViewHandle() const { return m_IrradianceView; }
+        VkImageView GetPrefilterViewHandle() const { return m_PrefilterView; }
+        VkSampler   GetSampler() const { return m_LinearSampler; }
 
     private:
         // 单独抽出的 BRDF LUT 生成；不依赖 skybox，在 Init 时即可调用

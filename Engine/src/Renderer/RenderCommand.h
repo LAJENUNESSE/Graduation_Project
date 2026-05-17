@@ -67,6 +67,18 @@ namespace Engine
             s_RendererAPI->BindCubemapUnit(slot, textureID);
         }
 
+        // Vulkan path PBR IBL 资源绑定（OpenGL 默认 warn-once 不应被走到）。
+        // view / sampler 是 void* 透传 (VkImageView / VkSampler)，避开 vulkan.h 泄漏。
+        // 调用方 if (RendererAPI::GetAPI() == Vulkan) 走 BindXxxView，否则走 BindXxxUnit。
+        static void BindCubemapView(uint32_t slot, void* view, void* sampler)
+        {
+            s_RendererAPI->BindCubemapView(slot, view, sampler);
+        }
+        static void BindTextureView(uint32_t slot, void* view, void* sampler)
+        {
+            s_RendererAPI->BindTextureView(slot, view, sampler);
+        }
+
         static void ClearColorOnly() { s_RendererAPI->ClearColorOnly(); }
 
         static int GetBoundFramebufferID() { return s_RendererAPI->GetBoundFramebufferID(); }

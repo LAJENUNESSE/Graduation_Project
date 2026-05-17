@@ -8,6 +8,7 @@
 #include "Debug/ProfileTimer.h"
 #include "Events/ApplicationEvent.h"
 #include "ImGui/ImGuiLayer.h"
+#include "Renderer/GraphicsContext.h"
 #include "Renderer/Renderer.h"
 
 #include <GLFW/glfw3.h>
@@ -151,6 +152,16 @@ namespace Engine
 
             PerformanceMonitor::Get().BeginFrame(static_cast<float>(time));
 
+            // 主循环显式驱动帧边界：
+            // - Vulkan path 下 BeginRenderFrame 调 BeginFrame(acquire swapchain + Begin cmd)，
+            //   使 layer->OnUpdate 期间粒子/流体 dispatch 能录入主帧 cmd
+            // - OpenGL path 下 BeginRenderFrame/EndRenderFrame 默认 no-op，行为零变化
+            // - EndRenderFrame 录默认 pass（清屏/debug/ImGui pass）+ EndFrame(submit + present)
+            // 详见 GraphicsContext.h 和 SPEC §3 D-16
+            GraphicsContext* gfx = m_Window->GetGraphicsContext();
+            if (gfx)
+                gfx->BeginRenderFrame();
+
             if (!m_Minimized)
             {
                 for (const auto& layer : m_LayerStack)
@@ -166,6 +177,9 @@ namespace Engine
                 PerformanceMonitor::Get().SetImGuiCPU(imguiCpuMs);
                 m_ImGuiLayer->End();
             }
+
+            if (gfx)
+                gfx->EndRenderFrame();
 
             m_Window->OnUpdate();
 

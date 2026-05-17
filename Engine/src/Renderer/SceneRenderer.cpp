@@ -98,7 +98,7 @@ namespace Engine
             noiseSpec.WrapS        = TextureWrap::Repeat;
             noiseSpec.WrapT        = TextureWrap::Repeat;
             noiseSpec.UploadLayout = TextureDataLayout::RGB_Float;
-            m_SSAONoiseTex = Texture2D::Create(ssaoNoise.data(), 4, 4, noiseSpec);
+            m_SSAONoiseTex         = Texture2D::Create(ssaoNoise.data(), 4, 4, noiseSpec);
         }
 
         // 全屏四边形 VAO（供 SSAO pass 使用）
@@ -309,14 +309,28 @@ namespace Engine
                  m_PBRShader->SetInt("u_IBLDebugMode", m_IBLDebugMode);
                  if (iblActive)
                  {
-                     // Irradiance 和 Prefilter 是 cubemap 纹理，必须用 BindCubemapUnit
-                     RenderCommand::BindCubemapUnit(6, m_SkyboxSystem.GetIrradianceMapID());
-                     m_PBRShader->SetInt("u_IrradianceMap", 6);
-                     RenderCommand::BindCubemapUnit(7, m_SkyboxSystem.GetPrefilterMapID());
-                     m_PBRShader->SetInt("u_PrefilterMap", 7);
-                     // BRDF LUT 是 2D 纹理，使用 BindTextureUnit
-                     RenderCommand::BindTextureUnit(8, m_SkyboxSystem.GetBRDFLutID());
-                     m_PBRShader->SetInt("u_BRDF_LUT", 8);
+                     if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                     {
+                         // Vulkan path: void* 透传 VkImageView + VkSampler，避开 vulkan.h 泄漏 Engine/src/
+                         // GetIrradianceMapID() 在 Vulkan 下恒返回 0，必须走 view 接口
+                         void* sampler = m_SkyboxSystem.GetIBLSampler();
+                         RenderCommand::BindCubemapView(6, m_SkyboxSystem.GetIrradianceView(), sampler);
+                         m_PBRShader->SetInt("u_IrradianceMap", 6);
+                         RenderCommand::BindCubemapView(7, m_SkyboxSystem.GetPrefilterView(), sampler);
+                         m_PBRShader->SetInt("u_PrefilterMap", 7);
+                         RenderCommand::BindTextureView(8, m_SkyboxSystem.GetBRDFLutView(), sampler);
+                         m_PBRShader->SetInt("u_BRDF_LUT", 8);
+                     }
+                     else
+                     {
+                         // OpenGL path：Irradiance/Prefilter cubemap 用 BindCubemapUnit，BRDF LUT 2D 用 BindTextureUnit
+                         RenderCommand::BindCubemapUnit(6, m_SkyboxSystem.GetIrradianceMapID());
+                         m_PBRShader->SetInt("u_IrradianceMap", 6);
+                         RenderCommand::BindCubemapUnit(7, m_SkyboxSystem.GetPrefilterMapID());
+                         m_PBRShader->SetInt("u_PrefilterMap", 7);
+                         RenderCommand::BindTextureUnit(8, m_SkyboxSystem.GetBRDFLutID());
+                         m_PBRShader->SetInt("u_BRDF_LUT", 8);
+                     }
                  }
 
                  // SSAO 纹理绑定

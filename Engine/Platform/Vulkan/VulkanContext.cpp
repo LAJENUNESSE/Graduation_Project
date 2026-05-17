@@ -258,17 +258,32 @@ namespace Engine
     }
 
     // =========================================================================
-    // SwapBuffers — BeginFrame + 默认清屏/Debug/ImGui Pass + EndFrame
+    // SwapBuffers — Vulkan path 下退化为 no-op；帧生命周期由主循环
+    // (Application::Run) 通过 BeginRenderFrame / EndRenderFrame 显式驱动。
+    // Window::OnUpdate 仍调本函数（OpenGL path 需要 glfwSwapBuffers），不再做帧录制。
     // =========================================================================
 
-    void VulkanContext::SwapBuffers()
+    void VulkanContext::SwapBuffers() {}
+
+    void VulkanContext::BeginRenderFrame()
     {
-        if (!BeginFrame())
+        BeginFrame(); // 内部 m_FrameInProgress 跟踪 swapchain recreate 情况
+    }
+
+    void VulkanContext::EndRenderFrame()
+    {
+        if (!m_FrameInProgress)
             return;
 
         VkCommandBuffer cmd        = m_CommandBuffers[m_CurrentFrame];
         const uint32_t  imageIndex = m_PendingImageIndex;
 
+        RecordDefaultFramePasses(cmd, imageIndex);
+        EndFrame();
+    }
+
+    void VulkanContext::RecordDefaultFramePasses(VkCommandBuffer cmd, uint32_t imageIndex)
+    {
         const bool hasPendingDraws = !m_PendingDrawCalls.empty();
         const bool canDebugDraw    = hasPendingDraws && m_DebugRenderPass != VK_NULL_HANDLE &&
                                   m_DebugPipeline != VK_NULL_HANDLE && m_DebugLinePipeline != VK_NULL_HANDLE &&
@@ -404,8 +419,6 @@ namespace Engine
 
         // ImGui pass: 始终录制（drawData 为空时只做 layout transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR）
         RecordImGuiPass(cmd, imageIndex);
-
-        EndFrame();
     }
 
     // =========================================================================
