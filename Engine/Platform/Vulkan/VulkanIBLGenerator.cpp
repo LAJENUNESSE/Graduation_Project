@@ -302,7 +302,10 @@ namespace Engine
         {
             ENGINE_CORE_WARN("[VulkanIBL] Skybox face size = 0 (VulkanTextureCubemap not yet implemented); "
                              "Irradiance/Prefilter generation skipped");
-            m_IBLReady = true; // BRDF LUT 已就绪
+            // m_IBLReady 保持 false：单 BRDF LUT 不构成"IBL 就绪"，
+            // 三个 GetXxxID() 在 Vulkan 路径下都返回 0；若此处置 true，
+            // SkyboxSystem::HasIBL() 会让 SceneRenderer 用 id=0 调 BindCubemapUnit，破坏 PBR 采样。
+            // 等 VulkanTextureCubemap 实装后由完整 Generate 末尾置 true。
             return;
         }
 
