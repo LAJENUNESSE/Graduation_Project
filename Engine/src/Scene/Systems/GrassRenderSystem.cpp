@@ -97,10 +97,18 @@ namespace Engine
         const char* forceDirect    = std::getenv("ENGINE_GRASS_DIRECT_DRAW");
         bool        envForceDirect = forceDirect && forceDirect[0] == '1';
 
-        m_UseIndirectDraw = !(vmwareDriver || envForceDirect);
+        // Vulkan 路径下 VulkanRendererAPI::DrawArraysIndirect 仍是 stub（Phase 8 接通主路径前不实装），
+        // 同时 VulkanStorageBuffer::GetRendererID() 恒返回 0，indirect 路径必然不出图。
+        // 强制走 DrawArraysInstanced（已实装），GrassCount 在 RebuildGrass Vulkan 分支同步阻塞读回。
+        bool vulkanBackend = RendererAPI::GetAPI() == RendererAPI::API::Vulkan;
+
+        m_UseIndirectDraw = !(vmwareDriver || envForceDirect || vulkanBackend);
         if (!m_UseIndirectDraw)
         {
-            ENGINE_WARN("[Grass] Using direct instanced draw fallback (VMware compatibility mode).");
+            const char* reason = vulkanBackend  ? "Vulkan backend (DrawArraysIndirect not yet implemented)"
+                                 : vmwareDriver ? "VMware compatibility mode"
+                                                : "ENGINE_GRASS_DIRECT_DRAW=1";
+            ENGINE_WARN("[Grass] Using direct instanced draw fallback ({}).", reason);
         }
     }
 
@@ -334,6 +342,7 @@ namespace Engine
 
             // 4) 同步阻塞读回 grassCount — 草地构建低频，可接受 GPU stall
             //    AsyncReadback 在 Vulkan 端暂未实装（Phase 7 Step 8 推迟）。
+            //    Vulkan 路径下 Init() 强制 m_UseIndirectDraw=false，此分支必然命中。
             if (!m_UseIndirectDraw)
             {
                 GrassCounterData readback{0};
