@@ -9,15 +9,29 @@
 
 ## 1. 当前位置
 
-- **进行中阶段**：Phase 7 ✅ 收尾 → 准备进入 Phase 8（PBR pass）
-- **最近一次 commit**：`0fa0923 phase7: SPH 整体 Vulkan 化（7 shader + PCISPH 8 迭代 + 粒子 SPH 接入）`
-- **下一步**：见 [§6 Next Steps](#6-next-steps)（VulkanTextureCubemap → Phase 8）
+- **进行中阶段**：Phase 8 — Vulkan PBR pass 接通中（cubemap + Editor 主路径 + IBL view 分派完成；DrawIndexed 真实实装待 Phase 8.2）
+- **最近一次 commit**：`8f16fa0 feat(vulkan): switch Editor main path + IBL view API dispatch + frame ordering`
+- **下一步**：见 [§6 Next Steps](#6-next-steps)（VulkanVertexArray + Pipeline Cache + DrawIndexed 实装 → Phase 8.2）
 
 ---
 
 ## 2. 已完成 Phase（按时间倒序）
 
-### Phase 7 — Compute 迁移 ⬅️ 进行中
+### Phase 8 — Vulkan PBR pass 接通 ⬅️ 进行中
+
+**已完成**
+- [x] `VulkanTextureCubemap` 实装 — VMA Image (arrayLayers=6 + CUBE_COMPATIBLE) + cube ImageView + Sampler + 6 region staging（`0c6eb28`）
+- [x] `VulkanIBLGenerator::Generate` 接入真实 cubemap — 删占位 envAtlas，descriptor binding=1 改 COMBINED_IMAGE_SAMPLER + cube view；IBL GLSL 双路径 `#ifdef VULKAN samplerCube` / OpenGL atlas + imageLoad（`28fcfc9`）
+- [x] `EditorApp.cpp` 删 Vulkan→SmokeLayer 硬切，统一走 EditorLayer（`8f16fa0`）
+- [x] `GraphicsContext::{Begin,End}RenderFrame` 抽象 + Vulkan override + `Application::Run` 主循环时序（BeginRenderFrame → OnUpdate → ImGui → EndRenderFrame → Window::OnUpdate）（`8f16fa0`）
+- [x] `IBLGenerator::Get{Irradiance,Prefilter,BRDFLut}View / GetIBLSampler` 4 个 `void*` 虚函数 + `VulkanIBLGenerator` override + `SkyboxSystem` 透传 + `RenderCommand::Bind{Cubemap,Texture}View`（`8f16fa0`）
+- [x] `SceneRenderer::GeometryPass` IBL 按 API 分派 ID vs View；PBR.glsl IBL 采样器 `#ifdef VULKAN` 显式 `layout(set=0, binding=6/7/8)`（`8f16fa0`）
+
+**待 Phase 8.2**
+- [ ] `VulkanRendererAPI::DrawIndexed` 真实实装 — 需新建 `VulkanVertexArray`（BufferLayout → VkVertexInputBindingDescription/AttributeDescription）+ Pipeline Cache（shader hash + render pass + vertex layout）+ DescriptorSet flush + 主帧 cmd 录制
+- [ ] Vulkan path PBR mesh 真实可见（当前 DrawIndexed 走 warn-once-fallback，PBR mesh 在 Vulkan path 不渲染但不崩）
+
+### Phase 7 — Compute 迁移 ✅
 
 **基础设施**（已就绪）
 - [x] `VulkanContext` 增加 compute queue family 查询（`16a3db0`）
@@ -39,14 +53,14 @@
 - [x] `ParticleSystemGPU` 非 SPH 路径 — emit / simulate / render_args 3 dispatch + 4 shader（`399bd2c`）
 - [x] `FluidSystemGPU` emit/simulate — 2 dispatch + 2 shader + MeshSDFMeta 异步回读预埋（`42eb259`）
 - [x] SPH 整体迁移 — 7 SPH shader + FluidSystemGPU PCISPH 8 迭代 + 粒子 SPH WCSPH 接入（`0fa0923`）
-- [ ] `VulkanTextureCubemap` — 解锁 IBL 真实 skybox 像素，目前用占位 env atlas
+- [x] `VulkanTextureCubemap` 实装（`0c6eb28`，移到 Phase 8）
 
-### Phase 6 — ImGui 集成（部分完成）
+### Phase 6 — ImGui 集成 ✅
 
 - [x] `imgui_impl_vulkan` 初始化 + RenderPass + descriptor pool（`5f0fe51`）
 - [x] 多视口（Vulkan only）
 - [x] `VulkanSmokeLayer` 增加 ImGui 验证窗口（`d807afe`）
-- [ ] `VulkanContext::RenderImGui()` 实际渲染 ImGui draw data（当前 stub）—— 阻塞 Editor 主路径
+- [x] `VulkanContext::RenderImGui()` 实装 — 缓存 drawData 指针，`RecordImGuiPass(cmd, imageIndex)` 录制到主帧 cmd 调 `ImGui_ImplVulkan_RenderDrawData`
 
 ### Phase 5 — 资源抽象 ✅
 
@@ -172,6 +186,12 @@
 > **Why**：(1) SPH stable params 高度重叠（h / mass / restDensity / cellSize 等都在 ≥4 shader 复用），独立 UBO 等于 7 次重复上传同样数据；(2) cpp 端只维护一份 `SPHParamsUBO`，每帧调用 `SetData` 一次，所有 dispatch 共享；(3) push constant 三字段覆盖所有 shader 实际需求，某 shader 不读的字段无害（PC 是寄存器写入，读不读取决于 shader main 函数）。
 > **How to apply**：跨 ParticleSystemGPU / FluidSystemGPU 不共享 UBO 实例（每系统持自己的 `m_SPHParamsUBO`），但 GLSL 层共享 layout；新增 SPH shader 时复用本 UBO + PC 结构，避免再分裂。Vulkan 路径 GLSL 内用 `#define u_XXX` 映射到 UBO 字段，OpenGL 路径 `uniform u_XXX` 保留（P-14）。
 
+### D-16：主循环显式驱动帧边界 — `GraphicsContext::{Begin,End}RenderFrame`
+
+> **Decision**：`GraphicsContext` 抽象层加 `virtual void BeginRenderFrame() {}` / `virtual void EndRenderFrame() {}` 默认 no-op；`VulkanContext` override：`BeginRenderFrame`=`BeginFrame`（acquire swapchain + Begin cmd），`EndRenderFrame`=`RecordDefaultFramePasses`（清屏/debug/ImGui）+ `EndFrame`（submit + present）。`SwapBuffers` 在 Vulkan path 退化为 no-op，OpenGL 仍 `glfwSwapBuffers`。`Application::Run` 主循环顺序：`BeginRenderFrame → layer->OnUpdate → ImGui Begin/End → EndRenderFrame → Window::OnUpdate`。
+> **Why**：Phase 7 已将 `ParticleSystemGPU::UpdateVulkan` / `FluidSystemGPU` 改为录入主帧 cmd（D-3 / ADR-0002），它们在 `OnUpdate` 期间调 `ctx->GetCurrentFrameCommandBuffer()`。Phase 8 接通 EditorLayer 后此调用真实发生，但原 `BeginFrame` 在 `Window::OnUpdate → SwapBuffers` 内部、晚于 `OnUpdate` → `m_FrameInProgress==false` cmd 为空。把帧边界提前到主循环显式驱动，让 dispatch 拿到的 cmd 始终有效。
+> **How to apply**：所有需要每帧录主帧 cmd 的系统在 `Layer::OnUpdate` 阶段直接调 `VulkanContext::Get()->GetCurrentFrameCommandBuffer()`；SmokeLayer 也走主循环统一流程，不需要单独调 SwapBuffers。新增 GraphicsContext 实现必须 override 这两个虚函数（OpenGL 留空即可）。同时消化 P-11 接口正向修（IBL 按 API 分派 view vs ID）— SkyboxSystem 加 GetXxxView() 透传 + SceneRenderer GeometryPass 按 RendererAPI::GetAPI() 分派。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -180,16 +200,16 @@
 |---|------|---------|------|
 | P-1 | `prefix_sum` 三 pass 之间 barrier 不能省 | SpatialHashGrid scan 阶段 | 每 pass 间插入 `ResolveBarrierBits(ShaderStorage)`，原 plan 风险点 4 已确认 |
 | P-2 | 主帧 stall | 每帧调用 `BeginSingleTimeCommands` | 见 D-3，每帧路径禁用 SingleTime |
-| P-3 | IBL 用占位 env atlas | `VulkanTextureCubemap` 未实装 | 仅 BRDF LUT 可信，Irradiance/Prefilter 输出无实际意义直到 Cubemap 完成 |
-| P-4 | Editor 主路径在 Vulkan 下显示空场景 | `--vulkan` 走 `VulkanSmokeLayer` | 不要拿"Vulkan 下 Editor 没渲染"当 bug，PBR 接入是 Phase 8 任务 |
+| P-3 | ~~IBL 用占位 env atlas~~ — **已消化**（`28fcfc9`）：`VulkanTextureCubemap` 实装后 `VulkanIBLGenerator::Generate` 用真实 cube view + sampler 输入 Irradiance/Prefilter dispatch | — | — |
+| P-4 | ~~Editor 主路径在 Vulkan 下显示空场景~~ — **已消化**（`8f16fa0`）：`EditorApp.cpp` 删硬切走 EditorLayer + 主循环 BeginRenderFrame/EndRenderFrame 时序 | — | — |
 | P-5 | `Engine/src/` 重新引入 `#include <glad/gl.h>` | 新增 OpenGL-only 代码 | Phase 1 已封堵，新代码必须走 `RendererAPI` 抽象；考虑加 lint hook |
 | P-6 | vcpkg manifest 安装失败 — `curl error 35 SSL connect error` | CMake configure 时 vcpkg 从 GitHub 拉源码 | 见 D-8；优先 Vulkan SDK 自带；必要时换 vcpkg baseline 或加 git mirror |
 | P-7 | `u8"中文"` 在 C++20 报 C2664 类型不匹配 ImGui `const char*` | ImGui::Text / Begin 等 API 传字面量 | 项目用 `/utf-8` 编译，**普通 `"中文"` 即可**，不要加 `u8` 前缀；`char8_t` 与 `char` 是不同类型 |
 | P-8 | Bash 工具 `cd vendor/<submodule>` 后续命令仍在子目录运行 | 子模块内 reset/查 status 后继续工作 | 用 `git -C "<repo-root>" ...` 显式指定主仓库根；或用绝对路径，禁止依赖 cwd 状态 |
 | P-9 | 多次 `SpatialHashGrid::BuildVulkan` 同帧调用，pool Reset() 内置会让前次 set 失效 → cmd submit UAF | PCISPH 8 迭代每次内部 Grid.Build / 同帧粒子+流体共享 Grid | pool reset 移出 BuildVulkan；调用方每帧首次显式 `ResetFrameResources()`；pool 容量扩到 64 |
 | P-10 | 主帧单 submit 只 signal 1 个 fence | AsyncReadback ring 需独立 fence | 不复用 swapchain inFlightFence；EndFrame 在主 submit 之后追加零 cmd submit 信号化 |
-| P-11 | `VulkanIBLGenerator` 在 cubemap 不可用时 `m_IBLReady=true`（仅 BRDF LUT 完成，Irradiance/Prefilter 跳过），但 `GetXxxMapID()` 恒返回 0；`SkyboxSystem::HasIBL()` 在 Vulkan path 下会被误判为 true → 调用方拿到无效句柄 | Vulkan path 接通 SceneRenderer（Phase 8 PBR）时触发；当前 SmokeLayer 无 SceneRenderer 实例不触发 | Phase 8 前二选一：(a) `m_IBLReady` 改语义只有 Irradiance/Prefilter 也就绪才 true；(b) 改用 D-7 中的 `GetXxxView()` 接口，SceneRenderer 按 API 分派 |
-| P-12 | `GrassRenderSystem::Init` 在 Vulkan path 下 `m_UseIndirectDraw=true` 但渲染时调 `RenderCommand::DrawArraysIndirect`（OpenGL-only），渲染将退化或崩 | Vulkan path 接通 Scene 渲染（Phase 8）时触发；当前 grass compute commit 走 SmokeLayer 验证不触发 | Phase 8 前在 GrassRenderSystem Init 内按 `RendererAPI::GetAPI()` 切换；或在 VulkanRendererAPI 实装 DrawArraysIndirect |
+| P-11 | ~~IBL HasIBL 与 GetXxxMapID=0 不一致~~ — **已消化**（`1cc2c6a` 止血 + `28fcfc9` cubemap 接入 + `8f16fa0` view 接口正向修）：完整 Generate 末尾才 `m_IBLReady=true`；SkyboxSystem + IBLGenerator 加 `GetXxxView()` void* 透传，SceneRenderer GeometryPass 按 API 分派 | — | — |
+| P-12 | Grass `DrawArraysIndirect` stub — **已止血**（`e7fa266`）：`GrassRenderSystem::Init` Vulkan path 强制 `m_UseIndirectDraw=false` 走 instanced。真实 `vkCmdDrawIndirect` 实装 + `VulkanStorageBuffer::GetRendererID` 唯一化为 Phase 8.2 可选附录 | Vulkan path 接通 Scene 渲染后启用 indirect 路径时触发 | 当前 fallback 已规避；后续实装时需新建 SSBO ID→VkBuffer 映射表 |
 | P-13 | `VulkanShader` push constant 反射强制 offset=0 单段（取 `max(size)`） | 未来 shader 使用 `layout(offset=...)` 多段 push constant | 当前所有迁移 shader 都从 0 起始且单段，约束成立；新增多段 PC 时扩展 `m_ReflectedPushConstants` 为按 range 数组 |
 | P-14 | 双路径 shader 改写时把 OpenGL `uniform vec3 u_EmitterPos` 改名/改类型 → cpp 端 `m_Shader->SetVec3("u_EmitterPos", ...)` 断裂 | Vulkan 迁移时为对齐宏命名一并改 OpenGL uniform 标识 | OpenGL 路径 `uniform 名 / 类型 / 个数`完全保留，新增 `#ifdef VULKAN` 分支独立写 `push_constant` / `UBO`，main 函数用 `#define` 宏（如 `MAX_PARTICLES` / `EMITTER_POS`）抹平两侧引用 |
 | P-15 | 粒子/流体 Vulkan path 独立 `DescriptorPool` 每帧首次未 `Reset()` → set 累积溢出 pool 容量后 alloc 失败 | 每子系统在 cpp 内持有自己的 pool（独立于 `SpatialHashGrid::ResetFrameResources`） | 每帧首次 dispatch 前显式 `pool->Reset()`；本子系统的 pool reset 与 Grid 的 `ResetFrameResources()` 是两件事，不要互相覆盖职责 |
@@ -209,24 +229,25 @@
 
 ## 6. Next Steps
 
-Phase 7 Compute 迁移已收尾（IBL / Grass / SpatialHashGrid / AsyncReadback / Particle / Fluid emit-simulate / SPH 全部 ✅）。下阶段按优先级：
+Phase 8 已完成 cubemap + Editor 主路径切换 + IBL view 分派；Editor.exe --vulkan 现可进入 EditorLayer。下阶段按优先级：
 
-1. **`VulkanTextureCubemap` 实装**
-   - 6 面 atlas 上传 + view + sampler
-   - 解锁 `VulkanIBLGenerator` 真实输入（P-3）
-   - 当前 IBL 仅 BRDF LUT 可信，Irradiance/Prefilter 跳过
+1. **Phase 8.2: `VulkanRendererAPI::DrawIndexed` 真实实装**（最大阻塞 — PBR mesh 在 Vulkan path 仍走 warn-once-fallback 不渲染）
+   - 新建 `VulkanVertexArray.h/cpp`：BufferLayout → `VkVertexInputBindingDescription` / `VkVertexInputAttributeDescription`
+   - 新增 `VulkanPipelineCache`：按 (shader hash + render pass + vertex layout) 缓存 `VulkanPipeline::CreateGraphics`，懒创建
+   - `VulkanRendererAPI::DrawIndexed` 内：取主帧 cmd → 查/建 pipeline → flush descriptor set（含 PBR cache）→ `vkCmdBindPipeline` + `vkCmdBindDescriptorSets` + `vkCmdBindVertexBuffers` + `vkCmdBindIndexBuffer` + `vkCmdDrawIndexed`
+   - 实装 `VulkanRendererAPI::BindCubemapView` / `BindTextureView` 写入 `VulkanContext` 当前帧 PBR descriptor cache
+   - 验证：`Editor.exe --vulkan` 加载 `assets/scenes/流体测试.scene` → 天空盒 + PBR mesh + IBL 反射可见
 
-2. **Phase 8：Vulkan PBR pass — 接通 Editor 主路径**
-   - `VulkanIBLGenerator::GetXxxView()` 接入 PBR 采样
-   - `VulkanContext::RenderImGui()` 实装（解锁 Editor 主路径，当前走 SmokeLayer）
-   - P-11 消化：`VulkanIBLGenerator::HasIBL()` 语义修正（或 SceneRenderer 按 API 分派改用 `GetXxxView()`）
-   - P-12 消化：`GrassRenderSystem::Init` 在 Vulkan path 切换 `m_UseIndirectDraw=false`，或 `VulkanRendererAPI` 实装 `DrawArraysIndirect`
-   - 接通后 Particle/Fluid Update 真正被运行时调用，Vulkan path 视觉与 OpenGL 等价
-
-3. **回头验证（运行时）**
-   - waterfall demo 在 `--vulkan` 下不崩、密度场可视化与 OpenGL 一致
+2. **运行时验证（依赖 Phase 8.2 完成）**
+   - waterfall demo（`assets/scenes/流体测试.scene`）在 `--vulkan` 下视觉与 OpenGL 等价
    - validation layer 0 error
-   - `grep -n "RenderCommand::DispatchCompute" Engine/src/Renderer/{Particle,Fluid}SystemGPU.cpp` 仅命中 OpenGL 分支
+   - 粒子/流体 Update 不触发 VulkanAsyncReadback assert（bug 3 应被 D-16 主循环时序消化）
+
+3. **可选后续：Grass indirect 路径**（P-12 完整修复）
+   - `VulkanStorageBuffer::GetRendererID()` 从 `return 0` 改为 atomic counter 分配唯一 ID
+   - `VulkanContext` 新增 `unordered_map<uint32_t, VkBuffer>` SSBO 注册表
+   - `VulkanRendererAPI::DrawArraysIndirect` 实装 `vkCmdDrawIndirect` + indirect buffer barrier
+   - 完成后可移除 `GrassRenderSystem::Init` 的 Vulkan force fallback (`e7fa266`)
 
 ---
 
