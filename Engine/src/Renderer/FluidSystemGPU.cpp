@@ -12,6 +12,19 @@
 
 #include "Debug/PerformanceMonitor.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Core/Assert.h"
+#include "Platform/Vulkan/VulkanBarrierUtil.h"
+#include "Platform/Vulkan/VulkanBuffer.h"
+#include "Platform/Vulkan/VulkanCommandBuffer.h"
+#include "Platform/Vulkan/VulkanContext.h"
+#include "Platform/Vulkan/VulkanDescriptor.h"
+#include "Platform/Vulkan/VulkanPipeline.h"
+#include "Platform/Vulkan/VulkanShader.h"
+
+#include <vulkan/vulkan.h>
+#endif
+
 namespace Engine
 {
 
@@ -32,13 +45,79 @@ namespace Engine
         glm::vec4 params; // z=density(SPH), w=pressure(SPH)
     };
 
+#ifdef ENGINE_ENABLE_VULKAN
+    namespace
+    {
+        // std140 UBO 镜像 — 与 fluid_emit.glsl 中 EmitParams 块逐字节对应（48B）
+        struct alignas(16) FluidEmitParamsUBO
+        {
+            glm::vec4 EmitterPosV;      // xyz=EmitterPos, w=pad
+            glm::vec4 EmitExtentsV;     // xyz=EmitExtents, w=pad
+            glm::vec4 InitialVelocityV; // xyz=InitialVelocity, w=pad
+        };
+        static_assert(sizeof(FluidEmitParamsUBO) == 48, "FluidEmitParamsUBO must be std140-aligned 48 bytes");
+
+        // std140 UBO 镜像 — 与 fluid_simulate.glsl 中 SimParams 块对应（48B）
+        struct alignas(16) FluidSimParamsUBO
+        {
+            glm::vec4 GravityAndDamping;     // xyz=Gravity, w=Damping
+            glm::vec4 BoundaryMinAndUseFlag; // xyz=BoundaryMin, w=UseBoundary(1.0/0.0)
+            glm::vec4 BoundaryMaxAndMode;    // xyz=BoundaryMax, w=PCISPHMode(1.0/0.0)
+        };
+        static_assert(sizeof(FluidSimParamsUBO) == 48, "FluidSimParamsUBO must be std140-aligned 48 bytes");
+
+        // Push constant 布局：与 fluid_emit.glsl PushConstants 一致（8B）
+        struct FluidEmitPC
+        {
+            uint32_t ParticleCount;
+            float    Time;
+        };
+        static_assert(sizeof(FluidEmitPC) == 8, "FluidEmitPC must be 8 bytes");
+
+        // Push constant 布局：与 fluid_simulate.glsl PushConstants 一致（8B）
+        struct FluidSimulatePC
+        {
+            float    DeltaTime;
+            uint32_t ParticleCount;
+        };
+        static_assert(sizeof(FluidSimulatePC) == 8, "FluidSimulatePC must be 8 bytes");
+
+        // Binding 常量（与 shader layout 一致）
+        constexpr uint32_t FLUID_EMIT_UBO_BINDING = 5;
+        constexpr uint32_t FLUID_SIM_UBO_BINDING  = 6;
+    } // namespace
+
+    // ============================================================
+    // Vulkan 资源（Pimpl）— 仅 ENGINE_ENABLE_VULKAN 时存在
+    // ============================================================
+    struct FluidSystemGPU::VulkanResources
+    {
+        bool                           Initialized = false;
+        VkDevice                       Device      = VK_NULL_HANDLE;
+        Ref<VulkanDescriptorSetLayout> EmitLayout;
+        Ref<VulkanDescriptorSetLayout> SimulateLayout;
+        VulkanComputePipelineHandle    EmitPipeline{};
+        VulkanComputePipelineHandle    SimulatePipeline{};
+        Ref<VulkanDescriptorPool>      Pool;
+    };
+#else
+    struct FluidSystemGPU::VulkanResources
+    {
+        // Empty stub on non-Vulkan builds (header still references the type)
+    };
+#endif
+
     FluidSystemGPU::FluidSystemGPU(uint32_t particleCount)
-        : m_ParticleCount(particleCount), m_CudaImpl(CreateScope<CudaImpl>())
+        : m_ParticleCount(particleCount), m_CudaImpl(CreateScope<CudaImpl>()),
+          m_VulkanResources(CreateScope<VulkanResources>())
     {
     }
 
     FluidSystemGPU::~FluidSystemGPU()
     {
+#ifdef ENGINE_ENABLE_VULKAN
+        DestroyVulkanComputeResources();
+#endif
         // CudaImpl 析构函数处理 CUDA 资源清理
     }
 
@@ -69,6 +148,20 @@ namespace Engine
 
         // Empty VAO for instanced draw
         m_EmptyVAO = VertexArray::Create();
+
+#ifdef ENGINE_ENABLE_VULKAN
+        // Vulkan 路径需要 UBO 上传 emitter / simulate 大块参数（仅 Vulkan 路径创建，
+        // 避免 OpenGL 路径多余资源开销）。
+        // MeshSDFMeta 异步回读 (Commit D 预埋；当前 SPH 段在 Vulkan 下跳过，CopyFrom 实际未触发)。
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            m_EmitParamsUBO = UniformBuffer::Create(sizeof(FluidEmitParamsUBO), FLUID_EMIT_UBO_BINDING);
+            m_SimParamsUBO  = UniformBuffer::Create(sizeof(FluidSimParamsUBO), FLUID_SIM_UBO_BINDING);
+
+            // SDF metadata 异步回读 ring。容量按 MeshSDFMeta 上限分配。
+            m_SDFMetaReadback = GPUAsyncReadback::Create(MAX_MESH_SDF_BODIES * sizeof(GPUMeshSDFData));
+        }
+#endif
 
         m_Initialized = true;
     }
@@ -137,6 +230,16 @@ namespace Engine
     {
         if (!m_Initialized)
             return;
+
+#ifdef ENGINE_ENABLE_VULKAN
+        // Vulkan 路径分派 — emit + simulate 已迁，SPH 段（含 PCISPH 8 迭代）暂跳过，
+        // 由 Commit C 接通。
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            UpdateVulkan(dt, emitterPos, emitter, registry);
+            return;
+        }
+#endif
 
         float clampedDt = std::min(dt, 0.05f);
         m_TotalTime += dt;
@@ -440,5 +543,210 @@ namespace Engine
 
         PerformanceMonitor::Get().SetFluidActive(true);
     }
+
+#ifdef ENGINE_ENABLE_VULKAN
+    // =========================================================================
+    // Vulkan 路径实现（Commit D）
+    //
+    // 范围：fluid_emit + fluid_simulate 录入主帧 cmd。
+    // SPH 段（密度 / 力 / PCISPH 8 迭代）在 Vulkan 路径下显式 WARN+跳过，
+    // 等 Commit C 补齐 sph_*.glsl 的 #ifdef VULKAN 分支后接通。
+    //
+    // 见 SPEC §3 D-3 / D-9 / D-12，ADR-0002。
+    // =========================================================================
+
+    bool FluidSystemGPU::InitVulkanComputeResources()
+    {
+        if (m_VulkanResources->Initialized)
+            return true;
+
+        auto* ctx = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "[Fluid][Vulkan] VulkanContext not initialized");
+        m_VulkanResources->Device = ctx->GetDevice();
+
+        auto emitVk     = std::dynamic_pointer_cast<VulkanShader>(m_EmitShader);
+        auto simulateVk = std::dynamic_pointer_cast<VulkanShader>(m_SimulateShader);
+        ENGINE_CORE_RELEASE_ASSERT(emitVk && simulateVk, "[Fluid][Vulkan] fluid shader 转型失败（非 VulkanShader）");
+
+        VkShaderModule emitModule     = emitVk->GetOrCreateShaderModule(m_VulkanResources->Device, "compute");
+        VkShaderModule simulateModule = simulateVk->GetOrCreateShaderModule(m_VulkanResources->Device, "compute");
+        ENGINE_CORE_RELEASE_ASSERT(emitModule != VK_NULL_HANDLE && simulateModule != VK_NULL_HANDLE,
+                                   "[Fluid][Vulkan] 无法创建 fluid compute shader module");
+
+        // Descriptor set layouts —  由 SPIR-V 反射结果构建
+        m_VulkanResources->EmitLayout = VulkanDescriptorSetLayout::CreateFromReflection(
+            m_VulkanResources->Device, emitVk->GetReflectedBindings(), 0);
+        m_VulkanResources->SimulateLayout = VulkanDescriptorSetLayout::CreateFromReflection(
+            m_VulkanResources->Device, simulateVk->GetReflectedBindings(), 0);
+
+        // Compute pipelines
+        auto buildPipeline = [&](const Ref<VulkanShader>& shader, VkShaderModule module,
+                                 const Ref<VulkanDescriptorSetLayout>& setLayout) -> VulkanComputePipelineHandle
+        {
+            VulkanComputePipelineDesc desc{};
+            desc.ShaderModule = module;
+            desc.EntryPoint   = "main";
+            desc.SetLayouts   = {setLayout->GetHandle()};
+            for (const auto& pc : shader->GetReflectedPushConstants())
+            {
+                VkPushConstantRange r{};
+                r.offset     = pc.Offset;
+                r.size       = pc.Size;
+                r.stageFlags = pc.Stages;
+                desc.PushConstants.push_back(r);
+            }
+            return VulkanPipeline::CreateCompute(m_VulkanResources->Device, desc);
+        };
+
+        m_VulkanResources->EmitPipeline = buildPipeline(emitVk, emitModule, m_VulkanResources->EmitLayout);
+        m_VulkanResources->SimulatePipeline =
+            buildPipeline(simulateVk, simulateModule, m_VulkanResources->SimulateLayout);
+
+        // 每帧最多 2 sets（emit + simulate）；64 容量给充足余量。
+        m_VulkanResources->Pool = VulkanDescriptorPool::CreateDefaultComputePool(m_VulkanResources->Device, 64);
+
+        m_VulkanResources->Initialized = true;
+        ENGINE_CORE_INFO("[Fluid][Vulkan] 流体 compute pipeline 初始化完成 (emit + simulate)");
+        return true;
+    }
+
+    void FluidSystemGPU::DestroyVulkanComputeResources()
+    {
+        if (!m_VulkanResources || !m_VulkanResources->Initialized)
+            return;
+
+        if (m_VulkanResources->Device != VK_NULL_HANDLE)
+            vkDeviceWaitIdle(m_VulkanResources->Device);
+
+        VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->EmitPipeline);
+        VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->SimulatePipeline);
+        m_VulkanResources->Pool.reset();
+        m_VulkanResources->EmitLayout.reset();
+        m_VulkanResources->SimulateLayout.reset();
+        m_VulkanResources->Device      = VK_NULL_HANDLE;
+        m_VulkanResources->Initialized = false;
+    }
+
+    void FluidSystemGPU::UpdateVulkan(float                        dt,
+                                      const glm::vec3&             emitterPos,
+                                      const FluidEmitterComponent& emitter,
+                                      entt::registry*              registry)
+    {
+        (void)registry; // SPH 段在 Vulkan 路径下跳过，不需要 registry
+
+        auto* ctx = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "[Fluid][Vulkan] VulkanContext not initialized");
+
+        VkCommandBuffer cmd = ctx->GetCurrentFrameCommandBuffer();
+        if (cmd == VK_NULL_HANDLE)
+        {
+            // BeginFrame 未执行（swapchain recreate 或 SmokeLayer 直走 SwapBuffers），跳过录制
+            return;
+        }
+
+        if (!InitVulkanComputeResources())
+            return;
+
+        const float clampedDt = std::min(dt, 0.05f);
+        m_TotalTime += dt;
+
+        // Lazy init SPH grid（实际 Vulkan 路径 SPH 段当前跳过，但保持现状以便 Commit C 接通）
+        if (!m_SPHInitialized)
+            InitSPH(emitter.SmoothingRadius);
+
+        PerformanceMonitor::Get().GetFluidComputeGPUTimer().Begin();
+
+        // ---------------- fluid_emit dispatch ----------------
+        // 流体粒子是一次性发射，每帧都重新初始化（与 OpenGL 路径 Emit() 同语义，但这里没单独
+        // Emit 调用入口，按当前实现 simulate 之外不调度 emit；Vulkan 路径下亦如此，
+        // 维持与原 OpenGL Update 行为一致）。
+        //
+        // 不过为遵循"FluidSystemGPU 全 dispatch Vulkan 化"目标，本路径下若上层调用 Emit()
+        // 会经 RenderCommand::DispatchCompute（OpenGL 路径），Vulkan 路径下 Emit() 当前
+        // 不会被外部触发。完整 emit 接入路径在 Commit C 接通 SceneRenderer 后明确。
+        //
+        // 本 Update 录制只走 simulate（与原 OpenGL Update 行为对齐：Update 内不调 emit）。
+        //
+        // [SPH 段跳过] ----------------
+        {
+            static bool s_SPHSkipWarned = false;
+            if (!s_SPHSkipWarned)
+            {
+                ENGINE_CORE_WARN("[Vulkan] FluidSystemGPU SPH path not yet migrated (Commit C). "
+                                 "Density / Force / PCISPH 迭代跳过，仅执行 fluid_simulate。");
+                s_SPHSkipWarned = true;
+            }
+        }
+
+        // ---------------- fluid_simulate dispatch ----------------
+        // 写 simulate UBO（gravity + damping + boundary + mode）
+        FluidSimParamsUBO simUbo{};
+        glm::vec3         simGravity = emitter.PCISPHEnabled ? glm::vec3(0.0f) : emitter.Gravity;
+        simUbo.GravityAndDamping     = glm::vec4(simGravity, emitter.Damping);
+        simUbo.BoundaryMinAndUseFlag = glm::vec4(emitterPos + emitter.BoundaryMin, emitter.UseBoundary ? 1.0f : 0.0f);
+        simUbo.BoundaryMaxAndMode    = glm::vec4(emitterPos + emitter.BoundaryMax, emitter.PCISPHEnabled ? 1.0f : 0.0f);
+        m_SimParamsUBO->SetData(&simUbo, sizeof(FluidSimParamsUBO));
+
+        VkDescriptorSet simulateSet = m_VulkanResources->Pool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
+        if (simulateSet == VK_NULL_HANDLE)
+        {
+            ENGINE_CORE_WARN("[Fluid][Vulkan] DescriptorPool 耗尽，Reset 后重试");
+            m_VulkanResources->Pool->Reset();
+            simulateSet = m_VulkanResources->Pool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
+        }
+        ENGINE_CORE_RELEASE_ASSERT(simulateSet != VK_NULL_HANDLE, "[Fluid][Vulkan] simulate DescriptorPool 分配仍失败");
+
+        auto vkParticle = std::dynamic_pointer_cast<VulkanStorageBuffer>(m_ParticleBuffer);
+        auto vkSimUBO   = std::dynamic_pointer_cast<VulkanUniformBuffer>(m_SimParamsUBO);
+        ENGINE_CORE_RELEASE_ASSERT(vkParticle && vkSimUBO, "[Fluid][Vulkan] particle/sim UBO 转型失败");
+
+        {
+            VulkanDescriptorWriter w;
+            w.WriteBuffer(0, vkParticle->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(FLUID_SIM_UBO_BINDING, vkSimUBO->GetBuffer(), 0, sizeof(FluidSimParamsUBO),
+                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            w.UpdateSet(m_VulkanResources->Device, simulateSet);
+        }
+
+        VulkanCommandBuffer cmdBuf(cmd);
+        cmdBuf.BindComputePipeline(m_VulkanResources->SimulatePipeline.Pipeline);
+        cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->SimulatePipeline.Layout, 0,
+                                  {simulateSet});
+
+        FluidSimulatePC simPC{};
+        simPC.DeltaTime     = clampedDt;
+        simPC.ParticleCount = m_ParticleCount;
+        cmdBuf.PushConstants(m_VulkanResources->SimulatePipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                             sizeof(FluidSimulatePC), &simPC);
+
+        const uint32_t simGroups = (m_ParticleCount + 255) / 256;
+        if (simGroups > 0)
+            cmdBuf.Dispatch(simGroups, 1, 1);
+
+        {
+            auto m = ResolveBarrierBits(BarrierBit::ShaderStorage);
+            cmdBuf.MemoryBarrier(m.SrcStage, m.DstStage, m.SrcAccess, m.DstAccess);
+        }
+
+        // ---------------- MeshSDFMeta 异步回读（Commit D 预埋）----------------
+        // SPH 段在 Vulkan 下跳过，m_MeshSDFMetaBuffer 当前不会被 InitMeshSDFBuffer 创建，
+        // 此 guard 让 Commit C 接通 SPH 段后该路径自动生效。
+        if (m_SDFMetaReadback && m_MeshSDFMetaBuffer)
+        {
+            if (m_SDFMetaReadback->IsPending() && m_SDFMetaReadback->IsReady())
+            {
+                // 读最老槽（3 帧延迟）。当前为 placeholder（实际消费方留待 Commit C 落地）。
+                std::vector<GPUMeshSDFData> staging(MAX_MESH_SDF_BODIES);
+                m_SDFMetaReadback->GetData(staging.data(), MAX_MESH_SDF_BODIES * sizeof(GPUMeshSDFData));
+                // 注：Commit C 接通 SPH 后会用 staging 填充 m_MeshSDFDebugBodies，
+                // 当前 Vulkan 路径 SPH 段跳过，此处仅完成读取消费 ring 槽避免堆积。
+            }
+            m_SDFMetaReadback->CopyFrom(m_MeshSDFMetaBuffer, MAX_MESH_SDF_BODIES * sizeof(GPUMeshSDFData), 0);
+        }
+
+        PerformanceMonitor::Get().GetFluidComputeGPUTimer().End();
+        PerformanceMonitor::Get().SetFluidActive(true);
+    }
+#endif // ENGINE_ENABLE_VULKAN
 
 } // namespace Engine

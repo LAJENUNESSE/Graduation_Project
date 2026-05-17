@@ -15,6 +15,33 @@ struct GPUParticle
     vec4 params;
 };
 
+#ifdef VULKAN
+// Vulkan 路径：SSBO 加 set=0，simulate 大块参数走 UBO，小常量走 push constant
+layout(std430, set = 0, binding = 0) buffer ParticlePool { GPUParticle particles[]; };
+
+// Simulate 参数 UBO
+layout(std140, set = 0, binding = 6) uniform SimParams
+{
+    vec4 u_GravityAndDamping;     // xyz=Gravity, w=Damping
+    vec4 u_BoundaryMinAndUseFlag; // xyz=BoundaryMin, w=UseBoundary(1.0/0.0)
+    vec4 u_BoundaryMaxAndMode;    // xyz=BoundaryMax, w=PCISPHMode(1.0/0.0)
+};
+
+layout(push_constant) uniform PushConstants
+{
+    float u_DeltaTimePC;
+    uint  u_ParticleCountPC;
+} pc;
+
+#define DT_VAL        pc.u_DeltaTimePC
+#define PCOUNT_VAL    pc.u_ParticleCountPC
+#define GRAVITY_VAL   u_GravityAndDamping.xyz
+#define DAMPING_VAL   u_GravityAndDamping.w
+#define BMIN_VAL      u_BoundaryMinAndUseFlag.xyz
+#define BMAX_VAL      u_BoundaryMaxAndMode.xyz
+#define USE_BOUNDARY  (u_BoundaryMinAndUseFlag.w > 0.5)
+#define PCISPH_MODE   (u_BoundaryMaxAndMode.w > 0.5)
+#else
 layout(std430, binding = 0) buffer ParticlePool { GPUParticle particles[]; };
 
 uniform float u_DeltaTime;
@@ -26,27 +53,37 @@ uniform vec3  u_BoundaryMax;
 uniform int   u_UseBoundary;
 uniform int   u_PCISPHMode;  // 0=标准WCSPH, 1=PCISPH（位置已由 apply 写入）
 
+#define DT_VAL        u_DeltaTime
+#define PCOUNT_VAL    uint(u_ParticleCount)
+#define GRAVITY_VAL   u_Gravity
+#define DAMPING_VAL   u_Damping
+#define BMIN_VAL      u_BoundaryMin
+#define BMAX_VAL      u_BoundaryMax
+#define USE_BOUNDARY  (u_UseBoundary != 0)
+#define PCISPH_MODE   (u_PCISPHMode != 0)
+#endif
+
 void main()
 {
     uint idx = gl_GlobalInvocationID.x;
-    if (idx >= uint(u_ParticleCount)) return;
+    if (idx >= PCOUNT_VAL) return;
 
     vec3 vel = particles[idx].velAndMaxLife.xyz;
 
     // 先叠加重力（PCISPH 模式下外部传入零重力）
-    if (u_PCISPHMode == 0)
+    if (!PCISPH_MODE)
     {
-        vel += u_Gravity * u_DeltaTime;
+        vel += GRAVITY_VAL * DT_VAL;
     }
 
     // 再阻尼（统一与 CUDA FluidSimulateKernel 顺序：先力后阻尼）
-    vel *= u_Damping;
+    vel *= DAMPING_VAL;
 
     vec3 pos;
-    if (u_PCISPHMode == 0)
+    if (!PCISPH_MODE)
     {
         // WCSPH：正常积分位置
-        pos = particles[idx].posAndLife.xyz + vel * u_DeltaTime;
+        pos = particles[idx].posAndLife.xyz + vel * DT_VAL;
     }
     else
     {
@@ -55,21 +92,21 @@ void main()
     }
 
     // 边界约束（穿透深度反射 + 速度反弹）
-    if (u_UseBoundary != 0)
+    if (USE_BOUNDARY)
     {
         float restitution = 0.3;
         for (int i = 0; i < 3; i++)
         {
-            if (pos[i] < u_BoundaryMin[i])
+            if (pos[i] < BMIN_VAL[i])
             {
-                float penetration = u_BoundaryMin[i] - pos[i];
-                pos[i] = u_BoundaryMin[i] + penetration * restitution;
+                float penetration = BMIN_VAL[i] - pos[i];
+                pos[i] = BMIN_VAL[i] + penetration * restitution;
                 vel[i] = abs(vel[i]) * restitution;
             }
-            else if (pos[i] > u_BoundaryMax[i])
+            else if (pos[i] > BMAX_VAL[i])
             {
-                float penetration = pos[i] - u_BoundaryMax[i];
-                pos[i] = u_BoundaryMax[i] - penetration * restitution;
+                float penetration = pos[i] - BMAX_VAL[i];
+                pos[i] = BMAX_VAL[i] - penetration * restitution;
                 vel[i] = -abs(vel[i]) * restitution;
             }
         }

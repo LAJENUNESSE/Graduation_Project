@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Renderer/GPUAsyncReadback.h"
 #include "Renderer/Shader.h"
 #include "Renderer/SPHCommon.h"
 #include "Renderer/SpatialHashGrid.h"
 #include "Renderer/StorageBuffer.h"
+#include "Renderer/UniformBuffer.h"
 #include "Renderer/VertexArray.h"
 
 #include <entt/entt.hpp>
@@ -32,13 +34,13 @@ namespace Engine
 
         struct MeshSDFDebugStats
         {
-            uint32_t BodyCount          = 0;
-            uint32_t VoxelCount         = 0;
-            uint32_t EstimatedSamples   = 0;
-            uint32_t Resolution         = 0;
-            float    Band               = 0.0f;
-            float    LastBuildCpuMs     = 0.0f;
-            bool     Enabled            = false;
+            uint32_t BodyCount        = 0;
+            uint32_t VoxelCount       = 0;
+            uint32_t EstimatedSamples = 0;
+            uint32_t Resolution       = 0;
+            float    Band             = 0.0f;
+            float    LastBuildCpuMs   = 0.0f;
+            bool     Enabled          = false;
         };
 
         FluidSystemGPU(uint32_t particleCount);
@@ -51,9 +53,9 @@ namespace Engine
                     const FluidEmitterComponent& emitter,
                     entt::registry*              registry = nullptr);
 
-        uint32_t                 GetParticleCount() const { return m_ParticleCount; }
-        Ref<ShaderStorageBuffer> GetParticleBuffer() const { return m_ParticleBuffer; }
-        Ref<VertexArray>         GetEmptyVAO() const { return m_EmptyVAO; }
+        uint32_t                             GetParticleCount() const { return m_ParticleCount; }
+        Ref<ShaderStorageBuffer>             GetParticleBuffer() const { return m_ParticleBuffer; }
+        Ref<VertexArray>                     GetEmptyVAO() const { return m_EmptyVAO; }
         const std::vector<MeshSDFDebugBody>& GetMeshSDFDebugBodies() const { return m_MeshSDFDebugBodies; }
         const MeshSDFDebugStats&             GetMeshSDFDebugStats() const { return m_MeshSDFDebugStats; }
 
@@ -101,6 +103,26 @@ namespace Engine
         // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
         struct CudaImpl;
         Scope<CudaImpl> m_CudaImpl;
+
+        // ---- Vulkan 路径（emit + simulate；SPH 段 Commit C 接通）----
+        // Vulkan 资源以 Pimpl 隐藏在 .cpp，避免 .h 引入 Vulkan 头依赖。
+        struct VulkanResources;
+        Scope<VulkanResources> m_VulkanResources;
+
+        // Emit / Simulate 走 UBO 上传大块参数（仅 Vulkan 路径）
+        Ref<UniformBuffer> m_EmitParamsUBO;
+        Ref<UniformBuffer> m_SimParamsUBO;
+
+        // MeshSDFMeta 异步回读（Commit D 预埋；当前 SPH 段在 Vulkan 跳过，跑不到）
+        Ref<GPUAsyncReadback> m_SDFMetaReadback;
+
+        // Vulkan 路径 Update 分派
+        void UpdateVulkan(float                        dt,
+                          const glm::vec3&             emitterPos,
+                          const FluidEmitterComponent& emitter,
+                          entt::registry*              registry);
+        bool InitVulkanComputeResources();
+        void DestroyVulkanComputeResources();
     };
 
 } // namespace Engine
