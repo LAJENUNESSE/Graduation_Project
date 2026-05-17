@@ -10,8 +10,8 @@
 ## 1. 当前位置
 
 - **进行中阶段**：Phase 7（Compute 迁移）
-- **最近一次 commit**：`23aa89f docs(SPEC): 记录 Codex 静态审查的三处 Vulkan path 已知风险`
-- **下一步**：见 [§6 Next Steps](#6-next-steps)
+- **最近一次 commit**：`42eb259 phase7: FluidSystemGPU fluid_emit/simulate Vulkan 化 + MeshSDFMeta 异步回读预埋`
+- **下一步**：见 [§6 Next Steps](#6-next-steps)（仅剩 Commit C — SPH 整体迁移）
 
 ---
 
@@ -36,8 +36,9 @@
 - [x] `SpatialHashGrid` — hash / prefix_sum (三 pass) / scatter（`93b2e2d`）
 - [x] `AsyncReadback` ring buffer — VulkanAsyncReadback 3 槽 + 独立 fence + EndFrame 零 cmd submit 信号化（`ad31c42`）
 - [x] `SpatialHashGrid::BuildVulkan(cmd, ...)` 接受外部 cmd buffer + ResetFrameResources，每帧调用方录主帧 cmd（`c7b2c92`）
-- [ ] `ParticleSystemGPU` — emit / simulate / sort compute
-- [ ] `FluidSystemGPU` + PCISPH — predict / pressure / correct / integrate
+- [x] `ParticleSystemGPU` 非 SPH 路径 — emit / simulate / render_args 3 dispatch + 4 shader（`399bd2c`）
+- [x] `FluidSystemGPU` emit/simulate — 2 dispatch + 2 shader + MeshSDFMeta 异步回读预埋（`42eb259`）
+- [ ] SPH 整体迁移（Commit C）— sph_density / sph_force / sph_pcisph_*(5) 7 shader + FluidSystemGPU::UpdateSPHVulkan PCISPH 8 迭代 + 回头补 ParticleSystemGPU SPH 分支
 - [ ] `VulkanTextureCubemap` — 解锁 IBL 真实 skybox 像素，目前用占位 env atlas
 
 ### Phase 6 — ImGui 集成（部分完成）
@@ -153,6 +154,18 @@
 > **Why**：PCISPH 1~8 迭代同帧多次调 BuildVulkan + 原内部 Pool->Reset() = 第二次 reset 让第一次的 set 失效（已 BindDescriptorSets 录入 cmd），cmd submit 时 UAF。
 > **How to apply**：每帧首次 `ResetFrameResources()` → `SetExternalBuffers(...)` → `BuildVulkan(cmd, alive, false)` → ... → 同帧后续可多次 `BuildVulkan(cmd, alive, true)` 复用同一 pool 但 alloc 新 set。
 
+### D-13：粒子/流体每帧 Vulkan 参数分流 — UBO + push constant
+
+> **Decision**：每帧粒子/流体 dispatch 的常量参数按"是否 >16B + 是否每 dispatch 变化"二分：每 dispatch 必变的小常量（emitCount / dt / maxParticles / seed / flags）走 `layout(push_constant)`（≤16B），emitter 状态 / boundary / SDF / 颜色梯度等大块向量参数走 UBO（binding=5 emit、binding=6 simulate）。OpenGL 路径保留原 `uniform vec3 u_EmitterPos` 等具名 uniform 不变，shader 主体用 `#define` 宏（如 `EMITTER_POS / SPEED_MIN / SIZE_START`）统一两侧 main 函数表达式。
+> **Why**：push constant 最小保证 128B，但 emitter 6 vec4 = 96B 占满后再加小常量风险面大；语义上 emitter 是"每次发射周期变化"，每 dispatch 必变的才是小常量。OpenGL uniform 名保留是兼容 cpp 端 `Shader::SetInt/Float/Vec3` 调用 — 不能因 shader 改写让 cpp 端断裂。
+> **How to apply**：新增每帧 Vulkan dispatch 时按此模板分流；新增 UBO 绑定从 binding=5 起，避开 SSBO 占用的 0~4 + binding 9（PCISPH）。Vulkan 路径下 UBO 由 cpp 端按 API 分支 `Create`，OpenGL 路径不 alloc。
+
+### D-14：`MeshSDFMeta` 调试回读 Vulkan-only 切换到 `GPUAsyncReadback`
+
+> **Decision**：Vulkan 路径 `FluidSystemGPU::Init` 创建 `m_SDFMetaReadback = GPUAsyncReadback::Create(sizeof(MeshSDFMeta))`，`UpdateVulkan` 末尾以 `m_MeshSDFMetaBuffer` 双 guard 调用 `IsPending/IsReady/GetData/CopyFrom` 五函数模式。OpenGL 路径保留原 `GetData` 同步读，零回归。
+> **Why**：原同步路径在 Vulkan 下等同 `vmaMapMemory` 同步读 host-visible（违反 D-4 异步回读要求）；但 OpenGL 路径低频且工作正常，盲改面会扩大回归风险，故仅 Vulkan 切换。
+> **How to apply**：未来新增 GPU→CPU 调试回读时 — Vulkan 路径强制走 `GPUAsyncReadback`，禁裸 `vmaMapMemory`；OpenGL 路径按工程量决定是否一并切换。当前 SPH 段在 Vulkan 下跳过（Commit C 接入前），所以本 commit 的 readback 调用为预埋状态，C 接通 `InitMeshSDFBuffer` 后自然生效。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -172,6 +185,8 @@
 | P-11 | `VulkanIBLGenerator` 在 cubemap 不可用时 `m_IBLReady=true`（仅 BRDF LUT 完成，Irradiance/Prefilter 跳过），但 `GetXxxMapID()` 恒返回 0；`SkyboxSystem::HasIBL()` 在 Vulkan path 下会被误判为 true → 调用方拿到无效句柄 | Vulkan path 接通 SceneRenderer（Phase 8 PBR）时触发；当前 SmokeLayer 无 SceneRenderer 实例不触发 | Phase 8 前二选一：(a) `m_IBLReady` 改语义只有 Irradiance/Prefilter 也就绪才 true；(b) 改用 D-7 中的 `GetXxxView()` 接口，SceneRenderer 按 API 分派 |
 | P-12 | `GrassRenderSystem::Init` 在 Vulkan path 下 `m_UseIndirectDraw=true` 但渲染时调 `RenderCommand::DrawArraysIndirect`（OpenGL-only），渲染将退化或崩 | Vulkan path 接通 Scene 渲染（Phase 8）时触发；当前 grass compute commit 走 SmokeLayer 验证不触发 | Phase 8 前在 GrassRenderSystem Init 内按 `RendererAPI::GetAPI()` 切换；或在 VulkanRendererAPI 实装 DrawArraysIndirect |
 | P-13 | `VulkanShader` push constant 反射强制 offset=0 单段（取 `max(size)`） | 未来 shader 使用 `layout(offset=...)` 多段 push constant | 当前所有迁移 shader 都从 0 起始且单段，约束成立；新增多段 PC 时扩展 `m_ReflectedPushConstants` 为按 range 数组 |
+| P-14 | 双路径 shader 改写时把 OpenGL `uniform vec3 u_EmitterPos` 改名/改类型 → cpp 端 `m_Shader->SetVec3("u_EmitterPos", ...)` 断裂 | Vulkan 迁移时为对齐宏命名一并改 OpenGL uniform 标识 | OpenGL 路径 `uniform 名 / 类型 / 个数`完全保留，新增 `#ifdef VULKAN` 分支独立写 `push_constant` / `UBO`，main 函数用 `#define` 宏（如 `MAX_PARTICLES` / `EMITTER_POS`）抹平两侧引用 |
+| P-15 | 粒子/流体 Vulkan path 独立 `DescriptorPool` 每帧首次未 `Reset()` → set 累积溢出 pool 容量后 alloc 失败 | 每子系统在 cpp 内持有自己的 pool（独立于 `SpatialHashGrid::ResetFrameResources`） | 每帧首次 dispatch 前显式 `pool->Reset()`；本子系统的 pool reset 与 Grid 的 `ResetFrameResources()` 是两件事，不要互相覆盖职责 |
 
 ---
 
@@ -189,29 +204,24 @@
 
 按优先级，自上而下：
 
-1. **`ParticleSystemGPU` 迁移**
-   - 已具备：VulkanContext::BeginFrame/EndFrame、VulkanAsyncReadback ring、SpatialHashGrid::BuildVulkan(cmd, ...)
-   - 待做：4 shader 加 `#ifdef VULKAN`（emit / compact / simulate / render_args）→ push constant；ParticleSystemGPU::UpdateVulkan(...) 写完 lazy pipeline init + dispatch 录主帧 cmd + 调 SetExternalBuffers + grid build + readback 接通
-   - **注意**：SPH 路径（含 PCISPH 8 迭代）在 Vulkan 下暂跳过（SPH shader 在 Commit C 才迁），写代码时显式 ASSERT 或退回 OpenGL 警告
-   - 验收：粒子在 `--vulkan` 路径下视觉与 OpenGL 等价（非 SPH 模式）
+1. **Commit C — SPH 整体迁移（Phase 7 收尾）**
+   - 已具备：B0/A0/A/B/D 全部基础设施 + 调用入口预埋（含 `m_SDFMetaReadback`）
+   - 待做：
+     - 7 个 SPH shader 加 `#ifdef VULKAN`（`sph_density` / `sph_force` / `sph_pcisph_{init,predict,density,force,apply}`）+ push constant 按计划 §Commit C 表
+     - `FluidSystemGPU::UpdateSPHVulkan` 录入 PCISPH 1~8 迭代同帧 cmd（含中间 `m_Grid.BuildVulkan(cmd, alive, /*predicted=*/true)` 重建）
+     - 回头补齐 `ParticleSystemGPU::UpdateVulkan` 的 SPH 分支（当前为 `ENGINE_CORE_WARN once + return`），接入 compact dispatch + Grid build
+     - `FluidSystemGPU::UpdateVulkan` 内移除 SPH `static-once WARN`，PCISPH 接入后 `m_SDFMetaReadback` 路径自然生效
+   - **协调点**：该 commit 同时触碰 `ParticleSystemGPU.cpp`（B 已落地）+ `FluidSystemGPU.cpp`（D 已落地），**串行执行**，不能再开 Subagent 并行
+   - 验收：waterfall demo 在 `--vulkan` 路径下不崩、validation layer 0 error；`grep -n "RenderCommand::DispatchCompute" Engine/src/Renderer/{Particle,Fluid}SystemGPU.cpp` 仅命中 `RendererAPI::OpenGL` 分支
 
-2. **`FluidSystemGPU` + PCISPH 迁移**
-   - sph_density / sph_force / sph_pcisph_{init,predict,density,force,apply} 7 shader 加 #ifdef VULKAN
-   - FluidSystemGPU::UpdateSPHVulkan 把 PCISPH 8 迭代录入同一帧 cmd
-   - 迁完后回头补齐 `ParticleSystemGPU::UpdateVulkan` 的 SPH 分支
-   - 验收：waterfall demo 在 `--vulkan` 路径下不崩、密度场可视化一致
-
-3. **fluid_emit / fluid_simulate + MeshSDFMeta 回读迁 GPUAsyncReadback**
-   - 完成 FluidSystemGPU 全 dispatch Vulkan 化
-   - `grep -n "RenderCommand::DispatchCompute" Engine/src/Renderer/FluidSystemGPU.cpp` 应仅在 OpenGL 分支内出现
-
-4. **`VulkanTextureCubemap` 实装**
+2. **`VulkanTextureCubemap` 实装**
    - 6 面 atlas 上传 + view + sampler
    - 解锁 `VulkanIBLGenerator` 真实输入（P-3）
 
-5. **Phase 8：Vulkan PBR pass**
+3. **Phase 8：Vulkan PBR pass**
    - `VulkanIBLGenerator::GetXxxView()` 接入 PBR 采样
    - `VulkanContext::RenderImGui()` 实装（解锁 Editor 主路径）
+   - P-11/P-12 在主路径接通前需先消化（IBL `HasIBL()` 语义 + Grass `DrawArraysIndirect` Vulkan 实装）
 
 ---
 
