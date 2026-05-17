@@ -59,8 +59,9 @@ namespace Engine
         static std::unordered_map<std::string, AssetHandle> s_MeshPathIndex;
         static std::unordered_map<std::string, AssetHandle> s_CubemapPathIndex;
 
-        // Track which handles are textures/meshes/cubemaps for generic GetPath
-        static std::unordered_map<AssetHandle, AssetType> s_HandleTypes;
+        // 注：handle 自身 Type 字段（hash/equality 参与）已携带类型信息，
+        // 取代旧 s_HandleTypes 全局 map（曾因三个 SlotMap 产生相同 {Index, Generation}
+        // 而被覆盖，触发 expected Mesh assert）。
 
         // Pending async loads — prevent duplicate requests for same path
         static std::unordered_map<std::string, AssetHandle> s_PendingAsyncLoads;

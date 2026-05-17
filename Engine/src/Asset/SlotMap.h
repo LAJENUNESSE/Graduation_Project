@@ -19,7 +19,7 @@ namespace Engine
             m_Slots.push_back({nullptr, "", 0});
         }
 
-        AssetHandle Insert(Ref<T> resource, const std::string& path)
+        AssetHandle Insert(Ref<T> resource, const std::string& path, AssetType type = AssetType::None)
         {
             uint32_t index;
             if (!m_FreeList.empty())
@@ -37,7 +37,7 @@ namespace Engine
                 m_Slots.push_back({std::move(resource), path, 1});
             }
             ++m_ActiveCount;
-            return {index, m_Slots[index].Generation};
+            return {index, m_Slots[index].Generation, type};
         }
 
         T* Get(AssetHandle h) const

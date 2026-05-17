@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Asset/AssetType.h"
+
 #include <cstdint>
 #include <functional>
 
@@ -8,11 +10,15 @@ namespace Engine
 
     struct AssetHandle
     {
-        uint32_t Index      = 0;
-        uint32_t Generation = 0;
+        uint32_t  Index      = 0;
+        uint32_t  Generation = 0;
+        AssetType Type       = AssetType::None;
 
-        bool     IsValid() const { return Index != 0 && Generation != 0; }
-        bool     operator==(const AssetHandle& o) const { return Index == o.Index && Generation == o.Generation; }
+        bool IsValid() const { return Index != 0 && Generation != 0; }
+        bool operator==(const AssetHandle& o) const
+        {
+            return Index == o.Index && Generation == o.Generation && Type == o.Type;
+        }
         bool     operator!=(const AssetHandle& o) const { return !(*this == o); }
         explicit operator bool() const { return IsValid(); }
     };
@@ -25,6 +31,7 @@ template <> struct std::hash<Engine::AssetHandle>
     {
         size_t seed = std::hash<uint32_t>{}(h.Index);
         seed ^= std::hash<uint32_t>{}(h.Generation) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= std::hash<int>{}(static_cast<int>(h.Type)) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         return seed;
     }
 };
