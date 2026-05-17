@@ -9,6 +9,7 @@
 #include "Platform/Vulkan/VulkanDescriptor.h"
 #include "Platform/Vulkan/VulkanPipeline.h"
 #include "Platform/Vulkan/VulkanShader.h"
+#include "Platform/Vulkan/VulkanTexture.h"
 #include "Renderer/Shader.h"
 
 #include <algorithm>
@@ -286,7 +287,7 @@ namespace Engine
         ENGINE_CORE_INFO("[VulkanIBL] BRDF LUT generated ({}x{})", BRDF_LUT_SIZE, BRDF_LUT_SIZE);
     }
 
-    // ---- Irradiance + Prefilter 生成（依赖 skybox atlas） ----
+    // ---- Irradiance + Prefilter 生成（依赖 skybox cubemap） ----
     void VulkanIBLGenerator::Generate(const Ref<TextureCubemap>& skybox)
     {
         if (!skybox)
@@ -295,25 +296,24 @@ namespace Engine
         auto* ctx    = VulkanContext::Get();
         auto  device = ctx->GetDevice();
 
-        // 当前 VulkanTextureCubemap 尚未真正实现（Phase 7.x 后续任务），GetWidth() 返回 0。
-        // 此时无法构造 env atlas，跳过 Irradiance/Prefilter；BRDF LUT 已在 Init 时生成。
-        const int envFaceSize = static_cast<int>(skybox->GetWidth());
-        if (envFaceSize <= 0)
+        // VulkanTextureCubemap 现已实装 (commit 0c6eb28)，dynamic_pointer_cast 拿 cube view + sampler
+        auto vkCube = std::dynamic_pointer_cast<VulkanTextureCubemap>(skybox);
+        if (!vkCube || vkCube->GetImageView() == VK_NULL_HANDLE)
         {
-            ENGINE_CORE_WARN("[VulkanIBL] Skybox face size = 0 (VulkanTextureCubemap not yet implemented); "
+            ENGINE_CORE_WARN("[VulkanIBL] Skybox is not a VulkanTextureCubemap or has null image view; "
                              "Irradiance/Prefilter generation skipped");
-            // m_IBLReady 保持 false：单 BRDF LUT 不构成"IBL 就绪"，
-            // 三个 GetXxxID() 在 Vulkan 路径下都返回 0；若此处置 true，
-            // SkyboxSystem::HasIBL() 会让 SceneRenderer 用 id=0 调 BindCubemapUnit，破坏 PBR 采样。
-            // 等 VulkanTextureCubemap 实装后由完整 Generate 末尾置 true。
             return;
         }
 
-        // 占位 atlas（待 Vulkan cubemap 完成后再从 cube faces 抽出真正像素）：
-        // 创建一张 envFaceSize*6 × envFaceSize 的 RGBA8 storage_image，全黑作为输入。
-        // 这样 Irradiance/Prefilter 的整条 dispatch 路径完整跑过，便于后续填上 cubemap 后立刻有正确结果。
-        ImageHandle envAtlas = CreateStorageImage2D(static_cast<uint32_t>(envFaceSize * 6),
-                                                    static_cast<uint32_t>(envFaceSize), VK_FORMAT_R8G8B8A8_UNORM);
+        const int envFaceSize = static_cast<int>(skybox->GetWidth());
+        if (envFaceSize <= 0)
+        {
+            ENGINE_CORE_WARN("[VulkanIBL] Skybox face size = 0; Irradiance/Prefilter generation skipped");
+            return;
+        }
+
+        VkImageView envCubeView    = vkCube->GetImageView();
+        VkSampler   envCubeSampler = vkCube->GetSampler();
 
         // ---- 1) Irradiance ----
         DestroyImage(m_Irradiance);
@@ -325,7 +325,8 @@ namespace Engine
         {
             VulkanDescriptorWriter w;
             w.WriteImage(0, m_Irradiance.View, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-            w.WriteImage(1, envAtlas.View, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            w.WriteImage(1, envCubeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, envCubeSampler);
             w.UpdateSet(device, irrSet);
         }
 
@@ -339,17 +340,15 @@ namespace Engine
         {
             VulkanDescriptorWriter w;
             w.WriteImage(0, m_Prefilter.View, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-            w.WriteImage(1, envAtlas.View, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            w.WriteImage(1, envCubeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, envCubeSampler);
             w.UpdateSet(device, preSet);
         }
 
         VkCommandBuffer     raw = ctx->BeginSingleTimeCommands();
         VulkanCommandBuffer cmd(raw);
 
-        // 三个输出 image 和 atlas 都转到 GENERAL
-        cmd.ImageBarrier(envAtlas.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
-                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
-                         VK_ACCESS_SHADER_READ_BIT);
+        // 输出 image 转到 GENERAL；envCube 已在 VulkanTextureCubemap 构造时转为 SHADER_READ_ONLY_OPTIMAL
         cmd.ImageBarrier(m_Irradiance.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
                          VK_ACCESS_SHADER_WRITE_BIT);
@@ -403,12 +402,8 @@ namespace Engine
 
         ctx->EndSingleTimeCommands(raw);
 
-        // 销毁占位 atlas（每次 Generate 重建）
-        DestroyImage(envAtlas);
-
         m_IBLReady = true;
-        ENGINE_CORE_INFO("[VulkanIBL] Irradiance + Prefilter generated (placeholder env atlas; "
-                         "VulkanTextureCubemap data path pending)");
+        ENGINE_CORE_INFO("[VulkanIBL] Irradiance + Prefilter generated (env cubemap {}x{})", envFaceSize, envFaceSize);
     }
 
 } // namespace Engine
