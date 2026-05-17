@@ -105,9 +105,27 @@ namespace Engine
             return;
 
         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
-            BuildVulkan(aliveCount, usePredictedPos);
+        {
+            // 低频路径（IBL / Grass / 视角触发）：开 SingleTime cmd，内部 reset pool + record + wait
+            auto*           ctx       = VulkanContext::Get();
+            VkCommandBuffer cmdHandle = ctx->BeginSingleTimeCommands();
+            ResetFrameResources();
+            BuildVulkan(cmdHandle, aliveCount, usePredictedPos);
+            ctx->EndSingleTimeCommands(cmdHandle);
+        }
         else
+        {
             BuildOpenGL(aliveCount, usePredictedPos);
+        }
+    }
+
+    void SpatialHashGrid::ResetFrameResources()
+    {
+        if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
+            return;
+        if (!m_VulkanResources || !m_VulkanResources->Initialized)
+            return;
+        m_VulkanResources->Pool->Reset();
     }
 
     // ============================================================
@@ -229,17 +247,21 @@ namespace Engine
         buildPipeline(m_PrefixSumShader, m_VulkanResources->PrefixSumPipeline, m_VulkanResources->PrefixSumLayout);
         buildPipeline(m_ScatterShader, m_VulkanResources->ScatterPipeline, m_VulkanResources->ScatterLayout);
 
-        // 共享 descriptor pool —— 每帧 Build() 末尾 Reset 复用
-        m_VulkanResources->Pool = VulkanDescriptorPool::CreateDefaultComputePool(device, 16);
+        // 共享 descriptor pool —— 每帧 ResetFrameResources() 复用。
+        // 容量 64 覆盖 PCISPH 8 迭代 × 3 set + 单帧多次外部 Build 的余量。
+        m_VulkanResources->Pool = VulkanDescriptorPool::CreateDefaultComputePool(device, 64);
 
         m_VulkanResources->Initialized = true;
     }
 
     // ============================================================
-    // Vulkan 路径：单次提交三阶段 compute
+    // Vulkan 路径：把三 pass 录入外部 cmd buffer（不 submit、不 reset pool）
     // ============================================================
-    void SpatialHashGrid::BuildVulkan(uint32_t aliveCount, bool usePredictedPos)
+    void SpatialHashGrid::BuildVulkan(VkCommandBuffer cmdHandle, uint32_t aliveCount, bool usePredictedPos)
     {
+        if (!m_Initialized || aliveCount == 0)
+            return;
+
         // 外部 buffer 注入检查（grid_hash 需要 ParticlePool + AliveList，PCISPH 模式下需要 PCISPHPool）
         ENGINE_CORE_RELEASE_ASSERT(m_ExternalParticlePool,
                                    "SpatialHashGrid::BuildVulkan: ParticlePool not set; call SetExternalBuffers first");
@@ -262,10 +284,7 @@ namespace Engine
         // BarrierBit::ShaderStorage → Vulkan stage/access 四元组（compute→compute 精确匹配）
         const VulkanBarrierMasks ssboMasks = ResolveBarrierBits(BarrierBit::ShaderStorage);
 
-        VkCommandBuffer     cmdHandle = ctx->BeginSingleTimeCommands();
         VulkanCommandBuffer cmd(cmdHandle);
-
-        m_VulkanResources->Pool->Reset();
 
         // SSBO VkBuffer 句柄（向下转型一次缓存）
         auto bufferOf = [](const Ref<ShaderStorageBuffer>& ssbo) -> VkBuffer
@@ -392,9 +411,6 @@ namespace Engine
             // sortedIndices + cellStart 后续被 SPH 邻域查询消费，再加一次 SSBO barrier
             cmd.MemoryBarrier(ssboMasks.SrcStage, ssboMasks.DstStage, ssboMasks.SrcAccess, ssboMasks.DstAccess);
         }
-
-        // EndSingleTimeCommands 同步等待 GPU 完成；本帧 Build() 返回时所有 grid 结果已就绪
-        ctx->EndSingleTimeCommands(cmdHandle);
     }
 
 } // namespace Engine
