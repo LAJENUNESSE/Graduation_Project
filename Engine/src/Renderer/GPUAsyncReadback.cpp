@@ -5,6 +5,10 @@
 #include "Platform/OpenGL/OpenGLAsyncReadback.h"
 #include "Renderer/RendererAPI.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanAsyncReadback.h"
+#endif
+
 namespace Engine
 {
 
@@ -18,8 +22,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLAsyncReadback>(size);
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_WARN("[Vulkan] GPUAsyncReadback not yet implemented, returning nullptr");
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanAsyncReadback>(size);
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "Vulkan backend not enabled in this build");
             return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
