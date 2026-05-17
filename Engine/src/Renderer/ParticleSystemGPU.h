@@ -135,12 +135,16 @@ namespace Engine
         Ref<UniformBuffer> m_EmitParamsUBO;
         Ref<UniformBuffer> m_SimParamsUBO;
 
+        // SPH 共享 UBO（binding=12），density + force 共用同一份布局
+        Ref<UniformBuffer> m_SPHParamsUBO;
+
         // Vulkan path Update 分派
         void UpdateVulkan(float                           dt,
                           const glm::vec3&                emitterPos,
                           const ParticleEmitterComponent& emitter,
                           entt::registry*                 registry);
         bool InitVulkanComputeResources();
+        bool InitSPHVulkanPipelines();
         void DestroyVulkanComputeResources();
     };
 

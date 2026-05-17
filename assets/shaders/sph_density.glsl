@@ -16,6 +16,53 @@ struct GPUParticle
     vec4 params;           // x=sizeStart, y=sizeEnd, z=density(SPH), w=pressure(SPH)
 };
 
+#ifdef VULKAN
+// Vulkan 路径：所有 SSBO set=0；统一 SPHParams UBO (binding=12) + 小常量走 push constant
+layout(std430, set = 0, binding = 0) buffer ParticlePool   { GPUParticle particles[];   };
+layout(std430, set = 0, binding = 2) readonly buffer AliveList     { uint aliveIndices[];     };
+layout(std430, set = 0, binding = 5) readonly buffer CellStart     { uint cellStart[];        };
+layout(std430, set = 0, binding = 6) readonly buffer CellCount     { uint cellCount[];        };
+layout(std430, set = 0, binding = 7) readonly buffer SortedIndices  { uint sortedIndices[];   };
+layout(std430, set = 0, binding = 8) writeonly buffer SurfaceNormals { vec4 surfaceNormals[]; };
+
+layout(std140, set = 0, binding = 12) uniform SPHParams
+{
+    vec4 u_GravityAndSmoothingRadius;     // xyz=Gravity, w=SmoothingRadius
+    vec4 u_MassDensityGasViscosity;       // x=ParticleMass, y=RestDensity, z=GasConstant, w=Viscosity
+    vec4 u_GridParams;                    // x=GridSize(int as float), y=CellSize, z=Poly6Coeff, w=SpikyCoeff
+    vec4 u_BoundaryParams;                // x=BoundaryStiffness, y=BoundaryDamping, z=WarmupTime, w=SurfaceTension
+    vec4 u_SDFCounts;                     // x=RigidBodyCount, y=MeshSDFCount, z=MeshSDFVoxelCount, w=PCISPHDelta
+};
+
+layout(push_constant) uniform PushConstants
+{
+    uint  u_AliveCountPC;
+    float u_DeltaTimePC;
+    uint  u_UsePredictedPosPC;
+} pc;
+
+#define u_AliveCount         int(pc.u_AliveCountPC)
+#define u_DeltaTime          pc.u_DeltaTimePC
+#define u_UsePredictedPos    int(pc.u_UsePredictedPosPC)
+#define u_Gravity            u_GravityAndSmoothingRadius.xyz
+#define u_SmoothingRadius    u_GravityAndSmoothingRadius.w
+#define u_ParticleMass       u_MassDensityGasViscosity.x
+#define u_RestDensity        u_MassDensityGasViscosity.y
+#define u_GasConstant        u_MassDensityGasViscosity.z
+#define u_Viscosity          u_MassDensityGasViscosity.w
+#define u_GridSize           int(u_GridParams.x)
+#define u_CellSize           u_GridParams.y
+#define u_Poly6Coeff         u_GridParams.z
+#define u_SpikyCoeff         u_GridParams.w
+#define u_BoundaryStiffness  u_BoundaryParams.x
+#define u_BoundaryDamping    u_BoundaryParams.y
+#define u_WarmupTime         u_BoundaryParams.z
+#define u_SurfaceTension     u_BoundaryParams.w
+#define u_RigidBodyCount     int(u_SDFCounts.x)
+#define u_MeshSDFCount       int(u_SDFCounts.y)
+#define u_MeshSDFVoxelCount  int(u_SDFCounts.z)
+#define u_PCISPHDelta        u_SDFCounts.w
+#else
 layout(std430, binding = 0) buffer ParticlePool  { GPUParticle particles[]; };
 layout(std430, binding = 2) readonly buffer AliveList    { uint aliveIndices[];     };
 layout(std430, binding = 5) readonly buffer CellStart    { uint cellStart[];        };
@@ -33,6 +80,7 @@ uniform float u_CellSize;
 uniform float u_Poly6Coeff;        // 315 / (64 * π * h^9), CPU 预计算
 uniform float u_SpikyCoeff;        // -45 / (π * h^6), CPU 预计算（表面法线需要）
 uniform float u_SurfaceTension;    // γ, 0=关闭（控制是否计算表面法线）
+#endif
 
 // Poly6 kernel: W(r, h) = u_Poly6Coeff * (h² - r²)³
 float poly6(float r2, float h)
