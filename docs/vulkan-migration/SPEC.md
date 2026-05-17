@@ -10,7 +10,7 @@
 ## 1. 当前位置
 
 - **进行中阶段**：Phase 7（Compute 迁移）
-- **最近一次 commit**：`c7b2c92 phase7: SpatialHashGrid::BuildVulkan 接受外部 cmd buffer`
+- **最近一次 commit**：`23aa89f docs(SPEC): 记录 Codex 静态审查的三处 Vulkan path 已知风险`
 - **下一步**：见 [§6 Next Steps](#6-next-steps)
 
 ---
