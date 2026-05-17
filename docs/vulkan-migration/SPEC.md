@@ -214,6 +214,7 @@
 | P-14 | 双路径 shader 改写时把 OpenGL `uniform vec3 u_EmitterPos` 改名/改类型 → cpp 端 `m_Shader->SetVec3("u_EmitterPos", ...)` 断裂 | Vulkan 迁移时为对齐宏命名一并改 OpenGL uniform 标识 | OpenGL 路径 `uniform 名 / 类型 / 个数`完全保留，新增 `#ifdef VULKAN` 分支独立写 `push_constant` / `UBO`，main 函数用 `#define` 宏（如 `MAX_PARTICLES` / `EMITTER_POS`）抹平两侧引用 |
 | P-15 | 粒子/流体 Vulkan path 独立 `DescriptorPool` 每帧首次未 `Reset()` → set 累积溢出 pool 容量后 alloc 失败 | 每子系统在 cpp 内持有自己的 pool（独立于 `SpatialHashGrid::ResetFrameResources`） | 每帧首次 dispatch 前显式 `pool->Reset()`；本子系统的 pool reset 与 Grid 的 `ResetFrameResources()` 是两件事，不要互相覆盖职责 |
 | P-16 | 粒子 SPH 路径下 `sph_density.glsl` 的 binding=8 SurfaceNormals SSBO 在 ParticleSystemGPU 没有专属 buffer | 粒子 SPH WCSPH 与 FluidSystemGPU 共用 shader 但 ParticleSystemGPU 无 `m_SurfaceNormalBuffer` | 当前 Vulkan path 用 alive list 占位以满足 descriptor layout 非空，shader 内 `u_SurfaceTension>0` 控制是否写入（OpenGL 路径同款隐式约束）；启用粒子表面张力前必须为 ParticleSystemGPU 单独分配 `m_SurfaceNormalBuffer` |
+| P-17 | Debug build 链 spirv-cross-core.lib 报 `LNK2038 _ITERATOR_DEBUG_LEVEL 0 vs 2` / `RuntimeLibrary MD vs MDd` | Vulkan SDK 同时提供 Release (`spirv-cross-core.lib` MD) 和 Debug (`spirv-cross-cored.lib` MDd) 两套；CMake 若只 find Release 名，Debug build 链 Release lib → MSVC CRT 不匹配拒链 | `find_library` 分别 Release/Debug 双 find，`target_link_libraries` 用 `$<$<CONFIG:Debug>:...>` 生成器表达式按 config 切。新增 Vulkan SDK 依赖时（glslang/SPIRV-Tools 等）同样要查双版本（D-8 衍生约束）|
 
 ---
 
