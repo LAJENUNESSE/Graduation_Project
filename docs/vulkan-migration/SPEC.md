@@ -27,7 +27,7 @@
 - [x] `VulkanPipeline::CreateCompute` 工厂（`fed450e`）
 - [x] `VulkanCommandBuffer` compute 命令封装（`f547bd0`）
 - [x] `VulkanBarrierUtil` — `BarrierBit::{ShaderStorage,Command,BufferUpdate,All}` → `VkPipelineStage`/`VkAccess` 映射（`6f577a5`）
-- [x] `VulkanStorageBuffer::ExternalMemoryHint` 占位（CUDA 互操作，Phase 7.5 实装）（`2625fa4`）
+- [x] `VulkanStorageBuffer::ExternalMemoryHint` 占位（CUDA 互操作，按 CUDA sidecar 迁移驱动实装，详见 D-6）（`2625fa4`）
 - [x] `VulkanContext` 拆 `BeginFrame()` / `EndFrame()` / `GetCurrentFrameCommandBuffer()` + readback fence 信号化 hook（`777de43`）
 
 **子系统迁移**
@@ -98,7 +98,7 @@
 
 > **Decision**：IBL Init / RebuildGrass / SpatialHashGrid Rebuild 走"录制 → submit → waitIdle"同步链路。
 > **Why**：这些路径都是低频（Init / 视角触发），主帧 stall 可接受；先把功能跑通。
-> **How to apply**：**每帧执行的 dispatch**（粒子/流体 step）禁止再走 SingleTime，必须录制到主帧 command buffer。Phase 7.5 把现有调用点统一改造。
+> **How to apply**：**每帧执行的 dispatch**（粒子/流体 step）禁止再走 SingleTime，必须录制到主帧 command buffer。本条改造已在 Phase 7 A0/B0/B/C/D 落地（ADR-0002 选激进路线，原"Phase 7.5"独立阶段不再存在）。
 
 ### D-4：`grassCount` 同步阻塞回读
 
@@ -112,11 +112,11 @@
 > **Why**：Vulkan 没有 OpenGL 的全局 SSBO binding，descriptor set 必须知道具体 buffer。
 > **How to apply**：粒子/流体迁移时**先**补 setter 调用，再迁移自身 compute，否则 SpatialHashGrid 在 Vulkan 路径下拿不到外部 buffer。
 
-### D-6：`ExternalMemoryHint` 占位推迟到 Phase 7.5
+### D-6：`ExternalMemoryHint` 占位 — 按 CUDA sidecar 迁移驱动实装
 
 > **Decision**：`VulkanStorageBuffer::ExternalMemoryHint::CudaInterop` 当前断言未实现。
-> **Why**：CUDA-Vulkan 互操作需要 `VK_EXTERNAL_MEMORY_HANDLE_TYPE_*` + Win32/Fd handle 导出导入链路，Phase 7 主线先不引入。
-> **How to apply**：上层 API 透传该枚举即可；真正启用时机由 CUDA sidecar 迁移驱动。
+> **Why**：CUDA-Vulkan 互操作需要 `VK_EXTERNAL_MEMORY_HANDLE_TYPE_*` + Win32/Fd handle 导出导入链路，Phase 7 主线先不引入。原标注"Phase 7.5 实装"，但激进路线（ADR-0002）已让 Phase 7.5 这个独立阶段消失，本项改为**按 CUDA sidecar 迁移触发**。
+> **How to apply**：上层 API 透传该枚举即可；真正启用时机由 CUDA sidecar 迁移驱动，不挂在固定 phase 标签下。
 
 ### D-7：`VulkanIBLGenerator::GetXxxID()` 返回 0 占位
 
