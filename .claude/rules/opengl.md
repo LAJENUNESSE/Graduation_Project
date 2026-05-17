@@ -5,7 +5,7 @@ paths:
 
 # Platform/OpenGL
 
-`Engine/src/Renderer/` 中抽象接口的 OpenGL 4.3 具体实现。
+`Engine/src/Renderer/` 中抽象接口的 OpenGL 4.3 具体实现，**默认后端**。
 
 ## 文件映射
 
@@ -20,6 +20,9 @@ paths:
 | UniformBuffer | OpenGLUniformBuffer |
 | StorageBuffer (SSBO) | OpenGLStorageBuffer |
 | GraphicsContext | OpenGLContext |
+| IBLGenerator | OpenGLIBLGenerator |
+| GPUAsyncReadback | OpenGLAsyncReadback |
+| GPUTimerQuery | OpenGLGPUTimerQuery |
 
 ## 注意事项
 
@@ -30,4 +33,11 @@ paths:
 - MSVC 需要 `/utf-8` 编译选项以支持中文字符串字面量
 - OpenGL 状态有缓存以减少冗余调用
 - **纹理必须用 `glTexStorage2D`（immutable storage）创建**，`glTexImage2D` 在 `imageLoad`/`imageStore` 场景下为未定义行为
-- 新增渲染后端时应在此目录下新建对应文件夹（如 `Platform/Vulkan/`）
+- 异步回读走 `OpenGLAsyncReadback`（fence + persistent map），不要在 `Engine/src/` 直接调 `glFenceSync`
+- 与 Vulkan 后端并存：所有 OpenGL-only 代码必须留在此目录下，禁止泄漏到 `Engine/src/`
+
+## 与 Vulkan 后端共存
+
+- `RendererAPI::Get().GetAPI()` 返回 `API::OpenGL` 或 `API::Vulkan`，工厂据此分派
+- `Editor.exe` 默认走 OpenGL；`Editor.exe --vulkan` 切到 Vulkan 路径（详见 `vulkan.md`）
+- 新增 OpenGL 资源/状态调用都应同步设计 Vulkan 对应实现，避免再次抽象泄漏

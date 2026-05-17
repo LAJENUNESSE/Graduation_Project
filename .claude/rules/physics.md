@@ -5,7 +5,7 @@ paths:
 
 # Physics（物理系统）
 
-双后端物理：Bullet3（生产用）+ 自研简易求解器（教学用）。
+主用 Bullet3（生产用），辅以 SDFMath 纯数学库。
 
 ## Bullet3 后端（BulletPhysicsWorld）
 
@@ -16,30 +16,18 @@ paths:
 - 碰撞事件通过 `GetCollisionEvents()` 获取，仅在当前帧有效
 - 碰撞体偏移使用 `btCompoundShape` 包装实现
 
-## 自研求解器（PhysicsWorld）
+## PhysicsDebugDraw
 
-- 碰撞检测使用**世界坐标**（非本地坐标）
-- 惯性张量为 `mat3`（非标量），支持各向异性
-- 角动量积分包含**陀螺力矩项**（`τ_gyro = ω × (I · ω)`）
-- 四元数积分避免万向节锁
-
-## CollisionMath（独立命名空间）
-
-从 PhysicsWorld 提取的碰撞检测纯数学函数，可独立单元测试：
-
-- `SphereSphere` — 球-球碰撞
-- `AABBAABB` — AABB-AABB 碰撞（接触面计算，非中心中点）
-- `OBBOBB` — 完整 OBB-OBB SAT 分离轴检测
-- `SphereOBB` — 球-OBB 碰撞
-
-输出 `CollisionInfo`：contactPoint / contactNormal / penetrationDepth
+继承 `btIDebugDraw`，把 Bullet 的 debug 几何（接触点、AABB、约束等）转发到引擎的 line renderer（走 `RenderCommand::DrawLines`，与具体后端无关）。
 
 ## SDFMath（header-only）
 
-从 CudaSPHPipeline 提取的 SDF 纯数学函数，兼容 CUDA `__device__` 和 C++：
+`SDFMath.h` —— SDF 纯数学函数，原本从 CUDA SPH 管线提取，目前作为 header-only 库用于 SPH 边界条件与单元测试：
 
-- `BoxSDF` — 点到 AABB 有符号距离
-- `SphereSDF` — 点到球心有符号距离
+- `BoxSDF` — 点到 AABB 有符号距离 + 梯度法线
+- `SphereSDF` — 点到球心有符号距离 + 梯度法线
+
+历史上为 CUDA `__device__` 兼容保留 `SDF_DEVICE` 宏（`__CUDACC__` 触发），CUDA sidecar 已下线但宏保留以便未来复用。
 
 ## 刚体类型
 
@@ -51,9 +39,8 @@ paths:
 
 ## 注意事项
 
-- 每个 Scene 只选一种后端，不可混用，切换需要完整清理
+- 每个 Scene 持有一个 Bullet `btDiscreteDynamicsWorld`，切换场景时需完整清理
 - 碰撞体形状变化时必须销毁重建 Bullet 刚体（开销较大）
 - `Scene::DestroyEntity()` 必须先清理对应的 Bullet 刚体
 - 碰撞事件每帧清空，仅在 `Step()` 后立即可用
-- 自研求解器支持 Sphere/AABB/OBB 碰撞（含 SAT），用于教学演示
-- 新增碰撞数学函数应放在 `CollisionMath` 命名空间，保持可测试性
+- 新增 SDF / 碰撞数学函数应放在 header-only 文件并保持纯数学（无引擎依赖），便于单元测试
