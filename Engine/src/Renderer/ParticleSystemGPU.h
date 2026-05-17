@@ -6,6 +6,7 @@
 #include "Renderer/SpatialHashGrid.h"
 #include "Renderer/GPUAsyncReadback.h"
 #include "Renderer/StorageBuffer.h"
+#include "Renderer/UniformBuffer.h"
 #include "Renderer/VertexArray.h"
 
 #include <entt/entt.hpp>
@@ -124,6 +125,23 @@ namespace Engine
         Scope<CudaImpl> m_CudaImpl;
 
         void InitSPH(float smoothingRadius);
+
+        // ---- Vulkan path (非 SPH) ----
+        // Vulkan 资源以 Pimpl 隐藏在 .cpp，避免 .h 引入 Vulkan 头依赖。
+        struct VulkanResources;
+        Scope<VulkanResources> m_VulkanResources;
+
+        // Emit / Simulate 用 UBO 上传大块 emitter 参数
+        Ref<UniformBuffer> m_EmitParamsUBO;
+        Ref<UniformBuffer> m_SimParamsUBO;
+
+        // Vulkan path Update 分派
+        void UpdateVulkan(float                           dt,
+                          const glm::vec3&                emitterPos,
+                          const ParticleEmitterComponent& emitter,
+                          entt::registry*                 registry);
+        bool InitVulkanComputeResources();
+        void DestroyVulkanComputeResources();
     };
 
 } // namespace Engine

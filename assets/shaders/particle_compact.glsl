@@ -14,6 +14,23 @@ struct GPUParticle
     vec4 params;
 };
 
+#ifdef VULKAN
+layout(std430, set = 0, binding = 0) buffer ParticlePool { GPUParticle particles[]; };
+layout(std430, set = 0, binding = 1) buffer DeadList     { uint deadIndices[];      };
+layout(std430, set = 0, binding = 2) buffer AliveList    { uint aliveIndices[];     };
+layout(std430, set = 0, binding = 3) buffer Counters     {
+    uint deadCount;
+    uint aliveCount;
+    uint emitCount;
+    uint simulateCount;
+};
+
+layout(push_constant) uniform PushConstants
+{
+    uint u_MaxParticles;
+} pc;
+#define MAX_PARTICLES pc.u_MaxParticles
+#else
 layout(std430, binding = 0) buffer ParticlePool { GPUParticle particles[]; };
 layout(std430, binding = 1) buffer DeadList     { uint deadIndices[];      };
 layout(std430, binding = 2) buffer AliveList    { uint aliveIndices[];     };
@@ -25,11 +42,13 @@ layout(std430, binding = 3) buffer Counters     {
 };
 
 uniform int u_MaxParticles;
+#define MAX_PARTICLES uint(u_MaxParticles)
+#endif
 
 void main()
 {
     uint gid = gl_GlobalInvocationID.x;
-    if (gid >= uint(u_MaxParticles))
+    if (gid >= MAX_PARTICLES)
         return;
 
     if (particles[gid].posAndLife.w > 0.0)

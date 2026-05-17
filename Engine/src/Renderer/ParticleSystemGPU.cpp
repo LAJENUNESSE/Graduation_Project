@@ -17,6 +17,19 @@
 
 #include "Debug/PerformanceMonitor.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Core/Assert.h"
+#include "Platform/Vulkan/VulkanBarrierUtil.h"
+#include "Platform/Vulkan/VulkanBuffer.h"
+#include "Platform/Vulkan/VulkanCommandBuffer.h"
+#include "Platform/Vulkan/VulkanContext.h"
+#include "Platform/Vulkan/VulkanDescriptor.h"
+#include "Platform/Vulkan/VulkanPipeline.h"
+#include "Platform/Vulkan/VulkanShader.h"
+
+#include <vulkan/vulkan.h>
+#endif
+
 namespace Engine
 {
 
@@ -239,6 +252,88 @@ namespace Engine
         uint32_t baseInstance;
     };
 
+#ifdef ENGINE_ENABLE_VULKAN
+    namespace
+    {
+        // std140 UBO 镜像 — 与 particle_emit.glsl 中 EmitParams 块逐字节对应
+        struct alignas(16) ParticleEmitParamsUBO
+        {
+            glm::vec4 EmitterPosAndAngle; // xyz=EmitterPos, w=EmitAngle(radians)
+            glm::vec4 EmitDirAndSpeedMin; // xyz=EmitDirection, w=SpeedMin
+            glm::vec4 LifeAndSpeedMax;    // x=LifeMin, y=LifeMax, z=SpeedMax, w=unused
+            glm::vec4 SizeStartEnd;       // x=SizeStart, y=SizeEnd, z=unused, w=unused
+            glm::vec4 StartColor;
+            glm::vec4 EndColor;
+        };
+        static_assert(sizeof(ParticleEmitParamsUBO) == 96, "ParticleEmitParamsUBO must be std140-aligned 96 bytes");
+
+        // std140 UBO 镜像 — 与 particle_simulate.glsl 中 SimParams 块对应
+        struct alignas(16) ParticleSimParamsUBO
+        {
+            glm::vec4 GravityAndDamping; // xyz=Gravity, w=Damping
+        };
+        static_assert(sizeof(ParticleSimParamsUBO) == 16, "ParticleSimParamsUBO must be std140-aligned 16 bytes");
+
+        // Push constant 布局：与 particle_emit.glsl 中 PushConstants 对应
+        struct ParticleEmitPC
+        {
+            uint32_t EmitCount;
+            uint32_t MaxParticles;
+            float    Time;
+            uint32_t Seed;
+        };
+        static_assert(sizeof(ParticleEmitPC) == 16, "EmitPC must be 16 bytes");
+
+        // Push constant 布局：与 particle_compact.glsl 中 PushConstants 对应
+        struct ParticleCompactPC
+        {
+            uint32_t MaxParticles;
+        };
+
+        // Push constant 布局：与 particle_simulate.glsl 中 PushConstants 对应
+        struct ParticleSimulatePC
+        {
+            float    DeltaTime;
+            uint32_t MaxParticles;
+            uint32_t Flags;
+        };
+        static_assert(sizeof(ParticleSimulatePC) == 12, "SimulatePC must be 12 bytes");
+
+        // Push constant 布局：与 particle_render_args.glsl 中 PushConstants 对应
+        struct ParticleRenderArgsPC
+        {
+            uint32_t MaxParticles;
+        };
+
+        // Binding 常量（与 shader layout 一致）
+        constexpr uint32_t PARTICLE_EMIT_UBO_BINDING = 5;
+        constexpr uint32_t PARTICLE_SIM_UBO_BINDING  = 6;
+    } // namespace
+
+    // ============================================================
+    // Vulkan 资源（Pimpl）— 仅 ENGINE_ENABLE_VULKAN 时存在
+    // ============================================================
+    struct ParticleSystemGPU::VulkanResources
+    {
+        bool                           Initialized = false;
+        VkDevice                       Device      = VK_NULL_HANDLE;
+        Ref<VulkanDescriptorSetLayout> EmitLayout;
+        Ref<VulkanDescriptorSetLayout> CompactLayout;
+        Ref<VulkanDescriptorSetLayout> SimulateLayout;
+        Ref<VulkanDescriptorSetLayout> RenderArgsLayout;
+        VulkanComputePipelineHandle    EmitPipeline{};
+        VulkanComputePipelineHandle    CompactPipeline{};
+        VulkanComputePipelineHandle    SimulatePipeline{};
+        VulkanComputePipelineHandle    RenderArgsPipeline{};
+        Ref<VulkanDescriptorPool>      Pool;
+    };
+#else
+    struct ParticleSystemGPU::VulkanResources
+    {
+        // Empty stub on non-Vulkan builds (header still references the type)
+    };
+#endif
+
     ParticleSystemGPU::ParticleSystemGPU(uint32_t maxParticles)
         : m_MaxParticles(maxParticles), m_CudaImpl(CreateScope<CudaImpl>())
     {
@@ -248,6 +343,9 @@ namespace Engine
     {
         // CudaImpl 析构函数处理 CUDA 资源清理
         // m_Readback via Ref<GPUAsyncReadback> auto-destructs
+#ifdef ENGINE_ENABLE_VULKAN
+        DestroyVulkanComputeResources();
+#endif
     }
 
     ParticleSystemGPU::ABConfigSnapshot ParticleSystemGPU::GetABConfigSnapshot()
@@ -377,6 +475,16 @@ namespace Engine
         // 异步回读缓冲：用于避免 glGetBufferSubData 的同步阻塞
         m_Readback = GPUAsyncReadback::Create(sizeof(CounterData));
 
+        // Vulkan 路径需要 UBO 上传 emitter / simulate 大块参数（OpenGL 路径不使用，
+        // 但 OpenGL 4.3 explicit binding 兼容 — 即使 OpenGL 路径下创建也无害）
+#ifdef ENGINE_ENABLE_VULKAN
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            m_EmitParamsUBO = UniformBuffer::Create(sizeof(ParticleEmitParamsUBO), PARTICLE_EMIT_UBO_BINDING);
+            m_SimParamsUBO  = UniformBuffer::Create(sizeof(ParticleSimParamsUBO), PARTICLE_SIM_UBO_BINDING);
+        }
+#endif
+
         auto& caps = RendererCapabilities::Get();
 
         // VMware SVGA has known instability with advanced compute/indirect paths.
@@ -441,6 +549,15 @@ namespace Engine
     {
         if (!m_Initialized)
             return;
+
+#ifdef ENGINE_ENABLE_VULKAN
+        // Vulkan 路径分派 — 非 SPH 路径已迁，SPH 暂跳过（Commit C 落地）
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            UpdateVulkan(dt, emitterPos, emitter, registry);
+            return;
+        }
+#endif
 
         const ABConfigSnapshot abConfig = GetABConfigSnapshot();
 
@@ -811,5 +928,332 @@ namespace Engine
         // Restore depth write
         RenderCommand::SetDepthMask(true);
     }
+
+#ifdef ENGINE_ENABLE_VULKAN
+    // ============================================================
+    // Vulkan compute 资源懒初始化
+    // ============================================================
+    bool ParticleSystemGPU::InitVulkanComputeResources()
+    {
+        if (m_VulkanResources && m_VulkanResources->Initialized)
+            return true;
+
+        if (!m_VulkanResources)
+            m_VulkanResources = CreateScope<VulkanResources>();
+
+        auto* ctx = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "[Particle][Vulkan] VulkanContext is null");
+        VkDevice device           = ctx->GetDevice();
+        m_VulkanResources->Device = device;
+
+        auto buildPipeline = [&](const Ref<Shader>& shader, VulkanComputePipelineHandle& outHandle,
+                                 Ref<VulkanDescriptorSetLayout>& outLayout) -> bool
+        {
+            auto vkShader = std::dynamic_pointer_cast<VulkanShader>(shader);
+            ENGINE_CORE_RELEASE_ASSERT(vkShader, "[Particle][Vulkan] expected VulkanShader instance on Vulkan backend");
+
+            VkShaderModule module = vkShader->GetOrCreateShaderModule(device, "compute");
+            ENGINE_CORE_RELEASE_ASSERT(module != VK_NULL_HANDLE,
+                                       "[Particle][Vulkan] compute shader module creation failed");
+
+            outLayout = VulkanDescriptorSetLayout::CreateFromReflection(device, vkShader->GetReflectedBindings(), 0);
+
+            std::vector<VkPushConstantRange> pcRanges;
+            for (const auto& pc : vkShader->GetReflectedPushConstants())
+            {
+                VkPushConstantRange r{};
+                r.stageFlags = pc.Stages;
+                r.offset     = pc.Offset;
+                r.size       = pc.Size;
+                pcRanges.push_back(r);
+            }
+
+            VulkanComputePipelineDesc desc{};
+            desc.ShaderModule  = module;
+            desc.SetLayouts    = {outLayout->GetHandle()};
+            desc.PushConstants = pcRanges;
+            outHandle          = VulkanPipeline::CreateCompute(device, desc);
+            return true;
+        };
+
+        buildPipeline(m_EmitShader, m_VulkanResources->EmitPipeline, m_VulkanResources->EmitLayout);
+        buildPipeline(m_CompactShader, m_VulkanResources->CompactPipeline, m_VulkanResources->CompactLayout);
+        buildPipeline(m_SimulateShader, m_VulkanResources->SimulatePipeline, m_VulkanResources->SimulateLayout);
+        buildPipeline(m_RenderArgsShader, m_VulkanResources->RenderArgsPipeline, m_VulkanResources->RenderArgsLayout);
+
+        // 每帧需要：emit(1) + simulate(1) + render_args(1) = 3 set；
+        // 加保险给 64 容量，余量留给将来扩展（SPH 整合时由 m_Grid 自己的 pool 处理）。
+        m_VulkanResources->Pool = VulkanDescriptorPool::CreateDefaultComputePool(device, 64);
+
+        m_VulkanResources->Initialized = true;
+        return true;
+    }
+
+    void ParticleSystemGPU::DestroyVulkanComputeResources()
+    {
+        if (!m_VulkanResources || !m_VulkanResources->Initialized)
+            return;
+
+        VkDevice device = m_VulkanResources->Device;
+        if (device != VK_NULL_HANDLE)
+            vkDeviceWaitIdle(device);
+
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->EmitPipeline);
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->CompactPipeline);
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->SimulatePipeline);
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->RenderArgsPipeline);
+
+        m_VulkanResources->EmitLayout.reset();
+        m_VulkanResources->CompactLayout.reset();
+        m_VulkanResources->SimulateLayout.reset();
+        m_VulkanResources->RenderArgsLayout.reset();
+        m_VulkanResources->Pool.reset();
+        m_VulkanResources->Device      = VK_NULL_HANDLE;
+        m_VulkanResources->Initialized = false;
+    }
+
+    // ============================================================
+    // Vulkan 路径 Update — 非 SPH 路径：emit / simulate / render_args
+    // SPH 路径（含 PCISPH）当前显式跳过，留给 Commit C
+    // ============================================================
+    void ParticleSystemGPU::UpdateVulkan(float                           dt,
+                                         const glm::vec3&                emitterPos,
+                                         const ParticleEmitterComponent& emitter,
+                                         entt::registry* /*registry*/)
+    {
+        // SPH 路径暂未迁移 — 显式 WARN 并 return（在 Commit C 落地）
+        if (emitter.SPH.Enabled && !m_DisableSPHOnDriver)
+        {
+            if (!m_SPHDisableLogged)
+            {
+                ENGINE_CORE_WARN("[Particle][Vulkan] SPH path not yet migrated (Commit C). Skipping particle update.");
+                m_SPHDisableLogged = true;
+            }
+            return;
+        }
+
+        auto*           ctx = VulkanContext::Get();
+        VkCommandBuffer cmd = ctx ? ctx->GetCurrentFrameCommandBuffer() : VK_NULL_HANDLE;
+        if (cmd == VK_NULL_HANDLE)
+        {
+            // BeginFrame 未调或 swapchain recreate — 当前 SmokeLayer 不会进，但 guard 必须写
+            return;
+        }
+
+        const ABConfigSnapshot abConfig = GetABConfigSnapshot();
+
+        // 与 OpenGL 路径一致的 CPU 端预处理：reset aliveCount / 计算 emitCount / clamp
+        uint32_t zero = 0;
+        m_CounterBuffer->SetData(&zero, sizeof(uint32_t), 4); // aliveCount = 0
+
+        float clampedDt = std::min(dt, 0.05f);
+        m_EmitAccumulator += emitter.EmitRate * clampedDt;
+        uint32_t emitCount = static_cast<uint32_t>(m_EmitAccumulator);
+        m_EmitAccumulator -= static_cast<float>(emitCount);
+
+        int totalBurst = emitter.PendingBurst + emitter.CollisionBurstCount;
+        if (totalBurst > 0)
+            emitCount += static_cast<uint32_t>(totalBurst);
+
+        emitCount = std::min(emitCount, m_MaxParticles);
+
+        m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8); // emitCount
+
+        m_TotalTime += dt;
+
+        // 懒初始化 pipeline / pool
+        if (!InitVulkanComputeResources())
+            return;
+
+        VulkanCommandBuffer cmdBuf(cmd);
+        VkDevice            device = m_VulkanResources->Device;
+
+        // 每帧首次：reset 全部短期 descriptor set（D-12 类约束）
+        m_VulkanResources->Pool->Reset();
+
+        // 向下转型 SSBO → VulkanStorageBuffer 拿原生 VkBuffer 句柄
+        auto bufferOf = [](const Ref<ShaderStorageBuffer>& ssbo) -> VkBuffer
+        {
+            auto v = std::dynamic_pointer_cast<VulkanStorageBuffer>(ssbo);
+            ENGINE_CORE_RELEASE_ASSERT(v, "[Particle][Vulkan] SSBO is not a VulkanStorageBuffer");
+            return v->GetBuffer();
+        };
+
+        VkBuffer particleBuf    = bufferOf(m_ParticleBuffer);
+        VkBuffer deadListBuf    = bufferOf(m_DeadList);
+        VkBuffer aliveListBuf   = bufferOf(m_AliveList);
+        VkBuffer counterBuf     = bufferOf(m_CounterBuffer);
+        VkBuffer indirectArgBuf = bufferOf(m_IndirectArgs);
+
+        auto vkEmitUBO = std::dynamic_pointer_cast<VulkanUniformBuffer>(m_EmitParamsUBO);
+        auto vkSimUBO  = std::dynamic_pointer_cast<VulkanUniformBuffer>(m_SimParamsUBO);
+        ENGINE_CORE_RELEASE_ASSERT(vkEmitUBO && vkSimUBO, "[Particle][Vulkan] UBO 转型失败");
+
+        const VulkanBarrierMasks ssboBarrier    = ResolveBarrierBits(BarrierBit::ShaderStorage);
+        const VulkanBarrierMasks ssboCmdBarrier = ResolveBarrierBits(BarrierBit::ShaderStorage | BarrierBit::Command);
+
+        PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
+
+        // ============================================================
+        // Pass 1: Emit
+        // ============================================================
+        if (emitCount > 0)
+        {
+            ParticleEmitParamsUBO ubo{};
+            // Sanitize LifeMin/LifeMax
+            float safeLifeMin      = std::max(emitter.LifeMin, 1e-6f);
+            float safeLifeMax      = std::max(emitter.LifeMax, safeLifeMin);
+            ubo.EmitterPosAndAngle = glm::vec4(emitterPos, glm::radians(emitter.EmitAngle));
+            ubo.EmitDirAndSpeedMin = glm::vec4(emitter.EmitDirection, emitter.SpeedMin);
+            ubo.LifeAndSpeedMax    = glm::vec4(safeLifeMin, safeLifeMax, emitter.SpeedMax, 0.0f);
+            ubo.SizeStartEnd       = glm::vec4(emitter.SizeStart, emitter.SizeEnd, 0.0f, 0.0f);
+            ubo.StartColor         = emitter.ColorStart;
+            ubo.EndColor           = emitter.ColorEnd;
+            m_EmitParamsUBO->SetData(&ubo, sizeof(ubo));
+
+            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->EmitLayout->GetHandle());
+            ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] emit descriptor alloc failed");
+
+            VulkanDescriptorWriter w;
+            w.WriteBuffer(0, particleBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(1, deadListBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(3, counterBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(PARTICLE_EMIT_UBO_BINDING, vkEmitUBO->GetBuffer(), 0, sizeof(ParticleEmitParamsUBO),
+                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            w.UpdateSet(device, set);
+
+            cmdBuf.BindComputePipeline(m_VulkanResources->EmitPipeline.Pipeline);
+            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->EmitPipeline.Layout, 0, {set});
+
+            ParticleEmitPC pc{emitCount, m_MaxParticles, m_TotalTime, 0u};
+            cmdBuf.PushConstants(m_VulkanResources->EmitPipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc),
+                                 &pc);
+
+            uint32_t groups = (emitCount + 63) / 64;
+            if (groups > 0) // P-10 类 guard：emitCount==0 时不 dispatch
+                cmdBuf.Dispatch(groups, 1, 1);
+
+            cmdBuf.MemoryBarrier(ssboBarrier.SrcStage, ssboBarrier.DstStage, ssboBarrier.SrcAccess,
+                                 ssboBarrier.DstAccess);
+        }
+
+        // ============================================================
+        // Pass 2: Simulate (gravity + damping + alive/dead management)
+        // ============================================================
+        if (m_LastAliveCount > 0 || emitCount > 0)
+        {
+            // SPH 路径已在顶端 early-return，这里 simGravity 必走非-SPH 分支
+            glm::vec3 simGravity = emitter.Gravity;
+            float     simulateDt = std::min(dt, 0.05f);
+
+            ParticleSimParamsUBO simUbo{};
+            simUbo.GravityAndDamping = glm::vec4(simGravity, emitter.Damping);
+            m_SimParamsUBO->SetData(&simUbo, sizeof(simUbo));
+
+            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
+            ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] simulate descriptor alloc failed");
+
+            VulkanDescriptorWriter w;
+            w.WriteBuffer(0, particleBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(1, deadListBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(2, aliveListBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(3, counterBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(PARTICLE_SIM_UBO_BINDING, vkSimUBO->GetBuffer(), 0, sizeof(ParticleSimParamsUBO),
+                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            w.UpdateSet(device, set);
+
+            cmdBuf.BindComputePipeline(m_VulkanResources->SimulatePipeline.Pipeline);
+            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->SimulatePipeline.Layout, 0,
+                                      {set});
+
+            ParticleSimulatePC pc{simulateDt, m_MaxParticles, 0u};
+            cmdBuf.PushConstants(m_VulkanResources->SimulatePipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc),
+                                 &pc);
+
+            uint32_t simGroups = (m_MaxParticles + 255) / 256;
+            if (simGroups > 0)
+                cmdBuf.Dispatch(simGroups, 1, 1);
+
+            cmdBuf.MemoryBarrier(ssboBarrier.SrcStage, ssboBarrier.DstStage, ssboBarrier.SrcAccess,
+                                 ssboBarrier.DstAccess);
+        }
+
+        // ============================================================
+        // Pass 3: Render Args
+        // ============================================================
+        {
+            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->RenderArgsLayout->GetHandle());
+            ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] render_args descriptor alloc failed");
+
+            VulkanDescriptorWriter w;
+            w.WriteBuffer(3, counterBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.WriteBuffer(4, indirectArgBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            w.UpdateSet(device, set);
+
+            cmdBuf.BindComputePipeline(m_VulkanResources->RenderArgsPipeline.Pipeline);
+            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->RenderArgsPipeline.Layout, 0,
+                                      {set});
+
+            ParticleRenderArgsPC pc{m_MaxParticles};
+            cmdBuf.PushConstants(m_VulkanResources->RenderArgsPipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                                 sizeof(pc), &pc);
+
+            cmdBuf.Dispatch(1, 1, 1);
+
+            // ShaderStorage + Command bit → IndirectArgs 写完后供 DrawArraysIndirect 读取
+            cmdBuf.MemoryBarrier(ssboCmdBarrier.SrcStage, ssboCmdBarrier.DstStage, ssboCmdBarrier.SrcAccess,
+                                 ssboCmdBarrier.DstAccess);
+        }
+
+        PerformanceMonitor::Get().GetParticleComputeGPUTimer().End();
+
+        // ============================================================
+        // AsyncReadback —— Vulkan 路径下工厂返回 VulkanAsyncReadback，接口零修改
+        // ============================================================
+        if (abConfig.DisableCounterReadback)
+        {
+            m_Readback->Reset();
+        }
+        else
+        {
+            // Collect previous frame's result (non-blocking)
+            if (m_Readback->IsPending() && m_Readback->IsReady())
+            {
+                CounterData counters{};
+                m_Readback->GetData(&counters, sizeof(CounterData));
+
+                CounterData sanitized = counters;
+                bool        corrected = false;
+
+                if (sanitized.deadCount > m_MaxParticles)
+                {
+                    sanitized.deadCount = m_MaxParticles;
+                    corrected           = true;
+                }
+                if (sanitized.aliveCount > m_MaxParticles)
+                {
+                    sanitized.aliveCount = m_MaxParticles;
+                    corrected            = true;
+                }
+
+                if (corrected)
+                {
+                    ENGINE_WARN("[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); "
+                                "clamping to safe range.",
+                                counters.deadCount, counters.aliveCount, m_MaxParticles);
+                    m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
+                }
+
+                m_LastAliveCount = sanitized.aliveCount;
+
+                if (!m_UseIndirectDraw)
+                    m_AliveCountForDirectDraw = sanitized.aliveCount;
+            }
+
+            // 录入主帧 cmd 的 vkCmdCopyBuffer（VulkanAsyncReadback 内部）
+            m_Readback->CopyFrom(m_CounterBuffer, sizeof(CounterData));
+        }
+    }
+#endif // ENGINE_ENABLE_VULKAN
 
 } // namespace Engine
