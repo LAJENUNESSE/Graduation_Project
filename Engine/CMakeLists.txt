@@ -139,15 +139,38 @@ if(ENGINE_ENABLE_VULKAN)
     endif()
 
     # spirv-cross：从 SPIR-V 反射 descriptor binding / push constant 信息（Phase 7 compute 必需）
-    # 优先用 Vulkan SDK 自带的 spirv-cross（避免 vcpkg 网络下载），fallback 走 vcpkg 提供的 CONFIG 包
-    find_library(SPIRV_CROSS_CORE_LIB
+    # 优先用 Vulkan SDK 自带的 spirv-cross（避免 vcpkg 网络下载），fallback 走 vcpkg 提供的 CONFIG 包。
+    # Vulkan SDK 同时提供 Release (spirv-cross-core.lib) 和 Debug (spirv-cross-cored.lib) 两套，
+    # **必须按 build config 切换** — 否则 MSVC CRT (_ITERATOR_DEBUG_LEVEL / MD vs MDd) 不匹配链接失败。
+    find_library(SPIRV_CROSS_CORE_LIB_RELEASE
         NAMES spirv-cross-core
         HINTS "$ENV{VULKAN_SDK}/Lib" "$ENV{VULKAN_SDK}/lib"
+        NO_DEFAULT_PATH
     )
-    if(SPIRV_CROSS_CORE_LIB)
-        target_link_libraries(Engine PRIVATE ${SPIRV_CROSS_CORE_LIB})
+    find_library(SPIRV_CROSS_CORE_LIB_DEBUG
+        NAMES spirv-cross-cored
+        HINTS "$ENV{VULKAN_SDK}/Lib" "$ENV{VULKAN_SDK}/lib"
+        NO_DEFAULT_PATH
+    )
+    if(SPIRV_CROSS_CORE_LIB_RELEASE AND SPIRV_CROSS_CORE_LIB_DEBUG)
+        # 多配置生成器 (VS) 和单配置生成器 (Ninja) 都用生成器表达式切换
+        target_link_libraries(Engine PRIVATE
+            "$<$<CONFIG:Debug>:${SPIRV_CROSS_CORE_LIB_DEBUG}>"
+            "$<$<NOT:$<CONFIG:Debug>>:${SPIRV_CROSS_CORE_LIB_RELEASE}>"
+        )
         target_compile_definitions(Engine PRIVATE ENGINE_VULKAN_HAS_SPIRV_CROSS=1)
-        message(STATUS "[Engine] Vulkan SPIR-V reflection enabled via Vulkan SDK spirv-cross-core: ${SPIRV_CROSS_CORE_LIB}")
+        message(STATUS "[Engine] Vulkan SPIR-V reflection enabled via Vulkan SDK spirv-cross-core")
+        message(STATUS "[Engine]   Release: ${SPIRV_CROSS_CORE_LIB_RELEASE}")
+        message(STATUS "[Engine]   Debug:   ${SPIRV_CROSS_CORE_LIB_DEBUG}")
+    elseif(SPIRV_CROSS_CORE_LIB_RELEASE)
+        # 仅 Release 可用：限制为非 Debug 配置链接，避免 Debug build CRT 不匹配
+        target_link_libraries(Engine PRIVATE
+            "$<$<NOT:$<CONFIG:Debug>>:${SPIRV_CROSS_CORE_LIB_RELEASE}>"
+        )
+        target_compile_definitions(Engine PRIVATE
+            "$<$<NOT:$<CONFIG:Debug>>:ENGINE_VULKAN_HAS_SPIRV_CROSS=1>"
+        )
+        message(WARNING "[Engine] Vulkan SDK 仅提供 Release spirv-cross-core.lib；Debug build 将禁用 SPIR-V 反射")
     else()
         find_package(spirv_cross_core CONFIG QUIET)
         if(spirv_cross_core_FOUND)
