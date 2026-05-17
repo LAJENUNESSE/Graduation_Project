@@ -10,7 +10,7 @@
 ## 1. 当前位置
 
 - **进行中阶段**：Phase 7（Compute 迁移）
-- **最近一次 commit**：`b1ae718 docs: 同步 .claude/rules 至 Vulkan 迁移当前状态`
+- **最近一次 commit**：`5f7c11c docs: 引入任务沉淀机制 — SPEC / checkpoint skill / ADR`
 - **下一步**：见 [§6 Next Steps](#6-next-steps)
 
 ---
