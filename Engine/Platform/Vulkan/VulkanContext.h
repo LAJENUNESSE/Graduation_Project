@@ -66,6 +66,36 @@ namespace Engine
 
         VkCommandPool GetCommandPool() const { return m_CommandPool; }
 
+        // ---------------------------------------------------------------------
+        // 高级帧录制接口（Phase 7+）
+        //
+        // SwapBuffers() 是 BeginFrame() + 内部清屏/Debug/ImGui Pass + EndFrame() 的
+        // 复合包装；高级调用方（compute pass / Scene 渲染）可以直接：
+        //   if (ctx->BeginFrame()) {
+        //       VkCommandBuffer cmd = ctx->GetCurrentFrameCommandBuffer();
+        //       ... 录制 dispatch / 渲染 Pass ...
+        //       ctx->RecordImGuiPass(cmd, ctx->GetCurrentImageIndex());  // 可选
+        //       ctx->EndFrame();
+        //   }
+        // 绕过 SwapBuffers 的清屏与默认 ImGui 录制。SmokeLayer 仍走 SwapBuffers。
+        // ---------------------------------------------------------------------
+        bool            BeginFrame();
+        void            EndFrame();
+        VkCommandBuffer GetCurrentFrameCommandBuffer() const
+        {
+            return m_FrameInProgress ? m_CommandBuffers[m_CurrentFrame] : VK_NULL_HANDLE;
+        }
+        uint32_t GetCurrentImageIndex() const { return m_PendingImageIndex; }
+        uint32_t GetCurrentFrameIndex() const { return m_CurrentFrame; }
+
+        // 注册需在本帧主 submit 完成后信号化的 fence（追加零 cmd submit）。
+        // VulkanAsyncReadback 用它感知 host-visible staging buffer 何时可读。
+        void RegisterReadbackFenceSignal(VkFence fence);
+
+        // ImGui pass 录制：BeginFrame/EndFrame 高级用法可在自定义渲染后调用。
+        // 仍依赖 RenderImGui(drawData) 缓存的 drawData。
+        void RecordImGuiPass(VkCommandBuffer cmd, uint32_t imageIndex);
+
     private:
         // Setup helpers (called from Init)
         void CreateInstance();
@@ -79,7 +109,6 @@ namespace Engine
         void CreateImGuiRenderPass();
         void CreateImGuiFramebuffers();
         void DestroyImGuiFramebuffers();
-        void RecordImGuiPass(VkCommandBuffer cmd, uint32_t imageIndex);
         void CreateDebugDrawResources();
         void DestroyDebugDrawResources();
 
@@ -150,6 +179,11 @@ namespace Engine
         std::vector<VkSemaphore>  m_RenderFinishedSemaphores;
         std::vector<VkFence>      m_InFlightFences;
         uint32_t                  m_CurrentFrame = 0;
+
+        // 高级帧录制状态（BeginFrame/EndFrame）
+        bool                 m_FrameInProgress   = false;
+        uint32_t             m_PendingImageIndex = 0;
+        std::vector<VkFence> m_PendingReadbackFences; // EndFrame 末尾零 cmd submit 信号化
 
         bool m_FramebufferResized = false;
 

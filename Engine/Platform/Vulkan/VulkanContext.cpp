@@ -161,34 +161,113 @@ namespace Engine
     }
 
     // =========================================================================
-    // SwapBuffers — record clear command, submit, present
+    // BeginFrame / EndFrame — 高级帧录制接口
     // =========================================================================
 
-    void VulkanContext::SwapBuffers()
+    bool VulkanContext::BeginFrame()
     {
+        ENGINE_CORE_RELEASE_ASSERT(!m_FrameInProgress, "VulkanContext::BeginFrame called twice without EndFrame!");
+
         // Wait for previous frame at this index
         vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 
         // Acquire next swapchain image
-        uint32_t imageIndex = 0;
-        VkResult result     = vkAcquireNextImageKHR(
-            m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+        VkResult result =
+            vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame],
+                                  VK_NULL_HANDLE, &m_PendingImageIndex);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             RecreateSwapchain();
-            return;
+            return false;
         }
         ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
                                    "Failed to acquire swapchain image!");
 
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
-        // Record command buffer
-        VkCommandBuffer     cmd = m_CommandBuffers[m_CurrentFrame];
-        VulkanCommandBuffer commandBuffer(cmd);
+        VulkanCommandBuffer commandBuffer(m_CommandBuffers[m_CurrentFrame]);
         commandBuffer.Reset();
         commandBuffer.Begin();
+
+        m_FrameInProgress = true;
+        return true;
+    }
+
+    void VulkanContext::EndFrame()
+    {
+        if (!m_FrameInProgress)
+            return;
+
+        VkCommandBuffer     cmd = m_CommandBuffers[m_CurrentFrame];
+        VulkanCommandBuffer commandBuffer(cmd);
+        commandBuffer.End();
+
+        // Submit
+        VkSemaphore          waitSemaphores[]   = {m_ImageAvailableSemaphores[m_CurrentFrame]};
+        VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        VkSemaphore          signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.waitSemaphoreCount   = 1;
+        submitInfo.pWaitSemaphores      = waitSemaphores;
+        submitInfo.pWaitDstStageMask    = waitStages;
+        submitInfo.commandBufferCount   = 1;
+        submitInfo.pCommandBuffers      = &cmd;
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores    = signalSemaphores;
+
+        VkResult submitResult = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]);
+        ENGINE_CORE_RELEASE_ASSERT(submitResult == VK_SUCCESS, "Failed to submit draw command buffer!");
+
+        // Readback fence 信号化：本帧主 submit 已排队，追加零 cmd submit 在同一队列后面
+        // 顺序保证 cmdCopyBuffer 已完成 → host-visible staging 可读
+        for (VkFence fence : m_PendingReadbackFences)
+        {
+            VkSubmitInfo emptySubmit{};
+            emptySubmit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            vkQueueSubmit(m_GraphicsQueue, 1, &emptySubmit, fence);
+        }
+        m_PendingReadbackFences.clear();
+
+        // Present
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores    = signalSemaphores;
+        presentInfo.swapchainCount     = 1;
+        presentInfo.pSwapchains        = &m_Swapchain;
+        presentInfo.pImageIndices      = &m_PendingImageIndex;
+
+        VkResult result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FramebufferResized)
+        {
+            m_FramebufferResized = false;
+            RecreateSwapchain();
+        }
+
+        m_CurrentFrame    = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        m_FrameInProgress = false;
+    }
+
+    void VulkanContext::RegisterReadbackFenceSignal(VkFence fence)
+    {
+        if (fence != VK_NULL_HANDLE)
+            m_PendingReadbackFences.push_back(fence);
+    }
+
+    // =========================================================================
+    // SwapBuffers — BeginFrame + 默认清屏/Debug/ImGui Pass + EndFrame
+    // =========================================================================
+
+    void VulkanContext::SwapBuffers()
+    {
+        if (!BeginFrame())
+            return;
+
+        VkCommandBuffer cmd        = m_CommandBuffers[m_CurrentFrame];
+        const uint32_t  imageIndex = m_PendingImageIndex;
 
         const bool hasPendingDraws = !m_PendingDrawCalls.empty();
         const bool canDebugDraw    = hasPendingDraws && m_DebugRenderPass != VK_NULL_HANDLE &&
@@ -326,43 +405,7 @@ namespace Engine
         // ImGui pass: 始终录制（drawData 为空时只做 layout transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR）
         RecordImGuiPass(cmd, imageIndex);
 
-        commandBuffer.End();
-
-        // Submit
-        VkSemaphore          waitSemaphores[]   = {m_ImageAvailableSemaphores[m_CurrentFrame]};
-        VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        VkSemaphore          signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
-
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.waitSemaphoreCount   = 1;
-        submitInfo.pWaitSemaphores      = waitSemaphores;
-        submitInfo.pWaitDstStageMask    = waitStages;
-        submitInfo.commandBufferCount   = 1;
-        submitInfo.pCommandBuffers      = &cmd;
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores    = signalSemaphores;
-
-        VkResult submitResult = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]);
-        ENGINE_CORE_RELEASE_ASSERT(submitResult == VK_SUCCESS, "Failed to submit draw command buffer!");
-
-        // Present
-        VkPresentInfoKHR presentInfo{};
-        presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores    = signalSemaphores;
-        presentInfo.swapchainCount     = 1;
-        presentInfo.pSwapchains        = &m_Swapchain;
-        presentInfo.pImageIndices      = &imageIndex;
-
-        result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FramebufferResized)
-        {
-            m_FramebufferResized = false;
-            RecreateSwapchain();
-        }
-
-        m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        EndFrame();
     }
 
     // =========================================================================
