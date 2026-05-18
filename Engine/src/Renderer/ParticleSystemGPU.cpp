@@ -1309,6 +1309,13 @@ namespace Engine
             auto vkSPHUBO = std::dynamic_pointer_cast<VulkanUniformBuffer>(m_SPHParamsUBO);
             ENGINE_CORE_RELEASE_ASSERT(vkSPHUBO, "[Particle][Vulkan] SPH UBO 转型失败");
 
+            // 粒子 SPH binding=8 用 alive list 占位（无专属 SurfaceNormalBuffer）。
+            // shader 内 u_SurfaceTension>0 时会向该 binding 写入，会损坏 alive list。
+            // 若启用粒子表面张力，需先实装 m_SurfaceNormalBuffer。
+            ENGINE_CORE_RELEASE_ASSERT(
+                emitter.SPH.SurfaceTension == 0.0f,
+                "[Particle][Vulkan] SurfaceTension>0 需要专属 SurfaceNormalBuffer，当前 binding=8 是 alive list 占位");
+
             // Grid 注入外部 buffer + 每帧首次 ResetFrameResources（D-5/D-12）
             m_Grid.SetExternalBuffers(m_ParticleBuffer, m_AliveList, nullptr);
             m_Grid.ResetFrameResources();

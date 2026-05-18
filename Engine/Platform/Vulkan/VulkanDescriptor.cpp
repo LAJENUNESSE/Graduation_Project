@@ -154,6 +154,9 @@ namespace Engine
 
     void VulkanDescriptorWriter::UpdateSet(VkDevice device, VkDescriptorSet set)
     {
+        ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE,
+                                   "[Vulkan] DescriptorWriter::UpdateSet 收到 VK_NULL_HANDLE（pool 耗尽？）");
+
         for (size_t i = 0; i < m_Writes.size(); ++i)
         {
             m_Writes[i].dstSet = set;

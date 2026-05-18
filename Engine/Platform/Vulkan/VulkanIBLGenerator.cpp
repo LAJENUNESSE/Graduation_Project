@@ -126,10 +126,10 @@ namespace Engine
 
     void VulkanIBLGenerator::Shutdown()
     {
+        // Clear() 内部已 vkDeviceWaitIdle，无需再次 wait
         Clear();
 
         auto device = GetDevice();
-        vkDeviceWaitIdle(device);
 
         DestroyImage(m_BRDFLut);
         m_BRDFLutView = VK_NULL_HANDLE;
@@ -295,6 +295,11 @@ namespace Engine
 
         auto* ctx    = VulkanContext::Get();
         auto  device = ctx->GetDevice();
+
+        // 回收上一轮 descriptor set（前一次 EndSingleTimeCommands 已 vkQueueWaitIdle，
+        // GPU 不再引用旧 set）。否则每次切天空盒消耗 2 STORAGE_IMAGE + 2 COMBINED_IMAGE_SAMPLER，
+        // pool 容量 16 → 第 8 次切换 Allocate 返回 VK_NULL_HANDLE 触发 RELEASE_ASSERT。
+        m_DescriptorPool->Reset();
 
         // VulkanTextureCubemap 现已实装 (commit 0c6eb28)，dynamic_pointer_cast 拿 cube view + sampler
         auto vkCube = std::dynamic_pointer_cast<VulkanTextureCubemap>(skybox);

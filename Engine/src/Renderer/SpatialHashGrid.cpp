@@ -107,7 +107,8 @@ namespace Engine
         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
         {
             // 低频路径（IBL / Grass / 视角触发）：开 SingleTime cmd，内部 reset pool + record + wait
-            auto*           ctx       = VulkanContext::Get();
+            auto* ctx = VulkanContext::Get();
+            ENGINE_CORE_RELEASE_ASSERT(ctx, "SpatialHashGrid::Build: VulkanContext is null");
             VkCommandBuffer cmdHandle = ctx->BeginSingleTimeCommands();
             ResetFrameResources();
             BuildVulkan(cmdHandle, aliveCount, usePredictedPos);
