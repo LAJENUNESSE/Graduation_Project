@@ -22,11 +22,36 @@
 #include "Platform/Vulkan/VulkanBuffer.h"
 #include "Platform/Vulkan/VulkanCommandBuffer.h"
 #include "Platform/Vulkan/VulkanContext.h"
+#include "Platform/Vulkan/VulkanDescriptor.h"
+#include "Platform/Vulkan/VulkanPipeline.h"
 #include "Platform/Vulkan/VulkanShader.h"
+#include <vulkan/vulkan.h>
 #endif
 
 namespace Engine
 {
+
+#ifdef ENGINE_ENABLE_VULKAN
+    // Vulkan compute 资源（Pimpl，对 .h 隐藏）
+    struct GrassRenderSystem::VulkanResources
+    {
+        bool                           Initialized = false;
+        VkDevice                       Device      = VK_NULL_HANDLE;
+        Ref<VulkanDescriptorSetLayout> PlacementSetLayout;
+        Ref<VulkanDescriptorSetLayout> RenderArgsSetLayout;
+        Ref<VulkanDescriptorPool>      DescriptorPool;
+        VulkanComputePipelineHandle    PlacementPipeline{};
+        VulkanComputePipelineHandle    RenderArgsPipeline{};
+    };
+#else
+    // 非 Vulkan 构建下也需要完整类型，让 unique_ptr 析构合法
+    struct GrassRenderSystem::VulkanResources
+    {
+    };
+#endif
+
+    GrassRenderSystem::GrassRenderSystem() : m_VulkanResources(CreateScope<VulkanResources>()) {}
+    GrassRenderSystem::~GrassRenderSystem() = default;
 
     namespace
     {
@@ -279,19 +304,19 @@ namespace Engine
             // GPU 已 idle，旧 set 安全可回收。
             auto allocateOrReset = [&](VkDescriptorSetLayout layout) -> VkDescriptorSet
             {
-                VkDescriptorSet set = m_DescriptorPool->Allocate(layout);
+                VkDescriptorSet set = m_VulkanResources->DescriptorPool->Allocate(layout);
                 if (set == VK_NULL_HANDLE)
                 {
                     ENGINE_CORE_WARN("[Grass][Vulkan] DescriptorPool 耗尽，Reset 后重试");
-                    m_DescriptorPool->Reset();
-                    set = m_DescriptorPool->Allocate(layout);
+                    m_VulkanResources->DescriptorPool->Reset();
+                    set = m_VulkanResources->DescriptorPool->Allocate(layout);
                 }
                 ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Grass][Vulkan] DescriptorPool 二次分配仍失败");
                 return set;
             };
 
             // 1) Placement descriptor set — bindings: 0=grass, 1=height, 2=params(UBO), 3=counter
-            VkDescriptorSet placementSet = allocateOrReset(m_PlacementSetLayout->GetHandle());
+            VkDescriptorSet placementSet = allocateOrReset(m_VulkanResources->PlacementSetLayout->GetHandle());
             {
                 VulkanDescriptorWriter w;
                 w.WriteBuffer(0, vkGrass->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
@@ -303,7 +328,7 @@ namespace Engine
             }
 
             // 2) RenderArgs descriptor set — bindings: 3=counter(read), 4=indirect args(write)
-            VkDescriptorSet renderArgsSet = allocateOrReset(m_RenderArgsSetLayout->GetHandle());
+            VkDescriptorSet renderArgsSet = allocateOrReset(m_VulkanResources->RenderArgsSetLayout->GetHandle());
             {
                 VulkanDescriptorWriter w;
                 w.WriteBuffer(3, vkCounter->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
@@ -316,8 +341,9 @@ namespace Engine
             VulkanCommandBuffer cmdBuf(rawCmd);
 
             // Placement dispatch
-            cmdBuf.BindComputePipeline(m_PlacementPipeline.Pipeline);
-            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_PlacementPipeline.Layout, 0, {placementSet});
+            cmdBuf.BindComputePipeline(m_VulkanResources->PlacementPipeline.Pipeline);
+            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->PlacementPipeline.Layout, 0,
+                                      {placementSet});
             uint32_t groups = (maxGrass + 63) / 64;
             cmdBuf.Dispatch(groups, 1, 1);
 
@@ -328,8 +354,9 @@ namespace Engine
             }
 
             // RenderArgs dispatch（写 indirect args buffer）
-            cmdBuf.BindComputePipeline(m_RenderArgsPipeline.Pipeline);
-            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_RenderArgsPipeline.Layout, 0, {renderArgsSet});
+            cmdBuf.BindComputePipeline(m_VulkanResources->RenderArgsPipeline.Pipeline);
+            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->RenderArgsPipeline.Layout, 0,
+                                      {renderArgsSet});
             cmdBuf.Dispatch(1, 1, 1);
 
             // Barrier — render_args 写 indirect，后续 DrawArraysIndirect 通过 DRAW_INDIRECT stage 读
@@ -387,12 +414,13 @@ namespace Engine
 #ifdef ENGINE_ENABLE_VULKAN
     void GrassRenderSystem::EnsureVulkanComputeResources()
     {
-        if (m_VulkanInitialized)
+        if (m_VulkanResources->Initialized)
             return;
 
         auto* ctx = VulkanContext::Get();
         ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "[Grass][Vulkan] VulkanContext not initialized");
-        m_VkDevice = ctx->GetDevice();
+        m_VulkanResources->Device = ctx->GetDevice();
+        VkDevice device           = m_VulkanResources->Device;
 
         // 反射拿到两个 shader 的 binding & shader module
         auto placementVk  = std::dynamic_pointer_cast<VulkanShader>(m_PlacementShader);
@@ -400,56 +428,57 @@ namespace Engine
         ENGINE_CORE_RELEASE_ASSERT(placementVk && renderArgsVk,
                                    "[Grass][Vulkan] grass shader 转型失败（非 VulkanShader）");
 
-        VkShaderModule placementModule  = placementVk->GetOrCreateShaderModule(m_VkDevice, "compute");
-        VkShaderModule renderArgsModule = renderArgsVk->GetOrCreateShaderModule(m_VkDevice, "compute");
+        VkShaderModule placementModule  = placementVk->GetOrCreateShaderModule(device, "compute");
+        VkShaderModule renderArgsModule = renderArgsVk->GetOrCreateShaderModule(device, "compute");
         ENGINE_CORE_RELEASE_ASSERT(placementModule != VK_NULL_HANDLE && renderArgsModule != VK_NULL_HANDLE,
                                    "[Grass][Vulkan] 无法创建 grass compute shader module");
 
         // Descriptor set layouts — 由 SPIR-V 反射结果构建
-        m_PlacementSetLayout =
-            VulkanDescriptorSetLayout::CreateFromReflection(m_VkDevice, placementVk->GetReflectedBindings(), 0);
-        m_RenderArgsSetLayout =
-            VulkanDescriptorSetLayout::CreateFromReflection(m_VkDevice, renderArgsVk->GetReflectedBindings(), 0);
+        m_VulkanResources->PlacementSetLayout =
+            VulkanDescriptorSetLayout::CreateFromReflection(device, placementVk->GetReflectedBindings(), 0);
+        m_VulkanResources->RenderArgsSetLayout =
+            VulkanDescriptorSetLayout::CreateFromReflection(device, renderArgsVk->GetReflectedBindings(), 0);
 
         // Compute pipelines（草地 shader 无 push constant，descriptor set 0 已覆盖全部输入）
         {
             VulkanComputePipelineDesc desc{};
             desc.ShaderModule = placementModule;
-            desc.SetLayouts   = {m_PlacementSetLayout->GetHandle()};
+            desc.SetLayouts   = {m_VulkanResources->PlacementSetLayout->GetHandle()};
             // 如果未来 shader 添加 push constant，可在此处填充：
             // for (auto& pc : placementVk->GetReflectedPushConstants())
             //     desc.PushConstants.push_back({pc.Stages, pc.Offset, pc.Size});
-            m_PlacementPipeline = VulkanPipeline::CreateCompute(m_VkDevice, desc);
+            m_VulkanResources->PlacementPipeline = VulkanPipeline::CreateCompute(device, desc);
         }
         {
             VulkanComputePipelineDesc desc{};
-            desc.ShaderModule    = renderArgsModule;
-            desc.SetLayouts      = {m_RenderArgsSetLayout->GetHandle()};
-            m_RenderArgsPipeline = VulkanPipeline::CreateCompute(m_VkDevice, desc);
+            desc.ShaderModule                     = renderArgsModule;
+            desc.SetLayouts                       = {m_VulkanResources->RenderArgsSetLayout->GetHandle()};
+            m_VulkanResources->RenderArgsPipeline = VulkanPipeline::CreateCompute(device, desc);
         }
 
         // Descriptor pool — placement(4) + render_args(2)，按场景内地形数量预估上限
         // 每次 RebuildGrass 分配 2 个 set；草地构建低频，给 256 set 容量足够。
-        m_DescriptorPool = VulkanDescriptorPool::CreateDefaultComputePool(m_VkDevice, 256);
+        m_VulkanResources->DescriptorPool = VulkanDescriptorPool::CreateDefaultComputePool(device, 256);
 
-        m_VulkanInitialized = true;
+        m_VulkanResources->Initialized = true;
     }
 
     void GrassRenderSystem::DestroyVulkanComputeResources()
     {
-        if (!m_VulkanInitialized)
+        if (!m_VulkanResources || !m_VulkanResources->Initialized)
             return;
 
-        if (m_VkDevice != VK_NULL_HANDLE)
-            vkDeviceWaitIdle(m_VkDevice);
+        VkDevice device = m_VulkanResources->Device;
+        if (device != VK_NULL_HANDLE)
+            vkDeviceWaitIdle(device);
 
-        VulkanPipeline::DestroyCompute(m_VkDevice, m_PlacementPipeline);
-        VulkanPipeline::DestroyCompute(m_VkDevice, m_RenderArgsPipeline);
-        m_DescriptorPool.reset();
-        m_PlacementSetLayout.reset();
-        m_RenderArgsSetLayout.reset();
-        m_VkDevice          = VK_NULL_HANDLE;
-        m_VulkanInitialized = false;
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->PlacementPipeline);
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->RenderArgsPipeline);
+        m_VulkanResources->DescriptorPool.reset();
+        m_VulkanResources->PlacementSetLayout.reset();
+        m_VulkanResources->RenderArgsSetLayout.reset();
+        m_VulkanResources->Device      = VK_NULL_HANDLE;
+        m_VulkanResources->Initialized = false;
     }
 #endif // ENGINE_ENABLE_VULKAN
 

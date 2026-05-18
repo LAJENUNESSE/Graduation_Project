@@ -2,8 +2,8 @@
 
 #include "Asset/AssetHandle.h"
 #include "Core/Base.h"
-#include "Renderer/Shader.h"
 #include "Renderer/GPUAsyncReadback.h"
+#include "Renderer/Shader.h"
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/Texture.h"
 #include "Renderer/UniformBuffer.h"
@@ -16,13 +16,6 @@
 #include <string>
 #include <unordered_map>
 
-#ifdef ENGINE_ENABLE_VULKAN
-#include <vulkan/vulkan.h>
-
-#include "Platform/Vulkan/VulkanDescriptor.h"
-#include "Platform/Vulkan/VulkanPipeline.h"
-#endif
-
 namespace Engine
 {
 
@@ -33,6 +26,9 @@ namespace Engine
     class GrassRenderSystem
     {
     public:
+        GrassRenderSystem();
+        ~GrassRenderSystem();
+
         void Init();
         void Shutdown();
         void UpdateGrassData(entt::registry& reg, float totalTime);
@@ -98,16 +94,10 @@ namespace Engine
         std::unordered_map<uint32_t, GrassInstance> m_Instances;
         std::unordered_map<uint32_t, GrassCache>    m_Cache;
 
-#ifdef ENGINE_ENABLE_VULKAN
-        // ---- Vulkan compute pipeline 资源（lazy 初始化，全 entity 共享）----
-        bool                           m_VulkanInitialized = false;
-        VkDevice                       m_VkDevice          = VK_NULL_HANDLE;
-        Ref<VulkanDescriptorSetLayout> m_PlacementSetLayout;
-        Ref<VulkanDescriptorSetLayout> m_RenderArgsSetLayout;
-        Ref<VulkanDescriptorPool>      m_DescriptorPool;
-        VulkanComputePipelineHandle    m_PlacementPipeline{};
-        VulkanComputePipelineHandle    m_RenderArgsPipeline{};
-#endif
+        // Vulkan 资源以 Pimpl 隐藏在 .cpp，避免 .h 引入 vulkan.h 依赖（污染 9 个翻译单元）。
+        // 与 FluidSystemGPU / ParticleSystemGPU 一致；Scope<不完整类型> 要求析构在 .cpp 实现。
+        struct VulkanResources;
+        Scope<VulkanResources> m_VulkanResources;
     };
 
 } // namespace Engine
