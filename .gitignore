@@ -105,6 +105,12 @@ Game_Engine/
 # Agent work plans
 .sisyphus/
 
+# OpenCode runtime state
+.omo/
+
+# OpenCode dependencies (config tracked)
+.opencode/node_modules/
+
 # CMake temp (root level)
 CMakeFiles/
 
