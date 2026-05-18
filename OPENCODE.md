@@ -17,7 +17,10 @@ Opencode — 仓库代理工作流与约束
 4) EXECUTE
    - 原子化改动、最小范围变更。不会在未授权下执行 git commit/push（见“提交策略”）。
 5) VERIFY
-   - 修改后运行 lsp_diagnostics（目标：0 error）、项目格式化（clang-format）、构建和相关测试。所有修改必须满足“通过验证”后方可视为完成。
+   - 修改后运行 lsp_diagnostics（目标：0 error）、项目格式化（clang-format）、构建和相关测试。所有修改必须满足"通过验证"后方可视为完成。
+6) CHECKPOINT（必要时）
+   - phase 收尾或踩了非显而易见的坑后，调用 checkpoint skill 沉淀关键决策、技术选型舍弃理由、踩坑记录到对应位置（任务 SPEC.md / 全局 MEMORY.md / docs/decisions/ ADR）。
+   - 不是每次 commit 都要做——只在有"非显而易见的选择"或"长期教训"时触发。
 
 三、并行与委派规则
 - 并行探索允许，但不可重复：一旦某信息委派给 explore/librarian，禁止本地再次做相同检索，等待并使用该背景任务结果。
@@ -35,23 +38,41 @@ Opencode — 仓库代理工作流与约束
 - 禁止删除或禁用测试以通过 CI。
 - 提交前必须运行 clang-format（项目指定的 clang-format 路径），不要格式化 vendor/。
 
-六、权限与秘密处理
+六、模块特定约定（路径限定规则）
+
+- 项目 `.claude/rules/` 下有 11 个模块特定规则文件（renderer.md、scene-ecs.md、physics.md、shaders.md 等），每个文件通过 `paths:` frontmatter 限定作用域。
+- OpenCode 不支持自动路径匹配注入，因此在操作对应模块时，agent 应主动查阅相关规则文件：
+  | 操作路径 | 应查阅规则 |
+  |---|---|
+  | `Engine/src/Renderer/**` | `.claude/rules/renderer.md`、`.claude/rules/opengl.md` |
+  | `Engine/src/Scene/**` | `.claude/rules/scene-ecs.md` |
+  | `Engine/src/Physics/**` | `.claude/rules/physics.md` |
+  | `Engine/src/Asset/**` | `.claude/rules/asset.md` |
+  | `Engine/src/Reflection/**` | `.claude/rules/reflection.md` |
+  | `Editor/**` | `.claude/rules/editor.md` |
+  | `assets/shaders/**` | `.claude/rules/shaders.md` |
+  | `tests/**` | `.claude/rules/tests.md` |
+  | `Engine/Platform/Vulkan/**` | `.claude/rules/vulkan.md` |
+- 规则优先级：AGENTS.md / OPENCODE.md > 模块规则 > 用户全局偏好。
+
+七、权限与秘密处理
 - 严格遵守 .claude/settings*.json 中的 allow/deny 列表（例如禁止读取 .env、*.pem、*.key）。
 - 若发现明文凭证（如 settings.json 中的 ANTHROPIC_AUTH_TOKEN），立即报告并建议凭证轮换/移除（不得自动上传/共享）。
 
-七、输出契约（Output Contract）
+八、输出契约（Output Contract）
 - 回应尽量简洁、使用简体中文。
 - 代码变更必须包含：修改文件列表、关键代码片段摘要、验证步骤与验证结果（LSP/构建/测试日志）。
 - 变更完成后说明下一步（人工审查/创建 PR/合并步骤）。
 
-八、故障恢复
+九、故障恢复
 - 每次修改附带回退计划（如何重置改动或恢复到前一良好状态）。
 - 若验证失败超过 3 次不同修复路径：停止更改并汇报完整诊断与建议（可请求 Oracle 协助）。
 
-九、快速必须/禁止清单
+十、快速必须/禁止清单
 - MUST：所有输出使用简体中文。
 - MUST：遇到不确定信息时主动问用户。
 - MUST：修改后运行 lsp_diagnostics（0 errors）+构建/测试通过或提供可重复日志与修复计划。
+- MUST：phase 收尾或踩坑后用 `/checkpoint` skill 沉淀关键决策（参考 CLAUDE.md 第 7 步）。
 - MUST NOT：未经授权创建/push commit。
 - MUST NOT：暴露明文凭证；发现即上报。
 - MUST NOT：使用 as any / @ts-ignore、空 catch、删除测试以通过 CI。
