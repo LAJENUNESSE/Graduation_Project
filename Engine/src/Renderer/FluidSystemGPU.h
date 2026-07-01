@@ -95,6 +95,11 @@ namespace Engine
         std::vector<MeshSDFDebugBody> m_MeshSDFDebugBodies;
         MeshSDFDebugStats             m_MeshSDFDebugStats;
 
+        // MeshSDF 缓存：当碰撞体 Transform 未变化时跳过重建
+        size_t              m_MeshSDFCacheHash = 0;
+        MeshSDFUploadResult m_CachedMeshSDFResult;
+        bool                m_MeshSDFCacheValid = false;
+
         void InitSPH(float smoothingRadius);
         void InitPCISPH();
         void InitRigidBodyBuffer();

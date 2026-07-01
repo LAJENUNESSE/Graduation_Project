@@ -326,9 +326,7 @@ namespace Engine
     void VulkanTexture2D::Destroy()
     {
         auto* context = VulkanContext::Get();
-        // VulkanAllocator::IsInitialized() 兜底：若 VulkanContext 已先于本对象析构（如 static），
-        // device 也已被销毁，跳过整个清理避免 use-after-destroy。
-        if (!context || !VulkanAllocator::IsInitialized())
+        if (!context)
             return;
 
         VkDevice device = context->GetDevice();
@@ -339,7 +337,7 @@ namespace Engine
         if (m_ImageView != VK_NULL_HANDLE)
             vkDestroyImageView(device, m_ImageView, nullptr);
 
-        if (m_Image != VK_NULL_HANDLE)
+        if (m_Image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
             vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Image, m_Allocation);
     }
 
@@ -625,9 +623,7 @@ namespace Engine
     void VulkanTextureCubemap::Destroy()
     {
         auto* context = VulkanContext::Get();
-        // VulkanAllocator::IsInitialized() 兜底：若 VulkanContext 已先于本对象析构（如 static），
-        // device 也已被销毁，跳过整个清理避免 use-after-destroy。
-        if (!context || !VulkanAllocator::IsInitialized())
+        if (!context)
             return;
 
         VkDevice device = context->GetDevice();
@@ -638,7 +634,7 @@ namespace Engine
         if (m_ImageView != VK_NULL_HANDLE)
             vkDestroyImageView(device, m_ImageView, nullptr);
 
-        if (m_Image != VK_NULL_HANDLE)
+        if (m_Image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
             vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Image, m_Allocation);
     }
 

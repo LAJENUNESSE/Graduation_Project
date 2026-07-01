@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <chrono>
+#include <cstring>
 
 #include "Debug/PerformanceMonitor.h"
 
@@ -34,6 +35,37 @@ namespace Engine
     struct FluidSystemGPU::CudaImpl
     {
     }; // Empty stub
+
+    // MeshCollider Transform 哈希：用于检测碰撞体是否移动
+    static size_t ComputeMeshColliderHash(entt::registry* registry)
+    {
+        if (!registry)
+            return 0;
+
+        size_t hash = 0;
+        auto   view = registry->view<TransformComponent, MeshColliderComponent>();
+        for (auto entity : view)
+        {
+            auto& tc = view.get<TransformComponent>(entity);
+            // 简单组合 Translation + Rotation + Scale 的 bit pattern
+            auto hashFloat = [](float f) -> size_t
+            {
+                uint32_t bits;
+                std::memcpy(&bits, &f, sizeof(bits));
+                return std::hash<uint32_t>{}(bits);
+            };
+            hash ^= hashFloat(tc.Translation.x) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Translation.y) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Translation.z) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Rotation.x) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Rotation.y) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Rotation.z) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Scale.x) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Scale.y) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash ^= hashFloat(tc.Scale.z) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        }
+        return hash;
+    }
 
     // Must match GLSL struct layout: 5 x vec4 = 80 bytes
     struct FluidGPUParticle
@@ -344,15 +376,22 @@ namespace Engine
                 if (emitter.MeshSDFCoupling)
                 {
                     InitMeshSDFBuffer();
-                    auto                      uploadStart = std::chrono::high_resolution_clock::now();
-                    const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
-                        registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
-                        static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
-                        emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
-                    auto uploadEnd = std::chrono::high_resolution_clock::now();
-                    meshSDFCount   = upload.BodyCount;
-                    meshSDFVoxels  = upload.VoxelCount;
-                    meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
+                    size_t currentHash = ComputeMeshColliderHash(registry);
+                    if (!m_MeshSDFCacheValid || currentHash != m_MeshSDFCacheHash)
+                    {
+                        auto                      uploadStart = std::chrono::high_resolution_clock::now();
+                        const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
+                            registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
+                            static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
+                            emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
+                        auto uploadEnd = std::chrono::high_resolution_clock::now();
+                        meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
+                        m_CachedMeshSDFResult = upload;
+                        m_MeshSDFCacheHash    = currentHash;
+                        m_MeshSDFCacheValid   = true;
+                    }
+                    meshSDFCount  = m_CachedMeshSDFResult.BodyCount;
+                    meshSDFVoxels = m_CachedMeshSDFResult.VoxelCount;
                 }
             }
 
@@ -415,19 +454,9 @@ namespace Engine
 
             int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
 
-            // 单帧内完成所有 PCISPH 迭代（Predict → Density → Force）
-            // 自适应 grid 策略：迭代 0 复用原始 grid，迭代 1+ 用预测位置重建
+            // 所有迭代复用初始 grid（性能优化：跳过迭代 1+ 的网格重建开销）
             for (int iter = 0; iter < iterations; iter++)
             {
-                // 迭代 1+：用预测位置重建空间哈希 grid
-                if (iter > 0)
-                {
-                    m_Grid.Build(m_ParticleCount, true);
-                    // Grid.Build() 将 CellHash 绑定到 slot 1，覆盖了 PCISPHBuffer
-                    // 必须恢复，否则后续 PCISPH shader（Predict/Density/Force）读不到正确的 PCISPHData
-                    m_PCISPHBuffer->Bind(1);
-                }
-
                 // Predict: x* = pos + dt * v*
                 m_SPHShaders.PCISPHPredict->Bind();
                 m_SPHShaders.PCISPHPredict->SetInt("u_AliveCount", static_cast<int>(m_ParticleCount));
@@ -447,7 +476,7 @@ namespace Engine
                 m_SPHShaders.PCISPHDensity->SetInt("u_GridSize", gridSize);
                 m_SPHShaders.PCISPHDensity->SetFloat("u_CellSize", cellSize);
                 m_SPHShaders.PCISPHDensity->SetFloat("u_Poly6Coeff", kp.poly6Coeff);
-                m_SPHShaders.PCISPHDensity->SetInt("u_UsePredictedPos", (iter > 0) ? 1 : 0);
+                m_SPHShaders.PCISPHDensity->SetInt("u_UsePredictedPos", 0);
                 RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
@@ -465,7 +494,7 @@ namespace Engine
                 m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryStiffness", emitter.BoundaryStiffness);
                 m_SPHShaders.PCISPHForce->SetFloat("u_BoundaryDamping", emitter.BoundaryDamping);
                 m_SPHShaders.PCISPHForce->SetFloat("u_SpikyCoeff", kp.spikyCoeff);
-                m_SPHShaders.PCISPHForce->SetInt("u_UsePredictedPos", (iter > 0) ? 1 : 0);
+                m_SPHShaders.PCISPHForce->SetInt("u_UsePredictedPos", 0);
                 RenderCommand::DispatchCompute(sphGroups);
                 RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
             }
@@ -505,15 +534,22 @@ namespace Engine
                 if (emitter.MeshSDFCoupling)
                 {
                     InitMeshSDFBuffer();
-                    auto                      uploadStart = std::chrono::high_resolution_clock::now();
-                    const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
-                        registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
-                        static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
-                        emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
-                    auto uploadEnd = std::chrono::high_resolution_clock::now();
-                    meshSDFCount   = upload.BodyCount;
-                    meshSDFVoxels  = upload.VoxelCount;
-                    meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
+                    size_t currentHash = ComputeMeshColliderHash(registry);
+                    if (!m_MeshSDFCacheValid || currentHash != m_MeshSDFCacheHash)
+                    {
+                        auto                      uploadStart = std::chrono::high_resolution_clock::now();
+                        const MeshSDFUploadResult upload      = UploadMeshSDFToBuffers(
+                            registry, m_MeshSDFMetaBuffer, m_MeshSDFVoxelBuffer, MAX_MESH_SDF_BODIES,
+                            static_cast<uint32_t>(std::max(emitter.MeshSDFResolution, 1)), emitter.MeshSDFBand,
+                            emitter.MeshSDFBlend, RigidBodyUploadFilter::AllColliders);
+                        auto uploadEnd = std::chrono::high_resolution_clock::now();
+                        meshSDFBuildMs = std::chrono::duration<float, std::milli>(uploadEnd - uploadStart).count();
+                        m_CachedMeshSDFResult = upload;
+                        m_MeshSDFCacheHash    = currentHash;
+                        m_MeshSDFCacheValid   = true;
+                    }
+                    meshSDFCount  = m_CachedMeshSDFResult.BodyCount;
+                    meshSDFVoxels = m_CachedMeshSDFResult.VoxelCount;
                     m_MeshSDFMetaBuffer->Bind(10);
                     m_MeshSDFVoxelBuffer->Bind(11);
                 }
