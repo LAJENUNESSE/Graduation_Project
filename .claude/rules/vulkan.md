@@ -5,7 +5,7 @@ paths:
 
 # Platform/Vulkan
 
-`Engine/src/Renderer/` 中抽象接口的 Vulkan 1.2+ 具体实现，位于 `feature/vulkan-backend` 分支。
+`Engine/src/Renderer/` 中抽象接口的 Vulkan 1.2+ 具体实现，已合并到主分支。
 
 > **事实源**: `docs/vulkan-migration/SPEC.md`（实时进度 + 决策日志）。修改前先读。
 > **阶段定义**: `docs/vulkan-migration-roadmap.md`（长期不变）。

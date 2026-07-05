@@ -40,4 +40,5 @@ paths:
 
 - `RendererAPI::Get().GetAPI()` 返回 `API::OpenGL` 或 `API::Vulkan`，工厂据此分派
 - `Editor.exe` 默认走 OpenGL；`Editor.exe --vulkan` 切到 Vulkan 路径（详见 `vulkan.md`）
+- Vulkan 后端 35 文件位于 `Engine/Platform/Vulkan/`，已合并主分支
 - 新增 OpenGL 资源/状态调用都应同步设计 Vulkan 对应实现，避免再次抽象泄漏

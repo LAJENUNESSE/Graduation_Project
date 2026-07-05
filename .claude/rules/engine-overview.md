@@ -25,14 +25,14 @@ paths:
 | `src/Debug/` | 调试工具（PerformanceMonitor、ProfileTimer、GPUTimerQuery） |
 | `src/ImGui/` | ImGui 后端集成与辅助（OpenGL/Vulkan 双后端分派） |
 | `Platform/OpenGL/` | OpenGL 4.3 具体实现（默认后端） |
-| `Platform/Vulkan/` | Vulkan 1.2+ 具体实现（`feature/vulkan-backend` 分支，`--vulkan` 命令行启用） |
+| `Platform/Vulkan/` | Vulkan 1.2+ 具体实现（可选，35 文件，`--vulkan` 命令行启用） |
 
 ## 后端选择
 
 - **默认**: OpenGL 4.3，`Editor.exe` 直接启动
 - **Vulkan**: 需 `vs2022-vulkan` CMake preset 启用 `ENGINE_ENABLE_VULKAN=ON`，运行时 `Editor.exe --vulkan` 切换
 - 两后端共存：`RendererAPI::SetAPI(API::OpenGL | API::Vulkan)` 决定 `Shader/Texture/VertexArray/IBLGenerator/...` 工厂分派
-- 详见 `docs/vulkan-migration/SPEC.md`（事实源）+ `docs/vulkan-migration-roadmap.md`（阶段定义）
+- Vulkan 后端已合并主分支，详见 `docs/vulkan-migration/SPEC.md`（事实源）+ `docs/vulkan-migration-roadmap.md`（阶段定义）
 
 ## 单元测试（tests/）
 
