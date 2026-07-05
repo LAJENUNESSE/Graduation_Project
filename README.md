@@ -10,7 +10,7 @@
 - **IBL 环境光照**：Compute Shader 生成 Irradiance Map + Prefilter Map + BRDF LUT，实现基于图像的全局光照
 - **光照与阴影**：方向光、点光源、聚光灯，方向光 Shadow Map + PCF 3×3 软阴影
 - **材质系统**：漫反射/法线/金属度/粗糙度/AO 纹理，纹理平铺控制
-- **后处理管线**：HDR 色调映射、Bloom 辉光（半分辨率优化）、SSAO 屏幕空间环境光遮蔽、Gamma 校正、MSAA 抗锯齿（1/2/4/8/16x）
+- **后处理管线**：HDR 色调映射、Bloom 辉光（半分辨率优化）、SSAO 屏幕空间环境光遮蔽、Gamma 校正、FXAA、MSAA 抗锯齿（1/2/4/8/16x）
 - **天空盒**：六面 Cubemap 天空盒渲染
 - **多 Pass 渲染**：Shadow → Terrain → Grass → Geometry → Skybox → Particle → Fluid + PostProcessing（8 Pass）
 
@@ -18,14 +18,14 @@
 
 - **GPU 粒子系统**：Compute Shader 驱动的粒子发射/模拟/渲染管线，支持可选 CUDA 加速路径
 - **SPH 流体模拟**：PCISPH 算法 + Screen Space Fluid Rendering（厚度/深度/高斯平滑/合成），支持可选 CUDA 加速路径
-- **CUDA Sidecar**：粒子和 SPH 管线可通过 CUDA 加速，含错误检测 + 全局中毒回退到 OpenGL Compute
+- **CUDA Sidecar**：粒子和 SPH 管线可通过 CUDA 加速，含错误检测 + 全局中毒回退到 OpenGL Compute（仓库预设不含 CUDA）
 - **GPU 草地渲染**：Compute Shader 在地形高度图上放置草叶，Billboard 渲染 + 风力动画
 - **物理系统**：Bullet3 刚体物理（动态/静态/运动学），碰撞检测（Box/Sphere/Mesh），物理调试可视化
 - **地形系统**：高度图驱动的地形生成，多层 Splatmap 纹理混合，多级 LOD
 
 ### 系统
 
-- **ECS 架构**：基于 EnTT 的实体-组件-系统，21 种组件类型
+- **ECS 架构**：基于 EnTT 的实体-组件-系统，18 种组件类型（15 种已注册反射系统）
 - **反射系统**：编译期宏 + 运行时 ComponentRegistry，驱动自动序列化与自动属性面板
 - **资产管理**：SlotMap 资源池 + Handle 安全引用，异步加载 + FileWatcher 热重载
 - **场景序列化**：YAML 格式保存/加载，反射驱动自动序列化
@@ -36,7 +36,7 @@
 ### 编辑器
 
 - **可视化编辑器**：ImGui Docking 布局 + ImGuizmo 变换操纵器
-- **面板系统**：场景层级 / 属性检查器 / 控制台 / 资源浏览器 / 渲染设置
+- **面板系统**：场景层级 / 属性检查器 / 控制台 / 资源浏览器 / 渲染设置 / 脚本编辑器
 - **撤销/重做**：双栈 UndoSystem，支持 Transform / Entity / Property / Parent 等 6 种命令
 - **性能监测**：GPU Timer Query + 帧时间分析
 - **自动保存与恢复**：定时自动保存 + 崩溃/异常退出后自动恢复，关闭前未保存变更提示
@@ -70,8 +70,6 @@
 
 脚本会自动检测 vcpkg 和 CMake，找不到时自动安装 vcpkg。
 
-> **说明**：当前 `CMakePresets.json` 未提供 `vs2022-cuda` 预设，因此 `./build.ps1 -Cuda` 在默认仓库配置下不可用。
-
 ### 手动构建
 
 #### 前置准备
@@ -102,8 +100,11 @@ cd <repo-folder>
 项目提供了 CMake Presets，按需选择：
 
 ```bash
-# 配置
+# 默认（推荐）
 cmake --preset default
+
+# 可选 Vulkan 后端（需 Vulkan SDK 1.4+）
+cmake --preset vs2022-vulkan
 
 # 构建
 cmake --build build --config RelWithDebInfo --target Editor
@@ -134,11 +135,18 @@ cmake --build build --target Editor
 
 编辑器可从任意目录启动，会自动检测项目根目录。
 
+### Vulkan 后端（可选）
+
+项目提供 `vs2022-vulkan` CMake preset，启用 `ENGINE_ENABLE_VULKAN=ON`：
+- 运行时通过 `Editor.exe --vulkan` 切换
+- 不指定参数 → 继续走 OpenGL 路径（main 分支行为零回归）
+- 详见 `docs/vulkan-migration/SPEC.md`
+
 ### CUDA 路径说明（可选）
 
-当前仓库默认预设（`default`、`linux-default`、`linux-sanitize`、`linux-system`）不包含 CUDA 一键配置，README 中的默认构建流程以 OpenGL Compute 路径为准。
+当前仓库默认预设不包含 CUDA 一键配置。若你使用自定义 CUDA 构建配置，需自行设置 `ENGINE_ENABLE_CUDA=ON`。
 
-若你使用自定义 CUDA 构建配置，仍需保证驱动与 Toolkit 版本兼容。运行时日志若出现 `the provided PTX was compiled with an unsupported toolchain`，说明驱动版本过旧；此时引擎会自动回退到 OpenGL Compute 路径，更新驱动后可恢复 CUDA 路径。
+运行时日志若出现 `the provided PTX was compiled with an unsupported toolchain`，说明驱动版本过旧；此时引擎会自动回退到 OpenGL Compute 路径，更新驱动后可恢复 CUDA 路径。
 
 > CUDA Toolkit 与驱动的版本对应关系见 [NVIDIA 官方文档](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-toolkit-major-component-versions)。
 
@@ -182,8 +190,8 @@ cmake --build build --target Editor
 │  └────────┴──────────┴───────────┴─────────────────┘ │
 ├──────────────────────────────────────────────────────┤
 │  Platform                                            │
-│  OpenGL 4.3          │  CUDA Sidecar (可选)          │
-│  (渲染 + Compute)     │  (粒子 + SPH 加速，含回退)    │
+│  OpenGL 4.3 (默认)    │  Vulkan 1.2+ (可选)         │
+│                       │  CUDA Sidecar (可选/无预设)   │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -194,7 +202,7 @@ Engine/                     核心引擎静态库
   src/
     Core/                   应用主循环、窗口、输入、日志、崩溃处理
     Renderer/               SceneRenderer 多 Pass 管线、PBR、IBL、后处理、粒子、流体
-    Scene/                  ECS 场景图（façade + 服务化）、21 种组件、运行时协调器
+    Scene/                  ECS 场景图（façade + 服务化）、18 种组件、运行时协调器
     Reflection/             编译期反射、ComponentRegistry、自动序列化/Inspector
     Asset/                  资产管理器（SlotMap + Handle）、异步加载、FileWatcher 热重载
     Physics/                Bullet3 物理世界、调试可视化
@@ -206,7 +214,8 @@ Engine/                     核心引擎静态库
     Debug/                  PerformanceMonitor、GPU Timer Query
     ImGui/                  ImGui 后端集成
   Platform/
-    OpenGL/                 OpenGL 4.3 后端实现
+    OpenGL/                 OpenGL 4.3 后端实现（默认）
+    Vulkan/                 Vulkan 1.2+ 后端实现（可选，35 文件）
     CUDA/                   CUDA 加速管线（粒子 + SPH）、GL 互操作、错误回退
 
 Editor/                     可视化编辑器
@@ -214,13 +223,19 @@ Editor/                     可视化编辑器
     EditorLayer             主协调器
     EditorSceneSession      场景生命周期（Edit ↔ Play）
     EditorShell             Dockspace + 快捷键
+    EditorPanelCoordinator  面板聚合器
     EditorRenderController  SceneRenderer + 后处理
     EditorViewportController  EditorCamera + Framebuffer
+    EditorSelectionGizmoController  3D 变换操纵器
     UndoSystem              撤销/重做（双栈 6 种命令）
-    Panels/                 层级 / 属性 / 控制台 / 资源浏览器 / 渲染设置
+    EditorBootstrapper      DI 工厂，创建并连线所有子系统
+    EditorAssetDescriptor   资源类型 → UI 图标 + 拖拽映射
+    VulkanSmokeLayer        Vulkan 烟雾测试层
+    Panels/                 层级 / 属性 / 控制台 / 资源浏览器 / 渲染设置 / 脚本编辑器
+    Scripts/                3 个示例脚本（PlayerController、RotateScript、CollisionTestScript）
 
 assets/                     资源文件
-  shaders/                  36 个 GLSL 着色器（PBR/IBL/后处理/粒子/SPH/SSFR/草地/阴影/地形）
+  shaders/                  37 个 GLSL 着色器（PBR/IBL/后处理/粒子/SPH/SSFR/草地/阴影/地形）
   scenes/                   场景文件（YAML）
   models/                   3D 模型
   textures/                 纹理资源（含 Skybox cubemaps）
@@ -228,7 +243,7 @@ assets/                     资源文件
   terrain/                  地形高度图
 
 vendor/                     第三方依赖（Git 子模块）
-docs/                       技术调研报告
+docs/                       技术调研报告、竞赛文档、论文、Vulkan 迁移、性能分析
 ```
 
 ## CI/CD
@@ -237,6 +252,7 @@ GitHub Actions 自动化流程：
 
 - **Windows 构建**：`default` 预设，分别构建 `Engine` 与 `Editor`
 - **Linux 构建矩阵**：`linux-default` 与 `linux-sanitize`（ASAN/UBSAN）
+- **macOS 编译验证**：`macos-default` 预设（仅编译，OpenGL 4.1 上限约束）
 - **测试执行**：在 `linux-sanitize` 任务中构建 `EngineTests` 并运行 CTest
 - **构建加速**：ccache/sccache + vcpkg 缓存
 
@@ -244,10 +260,10 @@ GitHub Actions 自动化流程：
 
 | 平台 | 状态 | 说明 |
 |------|------|------|
-| **Windows 10/11** (MSVC) | 主开发平台 | 完整功能，含可选 CUDA 加速 |
+| **Windows 10/11** (MSVC) | 主开发平台 | 完整功能，含可选 Vulkan/CUDA 后端 |
 | **Ubuntu LTS** (GCC) | CI 验证 | 完整功能 |
 | **其他 Linux 发行版** | 社区自行验证 | 推荐优先保证 Ubuntu LTS 兼容性 |
-| **macOS** (AppleClang ARM64) | 不支持运行 | macOS 仅支持 OpenGL 4.1，本引擎需要 4.3 |
+| **macOS** (AppleClang ARM64) | CI 编译验证 | macOS 仅支持 OpenGL 4.1，本引擎需要 4.3，仅做编译检查 |
 
 > **Linux 支持策略**：优先保证 Ubuntu LTS，其他发行版欢迎提 PR。
 >

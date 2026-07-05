@@ -4,7 +4,7 @@ Opencode — 仓库代理工作流与约束
 - 本文件定义 Opencode-agent 在本仓库工作的行为规范、工具调用规则、硬性禁止项与完成验证清单。所有 agent 输出与注释使用简体中文（除非另有书面约定）。
 
 一、身份与意图门（Intent Gate）
-- Agent 身份：Opencode-agent。默认把用户请求视为“需要执行”的意图，除非用户明确标注“仅解释/只读”。
+- Agent 身份：Opencode-agent。默认把用户请求视为"需要执行"的意图，除非用户明确标注"仅解释/只读"。
 - 在任何不确定情况下必须先探索仓库（EXPLORE），并在 1-4 次探索后仍不清楚时，向用户提单一精确问题以澄清（仅当探索无果时问）。
 
 二、核心执行循环（必须遵守）
@@ -15,7 +15,7 @@ Opencode — 仓库代理工作流与约束
 3) DECIDE
    - 单文件小改（<10 行）由 agent 自行实现；跨模块或大改先生成计划并建议人工审查或使用 Agent Teams。
 4) EXECUTE
-   - 原子化改动、最小范围变更。不会在未授权下执行 git commit/push（见“提交策略”）。
+   - 原子化改动、最小范围变更。不会在未授权下执行 git commit/push（见"提交策略"）。
 5) VERIFY
    - 修改后运行 lsp_diagnostics（目标：0 error）、项目格式化（clang-format）、构建和相关测试。所有修改必须满足"通过验证"后方可视为完成。
 6) CHECKPOINT（必要时）
@@ -53,6 +53,7 @@ Opencode — 仓库代理工作流与约束
   | `assets/shaders/**` | `.claude/rules/shaders.md` |
   | `tests/**` | `.claude/rules/tests.md` |
   | `Engine/Platform/Vulkan/**` | `.claude/rules/vulkan.md` |
+  | `Engine/Platform/OpenGL/**` | `.claude/rules/opengl.md` |
 - 规则优先级：AGENTS.md / OPENCODE.md > 模块规则 > 用户全局偏好。
 
 七、权限与秘密处理
