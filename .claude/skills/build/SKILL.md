@@ -27,11 +27,11 @@ argument-hint: "[target]  可选: Editor, Engine, Sandbox, 留空=全部构建"
 配置（二选一）：
 
 ```bash
-# 无 CUDA（default preset）
+# 默认（推荐）
 "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset default
 
-# 有 CUDA（vs2022-cuda preset，需安装 NVIDIA CUDA Toolkit）
-"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-cuda
+# 有 Vulkan（vs2022-vulkan preset，需 Vulkan SDK 1.4+）
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-vulkan
 ```
 
 构建（必须指定 `--config`）：
@@ -51,6 +51,7 @@ cmake --build build --target <target>
 
 - Windows 使用 VS 生成器，构建时必须指定 `--config RelWithDebInfo`
 - Linux 使用 Ninja 生成器，构建类型在配置时指定
-- 两个 preset 输出目录相同（`build/`），切换 preset 后需重新配置，但构建/运行路径不变
+- 所有 preset 输出目录相同（`build/`），切换 preset 后需重新配置，但构建/运行路径不变
 - Windows/VS 生成器输出路径包含 `RelWithDebInfo/` 子目录；Linux/Ninja 不包含
 - 如果遇到 submodule 问题，提示用户运行 `git submodule update --init --recursive`
+- 仓库预设不含 CUDA 一键配置；如需 CUDA 加速需自定义 CMake 开启 `ENGINE_ENABLE_CUDA=ON`

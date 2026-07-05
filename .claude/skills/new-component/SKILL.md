@@ -31,41 +31,46 @@ argument-hint: "[ComponentName] 组件名称（PascalCase，如 WindZoneComponen
 
 #### a) `Engine/src/Scene/Components.h`
 
-在文件末尾（最后一个组件之后）添加结构体 + 反射宏声明：
+在文件末尾（最后一个组件之后）添加结构体定义：
 
 ```cpp
 struct XxxComponent
 {
     // 属性字段 + 默认值
 };
-
-ENGINE_COMPONENT(XxxComponent, "显示名称");
-ENGINE_PROPERTY(XxxComponent, FieldName, "标签", PropertyType::类型);
-```
-
-如需 UI 约束（数值 Min/Max/Speed），使用带 Hints 的变体：
-
-```cpp
-ENGINE_PROPERTY_HINTS(XxxComponent, Speed, "速度", PropertyType::Float,
-    { .Speed = 0.1f, .Min = 0.0f, .Max = 100.0f });
 ```
 
 #### b) `Engine/src/Reflection/ComponentRegistry.cpp`
 
-在最后一个 `REGISTER_COMPONENT_END` 之后添加：
+在文件末尾添加反射声明 + 注册代码（`ENGINE_COMPONENT` / `ENGINE_PROPERTY` 宏现在在 `.cpp` 中声明）：
 
 ```cpp
+ENGINE_COMPONENT(XxxComponent, "显示名称");
+ENGINE_PROPERTY(XxxComponent, FieldName, "标签", Vec3);
+
 REGISTER_COMPONENT_BEGIN(XxxComponent)
-    REGISTER_PROPERTY(XxxComponent, FieldName)
+    REGISTER_COMPONENT_PROPERTY(XxxComponent, FieldName)
+REGISTER_COMPONENT_END(XxxComponent)
+```
+
+如需 UI 约束（数值 Min/Max/Speed），使用带 `_EX` 后缀的变体：
+
+```cpp
+ENGINE_PROPERTY_EX(XxxComponent, Speed, "速度", Float,
+    hints.Speed = 0.1f; hints.Min = 0.0f; hints.Max = 100.0f; hints.Format = "%.1f");
+
+REGISTER_COMPONENT_BEGIN(XxxComponent)
+    REGISTER_COMPONENT_PROPERTY(XxxComponent, Speed)
 REGISTER_COMPONENT_END(XxxComponent)
 ```
 
 ### 3. 自检
 
 - 结构体具备**默认构造**与**可拷贝**语义
-- 每个 `ENGINE_PROPERTY` / `ENGINE_PROPERTY_HINTS` 都有对应的 `REGISTER_PROPERTY`
+- 每个 `ENGINE_PROPERTY` / `ENGINE_PROPERTY_EX` 都有对应的 `REGISTER_COMPONENT_PROPERTY`
 - `PropertyType` 与字段 C++ 类型严格匹配
 - `ComponentRegistry.cpp` 已包含 `Scene/Components.h`（通常已有）
+- `PropertyType` 枚举值在 `ENGINE_PROPERTY` 中写简短形式（`Float`、`Vec3`），不是 `PropertyType::Float`
 
 ### 4. 构建验证
 
@@ -73,16 +78,16 @@ REGISTER_COMPONENT_END(XxxComponent)
 
 ## 属性类型速查
 
-| C++ 类型 | PropertyType |
-|---------|-------------|
-| `float` | `Float` |
-| `int` | `Int` |
-| `bool` | `Bool` |
-| `glm::vec2` | `Vec2` |
-| `glm::vec3` | `Vec3` |
-| `glm::vec4` | `Vec4` |
-| `glm::vec3`（颜色） | `Color3` |
-| `glm::vec4`（颜色） | `Color4` |
-| `std::string` | `String` |
-| `std::string`（路径） | `AssetPath` |
-| `enum` | `Enum`（需额外枚举名数组） |
+| C++ 类型 | ENGINE_PROPERTY 写法 | 说明 |
+|---------|---------------------|------|
+| `float` | `Float` | 标量 |
+| `int` | `Int` | 整数 |
+| `bool` | `Bool` | 布尔 |
+| `glm::vec2` | `Vec2` | 二维向量 |
+| `glm::vec3` | `Vec3` | 三维向量 |
+| `glm::vec4` | `Vec4` | 四维向量 |
+| `glm::vec3`（颜色） | `Color3` | 颜色选择器 |
+| `glm::vec4`（颜色） | `Color4` | 带 Alpha 颜色选择器 |
+| `std::string` | `String` | 字符串 |
+| `std::string`（路径） | `AssetPath` | 文件选择器 |
+| `enum` | `Enum` | 需额外定义枚举名数组 |

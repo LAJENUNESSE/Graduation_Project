@@ -23,11 +23,11 @@ allowed-tools: Bash
 配置（如果没有 `build/` 目录；二选一）：
 
 ```bash
-# 无 CUDA
+# 默认（推荐）
 "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset default
 
-# 有 CUDA（需 NVIDIA CUDA Toolkit）
-"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-cuda
+# 有 Vulkan（vs2022-vulkan preset，需 Vulkan SDK 1.4+）
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-vulkan
 ```
 
 构建：
@@ -55,5 +55,5 @@ cmake --build build --target Editor
 
 - Editor.exe 会自动检测项目根目录，可从任何位置启动。
 - 运行时需要 OpenGL 4.3 支持的 GPU。
-- 使用 `vs2022-cuda` preset 构建时，粒子/SPH 走 CUDA 计算路径；CUDA 失败会全局中毒并回退到 OpenGL Compute。
+- 使用 `vs2022-vulkan` preset 构建时，`Editor.exe --vulkan` 走 Vulkan 后端路径。
 - Windows 输出路径含 `RelWithDebInfo/` 子目录，Linux/Ninja 不含。
