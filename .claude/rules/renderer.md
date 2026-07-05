@@ -16,7 +16,7 @@ paths:
 5. Skybox Pass → Cubemap
 6. Particle Pass → GPU Compute（emit → simulate → render_args → billboard），支持 GPU 刚体碰撞数据上传
 7. Fluid Pass → SPH/PCISPH 流体（密度→力→积分 + SSFR 表面渲染）
-8. Post-Processing → ToneMapping + Bloom（亮度提取→高斯模糊→合成） + SSAO + FXAA
+8. Post-Processing → ToneMapping + Bloom（亮度提取→高斯模糊→合成）+ SSAO + FXAA + MSAA resolve
 
 ## IBL 管线
 
@@ -28,9 +28,9 @@ paths:
 ## 后端抽象
 
 - 抽象层（本目录）— RendererAPI / RenderCommand / Shader / Texture / Framebuffer / Buffer / StorageBuffer / UniformBuffer / VertexArray / IBLGenerator / GPUAsyncReadback / RendererCapabilities
-- 默认实现：`Platform/OpenGL/`（详见 `opengl.md`）
-- 可选实现：`Platform/Vulkan/`（详见 `vulkan.md`，`--vulkan` 启用）
-- **Phase 1 已封堵**: `Engine/src/` 下零 `#include <glad/gl.h>`，所有 GL 调用必须经 `RendererAPI` 抽象
+- OpenGL 实现：`Platform/OpenGL/`（默认，详见 `opengl.md`）
+- Vulkan 实现：`Platform/Vulkan/`（可选，已合并主分支，详见 `vulkan.md`，`--vulkan` 启用）
+- **抽象层已封堵**: `Engine/src/` 下零 `#include <glad/gl.h>`，所有 GL 调用必须经 `RendererAPI` 抽象
 - 抽象泄漏案例：SSAO 噪声、blend state save/restore、异步回读、能力查询、IBL 生成已全部抽象到 Platform 层
 
 ## SPHKernelMath（header-only）
@@ -47,7 +47,7 @@ paths:
 - **ParticleSystemGPU** — Compute Shader 4 Pass 管线，含 GPU 刚体上传 + 空间哈希网格
 - **FluidSystemGPU** — SPH/PCISPH 流体管线，自适应 grid 重建
 - **SpatialHashGrid** — hash / prefix_sum (三 pass) / scatter，Vulkan 路径要求调用方 `SetExternalBuffers(...)` 注入外部 buffer
-- **GPUAsyncReadback** — fence + persistent map 异步回读抽象（OpenGL 实现已就绪，Vulkan 待 ring buffer 实装）
+- **GPUAsyncReadback** — fence + persistent map 异步回读抽象（OpenGL + Vulkan 均已实现）
 - **SPHCommon** — SPH 通用参数和配置
 - **IBLGenerator** — Irradiance/Prefilter/BRDF LUT compute 生成
 

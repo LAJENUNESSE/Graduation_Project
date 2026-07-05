@@ -27,7 +27,7 @@ paths:
 - `BoxSDF` — 点到 AABB 有符号距离 + 梯度法线
 - `SphereSDF` — 点到球心有符号距离 + 梯度法线
 
-历史上为 CUDA `__device__` 兼容保留 `SDF_DEVICE` 宏（`__CUDACC__` 触发），CUDA sidecar 已下线但宏保留以便未来复用。
+历史上为 CUDA `__device__` 兼容保留 `SDF_DEVICE` 宏（`__CUDACC__` 触发），CUDA sidecar 无预设提供但宏保留以便未来复用。
 
 ## 刚体类型
 

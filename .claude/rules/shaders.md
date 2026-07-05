@@ -73,8 +73,8 @@ uniform float u_CellSize;
 约定：
 - **OpenGL 分支保持不变**，main 分支行为零回归
 - **push_constant 限于 ≤128 bytes 的高频小常量**（cell_count / roughness / particle_count 等），避免新建 UBO（决策 D-1）
-- 已迁移：`grid_hash`、`grid_prefix_sum`、`grid_scatter`、`IBL_BRDF_LUT`、`IBL_Irradiance`、`IBL_Prefilter`
-- 待迁移：particle_*、sph_*、fluid_*（Phase 7 持续推进）
+- 已迁移到 `#ifdef VULKAN` 双路径：`grid_hash`、`grid_prefix_sum`、`grid_scatter`、`IBL_BRDF_LUT`、`IBL_Irradiance`、`IBL_Prefilter`
+- 未迁移（仅 OpenGL）：particle_*、sph_*、fluid_*
 
 ## 注意事项
 
