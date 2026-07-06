@@ -22,28 +22,9 @@ cmake --build build --target Editor
 ./build/Editor/Editor.exe
 ```
 
-### Windows (VS 2022 Build Tools + vcpkg)
+### Windows
 
-cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
-
-> **⚠️ 禁止使用 `find`/`ls`/`where`/`which` 等命令搜索 cmake 路径。** 下方路径是唯一正确路径，直接复制使用即可。
->
-> **⚠️ 禁止使用 `CMAKE="..." && "$CMAKE"` 变量模式。** MINGW Bash 中变量赋值 + `&&` + 管道会导致变量展开为空字符串（`command not found`），必须直接写完整路径。
-
-```bash
-# ── 配置 ──────────────────────────────────────────────
-# 默认（推荐）
-"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset default
-
-# 有 Vulkan（vs2022-vulkan preset，需 Vulkan SDK 1.4+）
-"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-vulkan
-
-# ── 构建（Visual Studio 生成器需指定 --config）─────────
-"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config RelWithDebInfo --target Editor
-
-# Run
-./build/Editor/RelWithDebInfo/Editor.exe
-```
+Windows 构建命令见 `CLAUDE.local.md`（含 VS Build Tools 完整路径）。
 
 > **注意：** Linux/Ninja 输出路径无配置子目录，Windows/VS 生成器输出路径含 `RelWithDebInfo/` 子目录。
 > 两个 preset 的输出目录相同（`build/`），切换 preset 后需重新配置但构建/运行路径不变。
@@ -80,7 +61,7 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 
 ## Key Conventions
 
-- **C++20** standard, MSVC on Windows with `/utf-8` flag for Chinese string literals
+- **C++20** standard
 - All asset paths are relative to the project root (e.g., `assets/shaders/PBR.glsl`)
 - Scene files are YAML with `.scene` extension in `assets/scenes/`
 - Shaders are raw GLSL files in `assets/shaders/` — vertex and fragment combined in one file, separated by `#type vertex` / `#type fragment` / `#type compute` pragmas
@@ -114,16 +95,6 @@ Always follow this workflow:
 
 **频繁提交：** 每完成一个小步骤就立即 `git commit`，保存快照。不要攒一大堆改动再提交。
 
-**提交前格式化：** 提交代码之前，对本次修改的 C/C++ 源文件（`.h`/`.cpp`）运行 clang-format，确保代码风格一致。不要格式化 `vendor/` 下的第三方代码。
+**提交前格式化：** 提交代码之前，对本次修改的 C/C++ 源文件（`.h`/`.cpp`）运行 clang-format，确保代码风格一致。不要格式化 `vendor/` 下的第三方代码。项目根目录的 `.clang-format` 会被自动识别。
 
-**⚠️ clang-format 不在全局 PATH 中**，需使用 VS Build Tools 内置路径，规则同 cmake：
-
-```bash
-# 格式化单个文件
-"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe" -i path/to/file.cpp
-
-# 批量格式化本次 git 修改的 C/C++ 文件（排除 vendor/）
-git diff --name-only --diff-filter=d HEAD | grep -E '\.(h|cpp)$' | grep -v '^vendor/' | xargs -r "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/bin/clang-format.exe" -i
-```
-
-项目根目录的 `.clang-format` 会被自动识别，无需额外指定。
+Windows 下 clang-format 的具体路径见 `CLAUDE.local.md`。
