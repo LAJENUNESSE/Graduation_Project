@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Renderer/SpatialHashGrid.h"
 #include "Core/Assert.h"
+#ifdef ENGINE_ENABLE_VULKAN
 #include "Platform/Vulkan/VulkanBarrierUtil.h"
 #include "Platform/Vulkan/VulkanBuffer.h"
 #include "Platform/Vulkan/VulkanCommandBuffer.h"
@@ -8,6 +9,7 @@
 #include "Platform/Vulkan/VulkanDescriptor.h"
 #include "Platform/Vulkan/VulkanPipeline.h"
 #include "Platform/Vulkan/VulkanShader.h"
+#endif
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
 
