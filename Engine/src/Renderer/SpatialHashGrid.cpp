@@ -18,6 +18,7 @@
 namespace Engine
 {
 
+#ifdef ENGINE_ENABLE_VULKAN
     // ============================================================
     // Vulkan 资源（Pimpl，仅 Vulkan 后端使用）
     // ============================================================
@@ -40,6 +41,7 @@ namespace Engine
 
         bool Initialized = false;
     };
+#endif
 
     // ============================================================
     // 构造 / 析构
@@ -48,6 +50,7 @@ namespace Engine
 
     SpatialHashGrid::~SpatialHashGrid()
     {
+#ifdef ENGINE_ENABLE_VULKAN
         if (m_VulkanResources && m_VulkanResources->Initialized)
         {
             VkDevice device = m_VulkanResources->Device;
@@ -55,6 +58,7 @@ namespace Engine
             VulkanPipeline::DestroyCompute(device, m_VulkanResources->PrefixSumPipeline);
             VulkanPipeline::DestroyCompute(device, m_VulkanResources->ScatterPipeline);
         }
+#endif
     }
 
     void SpatialHashGrid::SetExternalBuffers(Ref<ShaderStorageBuffer> particlePool,
@@ -108,6 +112,7 @@ namespace Engine
 
         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
         {
+#ifdef ENGINE_ENABLE_VULKAN
             // 低频路径（IBL / Grass / 视角触发）：开 SingleTime cmd，内部 reset pool + record + wait
             auto* ctx = VulkanContext::Get();
             ENGINE_CORE_RELEASE_ASSERT(ctx, "SpatialHashGrid::Build: VulkanContext is null");
@@ -115,6 +120,7 @@ namespace Engine
             ResetFrameResources();
             BuildVulkan(cmdHandle, aliveCount, usePredictedPos);
             ctx->EndSingleTimeCommands(cmdHandle);
+#endif
         }
         else
         {
@@ -124,11 +130,13 @@ namespace Engine
 
     void SpatialHashGrid::ResetFrameResources()
     {
+#ifdef ENGINE_ENABLE_VULKAN
         if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
             return;
         if (!m_VulkanResources || !m_VulkanResources->Initialized)
             return;
         m_VulkanResources->Pool->Reset();
+#endif
     }
 
     // ============================================================
@@ -198,6 +206,7 @@ namespace Engine
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
     }
 
+#ifdef ENGINE_ENABLE_VULKAN
     // ============================================================
     // Vulkan 资源懒初始化
     // ============================================================
@@ -415,5 +424,6 @@ namespace Engine
             cmd.MemoryBarrier(ssboMasks.SrcStage, ssboMasks.DstStage, ssboMasks.SrcAccess, ssboMasks.DstAccess);
         }
     }
+#endif
 
 } // namespace Engine
