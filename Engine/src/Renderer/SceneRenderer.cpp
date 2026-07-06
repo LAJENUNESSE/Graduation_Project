@@ -14,7 +14,6 @@
 #include "Scene/Systems/MeshRenderSystem.h"
 #include "Scene/WorldTransformService.h"
 
-#include <glad/gl.h>
 #include <random>
 
 namespace Engine
@@ -92,13 +91,14 @@ namespace Engine
                 ssaoNoise.push_back(noise);
             }
 
-            glGenTextures(1, &m_SSAONoiseTexID);
-            glBindTexture(GL_TEXTURE_2D, m_SSAONoiseTexID);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 4, 4, 0, GL_RGB, GL_FLOAT, ssaoNoise.data());
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            TextureSpecification noiseSpec;
+            noiseSpec.Format       = TextureFormat::RGBA16F;
+            noiseSpec.MinFilter    = TextureFilter::Nearest;
+            noiseSpec.MagFilter    = TextureFilter::Nearest;
+            noiseSpec.WrapS        = TextureWrap::Repeat;
+            noiseSpec.WrapT        = TextureWrap::Repeat;
+            noiseSpec.UploadLayout = TextureDataLayout::RGB_Float;
+            m_SSAONoiseTex         = Texture2D::Create(ssaoNoise.data(), 4, 4, noiseSpec);
         }
 
         // 全屏四边形 VAO（供 SSAO pass 使用）
@@ -214,7 +214,7 @@ namespace Engine
                                    m_SSAOShader->SetInt("u_DepthTexture", 0);
 
                                    // 绑定噪声纹理
-                                   RenderCommand::BindTextureUnit(1, m_SSAONoiseTexID);
+                                   m_SSAONoiseTex->Bind(1);
                                    m_SSAOShader->SetInt("u_NoiseTexture", 1);
 
                                    m_SSAOShader->SetMat4("u_Projection", ctx.Camera->GetProjection());
@@ -309,14 +309,28 @@ namespace Engine
                  m_PBRShader->SetInt("u_IBLDebugMode", m_IBLDebugMode);
                  if (iblActive)
                  {
-                     // Irradiance 和 Prefilter 是 cubemap 纹理，必须用 BindCubemapUnit
-                     RenderCommand::BindCubemapUnit(6, m_SkyboxSystem.GetIrradianceMapID());
-                     m_PBRShader->SetInt("u_IrradianceMap", 6);
-                     RenderCommand::BindCubemapUnit(7, m_SkyboxSystem.GetPrefilterMapID());
-                     m_PBRShader->SetInt("u_PrefilterMap", 7);
-                     // BRDF LUT 是 2D 纹理，使用 BindTextureUnit
-                     RenderCommand::BindTextureUnit(8, m_SkyboxSystem.GetBRDFLutID());
-                     m_PBRShader->SetInt("u_BRDF_LUT", 8);
+                     if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                     {
+                         // Vulkan path: void* 透传 VkImageView + VkSampler，避开 vulkan.h 泄漏 Engine/src/
+                         // GetIrradianceMapID() 在 Vulkan 下恒返回 0，必须走 view 接口
+                         void* sampler = m_SkyboxSystem.GetIBLSampler();
+                         RenderCommand::BindCubemapView(6, m_SkyboxSystem.GetIrradianceView(), sampler);
+                         m_PBRShader->SetInt("u_IrradianceMap", 6);
+                         RenderCommand::BindCubemapView(7, m_SkyboxSystem.GetPrefilterView(), sampler);
+                         m_PBRShader->SetInt("u_PrefilterMap", 7);
+                         RenderCommand::BindTextureView(8, m_SkyboxSystem.GetBRDFLutView(), sampler);
+                         m_PBRShader->SetInt("u_BRDF_LUT", 8);
+                     }
+                     else
+                     {
+                         // OpenGL path：Irradiance/Prefilter cubemap 用 BindCubemapUnit，BRDF LUT 2D 用 BindTextureUnit
+                         RenderCommand::BindCubemapUnit(6, m_SkyboxSystem.GetIrradianceMapID());
+                         m_PBRShader->SetInt("u_IrradianceMap", 6);
+                         RenderCommand::BindCubemapUnit(7, m_SkyboxSystem.GetPrefilterMapID());
+                         m_PBRShader->SetInt("u_PrefilterMap", 7);
+                         RenderCommand::BindTextureUnit(8, m_SkyboxSystem.GetBRDFLutID());
+                         m_PBRShader->SetInt("u_BRDF_LUT", 8);
+                     }
                  }
 
                  // SSAO 纹理绑定
@@ -472,11 +486,7 @@ namespace Engine
         m_BoundRegistry = nullptr;
 
         // 清理 SSAO 噪声纹理
-        if (m_SSAONoiseTexID)
-        {
-            glDeleteTextures(1, &m_SSAONoiseTexID);
-            m_SSAONoiseTexID = 0;
-        }
+        m_SSAONoiseTex.reset();
     }
 
     void SceneRenderer::BeginScene(const EditorCamera& camera, const SceneRenderInput& input)

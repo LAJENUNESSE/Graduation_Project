@@ -1,7 +1,7 @@
 #type compute
 #version 430 core
 
-// 流体粒子积分 — 位置/速度更新 + 边界约束 + 寿命管理
+// 流体粒子积分 — 位置/速度更新 + 边界约束
 // SPH 力已经在之前的 pass 中写入了 velocity
 
 layout(local_size_x = 256) in;
@@ -15,15 +15,34 @@ struct GPUParticle
     vec4 params;
 };
 
-layout(std430, binding = 0)  buffer ParticlePool { GPUParticle particles[]; };
-layout(std430, binding = 2)  buffer AliveList    { uint aliveIndices[];     };
-layout(std430, binding = 12) buffer DeadList     { uint deadIndices[];      };
-layout(std430, binding = 13) buffer Counters {
-    uint deadCount;
-    uint aliveCount;
-    uint emitCount;
-    uint pad;
+#ifdef VULKAN
+// Vulkan 路径：SSBO 加 set=0，simulate 大块参数走 UBO，小常量走 push constant
+layout(std430, set = 0, binding = 0) buffer ParticlePool { GPUParticle particles[]; };
+
+// Simulate 参数 UBO
+layout(std140, set = 0, binding = 6) uniform SimParams
+{
+    vec4 u_GravityAndDamping;     // xyz=Gravity, w=Damping
+    vec4 u_BoundaryMinAndUseFlag; // xyz=BoundaryMin, w=UseBoundary(1.0/0.0)
+    vec4 u_BoundaryMaxAndMode;    // xyz=BoundaryMax, w=PCISPHMode(1.0/0.0)
 };
+
+layout(push_constant) uniform PushConstants
+{
+    float u_DeltaTimePC;
+    uint  u_ParticleCountPC;
+} pc;
+
+#define DT_VAL        pc.u_DeltaTimePC
+#define PCOUNT_VAL    pc.u_ParticleCountPC
+#define GRAVITY_VAL   u_GravityAndDamping.xyz
+#define DAMPING_VAL   u_GravityAndDamping.w
+#define BMIN_VAL      u_BoundaryMinAndUseFlag.xyz
+#define BMAX_VAL      u_BoundaryMaxAndMode.xyz
+#define USE_BOUNDARY  (u_BoundaryMinAndUseFlag.w > 0.5)
+#define PCISPH_MODE   (u_BoundaryMaxAndMode.w > 0.5)
+#else
+layout(std430, binding = 0) buffer ParticlePool { GPUParticle particles[]; };
 
 uniform float u_DeltaTime;
 uniform vec3  u_Gravity;
@@ -33,65 +52,38 @@ uniform vec3  u_BoundaryMin;
 uniform vec3  u_BoundaryMax;
 uniform int   u_UseBoundary;
 uniform int   u_PCISPHMode;  // 0=标准WCSPH, 1=PCISPH（位置已由 apply 写入）
-uniform float u_MaxSpeed;    // CFL 速度上限 = h / dt
-uniform int   u_UseLifetime; // 0=legacy（不管理 life）, 1=lifetime 模式
+
+#define DT_VAL        u_DeltaTime
+#define PCOUNT_VAL    uint(u_ParticleCount)
+#define GRAVITY_VAL   u_Gravity
+#define DAMPING_VAL   u_Damping
+#define BMIN_VAL      u_BoundaryMin
+#define BMAX_VAL      u_BoundaryMax
+#define USE_BOUNDARY  (u_UseBoundary != 0)
+#define PCISPH_MODE   (u_PCISPHMode != 0)
+#endif
 
 void main()
 {
     uint idx = gl_GlobalInvocationID.x;
-    if (idx >= uint(u_ParticleCount)) return;
-
-    float life = particles[idx].posAndLife.w;
-
-    if (u_UseLifetime != 0)
-    {
-        // 已经死亡的粒子 → push dead list，跳过积分
-        if (life <= 0.0)
-        {
-            uint slot = atomicAdd(deadCount, 1u);
-            if (slot < uint(u_ParticleCount))
-                deadIndices[slot] = idx;
-            return;
-        }
-
-        // 递减寿命
-        life -= u_DeltaTime;
-
-        if (life <= 0.0)
-        {
-            // 刚死亡 → 移至墓地，push dead list
-            particles[idx].posAndLife    = vec4(1e5, 1e5, 1e5, 0.0);
-            particles[idx].velAndMaxLife.xyz = vec3(0.0);
-            uint slot = atomicAdd(deadCount, 1u);
-            if (slot < uint(u_ParticleCount))
-                deadIndices[slot] = idx;
-            return;
-        }
-
-        particles[idx].posAndLife.w = life;
-    }
+    if (idx >= PCOUNT_VAL) return;
 
     vec3 vel = particles[idx].velAndMaxLife.xyz;
 
     // 先叠加重力（PCISPH 模式下外部传入零重力）
-    if (u_PCISPHMode == 0)
+    if (!PCISPH_MODE)
     {
-        vel += u_Gravity * u_DeltaTime;
+        vel += GRAVITY_VAL * DT_VAL;
     }
 
-    // 帧率无关阻尼：pow(damping, dt/0.016667) 使不同帧率行为一致
-    vel *= pow(u_Damping, u_DeltaTime / 0.016667);
-
-    // CFL 速度安全限幅
-    float speed = length(vel);
-    if (speed > u_MaxSpeed)
-        vel *= u_MaxSpeed / speed;
+    // 再阻尼（统一与 CUDA FluidSimulateKernel 顺序：先力后阻尼）
+    vel *= DAMPING_VAL;
 
     vec3 pos;
-    if (u_PCISPHMode == 0)
+    if (!PCISPH_MODE)
     {
         // WCSPH：正常积分位置
-        pos = particles[idx].posAndLife.xyz + vel * u_DeltaTime;
+        pos = particles[idx].posAndLife.xyz + vel * DT_VAL;
     }
     else
     {
@@ -100,21 +92,21 @@ void main()
     }
 
     // 边界约束（穿透深度反射 + 速度反弹）
-    if (u_UseBoundary != 0)
+    if (USE_BOUNDARY)
     {
         float restitution = 0.3;
         for (int i = 0; i < 3; i++)
         {
-            if (pos[i] < u_BoundaryMin[i])
+            if (pos[i] < BMIN_VAL[i])
             {
-                float penetration = u_BoundaryMin[i] - pos[i];
-                pos[i] = u_BoundaryMin[i] + penetration * restitution;
+                float penetration = BMIN_VAL[i] - pos[i];
+                pos[i] = BMIN_VAL[i] + penetration * restitution;
                 vel[i] = abs(vel[i]) * restitution;
             }
-            else if (pos[i] > u_BoundaryMax[i])
+            else if (pos[i] > BMAX_VAL[i])
             {
-                float penetration = pos[i] - u_BoundaryMax[i];
-                pos[i] = u_BoundaryMax[i] - penetration * restitution;
+                float penetration = pos[i] - BMAX_VAL[i];
+                pos[i] = BMAX_VAL[i] - penetration * restitution;
                 vel[i] = -abs(vel[i]) * restitution;
             }
         }
@@ -122,12 +114,4 @@ void main()
 
     particles[idx].posAndLife.xyz = pos;
     particles[idx].velAndMaxLife.xyz = vel;
-
-    // Lifetime 模式下维护 alive list（供下一帧 emit 使用）
-    if (u_UseLifetime != 0)
-    {
-        uint slot = atomicAdd(aliveCount, 1u);
-        if (slot < uint(u_ParticleCount))
-            aliveIndices[slot] = idx;
-    }
 }

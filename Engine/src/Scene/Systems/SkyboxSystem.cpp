@@ -5,8 +5,6 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererCapabilities.h"
 
-#include <glad/gl.h>
-
 namespace Engine
 {
 
@@ -35,46 +33,9 @@ namespace Engine
         // 预计算 BRDF LUT（只需一次，与 skybox 无关）
         if (RendererCapabilities::Get().SupportsComputeShaders)
         {
-            m_BRDFLutShader    = Shader::Create("assets/shaders/IBL_BRDF_LUT.glsl");
-            m_IrradianceShader = Shader::Create("assets/shaders/IBL_Irradiance.glsl");
-            m_PrefilterShader  = Shader::Create("assets/shaders/IBL_Prefilter.glsl");
-
-            // ★ 验证 IBL shader 编译是否成功（RelWithDebInfo 下 assert 不终止，需运行时检查）
-            auto validateShader = [](const Ref<Shader>& shader, const char* name)
-            {
-                if (!shader)
-                {
-                    ENGINE_CORE_ERROR("IBL: {} shader is null!", name);
-                    return false;
-                }
-                // Bind 后检查 GL 错误，如果 m_RendererID==0 则 glUseProgram(0) 会导致后续 uniform 设置无效
-                shader->Bind();
-                GLenum err = glGetError();
-                if (err != GL_NO_ERROR)
-                {
-                    ENGINE_CORE_ERROR("IBL: {} shader bind failed (GL error: 0x{:04X})", name, err);
-                    return false;
-                }
-                return true;
-            };
-
-            bool allShadersValid = true;
-            allShadersValid &= validateShader(m_BRDFLutShader, "BRDF_LUT");
-            allShadersValid &= validateShader(m_IrradianceShader, "Irradiance");
-            allShadersValid &= validateShader(m_PrefilterShader, "Prefilter");
-
-            if (allShadersValid)
-            {
-                ENGINE_CORE_INFO("IBL: All compute shaders compiled successfully");
-                GenerateBRDFLut();
-            }
-            else
-            {
-                ENGINE_CORE_ERROR("IBL: Shader compilation failed, IBL disabled");
-                m_BRDFLutShader.reset();
-                m_IrradianceShader.reset();
-                m_PrefilterShader.reset();
-            }
+            m_IBL = IBLGenerator::Create();
+            if (!m_IBL->Init())
+                m_IBL.reset();
         }
     }
 
@@ -108,9 +69,8 @@ namespace Engine
         m_SkyboxTexture = TextureCubemap::Create(facePaths);
 
         // 加载天空盒后生成 IBL 资源（需要 shader 有效）
-        if (RendererCapabilities::Get().SupportsComputeShaders && m_IrradianceShader && m_PrefilterShader &&
-            m_BRDFLutShader)
-            GenerateIBL();
+        if (m_IBL)
+            m_IBL->Generate(m_SkyboxTexture);
     }
 
     void SkyboxSystem::ClearSkybox()
@@ -118,47 +78,14 @@ namespace Engine
         m_SkyboxTexture.reset();
         m_FacePaths.clear();
 
-        // 清理 IBL 资源
-        if (m_IrradianceMapID)
-        {
-            glDeleteTextures(1, &m_IrradianceMapID);
-            m_IrradianceMapID = 0;
-        }
-        if (m_PrefilterMapID)
-        {
-            glDeleteTextures(1, &m_PrefilterMapID);
-            m_PrefilterMapID = 0;
-        }
-        m_IBLReady = false;
+        if (m_IBL)
+            m_IBL->Clear();
     }
 
-    void SkyboxSystem::GenerateBRDFLut()
-    {
-        if (m_BRDFLutID)
-            glDeleteTextures(1, &m_BRDFLutID);
+} // namespace Engine
 
-        // 创建 BRDF LUT 纹理 (RG16F) — 使用 immutable storage
-        glGenTextures(1, &m_BRDFLutID);
-        glBindTexture(GL_TEXTURE_2D, m_BRDFLutID);
-        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RG16F, BRDF_LUT_SIZE, BRDF_LUT_SIZE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        // 用 compute shader 填充
-        m_BRDFLutShader->Bind();
-        glBindImageTexture(0, m_BRDFLutID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RG16F);
-
-        uint32_t groupsX = (BRDF_LUT_SIZE + 15) / 16;
-        uint32_t groupsY = (BRDF_LUT_SIZE + 15) / 16;
-        RenderCommand::DispatchCompute(groupsX, groupsY, 1);
-        RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | 0x00000020); // GL_TEXTURE_FETCH_BARRIER_BIT
-
-        ENGINE_CORE_INFO("IBL: BRDF LUT generated ({}x{})", BRDF_LUT_SIZE, BRDF_LUT_SIZE);
-    }
-
-    uint32_t SkyboxSystem::CreateEnvAtlas()
+#if 0 // Dead code — moved to Platform/OpenGL/OpenGLIBLGenerator.cpp
+    void REMOVED()
     {
         // 将 cubemap 6 面读到 CPU，创建横向排列的 2D atlas 纹理
         // 用 sampler2D 采样 atlas 替代 samplerCube，绕开 compute shader 中
@@ -389,5 +316,4 @@ namespace Engine
         m_IBLReady = true;
         ENGINE_CORE_INFO("IBL: All resources ready");
     }
-
-} // namespace Engine
+#endif

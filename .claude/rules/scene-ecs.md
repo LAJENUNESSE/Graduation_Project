@@ -27,7 +27,7 @@ Scene (façade)
 - **Scene** — 轻量 façade，持有 `entt::registry` + 索引/协调器引用，提供 `OnUpdateRuntime()` / `OnUpdateEditor()`
 - **Entity** — 轻量包装 `{ entt::entity, Scene* }`，提供 `AddComponent<T>()`、`GetComponent<T>()` 等模板方法
 - **Components.h** — 所有组件结构体（POD，必须有默认构造和拷贝构造）
-- **SceneRuntimeCoordinator** — 隔离运行时逻辑（物理、脚本），持有 PhysicsWorld/BulletPhysicsWorld
+- **SceneRuntimeCoordinator** — 隔离运行时逻辑（物理、脚本），持有 BulletPhysicsWorld
 - **ResourceLifecycleCoordinator** — 三类清理回调：EntityCleanup / RuntimeStopCleanup / SceneDestroyCleanup
 - **SceneHierarchyService** — 静态工具类，SetParent/RemoveParent/GetChildren/IsAncestorOf/GetRootEntities
 - **WorldTransformService** — 静态工具类，ComputeWorldTransform（遍历父子链），含防御性线程安全检查
@@ -53,6 +53,6 @@ Scene (façade)
 - 每个组件结构体必须有默认构造函数和拷贝构造函数
 - `Scene::OnRuntimeStart/Stop` 委托给 SceneRuntimeCoordinator
 - `Scene::DestroyEntity()` 递归销毁子实体（先收集再删除，避免 O(N²) 扫描），触发 ResourceLifecycleCoordinator 的 EntityCleanup 回调
-- 物理后端可选（Bullet 或自研），不能混用
+- 物理后端：Bullet3（`BulletPhysicsWorld`），切换场景时完整清理
 - Scene 是 façade — 新功能应考虑提取为 Service 或 Coordinator，不要直接膨胀 Scene 类
-- SceneHierarchyService / WorldTransformService 已有单元测试覆盖，修改时需确保测试通过
+- SceneHierarchyService / WorldTransformService / SceneEntityIndex 已有单元测试覆盖，修改时需确保测试通过

@@ -35,9 +35,9 @@ namespace Engine
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        // Note: ViewportsEnable disabled — it causes glfwSwapBuffers in ImGuiLayer::End()
-        // which adds ~14ms vsync stall to the ImGui CPU timing, distorting perf data.
-        // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        // OpenGL 路径：ViewportsEnable 会导致 glfwSwapBuffers 在 ImGuiLayer::End() 中被调用，
+        // 引入 ~14ms vsync stall。Vulkan 路径下副窗口由 ImGui_ImplVulkan 自管，不走 glfwSwapBuffers，
+        // 因此在下方 Vulkan 分支中单独启用 ViewportsEnable。
 
         // 加载 UI 默认字体：NotoSansSC，用于界面中文文字
         const std::string fontPath =
@@ -161,11 +161,16 @@ namespace Engine
 #if defined(ENGINE_ENABLE_VULKAN)
         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
         {
+            // 仅 Vulkan 路径启用多视口：副窗口由 ImGui_ImplVulkan 内部管理 swapchain/cmd/fence，不走 glfwSwapBuffers
+            io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
             // Vulkan backend initialization
             auto* vkContext = VulkanContext::Get();
             ENGINE_CORE_RELEASE_ASSERT(vkContext, "VulkanContext must be initialized before ImGuiLayer");
 
-            ImGui_ImplGlfw_InitForVulkan(window, true);
+            // install_callbacks=false: Window.cpp 已手动转发 7 个 ImGui callback 到主窗口；
+            // 副窗口由 ImGui viewports 内部 hook，与主窗口转发互不冲突。
+            ImGui_ImplGlfw_InitForVulkan(window, false);
 
             ImGui_ImplVulkan_InitInfo initInfo = {};
             initInfo.ApiVersion                = VK_API_VERSION_1_2;
@@ -280,10 +285,21 @@ namespace Engine
 
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
-            GLFWwindow* backupCurrentContext = glfwGetCurrentContext();
-            ImGui::UpdatePlatformWindows();
-            ImGui::RenderPlatformWindowsDefault();
-            glfwMakeContextCurrent(backupCurrentContext);
+#if defined(ENGINE_ENABLE_VULKAN)
+            if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+            {
+                // Vulkan：副窗口由 ImGui_ImplVulkan 自管，无需 glfwMakeContextCurrent
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault();
+            }
+            else
+#endif
+            {
+                GLFWwindow* backupCurrentContext = glfwGetCurrentContext();
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault();
+                glfwMakeContextCurrent(backupCurrentContext);
+            }
         }
     }
 

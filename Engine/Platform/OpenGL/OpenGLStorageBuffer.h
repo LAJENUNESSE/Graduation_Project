@@ -32,6 +32,8 @@ namespace Engine
         uint32_t GetRendererID() const override { return m_RendererID; }
         uint32_t GetSize() const override { return m_Size; }
 
+        void ClearToZero() override;
+
     private:
         uint32_t         m_RendererID  = 0;
         uint32_t         m_Size        = 0;

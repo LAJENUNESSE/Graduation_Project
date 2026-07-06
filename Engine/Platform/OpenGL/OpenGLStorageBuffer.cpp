@@ -103,4 +103,10 @@ namespace Engine
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 
+    void OpenGLStorageBuffer::ClearToZero()
+    {
+        GLuint zero = 0;
+        glClearNamedBufferData(m_RendererID, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    }
+
 } // namespace Engine

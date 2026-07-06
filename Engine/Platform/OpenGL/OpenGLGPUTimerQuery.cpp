@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Core/Log.h"
 #include "Debug/GPUTimerQuery.h"
+#include "Renderer/RendererAPI.h"
 
 #include <glad/gl.h>
 
@@ -20,6 +21,12 @@ namespace Engine
 
     GPUTimerQuery::GPUTimerQuery()
     {
+        if (RendererAPI::GetAPI() != RendererAPI::API::OpenGL)
+        {
+            m_Disabled = true;
+            return;
+        }
+
         const char* disableEnv = std::getenv("ENGINE_DISABLE_GPU_TIMER");
         bool        envDisable = disableEnv && disableEnv[0] == '1';
 

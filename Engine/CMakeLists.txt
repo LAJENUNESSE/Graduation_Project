@@ -5,6 +5,8 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLGPUTimerQuery.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLRendererAPI.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLShader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLAsyncReadback.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLIBLGenerator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLStorageBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLTexture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Platform/OpenGL/OpenGLUniformBuffer.cpp
@@ -54,6 +56,8 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Shader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SpatialHashGrid.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SPHCommon.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/GPUAsyncReadback.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/IBLGenerator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/StorageBuffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Texture.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/UniformBuffer.cpp
@@ -80,6 +84,27 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Terrain/TerrainMeshGenerator.cpp
 )
 
+# Vulkan platform sources (conditional)
+if(ENGINE_ENABLE_VULKAN)
+    list(APPEND ENGINE_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanAllocator.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanAsyncReadback.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanBarrierUtil.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanBuffer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanCommandBuffer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanDescriptor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanFramebuffer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanContext.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanIBLGenerator.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanPipeline.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRenderPass.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanShader.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanTexture.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSynchronization.cpp
+    )
+endif()
+
 add_library(Engine STATIC ${ENGINE_SOURCES})
 
 target_compile_features(Engine PUBLIC cxx_std_20)
@@ -99,6 +124,64 @@ find_package(Lua REQUIRED)
 
 # OpenAL (vcpkg)
 find_package(OpenAL CONFIG REQUIRED)
+
+# Vulkan (optional)
+if(ENGINE_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
+    target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN)
+    target_include_directories(Engine PRIVATE ${Vulkan_INCLUDE_DIRS})
+
+    if(TARGET Vulkan::shaderc_combined)
+        target_compile_definitions(Engine PRIVATE ENGINE_VULKAN_HAS_SHADERC=1)
+        message(STATUS "[Engine] Vulkan runtime shader compilation enabled via Vulkan::shaderc_combined")
+    else()
+        message(WARNING "[Engine] Vulkan::shaderc_combined not found; VulkanShader runtime GLSL->SPIR-V compile disabled")
+    endif()
+
+    # spirv-cross：从 SPIR-V 反射 descriptor binding / push constant 信息（Phase 7 compute 必需）
+    # 优先用 Vulkan SDK 自带的 spirv-cross（避免 vcpkg 网络下载），fallback 走 vcpkg 提供的 CONFIG 包。
+    # Vulkan SDK 同时提供 Release (spirv-cross-core.lib) 和 Debug (spirv-cross-cored.lib) 两套，
+    # **必须按 build config 切换** — 否则 MSVC CRT (_ITERATOR_DEBUG_LEVEL / MD vs MDd) 不匹配链接失败。
+    find_library(SPIRV_CROSS_CORE_LIB_RELEASE
+        NAMES spirv-cross-core
+        HINTS "$ENV{VULKAN_SDK}/Lib" "$ENV{VULKAN_SDK}/lib"
+        NO_DEFAULT_PATH
+    )
+    find_library(SPIRV_CROSS_CORE_LIB_DEBUG
+        NAMES spirv-cross-cored
+        HINTS "$ENV{VULKAN_SDK}/Lib" "$ENV{VULKAN_SDK}/lib"
+        NO_DEFAULT_PATH
+    )
+    if(SPIRV_CROSS_CORE_LIB_RELEASE AND SPIRV_CROSS_CORE_LIB_DEBUG)
+        # 多配置生成器 (VS) 和单配置生成器 (Ninja) 都用生成器表达式切换
+        target_link_libraries(Engine PRIVATE
+            "$<$<CONFIG:Debug>:${SPIRV_CROSS_CORE_LIB_DEBUG}>"
+            "$<$<NOT:$<CONFIG:Debug>>:${SPIRV_CROSS_CORE_LIB_RELEASE}>"
+        )
+        target_compile_definitions(Engine PRIVATE ENGINE_VULKAN_HAS_SPIRV_CROSS=1)
+        message(STATUS "[Engine] Vulkan SPIR-V reflection enabled via Vulkan SDK spirv-cross-core")
+        message(STATUS "[Engine]   Release: ${SPIRV_CROSS_CORE_LIB_RELEASE}")
+        message(STATUS "[Engine]   Debug:   ${SPIRV_CROSS_CORE_LIB_DEBUG}")
+    elseif(SPIRV_CROSS_CORE_LIB_RELEASE)
+        # 仅 Release 可用：限制为非 Debug 配置链接，避免 Debug build CRT 不匹配
+        target_link_libraries(Engine PRIVATE
+            "$<$<NOT:$<CONFIG:Debug>>:${SPIRV_CROSS_CORE_LIB_RELEASE}>"
+        )
+        target_compile_definitions(Engine PRIVATE
+            "$<$<NOT:$<CONFIG:Debug>>:ENGINE_VULKAN_HAS_SPIRV_CROSS=1>"
+        )
+        message(WARNING "[Engine] Vulkan SDK 仅提供 Release spirv-cross-core.lib；Debug build 将禁用 SPIR-V 反射")
+    else()
+        find_package(spirv_cross_core CONFIG QUIET)
+        if(spirv_cross_core_FOUND)
+            target_link_libraries(Engine PRIVATE spirv-cross-core)
+            target_compile_definitions(Engine PRIVATE ENGINE_VULKAN_HAS_SPIRV_CROSS=1)
+            message(STATUS "[Engine] Vulkan SPIR-V reflection enabled via vcpkg spirv-cross-core")
+        else()
+            message(WARNING "[Engine] spirv-cross-core not found; VulkanShader reflection disabled (compute pipeline will not work)")
+        endif()
+    endif()
+endif()
 
 target_include_directories(Engine
     PUBLIC
@@ -130,7 +213,12 @@ target_link_libraries(Engine PUBLIC
     ${FFMPEG_LIBRARIES}
     ${LUA_LIBRARIES}
     OpenAL::OpenAL
+    $<$<BOOL:${ENGINE_ENABLE_VULKAN}>:Vulkan::Vulkan>
 )
+
+if(ENGINE_ENABLE_VULKAN AND TARGET Vulkan::shaderc_combined)
+    target_link_libraries(Engine PUBLIC Vulkan::shaderc_combined)
+endif()
 
 target_link_directories(Engine PUBLIC ${FFMPEG_LIBRARY_DIRS})
 

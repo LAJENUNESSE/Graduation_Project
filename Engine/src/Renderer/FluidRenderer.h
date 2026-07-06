@@ -4,6 +4,7 @@
 #include "Renderer/Framebuffer.h"
 #include "Renderer/Shader.h"
 #include "Renderer/StorageBuffer.h"
+#include "Renderer/Texture.h"
 #include "Renderer/VertexArray.h"
 
 #include <glm/glm.hpp>
@@ -56,9 +57,7 @@ namespace Engine
         Ref<Framebuffer> m_ThicknessFBO; // R16F
 
         // Scene color copy texture (avoids feedback loop)
-        uint32_t m_SceneColorCopyTex    = 0;
-        uint32_t m_SceneColorCopyWidth  = 0;
-        uint32_t m_SceneColorCopyHeight = 0;
+        Ref<Texture2D> m_SceneColorCopyTex;
 
         // Fullscreen quad
         Ref<VertexArray> m_QuadVAO;

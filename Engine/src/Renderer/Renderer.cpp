@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderCommand.h"
+#include "Renderer/RendererCapabilities.h"
 #include "Renderer/Shader.h"
 #include "Renderer/VertexArray.h"
 
@@ -12,6 +13,7 @@ namespace Engine
     void Renderer::Init()
     {
         RenderCommand::Init();
+        RendererCapabilities::Get().Query();
     }
 
     void Renderer::Shutdown() {}

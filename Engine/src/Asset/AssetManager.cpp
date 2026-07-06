@@ -5,6 +5,7 @@
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/RendererAPI.h"
 #include "Renderer/Texture.h"
 
 namespace Engine
@@ -17,7 +18,9 @@ namespace Engine
     std::unordered_map<std::string, AssetHandle> AssetManager::s_TexturePathIndex;
     std::unordered_map<std::string, AssetHandle> AssetManager::s_MeshPathIndex;
     std::unordered_map<std::string, AssetHandle> AssetManager::s_CubemapPathIndex;
-    std::unordered_map<AssetHandle, AssetType>   AssetManager::s_HandleTypes;
+    // 注：handle 自身已携带 Type（参与 hash/equality），无需单独 s_HandleTypes 全局映射。
+    // 历史原因：三个独立 SlotMap 产生相同 {Index, Generation}，旧 s_HandleTypes 被覆盖导致 type
+    // 错乱并 assert（如池塘展示.scene 触发 expected Mesh）。Type 内嵌后冲撞自然消失。
     std::unordered_map<std::string, AssetHandle> AssetManager::s_PendingAsyncLoads;
     std::mutex                                   AssetManager::s_AssetMutex;
 
@@ -34,7 +37,10 @@ namespace Engine
         s_AsyncQueue  = CreateScope<AsyncLoadQueue>();
         s_FileWatcher = CreateScope<FileWatcher>();
 
-        RegisterBuiltins();
+        if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
+            RegisterBuiltins();
+        else
+            ENGINE_CORE_WARN("[Vulkan] Skipping builtin asset registration (not yet implemented)");
 
         ENGINE_CORE_INFO("AssetManager initialized");
     }
@@ -52,7 +58,6 @@ namespace Engine
         s_TexturePathIndex.clear();
         s_MeshPathIndex.clear();
         s_CubemapPathIndex.clear();
-        s_HandleTypes.clear();
         s_Textures.Clear();
         s_Meshes.Clear();
         s_Cubemaps.Clear();
@@ -65,32 +70,31 @@ namespace Engine
     {
         // Builtin white texture (1x1 white)
         {
-            auto     tex   = Texture2D::Create(1, 1);
-            uint32_t white = 0xFFFFFFFF;
-            tex->SetData(&white, sizeof(uint32_t));
-            AssetHandle h                       = s_Textures.Insert(tex, "builtin:white");
-            s_TexturePathIndex["builtin:white"] = h;
-            s_HandleTypes[h]                    = AssetType::Texture2D;
+            auto tex = Texture2D::Create(1, 1);
+            if (tex)
+            {
+                uint32_t white = 0xFFFFFFFF;
+                tex->SetData(&white, sizeof(uint32_t));
+                AssetHandle h                       = s_Textures.Insert(tex, "builtin:white", AssetType::Texture2D);
+                s_TexturePathIndex["builtin:white"] = h;
+            }
         }
 
         // Builtin meshes
         {
             auto        cube                = Mesh::CreateCube();
-            AssetHandle h                   = s_Meshes.Insert(cube, "builtin:Cube");
+            AssetHandle h                   = s_Meshes.Insert(cube, "builtin:Cube", AssetType::Mesh);
             s_MeshPathIndex["builtin:Cube"] = h;
-            s_HandleTypes[h]                = AssetType::Mesh;
         }
         {
             auto        plane                = Mesh::CreatePlane();
-            AssetHandle h                    = s_Meshes.Insert(plane, "builtin:Plane");
+            AssetHandle h                    = s_Meshes.Insert(plane, "builtin:Plane", AssetType::Mesh);
             s_MeshPathIndex["builtin:Plane"] = h;
-            s_HandleTypes[h]                 = AssetType::Mesh;
         }
         {
             auto        sphere                = Mesh::CreateSphere();
-            AssetHandle h                     = s_Meshes.Insert(sphere, "builtin:Sphere");
+            AssetHandle h                     = s_Meshes.Insert(sphere, "builtin:Sphere", AssetType::Mesh);
             s_MeshPathIndex["builtin:Sphere"] = h;
-            s_HandleTypes[h]                  = AssetType::Mesh;
         }
     }
 
@@ -123,9 +127,9 @@ namespace Engine
             auto changed = s_FileWatcher->CheckChanges(deltaTime);
             for (auto& handle : changed)
             {
-                auto it = s_HandleTypes.find(handle);
-                if (it != s_HandleTypes.end())
-                    ReloadAsset(handle, it->second);
+                // handle 自带 Type 字段（Phase 8 修复 #c5d8 后 handle 内嵌 type）
+                if (handle.Type != AssetType::None)
+                    ReloadAsset(handle, handle.Type);
             }
         }
     }
@@ -181,9 +185,8 @@ namespace Engine
         }
 
         auto        tex          = Texture2D::Create(path);
-        AssetHandle h            = s_Textures.Insert(tex, path);
+        AssetHandle h            = s_Textures.Insert(tex, path, AssetType::Texture2D);
         s_TexturePathIndex[path] = h;
-        s_HandleTypes[h]         = AssetType::Texture2D;
 
         // Watch for hot-reload
         if (s_FileWatcher && path.find("builtin:") == std::string::npos)
@@ -219,9 +222,8 @@ namespace Engine
         if (!mesh)
             return {};
 
-        AssetHandle h         = s_Meshes.Insert(mesh, path);
+        AssetHandle h         = s_Meshes.Insert(mesh, path, AssetType::Mesh);
         s_MeshPathIndex[path] = h;
-        s_HandleTypes[h]      = AssetType::Mesh;
 
         if (s_FileWatcher && path.find("builtin:") == std::string::npos)
             s_FileWatcher->Watch(path, h);
@@ -252,9 +254,8 @@ namespace Engine
             faces.push_back(face);
 
         auto        cubemap      = TextureCubemap::Create(faces);
-        AssetHandle h            = s_Cubemaps.Insert(cubemap, path);
+        AssetHandle h            = s_Cubemaps.Insert(cubemap, path, AssetType::TextureCubemap);
         s_CubemapPathIndex[path] = h;
-        s_HandleTypes[h]         = AssetType::TextureCubemap;
 
         return h;
     }
@@ -291,9 +292,8 @@ namespace Engine
             uint32_t gray        = 0xFF808080;
             placeholder->SetData(&gray, sizeof(uint32_t));
 
-            h                         = s_Textures.Insert(placeholder, path);
+            h                         = s_Textures.Insert(placeholder, path, AssetType::Texture2D);
             s_TexturePathIndex[path]  = h;
-            s_HandleTypes[h]          = AssetType::Texture2D;
             s_PendingAsyncLoads[path] = h;
             needSubmit                = true;
         }
@@ -310,20 +310,24 @@ namespace Engine
     }
 
     // ---- Get specializations ----
+    // 注：type 校验改用 handle 自身的 Type 字段（参与 hash/equality），不再依赖全局
+    // s_HandleTypes 映射 — 后者曾因三个 SlotMap 产生相同 {Index, Generation} 而被覆盖。
 
-    // 注意：s_HandleTypes 是全局单一映射，而 Texture/Mesh/Cubemap 各有独立 SlotMap，
-    // 不同 SlotMap 可产出相同的 {Index, Generation}，导致 s_HandleTypes 碰撞。
-    // 因此此处不做类型断言，依赖 SlotMap::Get() 自身的 generation check 保证安全。
     template <> Texture2D* AssetManager::Get<Texture2D>(AssetHandle h)
     {
+        ENGINE_CORE_ASSERT(!h.IsValid() || h.Type == AssetType::Texture2D,
+                           "AssetHandle type mismatch: expected Texture2D");
         return s_Textures.Get(h);
     }
     template <> Mesh* AssetManager::Get<Mesh>(AssetHandle h)
     {
+        ENGINE_CORE_ASSERT(!h.IsValid() || h.Type == AssetType::Mesh, "AssetHandle type mismatch: expected Mesh");
         return s_Meshes.Get(h);
     }
     template <> TextureCubemap* AssetManager::Get<TextureCubemap>(AssetHandle h)
     {
+        ENGINE_CORE_ASSERT(!h.IsValid() || h.Type == AssetType::TextureCubemap,
+                           "AssetHandle type mismatch: expected TextureCubemap");
         return s_Cubemaps.Get(h);
     }
 

@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Scene/Systems/GrassRenderSystem.h"
 #include "Asset/AssetManager.h"
+#include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Renderer/EditorCamera.h"
 #include "Renderer/RenderCommand.h"
@@ -9,16 +10,48 @@
 #include "Renderer/RendererCapabilities.h"
 #include "Scene/Components.h"
 #include "Scene/Runtime/RuntimeComponents.h"
-#include "Scene/WorldTransformService.h"
 #include "Scene/SceneEntityIndex.h"
+#include "Scene/WorldTransformService.h"
 #include "Terrain/TerrainMeshGenerator.h"
 
 #include <algorithm>
 #include <cstring>
-#include <glad/gl.h>
+
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanBarrierUtil.h"
+#include "Platform/Vulkan/VulkanBuffer.h"
+#include "Platform/Vulkan/VulkanCommandBuffer.h"
+#include "Platform/Vulkan/VulkanContext.h"
+#include "Platform/Vulkan/VulkanDescriptor.h"
+#include "Platform/Vulkan/VulkanPipeline.h"
+#include "Platform/Vulkan/VulkanShader.h"
+#include <vulkan/vulkan.h>
+#endif
 
 namespace Engine
 {
+
+#ifdef ENGINE_ENABLE_VULKAN
+    // Vulkan compute 资源（Pimpl，对 .h 隐藏）
+    struct GrassRenderSystem::VulkanResources
+    {
+        bool                           Initialized = false;
+        VkDevice                       Device      = VK_NULL_HANDLE;
+        Ref<VulkanDescriptorSetLayout> PlacementSetLayout;
+        Ref<VulkanDescriptorSetLayout> RenderArgsSetLayout;
+        Ref<VulkanDescriptorPool>      DescriptorPool;
+        VulkanComputePipelineHandle    PlacementPipeline{};
+        VulkanComputePipelineHandle    RenderArgsPipeline{};
+    };
+#else
+    // 非 Vulkan 构建下也需要完整类型，让 unique_ptr 析构合法
+    struct GrassRenderSystem::VulkanResources
+    {
+    };
+#endif
+
+    GrassRenderSystem::GrassRenderSystem() : m_VulkanResources(CreateScope<VulkanResources>()) {}
+    GrassRenderSystem::~GrassRenderSystem() = default;
 
     namespace
     {
@@ -42,7 +75,23 @@ namespace Engine
             uint32_t baseInstance;
         };
 
+        // std140 UBO 镜像 — 与 grass_placement.glsl 中 GrassPlacementParams 块逐字节对应
+        struct alignas(16) GrassPlacementParams
+        {
+            int32_t MaxGrass;
+            int32_t HeightmapWidth;
+            int32_t HeightmapHeight;
+            float   TerrainSize;
+            float   HeightScale;
+            float   GrassHeight;
+            float   GrassWidth;
+            float   GrassWindStrength;
+        };
+        static_assert(sizeof(GrassPlacementParams) == 32, "GrassPlacementParams 必须与 std140 layout 一致");
+
         static constexpr uint32_t MAX_GRASS_BLADES = 500000;
+        // 参数 UBO 绑定点 — 与 grass_placement.glsl 中 layout(std140, binding = 2) 对应
+        static constexpr uint32_t GRASS_PARAMS_UBO_BINDING = 2;
     } // namespace
 
     void GrassRenderSystem::Init()
@@ -62,18 +111,29 @@ namespace Engine
 
         m_EmptyVAO = VertexArray::Create();
 
+        // Placement 参数 UBO（binding=2）— OpenGL/Vulkan 共用
+        m_ParamsUBO = UniformBuffer::Create(sizeof(GrassPlacementParams), GRASS_PARAMS_UBO_BINDING);
+
         // VMware 兼容检测
-        const char* vendor       = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-        const char* renderer     = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-        bool        vmwareDriver = ContainsToken(vendor, "VMware") || ContainsToken(renderer, "SVGA3D");
+        auto& caps = RendererCapabilities::Get();
+        bool  vmwareDriver =
+            ContainsToken(caps.VendorString.c_str(), "VMware") || ContainsToken(caps.RendererString.c_str(), "SVGA3D");
 
         const char* forceDirect    = std::getenv("ENGINE_GRASS_DIRECT_DRAW");
         bool        envForceDirect = forceDirect && forceDirect[0] == '1';
 
-        m_UseIndirectDraw = !(vmwareDriver || envForceDirect);
+        // Vulkan 路径下 VulkanRendererAPI::DrawArraysIndirect 仍是 stub（Phase 8 接通主路径前不实装），
+        // 同时 VulkanStorageBuffer::GetRendererID() 恒返回 0，indirect 路径必然不出图。
+        // 强制走 DrawArraysInstanced（已实装），GrassCount 在 RebuildGrass Vulkan 分支同步阻塞读回。
+        bool vulkanBackend = RendererAPI::GetAPI() == RendererAPI::API::Vulkan;
+
+        m_UseIndirectDraw = !(vmwareDriver || envForceDirect || vulkanBackend);
         if (!m_UseIndirectDraw)
         {
-            ENGINE_WARN("[Grass] Using direct instanced draw fallback (VMware compatibility mode).");
+            const char* reason = vulkanBackend  ? "Vulkan backend (DrawArraysIndirect not yet implemented)"
+                                 : vmwareDriver ? "VMware compatibility mode"
+                                                : "ENGINE_GRASS_DIRECT_DRAW=1";
+            ENGINE_WARN("[Grass] Using direct instanced draw fallback ({}).", reason);
         }
     }
 
@@ -82,13 +142,15 @@ namespace Engine
         // 清理异步回读资源
         for (auto& [eid, inst] : m_Instances)
         {
-            if (inst.ReadbackFence)
-                glDeleteSync(static_cast<GLsync>(inst.ReadbackFence));
-            if (inst.ReadbackBuffer)
-                glDeleteBuffers(1, &inst.ReadbackBuffer);
+            if (inst.Readback)
+                inst.Readback->Reset();
         }
         m_Instances.clear();
         m_Cache.clear();
+
+#ifdef ENGINE_ENABLE_VULKAN
+        DestroyVulkanComputeResources();
+#endif
     }
 
     void GrassRenderSystem::UpdateGrassData(entt::registry& reg, float totalTime)
@@ -109,10 +171,8 @@ namespace Engine
                 auto it = m_Instances.find(eid);
                 if (it != m_Instances.end())
                 {
-                    if (it->second.ReadbackFence)
-                        glDeleteSync(static_cast<GLsync>(it->second.ReadbackFence));
-                    if (it->second.ReadbackBuffer)
-                        glDeleteBuffers(1, &it->second.ReadbackBuffer);
+                    if (it->second.Readback)
+                        it->second.Readback->Reset();
                     m_Instances.erase(it);
                 }
                 m_Cache.erase(eid);
@@ -147,28 +207,20 @@ namespace Engine
         }
 
         // ---- 每帧检查异步回读栅栏，更新 GrassCount（零等待） ----
-        if (!m_UseIndirectDraw)
+        // 仅 OpenGL 路径需要：Vulkan 路径在 RebuildGrass 中已同步阻塞读取 GrassCount。
+        if (!m_UseIndirectDraw && RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
         {
             for (auto& [eid, inst] : m_Instances)
             {
-                if (!inst.ReadbackPending || !inst.ReadbackFence)
+                if (!inst.Readback || !inst.Readback->IsPending())
                     continue;
 
-                GLenum result =
-                    glClientWaitSync(static_cast<GLsync>(inst.ReadbackFence), GL_SYNC_FLUSH_COMMANDS_BIT, 0);
-
-                if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED)
+                if (inst.Readback->IsReady())
                 {
-                    // GPU 已完成，无阻塞读取回读缓冲
                     GrassCounterData readback{0};
-                    glBindBuffer(GL_COPY_READ_BUFFER, inst.ReadbackBuffer);
-                    glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(GrassCounterData), &readback);
-                    glBindBuffer(GL_COPY_READ_BUFFER, 0);
-
-                    inst.GrassCount      = readback.grassCount;
-                    inst.ReadbackPending = false;
+                    inst.Readback->GetData(&readback, sizeof(GrassCounterData));
+                    inst.GrassCount = readback.grassCount;
                 }
-                // GL_TIMEOUT_EXPIRED: GPU 还没完成，使用上一帧的 GrassCount
             }
         }
     }
@@ -193,10 +245,6 @@ namespace Engine
             auto it = m_Instances.find(eid);
             if (it != m_Instances.end())
             {
-                if (it->second.ReadbackFence)
-                    glDeleteSync(static_cast<GLsync>(it->second.ReadbackFence));
-                if (it->second.ReadbackBuffer)
-                    glDeleteBuffers(1, &it->second.ReadbackBuffer);
                 m_Instances.erase(it);
             }
             return;
@@ -220,20 +268,128 @@ namespace Engine
         IndirectDrawCommand cmd{6, 0, 0, 0};
         inst.IndirectArgs = ShaderStorageBuffer::CreateGPUOnly(&cmd, sizeof(IndirectDrawCommand), 4);
 
+        // 准备共用参数（OpenGL/Vulkan 都通过 UBO 上传）
+        GrassPlacementParams params{};
+        params.MaxGrass          = static_cast<int32_t>(maxGrass);
+        params.HeightmapWidth    = meshData->HeightmapWidth;
+        params.HeightmapHeight   = meshData->HeightmapHeight;
+        params.TerrainSize       = tc.TerrainSize;
+        params.HeightScale       = tc.HeightScale;
+        params.GrassHeight       = tc.GrassHeight;
+        params.GrassWidth        = tc.GrassWidth;
+        params.GrassWindStrength = tc.GrassWindStrength;
+        m_ParamsUBO->SetData(&params, sizeof(GrassPlacementParams));
+
+#ifdef ENGINE_ENABLE_VULKAN
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            // ---- Vulkan compute 路径 ----
+            EnsureVulkanComputeResources();
+
+            auto* ctx = VulkanContext::Get();
+            ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "[Grass][Vulkan] VulkanContext not initialized");
+            VkDevice device = ctx->GetDevice();
+
+            // 转回 VulkanStorageBuffer 拿到原生 VkBuffer 句柄
+            auto vkGrass     = std::dynamic_pointer_cast<VulkanStorageBuffer>(inst.GrassBuffer);
+            auto vkHeight    = std::dynamic_pointer_cast<VulkanStorageBuffer>(inst.HeightBuffer);
+            auto vkCounter   = std::dynamic_pointer_cast<VulkanStorageBuffer>(inst.CounterBuffer);
+            auto vkIndirect  = std::dynamic_pointer_cast<VulkanStorageBuffer>(inst.IndirectArgs);
+            auto vkParamsUBO = std::dynamic_pointer_cast<VulkanUniformBuffer>(m_ParamsUBO);
+            ENGINE_CORE_RELEASE_ASSERT(vkGrass && vkHeight && vkCounter && vkIndirect && vkParamsUBO,
+                                       "[Grass][Vulkan] SSBO/UBO 转型失败");
+
+            // 由于 RebuildGrass 是低频但累计的（每次场景重建/参数变更都会分配新 set），
+            // 这里在 pool 耗尽时自动 Reset；Vulkan 端 EndSingleTimeCommands 走 vkQueueWaitIdle，
+            // GPU 已 idle，旧 set 安全可回收。
+            auto allocateOrReset = [&](VkDescriptorSetLayout layout) -> VkDescriptorSet
+            {
+                VkDescriptorSet set = m_VulkanResources->DescriptorPool->Allocate(layout);
+                if (set == VK_NULL_HANDLE)
+                {
+                    ENGINE_CORE_WARN("[Grass][Vulkan] DescriptorPool 耗尽，Reset 后重试");
+                    m_VulkanResources->DescriptorPool->Reset();
+                    set = m_VulkanResources->DescriptorPool->Allocate(layout);
+                }
+                ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Grass][Vulkan] DescriptorPool 二次分配仍失败");
+                return set;
+            };
+
+            // 1) Placement descriptor set — bindings: 0=grass, 1=height, 2=params(UBO), 3=counter
+            VkDescriptorSet placementSet = allocateOrReset(m_VulkanResources->PlacementSetLayout->GetHandle());
+            {
+                VulkanDescriptorWriter w;
+                w.WriteBuffer(0, vkGrass->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                w.WriteBuffer(1, vkHeight->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                w.WriteBuffer(GRASS_PARAMS_UBO_BINDING, vkParamsUBO->GetBuffer(), 0, sizeof(GrassPlacementParams),
+                              VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+                w.WriteBuffer(3, vkCounter->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                w.UpdateSet(device, placementSet);
+            }
+
+            // 2) RenderArgs descriptor set — bindings: 3=counter(read), 4=indirect args(write)
+            VkDescriptorSet renderArgsSet = allocateOrReset(m_VulkanResources->RenderArgsSetLayout->GetHandle());
+            {
+                VulkanDescriptorWriter w;
+                w.WriteBuffer(3, vkCounter->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                w.WriteBuffer(4, vkIndirect->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                w.UpdateSet(device, renderArgsSet);
+            }
+
+            // 3) 录命令 & 提交 — 用 BeginSingleTimeCommands 拿同步 one-time cmd buffer
+            VkCommandBuffer     rawCmd = ctx->BeginSingleTimeCommands();
+            VulkanCommandBuffer cmdBuf(rawCmd);
+
+            // Placement dispatch
+            cmdBuf.BindComputePipeline(m_VulkanResources->PlacementPipeline.Pipeline);
+            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->PlacementPipeline.Layout, 0,
+                                      {placementSet});
+            uint32_t groups = (maxGrass + 63) / 64;
+            cmdBuf.Dispatch(groups, 1, 1);
+
+            // Barrier — placement 写 counter/grass，render_args 读 counter
+            {
+                auto m = ResolveBarrierBits(BarrierBit::ShaderStorage);
+                cmdBuf.MemoryBarrier(m.SrcStage, m.DstStage, m.SrcAccess, m.DstAccess);
+            }
+
+            // RenderArgs dispatch（写 indirect args buffer）
+            cmdBuf.BindComputePipeline(m_VulkanResources->RenderArgsPipeline.Pipeline);
+            cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->RenderArgsPipeline.Layout, 0,
+                                      {renderArgsSet});
+            cmdBuf.Dispatch(1, 1, 1);
+
+            // Barrier — render_args 写 indirect，后续 DrawArraysIndirect 通过 DRAW_INDIRECT stage 读
+            {
+                auto m = ResolveBarrierBits(BarrierBit::ShaderStorage | BarrierBit::Command);
+                cmdBuf.MemoryBarrier(m.SrcStage, m.DstStage, m.SrcAccess, m.DstAccess);
+            }
+
+            ctx->EndSingleTimeCommands(rawCmd); // vkQueueWaitIdle 内部同步
+
+            // 4) 同步阻塞读回 grassCount — 草地构建低频，可接受 GPU stall
+            //    AsyncReadback 在 Vulkan 端暂未实装（Phase 7 Step 8 推迟）。
+            //    Vulkan 路径下 Init() 强制 m_UseIndirectDraw=false，此分支必然命中。
+            if (!m_UseIndirectDraw)
+            {
+                GrassCounterData readback{0};
+                inst.CounterBuffer->GetData(&readback, sizeof(GrassCounterData));
+                inst.GrassCount = readback.grassCount;
+            }
+
+            return;
+        }
+#endif
+
+        // ---- OpenGL compute 路径（原有实现） ----
         // Dispatch placement compute
         inst.GrassBuffer->Bind(0);
         inst.HeightBuffer->Bind(1);
         inst.CounterBuffer->Bind(3);
 
         m_PlacementShader->Bind();
-        m_PlacementShader->SetInt("u_MaxGrass", static_cast<int>(maxGrass));
-        m_PlacementShader->SetInt("u_HeightmapWidth", meshData->HeightmapWidth);
-        m_PlacementShader->SetInt("u_HeightmapHeight", meshData->HeightmapHeight);
-        m_PlacementShader->SetFloat("u_TerrainSize", tc.TerrainSize);
-        m_PlacementShader->SetFloat("u_HeightScale", tc.HeightScale);
-        m_PlacementShader->SetFloat("u_GrassHeight", tc.GrassHeight);
-        m_PlacementShader->SetFloat("u_GrassWidth", tc.GrassWidth);
-        m_PlacementShader->SetFloat("u_GrassWindStrength", tc.GrassWindStrength);
+        // 注意：GLSL 使用 layout(std140, binding=2) UBO 后，散装 uniform 接口已废弃。
+        // m_ParamsUBO 在上面已 SetData，OpenGL 通过 glBindBufferBase 自动绑到 binding 2。
 
         uint32_t groups = (maxGrass + 63) / 64;
         RenderCommand::DispatchCompute(groups);
@@ -248,32 +404,83 @@ namespace Engine
         // ---- 异步回读 grassCount（避免 glGetBufferSubData 同步阻塞） ----
         if (!m_UseIndirectDraw)
         {
-            // 清理旧的回读资源
-            if (inst.ReadbackFence)
-            {
-                glDeleteSync(static_cast<GLsync>(inst.ReadbackFence));
-                inst.ReadbackFence = nullptr;
-            }
-            if (!inst.ReadbackBuffer)
-            {
-                glGenBuffers(1, &inst.ReadbackBuffer);
-                glBindBuffer(GL_COPY_WRITE_BUFFER, inst.ReadbackBuffer);
-                glBufferData(GL_COPY_WRITE_BUFFER, sizeof(GrassCounterData), nullptr, GL_STREAM_READ);
-                glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-            }
+            if (!inst.Readback)
+                inst.Readback = GPUAsyncReadback::Create(sizeof(GrassCounterData));
 
-            // 发起异步拷贝：Counter SSBO → 回读 PBO
-            glBindBuffer(GL_COPY_READ_BUFFER, inst.CounterBuffer->GetRendererID());
-            glBindBuffer(GL_COPY_WRITE_BUFFER, inst.ReadbackBuffer);
-            glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(GrassCounterData));
-            glBindBuffer(GL_COPY_READ_BUFFER, 0);
-            glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-
-            // 插入栅栏
-            inst.ReadbackFence   = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-            inst.ReadbackPending = true;
+            inst.Readback->CopyFrom(inst.CounterBuffer, sizeof(GrassCounterData));
         }
     }
+
+#ifdef ENGINE_ENABLE_VULKAN
+    void GrassRenderSystem::EnsureVulkanComputeResources()
+    {
+        if (m_VulkanResources->Initialized)
+            return;
+
+        auto* ctx = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "[Grass][Vulkan] VulkanContext not initialized");
+        m_VulkanResources->Device = ctx->GetDevice();
+        VkDevice device           = m_VulkanResources->Device;
+
+        // 反射拿到两个 shader 的 binding & shader module
+        auto placementVk  = std::dynamic_pointer_cast<VulkanShader>(m_PlacementShader);
+        auto renderArgsVk = std::dynamic_pointer_cast<VulkanShader>(m_RenderArgsShader);
+        ENGINE_CORE_RELEASE_ASSERT(placementVk && renderArgsVk,
+                                   "[Grass][Vulkan] grass shader 转型失败（非 VulkanShader）");
+
+        VkShaderModule placementModule  = placementVk->GetOrCreateShaderModule(device, "compute");
+        VkShaderModule renderArgsModule = renderArgsVk->GetOrCreateShaderModule(device, "compute");
+        ENGINE_CORE_RELEASE_ASSERT(placementModule != VK_NULL_HANDLE && renderArgsModule != VK_NULL_HANDLE,
+                                   "[Grass][Vulkan] 无法创建 grass compute shader module");
+
+        // Descriptor set layouts — 由 SPIR-V 反射结果构建
+        m_VulkanResources->PlacementSetLayout =
+            VulkanDescriptorSetLayout::CreateFromReflection(device, placementVk->GetReflectedBindings(), 0);
+        m_VulkanResources->RenderArgsSetLayout =
+            VulkanDescriptorSetLayout::CreateFromReflection(device, renderArgsVk->GetReflectedBindings(), 0);
+
+        // Compute pipelines（草地 shader 无 push constant，descriptor set 0 已覆盖全部输入）
+        {
+            VulkanComputePipelineDesc desc{};
+            desc.ShaderModule = placementModule;
+            desc.SetLayouts   = {m_VulkanResources->PlacementSetLayout->GetHandle()};
+            // 如果未来 shader 添加 push constant，可在此处填充：
+            // for (auto& pc : placementVk->GetReflectedPushConstants())
+            //     desc.PushConstants.push_back({pc.Stages, pc.Offset, pc.Size});
+            m_VulkanResources->PlacementPipeline = VulkanPipeline::CreateCompute(device, desc);
+        }
+        {
+            VulkanComputePipelineDesc desc{};
+            desc.ShaderModule                     = renderArgsModule;
+            desc.SetLayouts                       = {m_VulkanResources->RenderArgsSetLayout->GetHandle()};
+            m_VulkanResources->RenderArgsPipeline = VulkanPipeline::CreateCompute(device, desc);
+        }
+
+        // Descriptor pool — placement(4) + render_args(2)，按场景内地形数量预估上限
+        // 每次 RebuildGrass 分配 2 个 set；草地构建低频，给 256 set 容量足够。
+        m_VulkanResources->DescriptorPool = VulkanDescriptorPool::CreateDefaultComputePool(device, 256);
+
+        m_VulkanResources->Initialized = true;
+    }
+
+    void GrassRenderSystem::DestroyVulkanComputeResources()
+    {
+        if (!m_VulkanResources || !m_VulkanResources->Initialized)
+            return;
+
+        VkDevice device = m_VulkanResources->Device;
+        if (device != VK_NULL_HANDLE)
+            vkDeviceWaitIdle(device);
+
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->PlacementPipeline);
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->RenderArgsPipeline);
+        m_VulkanResources->DescriptorPool.reset();
+        m_VulkanResources->PlacementSetLayout.reset();
+        m_VulkanResources->RenderArgsSetLayout.reset();
+        m_VulkanResources->Device      = VK_NULL_HANDLE;
+        m_VulkanResources->Initialized = false;
+    }
+#endif // ENGINE_ENABLE_VULKAN
 
     void GrassRenderSystem::Render(entt::registry&         reg,
                                    const EditorCamera&     camera,

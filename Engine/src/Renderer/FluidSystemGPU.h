@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Renderer/GPUAsyncReadback.h"
 #include "Renderer/Shader.h"
 #include "Renderer/SPHCommon.h"
 #include "Renderer/SpatialHashGrid.h"
 #include "Renderer/StorageBuffer.h"
+#include "Renderer/UniformBuffer.h"
 #include "Renderer/VertexArray.h"
 
 #include <entt/entt.hpp>
@@ -113,6 +115,32 @@ namespace Engine
         // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
         struct CudaImpl;
         Scope<CudaImpl> m_CudaImpl;
+
+        // ---- Vulkan 路径（emit + simulate；SPH 段 Commit C 接通）----
+        // Vulkan 资源以 Pimpl 隐藏在 .cpp，避免 .h 引入 Vulkan 头依赖。
+        struct VulkanResources;
+        Scope<VulkanResources> m_VulkanResources;
+
+        // Emit / Simulate 走 UBO 上传大块参数（仅 Vulkan 路径）
+        Ref<UniformBuffer> m_EmitParamsUBO;
+        Ref<UniformBuffer> m_SimParamsUBO;
+
+        // SPH 路径统一 UBO：stable params + PCISPH delta（binding=12）
+        // 7 SPH shader 共享同一份布局，每 dispatch 仅小常量走 push
+        // constant（u_AliveCount/u_DeltaTime/u_UsePredictedPos）
+        Ref<UniformBuffer> m_SPHParamsUBO;
+
+        // MeshSDFMeta 异步回读（Commit D 预埋；当前 SPH 段在 Vulkan 跳过，跑不到）
+        Ref<GPUAsyncReadback> m_SDFMetaReadback;
+
+        // Vulkan 路径 Update 分派
+        void UpdateVulkan(float                        dt,
+                          const glm::vec3&             emitterPos,
+                          const FluidEmitterComponent& emitter,
+                          entt::registry*              registry);
+        bool InitVulkanComputeResources();
+        bool InitSPHVulkanPipelines();
+        void DestroyVulkanComputeResources();
     };
 
 } // namespace Engine

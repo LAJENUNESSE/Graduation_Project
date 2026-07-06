@@ -124,9 +124,17 @@ uniform sampler2D u_NormalMap;        // unit 2
 uniform int u_HasNormalMap;
 
 // IBL (Image-Based Lighting)
+#ifdef VULKAN
+// Vulkan path 必须显式 layout(set=N, binding=M)，由 VulkanShader 反射建 descriptor set layout
+layout(set = 0, binding = 6) uniform samplerCube u_IrradianceMap;
+layout(set = 0, binding = 7) uniform samplerCube u_PrefilterMap;
+layout(set = 0, binding = 8) uniform sampler2D u_BRDF_LUT;
+#else
+// OpenGL path：texture unit 6/7/8 由 cpp 端 SetInt 指定
 uniform samplerCube u_IrradianceMap;  // unit 6
 uniform samplerCube u_PrefilterMap;   // unit 7
 uniform sampler2D u_BRDF_LUT;         // unit 8
+#endif
 uniform int u_IBLEnabled;
 uniform float u_IBLIntensity;
 uniform int u_IBLDebugMode;   // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线

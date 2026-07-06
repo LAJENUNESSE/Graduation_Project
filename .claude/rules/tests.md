@@ -13,30 +13,27 @@ paths:
 tests/
 ├── CMakeLists.txt          — 构建配置
 └── src/
-    ├── TestCollisionMath.cpp    — Physics/CollisionMath
-    ├── TestSDFMath.cpp          — Physics/SDFMath
-    ├── TestSceneHierarchy.cpp   — Scene/SceneHierarchyService
-    ├── TestWorldTransform.cpp   — Scene/WorldTransformService
-    ├── TestSceneEntityIndex.cpp — Scene/SceneEntityIndex
-    ├── TestCommandHistory.cpp   — Editor/CommandHistory
-    ├── TestSPHKernel.cpp        — Renderer/SPHKernelMath
-    ├── TestCudaPoisonState.cpp  — CUDA/CudaPoisonState
-    ├── TestSlotMap.cpp          — Asset/SlotMap
-    ├── TestAssetHandle.cpp      — Asset/AssetHandle
-    ├── TestUUID.cpp             — Core/UUID
-    ├── TestEvents.cpp           — Core/Events
-    ├── TestTimestep.cpp         — Core/Timestep
-    └── TestCudaParticleTypes.cpp — CUDA/CudaParticleTypes
+    ├── TestMain.cpp              — gtest 主入口
+    ├── TestAssetHandle.cpp       — Asset/AssetHandle
+    ├── TestSlotMap.cpp           — Asset/SlotMap
+    ├── TestSceneEntityIndex.cpp  — Scene/SceneEntityIndex
+    ├── TestSceneHierarchy.cpp    — Scene/SceneHierarchyService
+    ├── TestWorldTransform.cpp    — Scene/WorldTransformService
+    ├── TestSDFMath.cpp           — Physics/SDFMath
+    ├── TestSPHKernel.cpp         — Renderer/SPHKernelMath
+    ├── TestCommandHistory.cpp    — Editor/CommandHistory
+    ├── TestUUID.cpp              — Core/UUID
+    ├── TestEvents.cpp            — Core/Events
+    └── TestTimestep.cpp          — Core/Timestep
 ```
 
 ## EngineTestCore 静态库
 
-轻量静态库，仅编译测试所需的少量 Engine 源文件，**避免链接完整 Engine 库**（OpenGL/OpenAL/Bullet3 等重依赖）：
+轻量静态库，仅编译测试所需的少量 Engine 源文件，**避免链接完整 Engine 库**（OpenGL/Vulkan/OpenAL/Bullet3 等重依赖）：
 
 包含源文件：
 - `Core/UUID.cpp`, `Core/Log.cpp`
 - `Scene/SceneEntityIndex.cpp`, `SceneHierarchyService.cpp`, `WorldTransformService.cpp`, `SceneCamera.cpp`
-- `Physics/CollisionMath.cpp`
 - `Editor/CommandHistory.cpp`
 
 依赖：entt（header-only）、glm（header-only）、spdlog
@@ -62,6 +59,6 @@ cd build && ctest --build-config RelWithDebInfo -R EngineTests
 
 ## 设计原则
 
-- **可测试性提取**：纯数学/纯逻辑代码从引擎类中提取为独立模块（如 CollisionMath、SDFMath、SPHKernelMath、CudaPoisonState、CommandHistory），不依赖 OpenGL/CUDA 等重运行时
-- **header-only 优先**：SDFMath、SPHKernelMath、CudaPoisonState 等纯计算模块用 header-only 实现
-- **CUDA 兼容**：SDFMath 使用 `SDF_DEVICE` 宏兼容 `__device__` 和普通 C++
+- **可测试性提取**：纯数学/纯逻辑代码从引擎类中提取为独立模块（如 SDFMath、SPHKernelMath、CommandHistory、SceneHierarchyService、WorldTransformService），不依赖 OpenGL/Vulkan 等重运行时
+- **header-only 优先**：SDFMath、SPHKernelMath 等纯计算模块用 header-only 实现
+- **轻量依赖**：测试可执行只链接 EngineTestCore + spdlog + entt/glm（header-only），构建快、CI 友好

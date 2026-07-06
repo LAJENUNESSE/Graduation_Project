@@ -2,6 +2,24 @@
 #version 430 core
 layout(local_size_x = 16, local_size_y = 16) in;
 
+#ifdef VULKAN
+// 输出 prefiltered map（6 个面横向排列）
+layout(set = 0, binding = 0, rgba16f) writeonly uniform image2D u_OutputPrefilter;
+// Vulkan 路径直接采样 cubemap（VulkanTextureCubemap 已实装）
+layout(set = 0, binding = 1) uniform samplerCube u_EnvCube;
+
+// uniform 通过 push constant 传递
+layout(push_constant) uniform PushConstants
+{
+    int   u_FaceSize;
+    int   u_EnvFaceSize;  // Vulkan 路径未使用，保留以保 PC 布局对齐
+    float u_Roughness;
+} pc;
+#define u_FaceSize    pc.u_FaceSize
+#define u_EnvFaceSize pc.u_EnvFaceSize
+#define u_Roughness   pc.u_Roughness
+
+#else
 // ★ 用 imageLoad 替代 texture() 采样
 layout(rgba8, binding = 1) readonly uniform image2D u_EnvAtlas;
 uniform int u_EnvFaceSize;  // 环境贴图单面分辨率
@@ -11,10 +29,18 @@ layout(rgba16f, binding = 0) writeonly uniform image2D u_OutputPrefilter;
 
 uniform int u_FaceSize;
 uniform float u_Roughness;
+#endif
 
 const float PI = 3.14159265359;
 
-// 从 2D atlas 用 imageLoad 读取环境贴图
+#ifdef VULKAN
+// Vulkan 路径：直接 cubemap 采样
+vec3 SampleEnvMap(vec3 dir)
+{
+    return texture(u_EnvCube, dir).rgb;
+}
+#else
+// OpenGL 路径：从 2D atlas 用 imageLoad 读取
 vec3 SampleEnvMap(vec3 dir)
 {
     vec3 a = abs(dir);
@@ -45,6 +71,7 @@ vec3 SampleEnvMap(vec3 dir)
 
     return imageLoad(u_EnvAtlas, ivec2(px, py)).rgb;
 }
+#endif
 
 // Van der Corput 序列
 float RadicalInverse_VdC(uint bits)

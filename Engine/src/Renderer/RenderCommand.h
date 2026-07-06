@@ -9,7 +9,8 @@ namespace Engine
     class RenderCommand
     {
     public:
-        static void Init() { s_RendererAPI->Init(); }
+        static void Init();
+        static void CreateRendererAPI();
 
         static void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
         {
@@ -66,6 +67,18 @@ namespace Engine
             s_RendererAPI->BindCubemapUnit(slot, textureID);
         }
 
+        // Vulkan path PBR IBL 资源绑定（OpenGL 默认 warn-once 不应被走到）。
+        // view / sampler 是 void* 透传 (VkImageView / VkSampler)，避开 vulkan.h 泄漏。
+        // 调用方 if (RendererAPI::GetAPI() == Vulkan) 走 BindXxxView，否则走 BindXxxUnit。
+        static void BindCubemapView(uint32_t slot, void* view, void* sampler)
+        {
+            s_RendererAPI->BindCubemapView(slot, view, sampler);
+        }
+        static void BindTextureView(uint32_t slot, void* view, void* sampler)
+        {
+            s_RendererAPI->BindTextureView(slot, view, sampler);
+        }
+
         static void ClearColorOnly() { s_RendererAPI->ClearColorOnly(); }
 
         static int GetBoundFramebufferID() { return s_RendererAPI->GetBoundFramebufferID(); }
@@ -90,6 +103,25 @@ namespace Engine
         static void SetDepthMask(bool enable) { s_RendererAPI->SetDepthMask(enable); }
 
         static void SetBlendFunc(BlendFactor src, BlendFactor dst) { s_RendererAPI->SetBlendFunc(src, dst); }
+        static void SetBlend(bool enable) { s_RendererAPI->SetBlend(enable); }
+        static bool GetBlendEnabled() { return s_RendererAPI->GetBlendEnabled(); }
+        static void SetScissorTest(bool enable) { s_RendererAPI->SetScissorTest(enable); }
+        static void SetColorMask(bool r, bool g, bool b, bool a) { s_RendererAPI->SetColorMask(r, g, b, a); }
+
+        static glm::vec4 GetClearColor() { return s_RendererAPI->GetClearColor(); }
+
+        static void SetReadBuffer(uint32_t attachment) { s_RendererAPI->SetReadBuffer(attachment); }
+        static void SetDrawBuffer(uint32_t attachment) { s_RendererAPI->SetDrawBuffer(attachment); }
+        static void SetDrawBuffers(uint32_t count, const uint32_t* attachments)
+        {
+            s_RendererAPI->SetDrawBuffers(count, attachments);
+        }
+        static void CopyFramebufferToTexture(uint32_t texID, uint32_t width, uint32_t height)
+        {
+            s_RendererAPI->CopyFramebufferToTexture(texID, width, height);
+        }
+
+        static void QueryCapabilities(RendererCapabilities& caps) { s_RendererAPI->QueryCapabilities(caps); }
 
     private:
         static Scope<RendererAPI> s_RendererAPI;

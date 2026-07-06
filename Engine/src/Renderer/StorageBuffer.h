@@ -21,6 +21,9 @@ namespace Engine
         virtual uint32_t GetRendererID() const = 0;
         virtual uint32_t GetSize() const       = 0;
 
+        // Clear entire buffer to zero (GPU-side, no CPU allocation)
+        virtual void ClearToZero() = 0;
+
         static Ref<ShaderStorageBuffer> Create(uint32_t size, uint32_t binding);
         static Ref<ShaderStorageBuffer> Create(const void* data, uint32_t size, uint32_t binding);
 

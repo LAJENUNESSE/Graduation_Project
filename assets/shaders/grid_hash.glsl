@@ -21,6 +21,26 @@ struct PCISPHData
     vec4 densityError;            // x=predicted density, y=density error
 };
 
+#ifdef VULKAN
+// Vulkan 路径：SSBO 加 set=0，default uniform 改用 push constant
+layout(std430, set = 0, binding = 0) readonly buffer ParticlePool { GPUParticle particles[]; };
+layout(std430, set = 0, binding = 9) readonly buffer PCISPHPool   { PCISPHData pcisphData[]; };
+layout(std430, set = 0, binding = 2) readonly buffer AliveList    { uint aliveIndices[];     };
+layout(std430, set = 0, binding = 6) buffer CellCount             { uint cellCount[];        };
+layout(std430, set = 0, binding = 1) buffer CellHash              { uint cellHash[];         };
+
+layout(push_constant) uniform PushConstants
+{
+    int   u_AliveCount;
+    int   u_GridSize;
+    float u_CellSize;
+    int   u_UsePredictedPos;
+} pc;
+#define u_AliveCount      pc.u_AliveCount
+#define u_GridSize        pc.u_GridSize
+#define u_CellSize        pc.u_CellSize
+#define u_UsePredictedPos pc.u_UsePredictedPos
+#else
 layout(std430, binding = 0) readonly buffer ParticlePool { GPUParticle particles[]; };
 layout(std430, binding = 9) readonly buffer PCISPHPool   { PCISPHData pcisphData[]; };
 layout(std430, binding = 2) readonly buffer AliveList    { uint aliveIndices[];     };
@@ -32,6 +52,7 @@ uniform int   u_GridSize;
 uniform float u_CellSize;
 // 当 u_UsePredictedPos=1 时，从 pcisphData 读取预测位置（PCISPH 迭代 1+ 重建 grid）
 uniform int   u_UsePredictedPos;
+#endif
 
 // 空间哈希：将 3D 坐标映射到 1D cell index
 uint hashCell(ivec3 cell)

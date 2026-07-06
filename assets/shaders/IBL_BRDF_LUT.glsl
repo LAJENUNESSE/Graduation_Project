@@ -2,7 +2,11 @@
 #version 430 core
 layout(local_size_x = 16, local_size_y = 16) in;
 
+#ifdef VULKAN
+layout(set = 0, binding = 0, rg16f) writeonly uniform image2D u_OutputLUT;
+#else
 layout(rg16f, binding = 0) writeonly uniform image2D u_OutputLUT;
+#endif
 
 const float PI = 3.14159265359;
 

@@ -4,7 +4,9 @@
 #include "Renderer/Shader.h"
 #include "Renderer/SPHCommon.h"
 #include "Renderer/SpatialHashGrid.h"
+#include "Renderer/GPUAsyncReadback.h"
 #include "Renderer/StorageBuffer.h"
+#include "Renderer/UniformBuffer.h"
 #include "Renderer/VertexArray.h"
 
 #include <entt/entt.hpp>
@@ -115,16 +117,35 @@ namespace Engine
         // 上一帧的活跃粒子数（用于 SPH dispatch）
         uint32_t m_LastAliveCount = 0;
 
-        // 异步回读（避免 glGetBufferSubData 同步阻塞）
-        uint32_t m_ReadbackBuffer  = 0;       // GL buffer for async copy
-        void*    m_ReadbackFence   = nullptr; // GLsync fence
-        bool     m_ReadbackPending = false;
+        // 异步回读（避免同步阻塞）
+        Ref<GPUAsyncReadback> m_Readback;
 
         // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
         struct CudaImpl;
         Scope<CudaImpl> m_CudaImpl;
 
         void InitSPH(float smoothingRadius);
+
+        // ---- Vulkan path (非 SPH) ----
+        // Vulkan 资源以 Pimpl 隐藏在 .cpp，避免 .h 引入 Vulkan 头依赖。
+        struct VulkanResources;
+        Scope<VulkanResources> m_VulkanResources;
+
+        // Emit / Simulate 用 UBO 上传大块 emitter 参数
+        Ref<UniformBuffer> m_EmitParamsUBO;
+        Ref<UniformBuffer> m_SimParamsUBO;
+
+        // SPH 共享 UBO（binding=12），density + force 共用同一份布局
+        Ref<UniformBuffer> m_SPHParamsUBO;
+
+        // Vulkan path Update 分派
+        void UpdateVulkan(float                           dt,
+                          const glm::vec3&                emitterPos,
+                          const ParticleEmitterComponent& emitter,
+                          entt::registry*                 registry);
+        bool InitVulkanComputeResources();
+        bool InitSPHVulkanPipelines();
+        void DestroyVulkanComputeResources();
     };
 
 } // namespace Engine

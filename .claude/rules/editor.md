@@ -14,7 +14,7 @@ EditorLayer (主协调器)
 ├── EditorBootstrapper            — DI 工厂，创建并连线所有子系统
 ├── EditorSceneSession            — 场景生命周期（Edit ↔ Play）、序列化
 ├── EditorShell                   — ImGui Dockspace + 快捷键 → 产出 EditorShellActions
-├── EditorPanelCoordinator        — 聚合 5 个面板、管理选择状态（单选+多选）
+├── EditorPanelCoordinator        — 聚合 7 个面板、管理选择状态（单选+多选）
 ├── EditorRenderController        — SceneRenderer + PostProcessing + MSAA
 ├── EditorViewportController      — EditorCamera + 3 个 Framebuffer（标准/HDR/拾取）
 ├── EditorSelectionGizmoController — ImGuizmo Gizmo 操控 + 悬停拾取
@@ -39,6 +39,7 @@ EditorLayer (主协调器)
 | 控制台 | ConsolePanel | "控制台" |
 | 资源浏览器 | AssetBrowserPanel | "资源浏览器" |
 | 渲染设置 | RenderSettingsPanel | "渲染设置" |
+| 脚本编辑器 | ScriptEditorPanel | "脚本编辑器" |
 
 ### PropertiesPanel 组件绘制策略
 

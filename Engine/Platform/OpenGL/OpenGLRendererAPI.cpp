@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLRendererAPI.h"
 #include "Core/Assert.h"
+#include "Renderer/RendererCapabilities.h"
 
 #include <glad/gl.h>
 
@@ -177,6 +178,76 @@ namespace Engine
     void OpenGLRendererAPI::SetBlendFunc(BlendFactor src, BlendFactor dst)
     {
         glBlendFunc(BlendFactorToGL(src), BlendFactorToGL(dst));
+    }
+
+    void OpenGLRendererAPI::SetBlend(bool enable)
+    {
+        if (enable)
+            glEnable(GL_BLEND);
+        else
+            glDisable(GL_BLEND);
+    }
+
+    bool OpenGLRendererAPI::GetBlendEnabled()
+    {
+        return glIsEnabled(GL_BLEND) == GL_TRUE;
+    }
+
+    void OpenGLRendererAPI::SetScissorTest(bool enable)
+    {
+        if (enable)
+            glEnable(GL_SCISSOR_TEST);
+        else
+            glDisable(GL_SCISSOR_TEST);
+    }
+
+    void OpenGLRendererAPI::SetColorMask(bool r, bool g, bool b, bool a)
+    {
+        glColorMask(r ? GL_TRUE : GL_FALSE, g ? GL_TRUE : GL_FALSE, b ? GL_TRUE : GL_FALSE, a ? GL_TRUE : GL_FALSE);
+    }
+
+    glm::vec4 OpenGLRendererAPI::GetClearColor()
+    {
+        GLfloat c[4];
+        glGetFloatv(GL_COLOR_CLEAR_VALUE, c);
+        return {c[0], c[1], c[2], c[3]};
+    }
+
+    void OpenGLRendererAPI::SetReadBuffer(uint32_t attachment)
+    {
+        glReadBuffer(GL_COLOR_ATTACHMENT0 + attachment);
+    }
+
+    void OpenGLRendererAPI::SetDrawBuffer(uint32_t attachment)
+    {
+        glDrawBuffer(GL_COLOR_ATTACHMENT0 + attachment);
+    }
+
+    void OpenGLRendererAPI::SetDrawBuffers(uint32_t count, const uint32_t* attachments)
+    {
+        GLenum bufs[8];
+        for (uint32_t i = 0; i < count && i < 8; ++i)
+            bufs[i] = GL_COLOR_ATTACHMENT0 + attachments[i];
+        glDrawBuffers(static_cast<GLsizei>(count), bufs);
+    }
+
+    void OpenGLRendererAPI::CopyFramebufferToTexture(uint32_t texID, uint32_t width, uint32_t height)
+    {
+        glBindTexture(GL_TEXTURE_2D, texID);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    void OpenGLRendererAPI::QueryCapabilities(RendererCapabilities& caps)
+    {
+        glGetIntegerv(GL_MAJOR_VERSION, &caps.MajorVersion);
+        glGetIntegerv(GL_MINOR_VERSION, &caps.MinorVersion);
+        caps.SupportsComputeShaders = (caps.MajorVersion > 4) || (caps.MajorVersion == 4 && caps.MinorVersion >= 3);
+
+        const char* vendor   = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        caps.VendorString    = vendor ? vendor : "";
+        caps.RendererString  = renderer ? renderer : "";
     }
 
 } // namespace Engine

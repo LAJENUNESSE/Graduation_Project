@@ -18,7 +18,7 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLVertexArray>();
         case RendererAPI::API::Vulkan:
-            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not yet implemented!");
+            ENGINE_CORE_WARN("[Vulkan] VertexArray not yet implemented, returning nullptr");
             return nullptr;
         }
 

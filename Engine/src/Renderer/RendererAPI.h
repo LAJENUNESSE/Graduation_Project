@@ -8,6 +8,8 @@
 namespace Engine
 {
 
+    struct RendererCapabilities;
+
     enum class DepthFunc
     {
         Less,
@@ -67,9 +69,26 @@ namespace Engine
         virtual void SetLineWidth(float width)                                                       = 0;
         virtual void BindTextureUnit(uint32_t slot, uint32_t textureID)                              = 0;
         virtual void BindCubemapUnit(uint32_t slot, uint32_t textureID)                              = 0;
-        virtual void ClearColorOnly()                                                                = 0;
-        virtual int  GetBoundFramebufferID()                                                         = 0;
-        virtual void BindFramebufferByID(int id)                                                     = 0;
+
+        // Vulkan path 资源绑定（OpenGL 实现默认 warn-once，不应被走到）。
+        // view / sampler 是 void* 透传 (VkImageView / VkSampler)，避免 vulkan.h 泄漏 Engine/src/。
+        // 用于 PBR pass IBL 采样：SceneRenderer 按 RendererAPI::GetAPI() 分派 Bind*Unit vs Bind*View。
+        virtual void BindCubemapView(uint32_t slot, void* view, void* sampler)
+        {
+            (void)slot;
+            (void)view;
+            (void)sampler;
+        }
+        virtual void BindTextureView(uint32_t slot, void* view, void* sampler)
+        {
+            (void)slot;
+            (void)view;
+            (void)sampler;
+        }
+
+        virtual void ClearColorOnly()            = 0;
+        virtual int  GetBoundFramebufferID()     = 0;
+        virtual void BindFramebufferByID(int id) = 0;
 
         // Compute Shader
         virtual void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1) = 0;
@@ -78,11 +97,28 @@ namespace Engine
         // Indirect Draw
         virtual void DrawArraysIndirect(uint32_t bufferID) = 0;
 
-        // Blend / Depth
+        // Blend / Depth / State
         virtual void SetDepthMask(bool enable)                      = 0;
         virtual void SetBlendFunc(BlendFactor src, BlendFactor dst) = 0;
+        virtual void SetBlend(bool enable)                          = 0;
+        virtual bool GetBlendEnabled()                              = 0;
+        virtual void SetScissorTest(bool enable)                    = 0;
+        virtual void SetColorMask(bool r, bool g, bool b, bool a)   = 0;
 
-        static API GetAPI() { return s_API; }
+        // Clear color
+        virtual glm::vec4 GetClearColor() = 0;
+
+        // FBO read/write
+        virtual void SetReadBuffer(uint32_t attachment)                                        = 0;
+        virtual void SetDrawBuffer(uint32_t attachment)                                        = 0;
+        virtual void SetDrawBuffers(uint32_t count, const uint32_t* attachments)               = 0;
+        virtual void CopyFramebufferToTexture(uint32_t texID, uint32_t width, uint32_t height) = 0;
+
+        // Capabilities
+        virtual void QueryCapabilities(RendererCapabilities& caps) = 0;
+
+        static API  GetAPI() { return s_API; }
+        static void SetAPI(API api) { s_API = api; }
 
     private:
         static API s_API;

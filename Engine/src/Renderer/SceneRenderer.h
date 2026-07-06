@@ -152,7 +152,7 @@ namespace Engine
         Ref<Shader>      m_SSAOBlurShader;
         Ref<Framebuffer> m_SSAOFBO;
         Ref<Framebuffer> m_SSAOBlurFBO;
-        uint32_t         m_SSAONoiseTexID   = 0;
+        Ref<Texture2D>   m_SSAONoiseTex;
         uint32_t         m_SSAOBlurredTexID = 0;
         bool             m_SSAOEnabled      = false;
         float            m_SSAORadius       = 0.5f;
