@@ -18,12 +18,14 @@
 namespace Engine
 {
 
-#ifdef ENGINE_ENABLE_VULKAN
     // ============================================================
     // Vulkan 资源（Pimpl，仅 Vulkan 后端使用）
+    // 注：struct 必须始终有定义体（即使为空），否则 Scope<VulkanResources>
+    //     的析构无法实例化 unique_ptr deleter（需要完整类型）。
     // ============================================================
     struct SpatialHashGrid::VulkanResources
     {
+#ifdef ENGINE_ENABLE_VULKAN
         // 三个 compute pipeline + 各自的 descriptor set layout
         VulkanComputePipelineHandle    HashPipeline{};
         VulkanComputePipelineHandle    PrefixSumPipeline{};
@@ -40,8 +42,8 @@ namespace Engine
         VkDevice Device = VK_NULL_HANDLE;
 
         bool Initialized = false;
-    };
 #endif
+    };
 
     // ============================================================
     // 构造 / 析构
