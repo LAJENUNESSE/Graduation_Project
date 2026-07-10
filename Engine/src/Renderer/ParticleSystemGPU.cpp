@@ -316,6 +316,16 @@ namespace Engine
         uint32_t baseInstance;
     };
 
+#ifdef ENGINE_ENABLE_CUDA
+    // 校验 C++/GLSL/CUDA 三端数据布局一致性
+    static_assert(sizeof(GPUParticleData) == sizeof(CudaInterop::GPUParticle),
+                  "GPUParticleData size mismatch between C++ and CUDA");
+    static_assert(sizeof(CounterData) == sizeof(CudaInterop::CounterData),
+                  "CounterData size mismatch between C++ and CUDA");
+    static_assert(sizeof(IndirectDrawCommand) == sizeof(CudaInterop::IndirectDrawCommand),
+                  "IndirectDrawCommand size mismatch between C++ and CUDA");
+#endif
+
 #ifdef ENGINE_ENABLE_VULKAN
     namespace
     {
