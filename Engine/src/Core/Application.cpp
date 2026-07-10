@@ -50,15 +50,6 @@ namespace Engine
         AssetManager::Init();
         PerformanceMonitor::Get().Init();
 
-#ifdef ENGINE_ENABLE_VULKAN_CUDA_INTEROP
-        // 初始化 VulkanExternalRuntime（骨架验证，静默降级）
-        if (!VulkanExternalRuntime::Get().Initialize())
-        {
-            ENGINE_CORE_WARN("[Particle][VkExtSkeleton] VulkanExternalRuntime initialization failed, "
-                             "falling back to default interop path");
-        }
-#endif
-
         auto imguiLayer = CreateScope<ImGuiLayer>();
         m_ImGuiLayer    = imguiLayer.get();
         PushOverlay(std::move(imguiLayer));
@@ -82,9 +73,6 @@ namespace Engine
         {
             PerformanceMonitor::Get().Shutdown();
             AssetManager::Shutdown();
-#ifdef ENGINE_ENABLE_VULKAN_CUDA_INTEROP
-            VulkanExternalRuntime::Get().Shutdown();
-#endif
         }
         Renderer::Shutdown();
         s_Instance = nullptr;
