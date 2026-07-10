@@ -30,15 +30,79 @@
 #include <vulkan/vulkan.h>
 #endif
 
+#ifdef ENGINE_ENABLE_CUDA
+#include "Platform/CUDA/CudaGLInteropContext.h"
+#include "Platform/CUDA/CudaParticlePipeline.h"
+#include "Platform/CUDA/CudaParticleTypes.h"
+#include "Platform/CUDA/CudaSPHPipeline.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
+#include "Platform/CUDA/CudaTimingHelper.h"
+#endif
+
 namespace Engine
 {
 
     // =========================================================================
-    // CudaImpl stub (CUDA removed)
+    // CudaImpl — CUDA-GL interop + 管线分派（CUDA 移除前的实现恢复）
     // =========================================================================
+#ifdef ENGINE_ENABLE_CUDA
     struct ParticleSystemGPU::CudaImpl
     {
-    }; // Empty stub
+        InteropBackend RequestedInteropBackend = InteropBackend::CudaGL;
+        InteropBackend ActiveInteropBackend    = InteropBackend::CudaGL;
+
+        Scope<CudaGLInteropContext> GLInterop;
+        bool                        UseCudaPath   = false;
+        bool                        InitAttempted = false;
+
+        int SlotParticle  = -1;
+        int SlotDeadList  = -1;
+        int SlotAliveList = -1;
+        int SlotCounter   = -1;
+        int SlotIndirect  = -1;
+
+        CudaTimingHelper Timing;
+        void*            SPHCtx = nullptr;
+
+        ~CudaImpl()
+        {
+            if (SPHCtx)
+                CudaInterop::DestroySPHContext(SPHCtx);
+            Timing.Destroy();
+        }
+
+        void* GetStream() const
+        {
+            if (GLInterop)
+                return GLInterop->GetStream();
+            return nullptr;
+        }
+
+        void* GetMappedPointer(int slot) const
+        {
+            if (GLInterop)
+                return GLInterop->GetMappedPointer(slot);
+            return nullptr;
+        }
+
+        bool MapAll()
+        {
+            if (GLInterop)
+                return GLInterop->MapAll();
+            return false;
+        }
+
+        void UnmapAll()
+        {
+            if (GLInterop)
+                GLInterop->UnmapAll();
+        }
+    };
+#else
+    struct ParticleSystemGPU::CudaImpl
+    {
+    }; // Empty stub when CUDA disabled
+#endif
 
     namespace
     {
