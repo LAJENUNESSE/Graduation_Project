@@ -605,6 +605,48 @@ namespace Engine
                         "force-enable.");
         }
 
+#ifdef ENGINE_ENABLE_CUDA
+        // ---- CUDA compute sidecar 初始化 ----
+        m_CudaImpl->RequestedInteropBackend = GetRequestedInteropBackend();
+
+        if (!m_CudaImpl->InitAttempted)
+        {
+            m_CudaImpl->InitAttempted = true;
+
+            if (m_CudaImpl->RequestedInteropBackend == InteropBackend::CudaGL &&
+                !CudaInterop::IsCudaPoisoned())
+            {
+                m_CudaImpl->GLInterop = CreateScope<CudaGLInteropContext>();
+                m_CudaImpl->SlotParticle =
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "ParticleBuffer");
+                m_CudaImpl->SlotDeadList =
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_DeadList->GetRendererID(), "DeadList");
+                m_CudaImpl->SlotAliveList =
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_AliveList->GetRendererID(), "AliveList");
+                m_CudaImpl->SlotCounter =
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_CounterBuffer->GetRendererID(), "CounterBuffer");
+                m_CudaImpl->SlotIndirect =
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_IndirectArgs->GetRendererID(), "IndirectArgs");
+
+                if (m_CudaImpl->SlotParticle >= 0 && m_CudaImpl->SlotDeadList >= 0 &&
+                    m_CudaImpl->SlotAliveList >= 0 && m_CudaImpl->SlotCounter >= 0 &&
+                    m_CudaImpl->SlotIndirect >= 0)
+                {
+                    m_CudaImpl->UseCudaPath = true;
+                    m_CudaImpl->Timing.Init();
+                    m_CudaImpl->SPHCtx =
+                        CudaInterop::CreateSPHContext(m_MaxParticles, 64, MAX_RIGID_BODIES);
+                    ENGINE_CORE_INFO("[CUDA] Particle初始化成功 ({0} slots)", m_CudaImpl->GLInterop->GetSlotCount());
+                }
+                else
+                {
+                    ENGINE_CORE_WARN("[CUDA] GL buffer 注册失败，回退到 GL Compute 路径");
+                    m_CudaImpl->GLInterop.reset();
+                }
+            }
+        }
+#endif
+
         m_Initialized = true;
     }
 
@@ -685,9 +727,93 @@ namespace Engine
 
         m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8); // emitCount
 
-        // GL Compute path
+        // GL Compute path（CUDA 路径在此之上，若成功则跳过）
         PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
 
+#ifdef ENGINE_ENABLE_CUDA
+        bool cudaRan = false;
+        if (!abConfig.ForceGL && m_CudaImpl->UseCudaPath &&
+            m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL &&
+            !CudaInterop::IsCudaPoisoned())
+        {
+            if (m_CudaImpl->MapAll())
+            {
+                m_TotalTime += dt;
+
+                void* stream       = m_CudaImpl->GetStream();
+                void* devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
+                void* devDeadList  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList);
+                void* devAliveList = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotAliveList);
+                void* devCounter   = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter);
+                void* devIndirect  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotIndirect);
+
+                // Clear aliveCount（CUDA kernel 中 atomicAdd 会累加）
+                uint32_t zero = 0;
+                cudaMemcpyAsync(static_cast<uint8_t*>(devCounter) + offsetof(CounterData, aliveCount),
+                                &zero, sizeof(uint32_t), cudaMemcpyHostToDevice,
+                                static_cast<cudaStream_t>(stream));
+
+                if (emitCount > 0)
+                {
+                    CudaInterop::EmitParams ep{};
+                    ep.emitterPos[0]    = emitterPos.x;
+                    ep.emitterPos[1]    = emitterPos.y;
+                    ep.emitterPos[2]    = emitterPos.z;
+                    ep.emitDirection[0] = emitter.EmitDirection.x;
+                    ep.emitDirection[1] = emitter.EmitDirection.y;
+                    ep.emitDirection[2] = emitter.EmitDirection.z;
+                    ep.emitAngle        = glm::radians(emitter.EmitAngle);
+                    ep.lifeMin          = std::max(emitter.LifeMin, 1e-6f);
+                    ep.lifeMax          = std::max(emitter.LifeMax, ep.lifeMin);
+                    ep.speedMin         = emitter.SpeedMin;
+                    ep.speedMax         = emitter.SpeedMax;
+                    ep.sizeStart        = emitter.SizeStart;
+                    ep.sizeEnd          = emitter.SizeEnd;
+                    ep.startColor[0]    = emitter.ColorStart.r;
+                    ep.startColor[1]    = emitter.ColorStart.g;
+                    ep.startColor[2]    = emitter.ColorStart.b;
+                    ep.startColor[3]    = emitter.ColorStart.a;
+                    ep.endColor[0]      = emitter.ColorEnd.r;
+                    ep.endColor[1]      = emitter.ColorEnd.g;
+                    ep.endColor[2]      = emitter.ColorEnd.b;
+                    ep.endColor[3]      = emitter.ColorEnd.a;
+                    ep.time             = m_TotalTime;
+                    ep.maxParticles     = m_MaxParticles;
+                    ep.emitCount        = emitCount;
+                    CudaInterop::LaunchEmit(devParticles, devDeadList, devCounter, ep,
+                                            static_cast<cudaStream_t>(stream));
+                }
+
+                CudaInterop::SimulateParams sp{};
+                sp.deltaTime    = clampedDt;
+                sp.gravity[0]   = emitter.Gravity.x;
+                sp.gravity[1]   = emitter.Gravity.y;
+                sp.gravity[2]   = emitter.Gravity.z;
+                sp.damping      = emitter.Damping;
+                sp.maxParticles = m_MaxParticles;
+                CudaInterop::LaunchSimulate(devParticles, devDeadList, devAliveList, devCounter, sp,
+                                            static_cast<cudaStream_t>(stream));
+
+                CudaInterop::LaunchRenderArgs(devCounter, devIndirect, static_cast<cudaStream_t>(stream));
+
+                m_CudaImpl->UnmapAll();
+                cudaRan = true;
+
+                if (CudaInterop::IsCudaPoisoned())
+                {
+                    ENGINE_WARN("[Particle] CUDA poisoned during compute; falling back to GL compute.");
+                    cudaRan = false;
+                }
+            }
+            else
+            {
+                ENGINE_WARN("[Particle] CUDA MapAll failed; falling back to GL compute.");
+            }
+        }
+
+        if (!cudaRan)
+#endif
+        {
         // Bind all buffers
         m_ParticleBuffer->Bind(0);
         m_DeadList->Bind(1);
@@ -927,6 +1053,8 @@ namespace Engine
         m_RenderArgsShader->Bind();
         RenderCommand::DispatchCompute(1);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage | BarrierBit::Command);
+
+        } // end if (!cudaRan) — CUDA path skips all GL compute above
 
         PerformanceMonitor::Get().GetParticleComputeGPUTimer().End();
 
