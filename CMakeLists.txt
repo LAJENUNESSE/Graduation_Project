@@ -18,6 +18,19 @@ option(ENGINE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for project target
 option(ENGINE_ENABLE_COMPILER_CACHE "Enable compiler cache launcher when available" ON)
 option(ENGINE_ENABLE_MSVC_MP "Enable /MP for MSVC C/C++ compilation" ON)
 option(ENGINE_ENABLE_VULKAN "Enable Vulkan rendering backend" OFF)
+option(ENGINE_ENABLE_CUDA "Enable CUDA compute sidecar for particle / SPH / fluid pipelines" OFF)
+
+# CUDA Configuration (optional)
+if(ENGINE_ENABLE_CUDA)
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        # 默认面向本地 RTX 3050 Ti (Ampere, CC 8.6)；可加 75 Turing / 89 Ada 覆盖更广设备
+        set(CMAKE_CUDA_ARCHITECTURES 86)
+    endif()
+endif()
 
 # Detect and enable compiler cache launcher (sccache/ccache) for local builds.
 if(ENGINE_ENABLE_COMPILER_CACHE)

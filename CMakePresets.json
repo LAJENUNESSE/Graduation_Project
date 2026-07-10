@@ -62,6 +62,15 @@
       }
     },
     {
+      "name": "vs2022-cuda",
+      "displayName": "Windows (VS 2022 + vcpkg + CUDA)",
+      "description": "实验性预设：启用 CUDA compute sidecar 加速粒子和流体管线。",
+      "inherits": "windows-vs2022",
+      "cacheVariables": {
+        "ENGINE_ENABLE_CUDA": "ON"
+      }
+    },
+    {
       "name": "default",
       "displayName": "Windows (VS 2022 + vcpkg)",
       "description": "默认 Windows 开发/CI 预设：启用严格 warning 与 warnings-as-errors。",
