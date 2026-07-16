@@ -92,9 +92,9 @@ namespace Engine
             }
             else if (Input::IsMouseButtonPressed(MouseCode::ButtonLeft))
             {
-                float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
-                m_Yaw += yawSign * delta.x * RotationSpeed();
-                m_Pitch += delta.y * RotationSpeed();
+                m_Yaw += delta.x * RotationSpeed();
+                m_Pitch = glm::clamp(m_Pitch + delta.y * RotationSpeed(), -glm::pi<float>() / 2.0f + 0.001f,
+                                     glm::pi<float>() / 2.0f - 0.001f);
             }
             else if (Input::IsMouseButtonPressed(MouseCode::ButtonRight))
             {
