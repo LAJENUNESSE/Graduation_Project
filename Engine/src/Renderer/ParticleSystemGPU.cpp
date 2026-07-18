@@ -731,7 +731,10 @@ namespace Engine
         PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
 
 #ifdef ENGINE_ENABLE_CUDA
-        bool cudaRan = false;
+        bool cudaEmitRan = false;
+        bool cudaRan     = false;
+
+        // ---- Pass 1: Emit (CUDA first MapAll/UnmapAll) ----
         if (!abConfig.ForceGL && m_CudaImpl->UseCudaPath &&
             m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL &&
             !CudaInterop::IsCudaPoisoned())
@@ -740,18 +743,15 @@ namespace Engine
             {
                 m_TotalTime += dt;
 
-                void* stream       = m_CudaImpl->GetStream();
-                void* devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
-                void* devDeadList  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList);
-                void* devAliveList = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotAliveList);
-                void* devCounter   = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter);
-                void* devIndirect  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotIndirect);
+                cudaStream_t strm        = static_cast<cudaStream_t>(m_CudaImpl->GetStream());
+                void*        devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
+                void*        devDeadList  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList);
+                void*        devCounter   = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter);
 
                 // Clear aliveCount（CUDA kernel 中 atomicAdd 会累加）
                 uint32_t zero = 0;
                 cudaMemcpyAsync(static_cast<uint8_t*>(devCounter) + offsetof(CounterData, aliveCount),
-                                &zero, sizeof(uint32_t), cudaMemcpyHostToDevice,
-                                static_cast<cudaStream_t>(stream));
+                                &zero, sizeof(uint32_t), cudaMemcpyHostToDevice, strm);
 
                 if (emitCount > 0)
                 {
@@ -780,21 +780,119 @@ namespace Engine
                     ep.time             = m_TotalTime;
                     ep.maxParticles     = m_MaxParticles;
                     ep.emitCount        = emitCount;
-                    CudaInterop::LaunchEmit(devParticles, devDeadList, devCounter, ep,
-                                            static_cast<cudaStream_t>(stream));
+                    CudaInterop::LaunchEmit(devParticles, devDeadList, devCounter, ep, strm);
                 }
 
+                m_CudaImpl->UnmapAll();
+                if (!CudaInterop::IsCudaPoisoned())
+                    cudaEmitRan = true;
+            }
+            else
+            {
+                ENGINE_WARN("[Particle] CUDA Pass 1 MapAll failed; falling back to GL compute.");
+            }
+        }
+
+        // ---- Pass 2 (SPH, optional) + Pass 3 (Simulate) + Pass 4 (Render Args)
+        //       CUDA second MapAll/UnmapAll——与 Pass 1 用同一份 stream，独立映射。
+        //       SPH 路径下重力被 PCISPH 内核处理，Simulate 传 gravity=0；WCSPH/non-SPH
+        //       走完整 emitter.Gravity。alive/dead list 由 Simulate 单步重建（rola中清零 aliveCount
+        //       在 Pass 1 已做），SPH 使用上一帧 m_LastAliveCount 做 dispatch（与 GL 一致延迟机制）。
+        if (cudaEmitRan && !CudaInterop::IsCudaPoisoned())
+        {
+            if (m_CudaImpl->MapAll())
+            {
+                cudaStream_t strm        = static_cast<cudaStream_t>(m_CudaImpl->GetStream());
+                void*        devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
+                void*        devDeadList  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList);
+                void*        devAliveList = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotAliveList);
+                void*        devCounter   = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter);
+                void*        devIndirect  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotIndirect);
+
+                // ---- Pass 2: SPH（仅 sphEnabled && 有存活粒子时跑）----
+                if (sphEnabled && m_LastAliveCount > 0)
+                {
+                    const SPHKernelParams kp       = SPHKernelParams::Compute(emitter.SPH.SmoothingRadius);
+                    const float           cellSize = m_Grid.GetCellSize();
+                    const int             gridSize = static_cast<int>(m_Grid.GetGridSize());
+
+                    CudaInterop::SPHParams sphP{};
+                    sphP.smoothingRadius = emitter.SPH.SmoothingRadius;
+                    sphP.poly6Coeff     = kp.poly6Coeff;
+                    sphP.spikyCoeff     = kp.spikyCoeff;
+                    sphP.particleMass   = emitter.SPH.ParticleMass;
+                    sphP.restDensity    = emitter.SPH.RestDensity;
+                    sphP.gasConstant    = emitter.SPH.GasConstant;
+                    sphP.viscosity      = emitter.SPH.Viscosity;
+                    sphP.surfaceTension = emitter.SPH.SurfaceTension;
+                    sphP.deltaTime      = clampedDt;
+                    sphP.gridSize       = gridSize;
+                    sphP.cellSize       = cellSize;
+                    sphP.aliveCount     = static_cast<int>(m_LastAliveCount);
+                    sphP.gravity[0]     = emitter.Gravity.x;
+                    sphP.gravity[1]     = emitter.Gravity.y;
+                    sphP.gravity[2]     = emitter.Gravity.z;
+                    sphP.warmupTime     = SPH_WARMUP_TIME;
+
+                    // Pass 2a: Grid Build (CUB ExclusiveSum 替代 GL 3-pass prefix sum)
+                    CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles,
+                                                   static_cast<uint32_t>(m_LastAliveCount), gridSize, cellSize, strm);
+
+                    if (emitter.SPH.PCISPHEnabled)
+                    {
+                        // Pass 2b: PCISPH path
+                        CudaInterop::PCISPHIterParams ip{};
+                        ip.pcisphDelta        = SPHKernelMath::ComputePCISPHDelta(emitter.SPH.SmoothingRadius,
+                                                                                  emitter.SPH.ParticleMass,
+                                                                                  emitter.SPH.RestDensity, clampedDt);
+                        ip.boundaryStiffness = emitter.SPH.BoundaryStiffness;
+                        ip.boundaryDamping    = emitter.SPH.BoundaryDamping;
+                        ip.rigidBodyCount    = 0; // task #3 待接：CUDA 路径下 RigidBody 上传
+                        ip.usePredictedPos   = 0;
+
+                        CudaInterop::LaunchPCISPHInit(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
+
+                        int iterations = std::clamp(emitter.SPH.PCISPHIterations, 1, 8);
+                        for (int iter = 0; iter < iterations; ++iter)
+                        {
+                            ip.usePredictedPos = (iter == 0) ? 0 : 1;
+                            CudaInterop::LaunchPCISPHPredict(m_CudaImpl->SPHCtx, devParticles, clampedDt,
+                                                             static_cast<int>(m_LastAliveCount), strm);
+                            CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+                            CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+                        }
+
+                        CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles,
+                                                       static_cast<int>(m_LastAliveCount), strm);
+                    }
+                    else
+                    {
+                        // Pass 2b alt: WCSPH Density + Force
+                        CudaInterop::PCISPHIterParams ip{};
+                        ip.boundaryStiffness = emitter.SPH.BoundaryStiffness;
+                        ip.boundaryDamping    = emitter.SPH.BoundaryDamping;
+                        ip.rigidBodyCount    = 0;
+                        ip.usePredictedPos   = 0;
+
+                        CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
+                        CudaInterop::LaunchSPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+                    }
+                }
+
+                // ---- Pass 3: Simulate（gravity 调整：PCISPH 内部已处理，传 0）----
+                glm::vec3 simGravity = (sphEnabled && emitter.SPH.PCISPHEnabled) ? glm::vec3(0.0f)
+                                                                                 : emitter.Gravity;
                 CudaInterop::SimulateParams sp{};
                 sp.deltaTime    = clampedDt;
-                sp.gravity[0]   = emitter.Gravity.x;
-                sp.gravity[1]   = emitter.Gravity.y;
-                sp.gravity[2]   = emitter.Gravity.z;
+                sp.gravity[0]   = simGravity.x;
+                sp.gravity[1]   = simGravity.y;
+                sp.gravity[2]   = simGravity.z;
                 sp.damping      = emitter.Damping;
                 sp.maxParticles = m_MaxParticles;
-                CudaInterop::LaunchSimulate(devParticles, devDeadList, devAliveList, devCounter, sp,
-                                            static_cast<cudaStream_t>(stream));
+                CudaInterop::LaunchSimulate(devParticles, devDeadList, devAliveList, devCounter, sp, strm);
 
-                CudaInterop::LaunchRenderArgs(devCounter, devIndirect, static_cast<cudaStream_t>(stream));
+                // ---- Pass 4: Render Args ----
+                CudaInterop::LaunchRenderArgs(devCounter, devIndirect, strm);
 
                 m_CudaImpl->UnmapAll();
                 cudaRan = true;
@@ -807,7 +905,7 @@ namespace Engine
             }
             else
             {
-                ENGINE_WARN("[Particle] CUDA MapAll failed; falling back to GL compute.");
+                ENGINE_WARN("[Particle] CUDA Pass 2 MapAll failed; falling back to GL compute.");
             }
         }
 
