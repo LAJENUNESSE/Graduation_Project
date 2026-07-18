@@ -62,5 +62,14 @@ namespace Engine
             }
         }
 
+        // ---- Internal:仅供单元测试使用，生产代码禁止调用 ----
+        // 中毒状态是单例 sticky 标志，正常情况下不可逆转。此函数仅用于在测试用例
+        // 之间隔离全局状态，名字以 Internal_ 为前缀警示误用。
+        inline void Internal_ResetPoisonForTests()
+        {
+            PoisonFlag().store(false, std::memory_order_relaxed);
+            PoisonReasonStorage() = nullptr;
+        }
+
     } // namespace CudaInterop
 } // namespace Engine

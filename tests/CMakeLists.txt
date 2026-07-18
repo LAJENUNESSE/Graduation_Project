@@ -67,6 +67,8 @@ add_executable(EngineTests
     src/TestSPHKernel.cpp
     src/TestSDFMath.cpp
     src/TestCommandHistory.cpp
+    src/TestCudaPoisonState.cpp
+    src/TestCudaParticleTypes.cpp
 )
 
 target_compile_features(EngineTests PUBLIC cxx_std_20)
@@ -81,6 +83,7 @@ target_include_directories(EngineTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/entt/single_include
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glm
     ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/spdlog/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Engine
     ${CMAKE_CURRENT_SOURCE_DIR}/../Engine/Platform
 )
 
