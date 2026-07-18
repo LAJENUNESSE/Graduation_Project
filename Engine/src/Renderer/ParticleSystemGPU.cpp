@@ -504,7 +504,6 @@ namespace Engine
 
     ParticleSystemGPU::InteropBackend ParticleSystemGPU::GetRequestedInteropBackend()
     {
-        // CUDA removed - always return CudaGL as placeholder
         return InteropBackend::CudaGL;
     }
 
@@ -512,19 +511,10 @@ namespace Engine
     {
         switch (backend)
         {
-        case InteropBackend::VulkanExternal:
-            return "VulkanExternal (deprecated)";
-        case InteropBackend::CudaVulkan:
-            return "CudaVulkan";
         case InteropBackend::CudaGL:
         default:
             return "CudaGL";
         }
-    }
-
-    bool ParticleSystemGPU::IsVkExtSkeletonReady()
-    {
-        return false;
     }
 
     void ParticleSystemGPU::Init()

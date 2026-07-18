@@ -44,18 +44,15 @@ namespace Engine
         static void             SetABConfigFromUI(bool forceGL, bool disableCounterReadback);
         static const char*      ABConfigSourceLabel(ABConfigSource source);
 
+        // CUDA-GL 互操作是当前唯一启用路径。Vulkan-CUDA 互操作与 VulkanExternal smoke
+        // kernel 已随 commit a18fd0c（2026-04-01）整体移除——若未来重做再加变体。
         enum class InteropBackend : uint8_t
         {
-            CudaGL         = 0,
-            VulkanExternal = 1, // Deprecated: use CudaVulkan instead
-            CudaVulkan     = 2  // CUDA-Vulkan external memory + timeline semaphore interop
+            CudaGL = 0
         };
 
         static InteropBackend GetRequestedInteropBackend();
         static const char*    InteropBackendLabel(InteropBackend backend);
-
-        /// 查询 VkExtSkeleton 运行时是否就绪（能力探测 + 自检通过）
-        static bool IsVkExtSkeletonReady();
 
         void Init();
         void Update(float                           dt,
