@@ -56,6 +56,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Shader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SpatialHashGrid.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SPHCommon.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/SPHRigidBodyCollector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/GPUAsyncReadback.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/IBLGenerator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/StorageBuffer.cpp

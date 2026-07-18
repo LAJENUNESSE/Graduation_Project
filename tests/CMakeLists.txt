@@ -31,6 +31,7 @@ add_library(EngineTestCore STATIC
     ${ENGINE_SRC_DIR}/Scene/WorldTransformService.cpp
     ${ENGINE_SRC_DIR}/Scene/SceneCamera.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../Editor/src/CommandHistory.cpp
+    ${ENGINE_SRC_DIR}/Renderer/SPHRigidBodyCollector.cpp
 )
 
 target_compile_features(EngineTestCore PUBLIC cxx_std_20)
@@ -69,6 +70,7 @@ add_executable(EngineTests
     src/TestCommandHistory.cpp
     src/TestCudaPoisonState.cpp
     src/TestCudaParticleTypes.cpp
+    src/TestSPHCommon.cpp
 )
 
 target_compile_features(EngineTests PUBLIC cxx_std_20)
