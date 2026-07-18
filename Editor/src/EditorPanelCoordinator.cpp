@@ -1,6 +1,7 @@
 #include "EditorPanelCoordinator.h"
 
 #include "Debug/PerformanceMonitor.h"
+#include "Platform/CUDA/CudaPoisonState.h"
 #include "Panels/AssetBrowserPanel.h"
 #include "Panels/ConsolePanel.h"
 #include "Panels/PropertiesPanel.h"
@@ -181,7 +182,11 @@ namespace Engine
         ImGui::Text("GPU 耗时 (上一帧):");
         ImGui::Text("  阴影Pass:  %.3f ms", pm.GetShadowPassGpuMs());
         ImGui::Text("  场景渲染:  %.3f ms", pm.GetSceneRenderGpuMs());
-        ImGui::Text("  粒子Compute: %.3f ms", pm.GetParticleComputeGpuMs());
+        ImGui::Text("  粒子Compute: %.3f ms (GL)", pm.GetParticleComputeGpuMs());
+        if (pm.IsParticleComputeCudaActive())
+            ImGui::Text("  粒子Compute: %.3f ms (CUDA)", pm.GetParticleComputeCudaMs());
+        else
+            ImGui::TextDisabled("  粒子Compute CUDA 通道未激活");
         {
             const auto ab = ParticleSystemGPU::GetABConfigSnapshot();
             ImGui::Text("  粒子AB: ForceGL=%d (%s), DisableReadback=%d (%s)", ab.ForceGL ? 1 : 0,
@@ -189,7 +194,31 @@ namespace Engine
                         ABSourceLabel(ab.DisableReadbackSource));
         }
         if (pm.IsFluidActive())
-            ImGui::Text("  流体Compute: %.3f ms", pm.GetFluidComputeGpuMs());
+        {
+            ImGui::Text("  流体Compute: %.3f ms (GL)", pm.GetFluidComputeGpuMs());
+            if (pm.IsFluidComputeCudaActive())
+                ImGui::Text("  流体Compute: %.3f ms (CUDA)", pm.GetFluidComputeCudaMs());
+            else
+                ImGui::TextDisabled("  流体Compute CUDA 通道未激活");
+        }
+        {
+            // Compute Backend 状态总览（演示用：观众能一眼看出 CUDA 路径是否启用 / 中毒回退到 GL）
+            const char* particleBackend = pm.IsParticleComputeCudaActive() ? "CudaGL" : "GL Compute";
+            const char* fluidBackend    = pm.IsFluidComputeCudaActive() ? "CudaGL" : "GL Compute";
+            const char* poisonReason    = CudaInterop::IsCudaPoisoned()
+                                              ? CudaInterop::GetCudaPoisonReason()
+                                              : nullptr;
+            ImGui::Separator();
+            ImGui::Text("Compute Backend:");
+            ImGui::Text("  粒子: %s", particleBackend);
+            ImGui::Text("  流体: %s", fluidBackend);
+            if (poisonReason)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 80, 80, 255));
+                ImGui::Text("  CUDA中毒: %s", poisonReason);
+                ImGui::PopStyleColor();
+            }
+        }
 
         if (m_SceneRenderer)
         {
