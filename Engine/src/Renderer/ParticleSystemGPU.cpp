@@ -746,6 +746,7 @@ namespace Engine
                 m_TotalTime += dt;
 
                 cudaStream_t strm        = static_cast<cudaStream_t>(m_CudaImpl->GetStream());
+                m_CudaImpl->Timing.RecordStart(strm);
                 void*        devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
                 void*        devDeadList  = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotDeadList);
                 void*        devCounter   = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter);
@@ -909,6 +910,7 @@ namespace Engine
                 // ---- Pass 4: Render Args ----
                 CudaInterop::LaunchRenderArgs(devCounter, devIndirect, strm);
 
+                m_CudaImpl->Timing.RecordStop(strm);
                 m_CudaImpl->UnmapAll();
                 cudaRan = true;
 
@@ -922,6 +924,18 @@ namespace Engine
             {
                 ENGINE_WARN("[Particle] CUDA Pass 2 MapAll failed; falling back to GL compute.");
             }
+        }
+
+        // 每帧 Swap CUDA ping-pong events，把上一帧已完成的耗时喂给 PerformanceMonitor。
+        // 第一帧或前一帧 stop 事件未就绪时 GetPrevElapsedMs 返回 -1，调用方应保留缓
+        // 存值——这里直接 set -1 等下次读，避免写入一个陈旧正数而误读为长帧。
+        if (m_CudaImpl->UseCudaPath && !CudaInterop::IsCudaPoisoned())
+        {
+            m_CudaImpl->Timing.SwapEvents();
+            float ms = m_CudaImpl->Timing.GetPrevElapsedMs();
+            if (ms >= 0.0f)
+                PerformanceMonitor::Get().SetParticleComputeCudaMs(ms);
+            PerformanceMonitor::Get().SetParticleComputeCudaActive(cudaRan);
         }
 
         if (!cudaRan)

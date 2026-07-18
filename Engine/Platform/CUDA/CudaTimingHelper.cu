@@ -3,6 +3,7 @@
 
 #include "Platform/CUDA/CudaTimingHelper.h"
 #include "Platform/CUDA/CudaParticlePipeline.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
 
 #include <algorithm>
 
@@ -17,13 +18,6 @@ namespace Engine
         PrevStop   = CudaInterop::CreateCudaEvent();
     }
 
-    void CudaTimingHelper::SwapEvents()
-    {
-        std::swap(EventStart, PrevStart);
-        std::swap(EventStop, PrevStop);
-        HasPrevTiming = true;
-    }
-
     void CudaTimingHelper::Destroy()
     {
         if (EventStart)
@@ -36,6 +30,34 @@ namespace Engine
             CudaInterop::DestroyCudaEvent(PrevStop);
         EventStart = EventStop = PrevStart = PrevStop = nullptr;
         HasPrevTiming                                 = false;
+    }
+
+    void CudaTimingHelper::RecordStart(void* stream)
+    {
+        if (!EventStart || CudaInterop::IsCudaPoisoned())
+            return;
+        CudaInterop::RecordCudaEvent(EventStart, stream);
+    }
+
+    void CudaTimingHelper::RecordStop(void* stream)
+    {
+        if (!EventStop || CudaInterop::IsCudaPoisoned())
+            return;
+        CudaInterop::RecordCudaEvent(EventStop, stream);
+    }
+
+    void CudaTimingHelper::SwapEvents()
+    {
+        std::swap(EventStart, PrevStart);
+        std::swap(EventStop, PrevStop);
+        HasPrevTiming = true;
+    }
+
+    float CudaTimingHelper::GetPrevElapsedMs() const
+    {
+        if (!HasPrevTiming || !PrevStart || !PrevStop)
+            return -1.0f;
+        return CudaInterop::CudaEventElapsedMs(PrevStart, PrevStop);
     }
 
 } // namespace Engine

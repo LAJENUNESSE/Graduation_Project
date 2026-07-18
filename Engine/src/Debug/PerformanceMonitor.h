@@ -68,7 +68,17 @@ namespace Engine
         void           SetFluidActive(bool v) { m_FluidActive = v; }
         bool           IsFluidActive() const { return m_FluidActive; }
 
-
+        // CUDA compute timing（由 ParticleSystemGPU/FluidSystemGPU 在 CUDA 路径下
+        // 通过 CudaTimingHelper event query 喂入——与 GL timer 一致采用 1 帧延迟；
+        // 未就绪时调用方保留上一帧缓存值）
+        void  SetParticleComputeCudaMs(float ms) { m_ParticleComputeCudaMs = ms; }
+        void  SetFluidComputeCudaMs(float ms) { m_FluidComputeCudaMs = ms; }
+        float GetParticleComputeCudaMs() const { return m_ParticleComputeCudaMs; }
+        float GetFluidComputeCudaMs() const { return m_FluidComputeCudaMs; }
+        bool  IsParticleComputeCudaActive() const { return m_ParticleComputeCudaActive; }
+        void  SetParticleComputeCudaActive(bool v) { m_ParticleComputeCudaActive = v; }
+        bool  IsFluidComputeCudaActive() const { return m_FluidComputeCudaActive; }
+        void  SetFluidComputeCudaActive(bool v) { m_FluidComputeCudaActive = v; }
 
         // Render stats (modified by RenderCommand::DrawIndexed)
         RenderStats&       GetStats() { return m_Stats; }
@@ -169,6 +179,12 @@ namespace Engine
         // Fluid GPU timers
         GPUTimerQuery m_FluidComputeGPU;
         bool          m_FluidActive = false;
+
+        // CUDA compute timing channels（与 GL timer 平行，独立通过 cudaEvent query 喂入）
+        float m_ParticleComputeCudaMs     = 0.0f;
+        float m_FluidComputeCudaMs       = 0.0f;
+        bool  m_ParticleComputeCudaActive = false;
+        bool  m_FluidComputeCudaActive    = false;
 
         // Render stats
         RenderStats m_Stats;
