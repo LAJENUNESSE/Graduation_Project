@@ -929,14 +929,22 @@ namespace Engine
         // 每帧 Swap CUDA ping-pong events，把上一帧已完成的耗时喂给 PerformanceMonitor。
         // 第一帧或前一帧 stop 事件未就绪时 GetPrevElapsedMs 返回 -1，调用方应保留缓
         // 存值——这里直接 set -1 等下次读，避免写入一个陈旧正数而误读为长帧。
-        if (m_CudaImpl->UseCudaPath && !CudaInterop::IsCudaPoisoned())
+        //
+        // SwapEvents 仅在 Pass 1+2 双成功（cudaRan=true）时执行——若 Pass 2 MapAll
+        // 失败但 Pass 1 已 RecordStart，start/stop 事件对不配对，Swap 后会让下一帧
+        // GetPrevElapsedMs 查到孤立 start，停事件未 record 时 cudaEventQuery 返回
+        // cudaErrorNotReady (经 CudaEventElapsedMs 转译为 -1)，仍能干净兜底但不严谨。
+        // 保守起见：未成对完成本帧时跳过 Swap，prev 槽位继续持有上一对有效事件。
+        if (cudaRan)
         {
             m_CudaImpl->Timing.SwapEvents();
             float ms = m_CudaImpl->Timing.GetPrevElapsedMs();
             if (ms >= 0.0f)
                 PerformanceMonitor::Get().SetParticleComputeCudaMs(ms);
-            PerformanceMonitor::Get().SetParticleComputeCudaActive(cudaRan);
         }
+        // CUDA Active 标记每帧 set 一次（含 GL fallback 时为 false），避免上一帧 true
+        // 状态在中毒后泄漏给 PerformanceMonitor 显示。
+        PerformanceMonitor::Get().SetParticleComputeCudaActive(cudaRan);
 
         if (!cudaRan)
 #endif
