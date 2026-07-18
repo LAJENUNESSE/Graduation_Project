@@ -112,6 +112,13 @@ namespace Engine
         void InitRigidBodyBuffer();
         void InitMeshSDFBuffer();
 
+        // CUDA 路径 Update 分派（成功返回 true，失败时 Update fall through 到 GL）
+        bool UpdateCuda(float                        clampedDt,
+                        const glm::vec3&             emitterPos,
+                        const FluidEmitterComponent& emitter,
+                        entt::registry*              registry,
+                        const SPHKernelParams&       kp);
+
         // CUDA compute sidecar（Pimpl 模式隐藏 CUDA 依赖）
         struct CudaImpl;
         Scope<CudaImpl> m_CudaImpl;

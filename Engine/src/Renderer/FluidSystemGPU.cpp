@@ -26,15 +26,57 @@
 #include <vulkan/vulkan.h>
 #endif
 
+#ifdef ENGINE_ENABLE_CUDA
+#include "Platform/CUDA/CudaGLInteropContext.h"
+#include "Platform/CUDA/CudaSPHPipeline.h"
+#include "Platform/CUDA/CudaParticlePipeline.h"
+#include "Platform/CUDA/CudaParticleTypes.h"
+#include "Platform/CUDA/CudaErrorHandling.h"
+#include "Platform/CUDA/CudaTimingHelper.h"
+#endif
+
 namespace Engine
 {
 
     // =========================================================================
     // CudaImpl stub (CUDA removed)
     // =========================================================================
+#ifdef ENGINE_ENABLE_CUDA
     struct FluidSystemGPU::CudaImpl
     {
-    }; // Empty stub
+        Scope<CudaGLInteropContext> GLInterop;
+        bool                        UseCudaPath   = false;
+        bool                        InitAttempted = false;
+
+        int     SlotParticle = -1;
+        void*   SPHCtx       = nullptr;
+
+        CudaTimingHelper Timing;
+
+        ~CudaImpl()
+        {
+            if (SPHCtx)
+                CudaInterop::DestroySPHContext(SPHCtx);
+            Timing.Destroy();
+        }
+
+        void* GetStream() const { return GLInterop ? GLInterop->GetStream() : nullptr; }
+        void* GetMappedPointer(int slot) const
+        {
+            return GLInterop ? GLInterop->GetMappedPointer(slot) : nullptr;
+        }
+        bool MapAll() { return GLInterop ? GLInterop->MapAll() : false; }
+        void UnmapAll()
+        {
+            if (GLInterop)
+                GLInterop->UnmapAll();
+        }
+    };
+#else
+    struct FluidSystemGPU::CudaImpl
+    {
+    }; // Empty stub when CUDA disabled
+#endif
 
     // MeshCollider Transform 哈希：用于检测碰撞体是否移动
     static size_t ComputeMeshColliderHash(entt::registry* registry)
@@ -238,6 +280,42 @@ namespace Engine
         }
 #endif
 
+#ifdef ENGINE_ENABLE_CUDA
+        // ---- CUDA compute sidecar 初始化（仅 OpenGL 路径 + 未强制 GL） ----
+        // fluid 没有 Particle 的 forceGL AB config；CUDA 路径默认开启，可通过
+        // 环境变量 ENGINE_FLUID_FORCE_GL=1 在诊断对比时停用走 GL compute。
+        if (!m_CudaImpl->InitAttempted && RendererAPI::GetAPI() == RendererAPI::API::OpenGL &&
+            !CudaInterop::IsCudaPoisoned())
+        {
+            m_CudaImpl->InitAttempted = true;
+
+            bool forceGL = false;
+            if (const char* env = std::getenv("ENGINE_FLUID_FORCE_GL"))
+                forceGL = (env[0] == '1');
+
+            if (!forceGL && CudaGLInteropContext::ProbeDeviceMatch())
+            {
+                m_CudaImpl->GLInterop  = CreateScope<CudaGLInteropContext>();
+                m_CudaImpl->SlotParticle =
+                    m_CudaImpl->GLInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "FluidParticleBuffer");
+
+                if (m_CudaImpl->SlotParticle >= 0)
+                {
+                    m_CudaImpl->UseCudaPath = true;
+                    m_CudaImpl->Timing.Init();
+                    m_CudaImpl->SPHCtx = CudaInterop::CreateSPHContext(m_ParticleCount, 64, MAX_RIGID_BODIES);
+                    ENGINE_CORE_INFO("[Fluid][CUDA] FluidSystemGPU CUDA 路径启用 ({0} slots)",
+                                     m_CudaImpl->GLInterop->GetSlotCount());
+                }
+                else
+                {
+                    ENGINE_WARN("[Fluid][CUDA] RegisterBuffer failed; CUDA path disabled");
+                    m_CudaImpl->GLInterop.reset();
+                }
+            }
+        }
+#endif
+
         m_Initialized = true;
     }
 
@@ -325,6 +403,18 @@ namespace Engine
 
         // CPU-side kernel constant precomputation
         SPHKernelParams kp = SPHKernelParams::Compute(emitter.SmoothingRadius);
+
+#ifdef ENGINE_ENABLE_CUDA
+        if (m_CudaImpl->UseCudaPath && !CudaInterop::IsCudaPoisoned())
+        {
+            bool cudaRan = UpdateCuda(clampedDt, emitterPos, emitter, registry, kp);
+            PerformanceMonitor::Get().SetFluidComputeCudaActive(cudaRan);
+            if (cudaRan)
+                return;
+            // CUDA 失败 → fall through 到 GL compute 路径
+        }
+        PerformanceMonitor::Get().SetFluidComputeCudaActive(false);
+#endif
 
         // ---- GL Compute 路径 ----
         PerformanceMonitor::Get().GetFluidComputeGPUTimer().Begin();
@@ -622,6 +712,157 @@ namespace Engine
 
         PerformanceMonitor::Get().SetFluidActive(true);
     }
+
+#ifdef ENGINE_ENABLE_CUDA
+    // =========================================================================
+    // CUDA 路径实现 —— SPH (Grid Build / Density / Force 或 PCISPH 全套) +
+    // FluidSimulate（积分 + 边界）。Emit 走 GL，Update 走 CUDA。失败时 fallback 到 GL。
+    //
+    // fluid 没有 Particle 的 dead list / counter buffer——所有 m_ParticleCount 个粒子
+    // 都是 alive 的，SPH 内核以 aliveCount=m_ParticleCount 直接 iterate particles[0..N-1]，
+    // 而 SPHCtx 内部维护 sortedIndices（CUB prefix sum 后的紧凑顺序）。
+    // =========================================================================
+    bool FluidSystemGPU::UpdateCuda(float                        clampedDt,
+                                    const glm::vec3&             emitterPos,
+                                    const FluidEmitterComponent& emitter,
+                                    entt::registry*              registry,
+                                    const SPHKernelParams&       kp)
+    {
+        if (!m_CudaImpl->GLInterop || !m_CudaImpl->SPHCtx)
+            return false;
+
+        if (!m_CudaImpl->MapAll())
+        {
+            ENGINE_WARN("[Fluid][CUDA] MapAll failed; falling back to GL compute.");
+            return false;
+        }
+
+        cudaStream_t strm        = static_cast<cudaStream_t>(m_CudaImpl->GetStream());
+        void*        devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
+        if (!devParticles)
+        {
+            m_CudaImpl->UnmapAll();
+            return false;
+        }
+
+        m_CudaImpl->Timing.RecordStart(strm);
+
+        const float cellSize = 2.0f * emitter.SmoothingRadius;
+        const int   gridSize = static_cast<int>(m_Grid.GetGridSize());
+
+        CudaInterop::SPHParams sphP{};
+        sphP.smoothingRadius = emitter.SmoothingRadius;
+        sphP.poly6Coeff     = kp.poly6Coeff;
+        sphP.spikyCoeff     = kp.spikyCoeff;
+        sphP.particleMass   = emitter.ParticleMass;
+        sphP.restDensity    = emitter.RestDensity;
+        sphP.gasConstant    = emitter.GasConstant;
+        sphP.viscosity      = emitter.Viscosity;
+        sphP.surfaceTension = emitter.SurfaceTension;
+        sphP.deltaTime      = clampedDt;
+        sphP.gridSize       = gridSize;
+        sphP.cellSize       = cellSize;
+        sphP.aliveCount     = static_cast<int>(m_ParticleCount);
+        sphP.gravity[0]     = emitter.Gravity.x;
+        sphP.gravity[1]     = emitter.Gravity.y;
+        sphP.gravity[2]     = emitter.Gravity.z;
+        sphP.warmupTime     = 0.0f; // fluid 永久存活，无 warm-up concept
+
+        // 收集刚体数据并上传到 SPHCtx
+        std::vector<GPURigidBodyData> rigidBodies;
+        if (emitter.RigidBodyCoupling && registry)
+        {
+            rigidBodies = CollectRigidBodies(registry, MAX_RIGID_BODIES, RigidBodyUploadFilter::AllColliders);
+            if (!rigidBodies.empty())
+                CudaInterop::SPHUploadRigidBodies(m_CudaImpl->SPHCtx, rigidBodies.data(),
+                                                  static_cast<uint32_t>(rigidBodies.size()));
+        }
+        const uint32_t rigidBodyCount = static_cast<uint32_t>(rigidBodies.size());
+
+        // 卧槽：fluid CUDA 路径暂不实现 Mesh SDF 体素耦合——Mesh SDF 在 CUDA 端需
+        // 体素 d_volume 复制进 SPHCtx，当前 CudaSPHPipeline 内核不接受 Mesh SDF。
+        // 留 TODO，需要时扩展 SPHContextImpl + ForceKernel。当前 meshSDFCoupling
+        // 在 CUDA 路径下静默失效。
+
+        // Pass a: Grid Build
+        CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles, m_ParticleCount, gridSize, cellSize, strm);
+
+        if (emitter.PCISPHEnabled)
+        {
+            // Pass b: PCISPH 全套
+            CudaInterop::PCISPHIterParams ip{};
+            ip.pcisphDelta        = SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
+                                                                      emitter.RestDensity, clampedDt);
+            ip.boundaryStiffness = emitter.BoundaryStiffness;
+            ip.boundaryDamping    = emitter.BoundaryDamping;
+            ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
+            ip.usePredictedPos   = 0;
+
+            CudaInterop::LaunchPCISPHInit(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
+
+            int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
+            for (int iter = 0; iter < iterations; ++iter)
+            {
+                ip.usePredictedPos = (iter == 0) ? 0 : 1;
+                CudaInterop::LaunchPCISPHPredict(m_CudaImpl->SPHCtx, devParticles, clampedDt,
+                                                 static_cast<int>(m_ParticleCount), strm);
+                CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+                CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+            }
+
+            CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles,
+                                           static_cast<int>(m_ParticleCount), strm);
+        }
+        else
+        {
+            // Pass b alt: WCSPH Density + Force
+            CudaInterop::PCISPHIterParams ip{};
+            ip.boundaryStiffness = emitter.BoundaryStiffness;
+            ip.boundaryDamping    = emitter.BoundaryDamping;
+            ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
+            ip.usePredictedPos   = 0;
+
+            CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
+            CudaInterop::LaunchSPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+        }
+
+        // Pass c: Fluid simulate（积分 + 边界约束）
+        CudaInterop::SPHSimulateParams sp{};
+        sp.deltaTime      = clampedDt;
+        sp.damping        = emitter.Damping;
+        sp.gravity[0]     = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.x;
+        sp.gravity[1]     = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.y;
+        sp.gravity[2]     = emitter.PCISPHEnabled ? 0.0f : emitter.Gravity.z;
+        sp.boundaryMin[0] = emitterPos.x + emitter.BoundaryMin.x;
+        sp.boundaryMin[1] = emitterPos.y + emitter.BoundaryMin.y;
+        sp.boundaryMin[2] = emitterPos.z + emitter.BoundaryMin.z;
+        sp.boundaryMax[0] = emitterPos.x + emitter.BoundaryMax.x;
+        sp.boundaryMax[1] = emitterPos.y + emitter.BoundaryMax.y;
+        sp.boundaryMax[2] = emitterPos.z + emitter.BoundaryMax.z;
+        sp.useBoundary    = emitter.UseBoundary ? 1 : 0;
+        sp.particleCount = static_cast<int>(m_ParticleCount);
+        CudaInterop::LaunchSPHSimulate(devParticles, sp, strm);
+
+        m_CudaImpl->Timing.RecordStop(strm);
+        m_CudaImpl->UnmapAll();
+
+        if (CudaInterop::IsCudaPoisoned())
+        {
+            ENGINE_WARN("[Fluid][CUDA] Compute poisoned during dispatch; falling back to GL compute.");
+            return false;
+        }
+
+        // 每帧 Swap CUDA ping-pong events，上一帧已完成的耗时喂给 PerformanceMonitor。
+        // cudaRan==true（双 Pass 都成功 RecordStop 后）才 Swap，避免孤立 start 事件污染下一帧。
+        m_CudaImpl->Timing.SwapEvents();
+        float ms = m_CudaImpl->Timing.GetPrevElapsedMs();
+        if (ms >= 0.0f)
+            PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
+
+        PerformanceMonitor::Get().SetFluidActive(true);
+        return true;
+    }
+#endif
 
 #ifdef ENGINE_ENABLE_VULKAN
     // =========================================================================
