@@ -324,6 +324,8 @@ namespace Engine
                   "CounterData size mismatch between C++ and CUDA");
     static_assert(sizeof(IndirectDrawCommand) == sizeof(CudaInterop::IndirectDrawCommand),
                   "IndirectDrawCommand size mismatch between C++ and CUDA");
+    static_assert(sizeof(GPURigidBodyData) == sizeof(CudaInterop::RigidBodyData),
+                  "GPURigidBodyData size mismatch between C++ and CUDA");
 #endif
 
 #ifdef ENGINE_ENABLE_VULKAN
@@ -749,9 +751,9 @@ namespace Engine
                 void*        devCounter   = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotCounter);
 
                 // Clear aliveCount（CUDA kernel 中 atomicAdd 会累加）
-                uint32_t zero = 0;
+                uint32_t zeroAlive = 0;
                 cudaMemcpyAsync(static_cast<uint8_t*>(devCounter) + offsetof(CounterData, aliveCount),
-                                &zero, sizeof(uint32_t), cudaMemcpyHostToDevice, strm);
+                                &zeroAlive, sizeof(uint32_t), cudaMemcpyHostToDevice, strm);
 
                 if (emitCount > 0)
                 {
@@ -834,6 +836,19 @@ namespace Engine
                     sphP.gravity[2]     = emitter.Gravity.z;
                     sphP.warmupTime     = SPH_WARMUP_TIME;
 
+                    // 收集刚体数据并上传到 SPHCtx->d_rigidBody，PCISPH/WCSPH 共用
+                    std::vector<GPURigidBodyData> rigidBodies;
+                    if (emitter.SPH.RigidBodyCoupling && registry)
+                    {
+                        rigidBodies = CollectRigidBodies(registry, MAX_RIGID_BODIES,
+                                                          RigidBodyUploadFilter::RequireRigidBodyComponent);
+                        if (!rigidBodies.empty())
+                            CudaInterop::SPHUploadRigidBodies(m_CudaImpl->SPHCtx, rigidBodies.data(),
+                                                              static_cast<uint32_t>(rigidBodies.size()));
+                    }
+                    // static_assert 在文件头已校验 GPURigidBodyData 与 CudaInterop::RigidBodyData 布局一致
+                    const uint32_t rigidBodyCount = static_cast<uint32_t>(rigidBodies.size());
+
                     // Pass 2a: Grid Build (CUB ExclusiveSum 替代 GL 3-pass prefix sum)
                     CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles,
                                                    static_cast<uint32_t>(m_LastAliveCount), gridSize, cellSize, strm);
@@ -847,7 +862,7 @@ namespace Engine
                                                                                   emitter.SPH.RestDensity, clampedDt);
                         ip.boundaryStiffness = emitter.SPH.BoundaryStiffness;
                         ip.boundaryDamping    = emitter.SPH.BoundaryDamping;
-                        ip.rigidBodyCount    = 0; // task #3 待接：CUDA 路径下 RigidBody 上传
+                        ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
                         ip.usePredictedPos   = 0;
 
                         CudaInterop::LaunchPCISPHInit(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
@@ -871,7 +886,7 @@ namespace Engine
                         CudaInterop::PCISPHIterParams ip{};
                         ip.boundaryStiffness = emitter.SPH.BoundaryStiffness;
                         ip.boundaryDamping    = emitter.SPH.BoundaryDamping;
-                        ip.rigidBodyCount    = 0;
+                        ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
                         ip.usePredictedPos   = 0;
 
                         CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
