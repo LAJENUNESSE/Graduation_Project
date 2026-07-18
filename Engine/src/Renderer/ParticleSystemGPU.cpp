@@ -129,6 +129,11 @@ namespace Engine
             bool UIForceGLTouched         = false;
             bool UIDisableReadbackTouched = false;
 
+            // Benchmark A/B 帧交替：env ENGINE_PARTICLE_AB_AUTO_ALTERNATE=1 启用，每帧按奇偶切换
+            // forceGL——偶数帧跑 CUDA，奇数帧跑 GL Compute，同屏两路 ms 形成实时对比。
+            bool     AutoAlternateEnabled = false;
+            uint64_t AutoAlternateFrameIdx = 0;
+
             bool                              LastLogValid        = false;
             bool                              LastForceGL         = false;
             bool                              LastDisableReadback = false;
@@ -229,6 +234,11 @@ namespace Engine
             auto& state    = GetParticleABRuntimeState();
             auto  snapshot = ResolveParticleABConfigSnapshot();
 
+            // Auto-alternate 模式会按奇偶帧持续切换 forceGL，禁用变更日志避免 stdout 刷屏
+            // （init 时的 "Auto-alternate enabled" INFO 仍会打一次）。
+            if (state.AutoAlternateEnabled)
+                return;
+
             if (state.LastLogValid && state.LastForceGL == snapshot.ForceGL &&
                 state.LastDisableReadback == snapshot.DisableCounterReadback &&
                 state.LastForceSource == snapshot.ForceGLSource &&
@@ -284,7 +294,34 @@ namespace Engine
                 }
             }
 
+            if (const char* rawAutoAlt = std::getenv("ENGINE_PARTICLE_AB_AUTO_ALTERNATE"))
+            {
+                bool value = false;
+                if (TryParseBoolEnv(rawAutoAlt, value) && value)
+                {
+                    state.AutoAlternateEnabled = true;
+                    ENGINE_CORE_INFO(
+                        "[Particle][AB] Auto-alternate enabled (even frames: CUDA, odd frames: GL compute).");
+                }
+            }
+
             LogParticleABSummaryIfChanged("Init");
+        }
+
+        // 每帧轮换 forceGL 用于 Benchmark A/B 对比（不覆盖 env lock 与 UI 手动操作）。
+        // 调用方：ParticleSystemGPU::Update 开头，在 GetABConfigSnapshot 之前。
+        void TickParticleAutoAlternateIfNeeded()
+        {
+            auto& state = GetParticleABRuntimeState();
+            if (!state.AutoAlternateEnabled)
+                return;
+
+            // 奇数帧 forceGL=true → GL compute，偶数帧 forceGL=false → CUDA 路径
+            // （与 Init 时 OwneredInterop 设置对应 CUDA 真启用）
+            bool oddFrame = (state.AutoAlternateFrameIdx & 1ULL) != 0;
+            state.UIForceGLTouched = true;
+            state.UIForceGLValue    = oddFrame;
+            state.AutoAlternateFrameIdx++;
         }
     } // namespace
 
@@ -698,6 +735,7 @@ namespace Engine
         }
 #endif
 
+        TickParticleAutoAlternateIfNeeded();
         const ABConfigSnapshot abConfig = GetABConfigSnapshot();
 
         float counterReadbackCpuMs = 0.0f;
