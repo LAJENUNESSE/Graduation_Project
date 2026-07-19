@@ -22,6 +22,7 @@ namespace Engine
             ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to map VMA allocation");
 
             std::memcpy(static_cast<uint8_t*>(mappedData) + offset, data, size);
+            vmaFlushAllocation(VulkanAllocator::GetAllocator(), allocation, offset, size);
             vmaUnmapMemory(VulkanAllocator::GetAllocator(), allocation);
         }
 
@@ -162,6 +163,7 @@ namespace Engine
         const VkResult result     = vmaMapMemory(VulkanAllocator::GetAllocator(), m_Allocation, &mappedData);
         ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to map VMA allocation");
 
+        vmaInvalidateAllocation(VulkanAllocator::GetAllocator(), m_Allocation, offset, size);
         std::memcpy(outData, static_cast<const uint8_t*>(mappedData) + offset, size);
         vmaUnmapMemory(VulkanAllocator::GetAllocator(), m_Allocation);
     }
@@ -173,6 +175,7 @@ namespace Engine
         ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to map VMA allocation");
 
         std::memset(mappedData, 0, m_Size);
+        vmaFlushAllocation(VulkanAllocator::GetAllocator(), m_Allocation, 0, m_Size);
         vmaUnmapMemory(VulkanAllocator::GetAllocator(), m_Allocation);
     }
 

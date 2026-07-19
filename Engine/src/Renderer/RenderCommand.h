@@ -91,6 +91,7 @@ namespace Engine
         }
 
         static void MemoryBarrier(uint32_t barriers) { s_RendererAPI->MemoryBarrier(barriers); }
+        static void WaitIdle() { s_RendererAPI->WaitIdle(); }
 
         static void DrawArraysIndirect(uint32_t bufferID)
         {

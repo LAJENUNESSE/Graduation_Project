@@ -473,10 +473,28 @@ namespace Engine
         if (!m_Initialized || !m_BackendReady || !m_ParticleBuffer || particles.size() != m_ParticleCount)
             return false;
 
+        RenderCommand::WaitIdle();
         m_ParticleBuffer->SetData(particles.data(),
                                   static_cast<uint32_t>(particles.size() * sizeof(FluidBenchmarkParticle)));
         m_TotalTime        = 0.0f;
         m_LastTimingSample = {};
+        return true;
+    }
+
+    bool FluidSystemGPU::ReadBenchmarkParticles(std::vector<FluidBenchmarkParticle>& particles,
+                                                std::string&                         error) const
+    {
+        error.clear();
+        if (!m_Initialized || !m_BackendReady || !m_ParticleBuffer)
+        {
+            error = m_BackendFailureReason.empty() ? "fluid backend is not ready" : m_BackendFailureReason;
+            return false;
+        }
+
+        RenderCommand::WaitIdle();
+        particles.resize(m_ParticleCount);
+        m_ParticleBuffer->GetData(particles.data(),
+                                  static_cast<uint32_t>(particles.size() * sizeof(FluidBenchmarkParticle)));
         return true;
     }
 

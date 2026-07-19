@@ -142,6 +142,11 @@ namespace Engine
         glMemoryBarrier(barriers);
     }
 
+    void OpenGLRendererAPI::WaitIdle()
+    {
+        glFinish();
+    }
+
     void OpenGLRendererAPI::DrawArraysIndirect(uint32_t bufferID)
     {
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, bufferID);

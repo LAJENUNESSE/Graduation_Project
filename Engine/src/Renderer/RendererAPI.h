@@ -93,6 +93,7 @@ namespace Engine
         // Compute Shader
         virtual void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1) = 0;
         virtual void MemoryBarrier(uint32_t barriers)                                              = 0;
+        virtual void WaitIdle()                                                                    = 0;
 
         // Indirect Draw
         virtual void DrawArraysIndirect(uint32_t bufferID) = 0;

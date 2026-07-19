@@ -30,6 +30,7 @@ namespace Engine
 
         void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1) override;
         void MemoryBarrier(uint32_t barriers) override;
+        void WaitIdle() override;
 
         void DrawArraysIndirect(uint32_t bufferID) override;
 

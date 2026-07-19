@@ -18,6 +18,7 @@ namespace Engine
     namespace
     {
         constexpr uint32_t kTimingPrimingSamples = 2;
+        constexpr uint32_t kCorrectnessFrames    = 120;
 
         bool IsFinite(const glm::vec4& value)
         {
@@ -93,6 +94,32 @@ namespace Engine
 
     void FluidBenchmarkLayer::OnUpdate(Timestep timestep)
     {
+        if (m_State == State::PrepareCorrectness)
+        {
+            if (!m_FluidSystem->SetBenchmarkParticles(m_InitialParticles))
+            {
+                Fail("failed to reset deterministic state before correctness validation");
+                return;
+            }
+            m_CorrectnessFrames = 0;
+            m_State             = State::CorrectnessRun;
+            return;
+        }
+        if (m_State == State::CorrectnessRun)
+        {
+            m_FluidSystem->Update(m_Config.FixedDeltaTime, glm::vec3(0.0f), m_Emitter, nullptr);
+            if (!m_FluidSystem->IsBackendReady() ||
+                m_FluidSystem->GetActiveBackend() != ToComputeBackend(m_Config.Backend))
+            {
+                Fail("backend failed during correctness validation: " + m_FluidSystem->GetBackendFailureReason());
+                return;
+            }
+
+            ++m_CorrectnessFrames;
+            if (m_CorrectnessFrames >= kCorrectnessFrames)
+                m_State = State::FinalizeRun;
+            return;
+        }
         if (m_State == State::FinalizeRun)
         {
             FinalizeRun();
@@ -134,7 +161,7 @@ namespace Engine
         m_Samples.push_back(std::move(row));
 
         if (m_Samples.size() >= m_Config.SampleFrames)
-            m_State = State::FinalizeRun;
+            m_State = State::PrepareCorrectness;
     }
 
     bool FluidBenchmarkLayer::OpenOutput()
@@ -181,12 +208,12 @@ namespace Engine
         return true;
     }
 
-    FluidBenchmarkLayer::CorrectnessResult FluidBenchmarkLayer::ReadCorrectness() const
+    bool FluidBenchmarkLayer::ReadCorrectness(CorrectnessResult& result, std::string& error) const
     {
-        CorrectnessResult                   result;
-        std::vector<FluidBenchmarkParticle> particles(m_Config.ParticleCount);
-        m_FluidSystem->GetParticleBuffer()->GetData(
-            particles.data(), static_cast<uint32_t>(particles.size() * sizeof(FluidBenchmarkParticle)));
+        result = {};
+        std::vector<FluidBenchmarkParticle> particles;
+        if (!m_FluidSystem->ReadBenchmarkParticles(particles, error))
+            return false;
 
         double densitySum        = 0.0;
         double densityErrorSqSum = 0.0;
@@ -217,12 +244,18 @@ namespace Engine
             result.RMSDensityError = std::sqrt(densityErrorSqSum / static_cast<double>(particles.size()));
         }
         result.StateHash = HashFluidBenchmarkParticles(particles);
-        return result;
+        return true;
     }
 
     void FluidBenchmarkLayer::FinalizeRun()
     {
-        const CorrectnessResult correctness = ReadCorrectness();
+        CorrectnessResult correctness;
+        std::string       readError;
+        if (!ReadCorrectness(correctness, readError))
+        {
+            Fail("correctness readback failed in run " + std::to_string(m_RunIndex) + ": " + readError);
+            return;
+        }
         if (!correctness.Finite || correctness.AliveCount != m_Config.ParticleCount)
         {
             Fail("correctness validation failed in run " + std::to_string(m_RunIndex) +

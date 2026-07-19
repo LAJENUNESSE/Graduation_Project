@@ -27,6 +27,8 @@ namespace Engine
         enum class State
         {
             Running,
+            PrepareCorrectness,
+            CorrectnessRun,
             FinalizeRun,
             Finished,
             Failed
@@ -52,12 +54,12 @@ namespace Engine
             bool     Finite           = true;
         };
 
-        bool              OpenOutput();
-        bool              StartRun();
-        CorrectnessResult ReadCorrectness() const;
-        void              FinalizeRun();
-        void              WriteRunRows(const CorrectnessResult& correctness);
-        void              Fail(const std::string& reason, int exitCode = 3);
+        bool OpenOutput();
+        bool StartRun();
+        bool ReadCorrectness(CorrectnessResult& result, std::string& error) const;
+        void FinalizeRun();
+        void WriteRunRows(const CorrectnessResult& correctness);
+        void Fail(const std::string& reason, int exitCode = 3);
 
         static FluidComputeBackend ToComputeBackend(FluidBenchmarkBackend backend);
         static std::string         CurrentTimestamp();
@@ -75,6 +77,7 @@ namespace Engine
         uint32_t                            m_RunIndex           = 1;
         uint32_t                            m_PrimingSamples     = 0;
         uint32_t                            m_WarmupSamples      = 0;
+        uint32_t                            m_CorrectnessFrames  = 0;
         uint64_t                            m_LastTimingSequence = 0;
     };
 

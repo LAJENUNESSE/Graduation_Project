@@ -72,6 +72,7 @@ namespace Engine
                     const FluidEmitterComponent& emitter,
                     entt::registry*              registry = nullptr);
         bool SetBenchmarkParticles(const std::vector<FluidBenchmarkParticle>& particles);
+        bool ReadBenchmarkParticles(std::vector<FluidBenchmarkParticle>& particles, std::string& error) const;
 
         uint32_t                             GetParticleCount() const { return m_ParticleCount; }
         Ref<ShaderStorageBuffer>             GetParticleBuffer() const { return m_ParticleBuffer; }

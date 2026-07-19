@@ -265,6 +265,13 @@ namespace Engine
         (void)barriers;
     }
 
+    void VulkanRendererAPI::WaitIdle()
+    {
+        auto* context = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(context != nullptr, "VulkanContext must be initialized before WaitIdle");
+        vkDeviceWaitIdle(context->GetDevice());
+    }
+
     void VulkanRendererAPI::DrawArraysIndirect(uint32_t bufferID)
     {
         (void)bufferID;
