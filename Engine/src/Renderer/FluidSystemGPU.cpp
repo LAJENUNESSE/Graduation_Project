@@ -454,6 +454,17 @@ namespace Engine
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
     }
 
+    bool FluidSystemGPU::SetBenchmarkParticles(const std::vector<FluidBenchmarkParticle>& particles)
+    {
+        if (!m_Initialized || !m_BackendReady || !m_ParticleBuffer || particles.size() != m_ParticleCount)
+            return false;
+
+        m_ParticleBuffer->SetData(particles.data(),
+                                  static_cast<uint32_t>(particles.size() * sizeof(FluidBenchmarkParticle)));
+        m_TotalTime = 0.0f;
+        return true;
+    }
+
     void FluidSystemGPU::Update(float                        dt,
                                 const glm::vec3&             emitterPos,
                                 const FluidEmitterComponent& emitter,

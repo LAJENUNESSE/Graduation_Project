@@ -40,6 +40,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Reflection/ComponentRegistry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/EditorCamera.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/FluidBenchmarkData.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/FluidRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/FluidSystemGPU.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Renderer/Framebuffer.cpp

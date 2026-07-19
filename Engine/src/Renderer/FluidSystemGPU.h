@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Renderer/GPUAsyncReadback.h"
+#include "Renderer/FluidBenchmarkData.h"
 #include "Renderer/Shader.h"
 #include "Renderer/SPHCommon.h"
 #include "Renderer/SpatialHashGrid.h"
@@ -61,6 +62,7 @@ namespace Engine
                     const glm::vec3&             emitterPos,
                     const FluidEmitterComponent& emitter,
                     entt::registry*              registry = nullptr);
+        bool SetBenchmarkParticles(const std::vector<FluidBenchmarkParticle>& particles);
 
         uint32_t                             GetParticleCount() const { return m_ParticleCount; }
         Ref<ShaderStorageBuffer>             GetParticleBuffer() const { return m_ParticleBuffer; }

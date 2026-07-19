@@ -27,6 +27,7 @@ add_library(EngineTestCore STATIC
     ${ENGINE_SRC_DIR}/Core/UUID.cpp
     ${ENGINE_SRC_DIR}/Core/Log.cpp
     ${ENGINE_SRC_DIR}/Core/FluidBenchmarkConfig.cpp
+    ${ENGINE_SRC_DIR}/Renderer/FluidBenchmarkData.cpp
     ${ENGINE_SRC_DIR}/Scene/SceneEntityIndex.cpp
     ${ENGINE_SRC_DIR}/Scene/SceneHierarchyService.cpp
     ${ENGINE_SRC_DIR}/Scene/WorldTransformService.cpp
@@ -70,6 +71,7 @@ add_executable(EngineTests
     src/TestSDFMath.cpp
     src/TestCommandHistory.cpp
     src/TestFluidBenchmarkConfig.cpp
+    src/TestFluidBenchmarkData.cpp
     src/TestCudaPoisonState.cpp
     src/TestCudaParticleTypes.cpp
     src/TestSPHCommon.cpp
