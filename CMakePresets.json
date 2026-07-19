@@ -71,6 +71,19 @@
       }
     },
     {
+      "name": "vs2022-benchmark",
+      "displayName": "Windows (VS 2022 + Vulkan + CUDA Benchmark)",
+      "description": "本地论文实验预设：同时编译 OpenGL、Vulkan Compute 与 CUDA Sidecar，不用于 CI。",
+      "inherits": "windows-vs2022",
+      "environment": {
+        "VULKAN_SDK": "C:/Dev/Environments/VulkanSDK/1.4.341.1"
+      },
+      "cacheVariables": {
+        "ENGINE_ENABLE_VULKAN": "ON",
+        "ENGINE_ENABLE_CUDA": "ON"
+      }
+    },
+    {
       "name": "default",
       "displayName": "Windows (VS 2022 + vcpkg)",
       "description": "默认 Windows 开发/CI 预设：启用严格 warning 与 warnings-as-errors。",
