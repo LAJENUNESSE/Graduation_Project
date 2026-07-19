@@ -14,6 +14,7 @@ param(
     [uint32]$Seed = 42,
     [string]$OutputDirectory = "benchmark/results",
     [switch]$Quick,
+    [switch]$Resume,
     [switch]$DryRun
 )
 
@@ -37,6 +38,54 @@ New-Item -ItemType Directory -Force -Path $resultRoot | Out-Null
 $rawResult = Join-Path $resultRoot "raw_results.csv"
 $partFiles = [System.Collections.Generic.List[string]]::new()
 
+function Test-CompleteResult {
+    param(
+        [string]$Path,
+        [string]$ExpectedBackend,
+        [string]$ExpectedSolver,
+        [uint32]$ExpectedParticles,
+        [uint32]$ExpectedIterations,
+        [uint32]$ExpectedWarmup,
+        [uint32]$ExpectedFrames,
+        [uint32]$ExpectedRuns
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $false
+    }
+
+    try {
+        $rows = @(Import-Csv -LiteralPath $Path)
+        if ($rows.Count -ne ($ExpectedFrames * $ExpectedRuns)) {
+            return $false
+        }
+
+        $sampleKeys = [System.Collections.Generic.HashSet[string]]::new()
+        foreach ($row in $rows) {
+            if (($row.Backend.ToLowerInvariant() -ne $ExpectedBackend) -or
+                ($row.Solver.ToLowerInvariant() -ne $ExpectedSolver) -or
+                ([uint32]$row.Particles -ne $ExpectedParticles) -or
+                ([uint32]$row.Iterations -ne $ExpectedIterations) -or
+                ([uint32]$row.Warmup -ne $ExpectedWarmup) -or
+                ([uint32]$row.Frame -lt 1) -or
+                ([uint32]$row.Frame -gt $ExpectedFrames) -or
+                ([uint32]$row.Run -lt 1) -or
+                ([uint32]$row.Run -gt $ExpectedRuns) -or
+                ($row.SampleValid -ne "1")) {
+                return $false
+            }
+            if (-not $sampleKeys.Add(("{0}:{1}" -f $row.Run, $row.Frame))) {
+                return $false
+            }
+        }
+    }
+    catch {
+        return $false
+    }
+
+    return $true
+}
+
 foreach ($backend in $Backends) {
     foreach ($solver in $Solvers) {
         foreach ($particleCount in $Particles) {
@@ -58,6 +107,20 @@ foreach ($backend in $Backends) {
             Write-Host ("[benchmark] {0} {1} particles={2}" -f $backend, $solver, $particleCount)
             if ($DryRun) {
                 Write-Host ("  {0} {1}" -f $editorPath, ($benchmarkArgs -join " "))
+                continue
+            }
+
+            if ($Resume -and (Test-CompleteResult `
+                    -Path $partFile `
+                    -ExpectedBackend $backend `
+                    -ExpectedSolver $solver `
+                    -ExpectedParticles $particleCount `
+                    -ExpectedIterations $Iterations `
+                    -ExpectedWarmup $Warmup `
+                    -ExpectedFrames $Frames `
+                    -ExpectedRuns $Runs)) {
+                Write-Host "  complete result found; skipping"
+                $partFiles.Add($partFile)
                 continue
             }
 

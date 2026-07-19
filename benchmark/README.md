@@ -19,6 +19,12 @@
 ./benchmark/run_matrix.ps1
 ```
 
+正式矩阵耗时较长，可使用 `-Resume` 复用配置完全匹配且样本完整的分组结果；不完整、参数不匹配或含无效样本的分组会自动重跑：
+
+```powershell
+./benchmark/run_matrix.ps1 -Resume
+```
+
 运行器会为每个后端、求解器和粒子数启动独立的 `Editor.exe` 进程，并将分组文件合并为
 `benchmark/results/raw_results.csv`。结果目录是本地实验产物，不提交到 Git。
 
