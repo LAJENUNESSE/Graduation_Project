@@ -192,7 +192,11 @@ namespace Engine
         Ref<VulkanDescriptorSetLayout> SimulateLayout;
         VulkanComputePipelineHandle    EmitPipeline{};
         VulkanComputePipelineHandle    SimulatePipeline{};
-        Ref<VulkanDescriptorPool>      Pool;
+        Ref<VulkanDescriptorPool>      Pools[2];
+        VkQueryPool                    TimestampPool       = VK_NULL_HANDLE;
+        float                          TimestampPeriodNs   = 0.0f;
+        uint32_t                       TimestampValidBits  = 0;
+        bool                           TimestampWritten[2] = {false, false};
 
         // ---- SPH 7 pipeline ----
         bool                           SPHInitialized = false;
@@ -392,6 +396,16 @@ namespace Engine
             ENGINE_CORE_ERROR("[Fluid][CUDA] Strict backend request failed: {}", m_BackendFailureReason);
             return;
         }
+
+#ifdef ENGINE_ENABLE_VULKAN
+        if (m_ActiveBackend == FluidComputeBackend::Vulkan && !InitVulkanComputeResources())
+        {
+            m_BackendReady = false;
+            m_Initialized  = true;
+            ENGINE_CORE_ERROR("[Fluid][Vulkan] Strict backend request failed: {}", m_BackendFailureReason);
+            return;
+        }
+#endif
 
         m_BackendReady = true;
         m_Initialized  = true;
@@ -1044,10 +1058,48 @@ namespace Engine
 
         // 容量扩到 256：emit+simulate ≤ 2/帧；SPH 路径 PCISPH 8 迭代 × 3 dispatch + density/init/apply + warmup
         // 余量 ≈ 32 set/帧（保险 ×8 倍）。pool 创建按 sets/type 论参数，最终 maxSets = N×8。
-        m_VulkanResources->Pool = VulkanDescriptorPool::CreateDefaultComputePool(m_VulkanResources->Device, 256);
+        for (auto& pool : m_VulkanResources->Pools)
+            pool = VulkanDescriptorPool::CreateDefaultComputePool(m_VulkanResources->Device, 256);
+
+        auto failTimestampSetup = [&](const std::string& reason)
+        {
+            m_BackendFailureReason         = reason;
+            m_VulkanResources->Initialized = true;
+            ENGINE_CORE_ERROR("[Fluid][Vulkan] {}", m_BackendFailureReason);
+            DestroyVulkanComputeResources();
+            return false;
+        };
+
+        VkPhysicalDeviceProperties deviceProperties{};
+        vkGetPhysicalDeviceProperties(ctx->GetPhysicalDevice(), &deviceProperties);
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(ctx->GetPhysicalDevice(), &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(ctx->GetPhysicalDevice(), &queueFamilyCount, queueFamilies.data());
+
+        const uint32_t graphicsQueueFamily = ctx->GetGraphicsQueueFamily();
+        if (!deviceProperties.limits.timestampComputeAndGraphics || graphicsQueueFamily >= queueFamilies.size() ||
+            queueFamilies[graphicsQueueFamily].timestampValidBits == 0)
+        {
+            return failTimestampSetup("Vulkan compute timestamps are not supported by the active graphics queue");
+        }
+
+        VkQueryPoolCreateInfo queryInfo{};
+        queryInfo.sType      = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+        queryInfo.queryType  = VK_QUERY_TYPE_TIMESTAMP;
+        queryInfo.queryCount = 4;
+        if (vkCreateQueryPool(m_VulkanResources->Device, &queryInfo, nullptr, &m_VulkanResources->TimestampPool) !=
+            VK_SUCCESS)
+        {
+            return failTimestampSetup("Failed to create Vulkan timestamp query pool");
+        }
+        m_VulkanResources->TimestampPeriodNs  = deviceProperties.limits.timestampPeriod;
+        m_VulkanResources->TimestampValidBits = queueFamilies[graphicsQueueFamily].timestampValidBits;
 
         m_VulkanResources->Initialized = true;
-        ENGINE_CORE_INFO("[Fluid][Vulkan] 流体 compute pipeline 初始化完成 (emit + simulate)");
+        ENGINE_CORE_INFO("[Fluid][Vulkan] 流体 compute pipeline 初始化完成 (emit + simulate, timestampPeriod={}ns)",
+                         m_VulkanResources->TimestampPeriodNs);
         return true;
     }
 
@@ -1113,6 +1165,12 @@ namespace Engine
         if (m_VulkanResources->Device != VK_NULL_HANDLE)
             vkDeviceWaitIdle(m_VulkanResources->Device);
 
+        if (m_VulkanResources->TimestampPool != VK_NULL_HANDLE)
+        {
+            vkDestroyQueryPool(m_VulkanResources->Device, m_VulkanResources->TimestampPool, nullptr);
+            m_VulkanResources->TimestampPool = VK_NULL_HANDLE;
+        }
+
         VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->EmitPipeline);
         VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->SimulatePipeline);
 
@@ -1136,7 +1194,8 @@ namespace Engine
             m_VulkanResources->SPHInitialized = false;
         }
 
-        m_VulkanResources->Pool.reset();
+        for (auto& pool : m_VulkanResources->Pools)
+            pool.reset();
         m_VulkanResources->EmitLayout.reset();
         m_VulkanResources->SimulateLayout.reset();
         m_VulkanResources->Device      = VK_NULL_HANDLE;
@@ -1168,13 +1227,45 @@ namespace Engine
         if (!m_SPHInitialized)
             InitSPH(emitter.SmoothingRadius);
 
-        PerformanceMonitor::Get().GetFluidComputeGPUTimer().Begin();
-
         VkDevice            device = m_VulkanResources->Device;
         VulkanCommandBuffer cmdBuf(cmd);
 
-        // P-15：每帧首次必须 Reset() 子系统自己的 pool（与 Grid 的 ResetFrameResources 各管各的）
-        m_VulkanResources->Pool->Reset();
+        const uint32_t frameIndex = ctx->GetCurrentFrameIndex();
+        const uint32_t queryBase  = frameIndex * 2;
+        if (m_VulkanResources->TimestampWritten[frameIndex])
+        {
+            uint64_t       timestamps[2] = {};
+            const VkResult queryResult =
+                vkGetQueryPoolResults(device, m_VulkanResources->TimestampPool, queryBase, 2, sizeof(timestamps),
+                                      timestamps, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+            if (queryResult == VK_SUCCESS)
+            {
+                uint64_t elapsedTicks = timestamps[1] - timestamps[0];
+                if (m_VulkanResources->TimestampValidBits < 64)
+                {
+                    const uint64_t validMask = (uint64_t{1} << m_VulkanResources->TimestampValidBits) - 1;
+                    elapsedTicks &= validMask;
+                }
+                const float elapsedMs = static_cast<float>(static_cast<double>(elapsedTicks) *
+                                                           m_VulkanResources->TimestampPeriodNs / 1000000.0);
+                PublishTimingSample(FluidComputeBackend::Vulkan, elapsedMs);
+            }
+            else if (queryResult != VK_NOT_READY)
+            {
+                m_BackendReady         = false;
+                m_BackendFailureReason = "Failed to read Vulkan timestamp query results";
+                ENGINE_CORE_ERROR("[Fluid][Vulkan] {} ({})", m_BackendFailureReason, static_cast<int>(queryResult));
+                return;
+            }
+        }
+
+        vkCmdResetQueryPool(cmd, m_VulkanResources->TimestampPool, queryBase, 2);
+        vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_VulkanResources->TimestampPool, queryBase);
+
+        // 每个 in-flight frame 独占一个 descriptor pool；BeginFrame 已等待该 frame slot 的 fence，
+        // 因此此处 Reset 不会使另一帧仍在使用的 descriptor set 失效。
+        Ref<VulkanDescriptorPool>& descriptorPool = m_VulkanResources->Pools[frameIndex];
+        descriptorPool->Reset();
 
         // 取四元组 ShaderStorage barrier（每 dispatch 后插一次）
         const VulkanBarrierMasks ssboBarrier   = ResolveBarrierBits(BarrierBit::ShaderStorage);
@@ -1282,7 +1373,7 @@ namespace Engine
                                    const Ref<VulkanDescriptorSetLayout>& layout, bool bindPCISPH, bool bindRigid,
                                    bool bindMeshSDF, bool bindSurfaceNormal, bool bindGrid, uint32_t usePredictedPos)
             {
-                VkDescriptorSet set = m_VulkanResources->Pool->Allocate(layout->GetHandle());
+                VkDescriptorSet set = descriptorPool->Allocate(layout->GetHandle());
                 ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Fluid][Vulkan] SPH pool 耗尽");
 
                 VulkanDescriptorWriter w;
@@ -1397,8 +1488,7 @@ namespace Engine
                 glm::vec4(emitterPos + emitter.BoundaryMax, emitter.PCISPHEnabled ? 1.0f : 0.0f);
             m_SimParamsUBO->SetData(&simUbo, sizeof(FluidSimParamsUBO));
 
-            VkDescriptorSet simulateSet =
-                m_VulkanResources->Pool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
+            VkDescriptorSet simulateSet = descriptorPool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(simulateSet != VK_NULL_HANDLE,
                                        "[Fluid][Vulkan] simulate DescriptorPool 分配失败");
 
@@ -1464,7 +1554,8 @@ namespace Engine
             m_SDFMetaReadback->CopyFrom(m_MeshSDFMetaBuffer, MAX_MESH_SDF_BODIES * sizeof(GPUMeshSDFData), 0);
         }
 
-        PerformanceMonitor::Get().GetFluidComputeGPUTimer().End();
+        vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_VulkanResources->TimestampPool, queryBase + 1);
+        m_VulkanResources->TimestampWritten[frameIndex] = true;
         PerformanceMonitor::Get().SetFluidActive(true);
     }
 #endif // ENGINE_ENABLE_VULKAN
