@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Editor = "build/Editor/RelWithDebInfo/Editor.exe",
+    [string]$Editor = "build-benchmark/Editor/RelWithDebInfo/Editor.exe",
     [ValidateSet("opengl", "cuda", "vulkan")]
     [string[]]$Backends = @("opengl", "cuda", "vulkan"),
     [ValidateSet("wcsph", "pcisph")]

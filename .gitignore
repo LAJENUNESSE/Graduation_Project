@@ -4,6 +4,7 @@ build_out.txt
 cmake-build-*/
 out/
 build-ninja/
+build-benchmark/
 
 # Agent skills（通过 npx skills add 安装的第三方技能）
 .agents/skills/*

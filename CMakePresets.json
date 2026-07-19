@@ -75,6 +75,7 @@
       "displayName": "Windows (VS 2022 + Vulkan + CUDA Benchmark)",
       "description": "本地论文实验预设：同时编译 OpenGL、Vulkan Compute 与 CUDA Sidecar，不用于 CI。",
       "inherits": "windows-vs2022",
+      "binaryDir": "${sourceDir}/build-benchmark",
       "environment": {
         "VULKAN_SDK": "C:/Dev/Environments/VulkanSDK/1.4.341.1"
       },

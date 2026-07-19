@@ -2,6 +2,13 @@
 
 短测试只检查三后端能否运行、自动退出并生成结构一致的 CSV：
 
+先使用独立实验目录配置并构建三后端版本，不会覆盖正在使用的普通 `build/`：
+
+```powershell
+& "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --preset vs2022-benchmark
+& "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build-benchmark --config RelWithDebInfo --target Editor
+```
+
 ```powershell
 ./benchmark/run_matrix.ps1 -Quick
 ```
