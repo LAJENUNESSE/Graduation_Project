@@ -65,6 +65,8 @@ namespace Engine
 
     void GPUTimerQuery::Begin()
     {
+        m_HasValidResult = false;
+
         if (m_Disabled)
             return;
 
@@ -78,7 +80,8 @@ namespace Engine
             {
                 GLuint64 elapsed = 0;
                 glGetQueryObjectui64v(m_QueryIDs[previousIndex], GL_QUERY_RESULT, &elapsed);
-                m_ElapsedMs = static_cast<float>(elapsed) / 1000000.0f; // ns -> ms
+                m_ElapsedMs      = static_cast<float>(elapsed) / 1000000.0f; // ns -> ms
+                m_HasValidResult = true;
             }
         }
 

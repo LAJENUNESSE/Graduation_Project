@@ -461,8 +461,18 @@ namespace Engine
 
         m_ParticleBuffer->SetData(particles.data(),
                                   static_cast<uint32_t>(particles.size() * sizeof(FluidBenchmarkParticle)));
-        m_TotalTime = 0.0f;
+        m_TotalTime        = 0.0f;
+        m_LastTimingSample = {};
         return true;
+    }
+
+    void FluidSystemGPU::PublishTimingSample(FluidComputeBackend backend, float computeMs, float interopMs)
+    {
+        m_LastTimingSample.Backend   = backend;
+        m_LastTimingSample.ComputeMs = computeMs;
+        m_LastTimingSample.InteropMs = interopMs;
+        ++m_LastTimingSample.Sequence;
+        m_LastTimingSample.Valid = true;
     }
 
     void FluidSystemGPU::Update(float                        dt,
@@ -807,7 +817,10 @@ namespace Engine
         RenderCommand::DispatchCompute(simGroups);
         RenderCommand::MemoryBarrier(BarrierBit::ShaderStorage);
 
-        PerformanceMonitor::Get().GetFluidComputeGPUTimer().End();
+        auto& fluidTimer = PerformanceMonitor::Get().GetFluidComputeGPUTimer();
+        fluidTimer.End();
+        if (fluidTimer.HasValidResult())
+            PublishTimingSample(FluidComputeBackend::OpenGL, fluidTimer.GetElapsedMs());
 
         PerformanceMonitor::Get().SetFluidActive(true);
     }
@@ -955,7 +968,10 @@ namespace Engine
         m_CudaImpl->Timing.SwapEvents();
         float ms = m_CudaImpl->Timing.GetPrevElapsedMs();
         if (ms >= 0.0f)
+        {
             PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
+            PublishTimingSample(FluidComputeBackend::CUDA, ms);
+        }
 
         PerformanceMonitor::Get().SetFluidActive(true);
         return true;

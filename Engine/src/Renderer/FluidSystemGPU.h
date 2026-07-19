@@ -28,6 +28,15 @@ namespace Engine
         Vulkan
     };
 
+    struct FluidComputeTimingSample
+    {
+        FluidComputeBackend Backend   = FluidComputeBackend::Automatic;
+        float               ComputeMs = 0.0f;
+        float               InteropMs = 0.0f;
+        uint64_t            Sequence  = 0;
+        bool                Valid     = false;
+    };
+
     class FluidSystemGPU
     {
     public:
@@ -73,15 +82,17 @@ namespace Engine
         FluidComputeBackend                  GetActiveBackend() const { return m_ActiveBackend; }
         bool                                 IsBackendReady() const { return m_BackendReady; }
         const std::string&                   GetBackendFailureReason() const { return m_BackendFailureReason; }
+        const FluidComputeTimingSample&      GetLastTimingSample() const { return m_LastTimingSample; }
 
         static const char* BackendLabel(FluidComputeBackend backend);
 
     private:
-        uint32_t            m_ParticleCount;
-        FluidComputeBackend m_RequestedBackend = FluidComputeBackend::Automatic;
-        FluidComputeBackend m_ActiveBackend    = FluidComputeBackend::Automatic;
-        bool                m_BackendReady     = false;
-        std::string         m_BackendFailureReason;
+        uint32_t                 m_ParticleCount;
+        FluidComputeBackend      m_RequestedBackend = FluidComputeBackend::Automatic;
+        FluidComputeBackend      m_ActiveBackend    = FluidComputeBackend::Automatic;
+        bool                     m_BackendReady     = false;
+        std::string              m_BackendFailureReason;
+        FluidComputeTimingSample m_LastTimingSample;
 
         // GPU buffers
         Ref<ShaderStorageBuffer> m_ParticleBuffer; // binding 0
@@ -169,6 +180,7 @@ namespace Engine
         bool InitVulkanComputeResources();
         bool InitSPHVulkanPipelines();
         void DestroyVulkanComputeResources();
+        void PublishTimingSample(FluidComputeBackend backend, float computeMs, float interopMs = 0.0f);
     };
 
 } // namespace Engine
