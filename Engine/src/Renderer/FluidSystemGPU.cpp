@@ -843,11 +843,14 @@ namespace Engine
         if (!m_CudaImpl->GLInterop || !m_CudaImpl->SPHCtx)
             return false;
 
+        const auto mapStart = std::chrono::steady_clock::now();
         if (!m_CudaImpl->MapAll())
         {
             ENGINE_WARN("[Fluid][CUDA] MapAll failed; falling back to GL compute.");
             return false;
         }
+        const auto mapEnd    = std::chrono::steady_clock::now();
+        float      interopMs = std::chrono::duration<float, std::milli>(mapEnd - mapStart).count();
 
         cudaStream_t strm         = static_cast<cudaStream_t>(m_CudaImpl->GetStream());
         void*        devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
@@ -955,7 +958,10 @@ namespace Engine
         CudaInterop::LaunchSPHSimulate(devParticles, sp, strm);
 
         m_CudaImpl->Timing.RecordStop(strm);
+        const auto unmapStart = std::chrono::steady_clock::now();
         m_CudaImpl->UnmapAll();
+        const auto unmapEnd = std::chrono::steady_clock::now();
+        interopMs += std::chrono::duration<float, std::milli>(unmapEnd - unmapStart).count();
 
         if (CudaInterop::IsCudaPoisoned())
         {
@@ -970,7 +976,7 @@ namespace Engine
         if (ms >= 0.0f)
         {
             PerformanceMonitor::Get().SetFluidComputeCudaMs(ms);
-            PublishTimingSample(FluidComputeBackend::CUDA, ms);
+            PublishTimingSample(FluidComputeBackend::CUDA, ms, interopMs);
         }
 
         PerformanceMonitor::Get().SetFluidActive(true);

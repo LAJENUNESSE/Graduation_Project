@@ -13,7 +13,7 @@
 - 每个后端在独立进程中运行，禁止将逐帧 CUDA/OpenGL 自动交替结果作为论文数据。
 - 正式计时阶段关闭粒子发射、动态生命周期、流体渲染、Mesh SDF 与非必要回读。
 - GPU Compute 时间仅覆盖空间网格、密度、力与积分阶段；初始化、最终正确性回读和 CSV 写入不计入。
-- CUDA 总 Compute 时间必须包含 CUB Prefix Sum；CUDA-OpenGL Map/Unmap 互操作时间另列。
+- CUDA 总 Compute 时间必须包含 CUB Prefix Sum；CUDA-OpenGL Map/Unmap 的主机 API 调用耗时另列为 Interop 时间。
 - 后端发生初始化失败、中毒或自动回退时，本组实验必须失败，禁止以回退后端的数据冒充目标后端。
 
 ## 3. 固定实验矩阵
