@@ -40,7 +40,8 @@ namespace Engine
         if (!m_Window->GetNativeWindow())
         {
             ENGINE_CORE_ERROR("Window creation failed! Application cannot continue.");
-            m_Running = false;
+            m_Running  = false;
+            m_ExitCode = 1;
             return;
         }
 

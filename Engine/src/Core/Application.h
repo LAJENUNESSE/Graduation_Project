@@ -23,7 +23,12 @@ namespace Engine
 
         void PushLayer(Scope<Layer> layer);
         void PushOverlay(Scope<Layer> overlay);
-        void Close() { m_Running = false; }
+        void Close(int exitCode = 0)
+        {
+            m_ExitCode = exitCode;
+            m_Running  = false;
+        }
+        int GetExitCode() const { return m_ExitCode; }
 
         // 关闭拦截器：返回 true 允许关闭，false 取消关闭
         using CloseInterceptFn = std::function<bool()>;
@@ -52,6 +57,7 @@ namespace Engine
         double           m_LastFrameTime         = 0.0;
         float            m_TargetFrameRate       = 144.0f;
         bool             m_FrameRateLimitEnabled = true;
+        int              m_ExitCode              = 0;
         CloseInterceptFn m_CloseInterceptor;
 
         static Application* s_Instance;
