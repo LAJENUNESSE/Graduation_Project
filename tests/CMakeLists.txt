@@ -26,6 +26,7 @@ set(ENGINE_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Engine/src)
 add_library(EngineTestCore STATIC
     ${ENGINE_SRC_DIR}/Core/UUID.cpp
     ${ENGINE_SRC_DIR}/Core/Log.cpp
+    ${ENGINE_SRC_DIR}/Core/FluidBenchmarkConfig.cpp
     ${ENGINE_SRC_DIR}/Scene/SceneEntityIndex.cpp
     ${ENGINE_SRC_DIR}/Scene/SceneHierarchyService.cpp
     ${ENGINE_SRC_DIR}/Scene/WorldTransformService.cpp
@@ -68,6 +69,7 @@ add_executable(EngineTests
     src/TestSPHKernel.cpp
     src/TestSDFMath.cpp
     src/TestCommandHistory.cpp
+    src/TestFluidBenchmarkConfig.cpp
     src/TestCudaPoisonState.cpp
     src/TestCudaParticleTypes.cpp
     src/TestSPHCommon.cpp

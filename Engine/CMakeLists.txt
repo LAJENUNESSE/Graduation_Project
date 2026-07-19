@@ -22,6 +22,7 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/Application.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/CrashHandler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/FileDialogs.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/FluidBenchmarkConfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/Input.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/Layer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/LayerStack.cpp

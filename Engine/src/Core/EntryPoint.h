@@ -3,6 +3,7 @@
 #include "Asset/PathUtils.h"
 #include "Core/Application.h"
 #include "Core/CrashHandler.h"
+#include "Core/FluidBenchmarkConfig.h"
 #include "Core/Log.h"
 #include "Renderer/RendererAPI.h"
 
@@ -62,8 +63,28 @@ int main(int argc, char** argv)
     Engine::CrashHandler::Install();
     ENGINE_CORE_INFO("Initialized Log!");
 
+    std::string benchmarkError;
+    if (!Engine::FluidBenchmarkConfig::Initialize(argc, argv, benchmarkError))
+    {
+        ENGINE_CORE_ERROR("Invalid fluid benchmark arguments: {}", benchmarkError);
+        ENGINE_CORE_ERROR("Usage: {}", Engine::FluidBenchmarkConfig::Usage());
+        return 2;
+    }
+
+    const auto& benchmarkConfig = Engine::FluidBenchmarkConfig::Get();
+    if (benchmarkConfig.Enabled)
+    {
+        ENGINE_CORE_INFO("Fluid benchmark requested: backend={}, solver={}, particles={}, iterations={}",
+                         Engine::FluidBenchmarkConfig::BackendLabel(benchmarkConfig.Backend),
+                         Engine::FluidBenchmarkConfig::SolverLabel(benchmarkConfig.Solver),
+                         benchmarkConfig.ParticleCount, benchmarkConfig.Iterations);
+
+        if (benchmarkConfig.Backend == Engine::FluidBenchmarkBackend::Vulkan)
+            Engine::RendererAPI::SetAPI(Engine::RendererAPI::API::Vulkan);
+    }
+
     // Parse command-line: --vulkan selects Vulkan backend
-    for (int i = 1; i < argc; ++i)
+    for (int i = 1; !benchmarkConfig.Enabled && i < argc; ++i)
     {
         if (std::strcmp(argv[i], "--vulkan") == 0)
         {
