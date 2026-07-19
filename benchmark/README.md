@@ -28,10 +28,10 @@
 python benchmark/summarize.py benchmark/results/raw_results.csv
 ```
 
-完成三后端短测试并冻结论文采用的密度相对误差容差后，再显式传入容差生成加速比。例如容差为 5%：
+三后端短矩阵校准测得平均密度最大相对偏差为 0.0261%，正式实验已冻结 0.1%（0.001）容差。显式传入该值生成受正确性门槛约束的加速比：
 
 ```powershell
-python benchmark/summarize.py benchmark/results/raw_results.csv --density-relative-tolerance 0.05
+python benchmark/summarize.py benchmark/results/raw_results.csv --density-relative-tolerance 0.001
 ```
 
 在没有冻结容差时，汇总脚本会保留 `Speedup` 为空，避免把数值偏差明显的后端结果写成论文加速比。
