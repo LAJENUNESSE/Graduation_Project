@@ -45,6 +45,8 @@ uv run --project docs/thesis/figures/scripted python benchmark/plot_results.py `
   --output-dir docs/thesis/figures/scripted/generated
 ```
 
-当前生成GPU计算耗时、加速比、密度一致性、CUDA端到端耗时构成、实时帧预算和
-逐帧耗时分布六组正式实验图。绘图脚本拒绝处理未通过正确性门槛的实验组。
+当前生成GPU计算耗时、加速比、平均密度与相对偏差一致性、双对数规模扩展性、
+CUDA端到端耗时构成、实时帧预算和逐帧耗时分布七组正式实验图。规模扩展图中的
+$O(N)$线仅表示锚定于OpenGL 10000粒子结果的参考斜率，不是额外实验数据。绘图
+脚本拒绝处理未通过正确性门槛的实验组。
 

@@ -186,10 +186,18 @@ def configure_plotting(cache_dir: Path):
 
 def save_figure(figure, output_dir: Path, stem: str) -> None:
     for extension in ("pdf", "png"):
+        metadata = None
+        if extension == "pdf":
+            metadata = {
+                "Creator": "Graduation_Project benchmark/plot_results.py",
+                "CreationDate": None,
+                "ModDate": None,
+            }
         figure.savefig(
             output_dir / f"{stem}.{extension}",
             bbox_inches="tight",
             pad_inches=0.04,
+            metadata=metadata,
         )
 
 
@@ -250,13 +258,26 @@ def plot_speedup(plt, grouped, output_dir: Path) -> None:
 
 
 def plot_density_consistency(plt, grouped, output_dir: Path) -> None:
-    figure, axes = plt.subplots(1, 2, figsize=(7.0, 2.65), sharex=True, sharey=True)
-    markers = {"CUDA": "s", "Vulkan": "^"}
-    for axis, solver in zip(axes, SOLVERS, strict=True):
+    figure, axes = plt.subplots(2, 2, figsize=(7.0, 4.8), sharex="col")
+    colors = {"OpenGL": "#0072B2", "CUDA": "#D55E00", "Vulkan": "#009E73"}
+    for row_index, solver in enumerate(SOLVERS):
+        density_axis = axes[row_index][0]
+        deviation_axis = axes[row_index][1]
         baseline = {
             row["particles"]: row["mean_density"]
             for row in grouped[(solver, "OpenGL")]
         }
+        for backend in BACKENDS:
+            rows = grouped[(solver, backend)]
+            density_axis.plot(
+                [row["particles"] for row in rows],
+                [row["mean_density"] for row in rows],
+                marker=MARKERS[backend],
+                linewidth=1.25,
+                markersize=4.0,
+                color=colors[backend],
+                label=backend,
+            )
         for backend in ("CUDA", "Vulkan"):
             rows = grouped[(solver, backend)]
             deviations = [
@@ -268,27 +289,84 @@ def plot_density_consistency(plt, grouped, output_dir: Path) -> None:
                 )
                 for row in rows
             ]
-            axis.plot(
+            deviation_axis.plot(
                 [row["particles"] for row in rows],
                 deviations,
-                marker=markers[backend],
+                marker=MARKERS[backend],
+                linewidth=1.25,
+                markersize=4.0,
+                color=colors[backend],
+                label=backend,
+            )
+        deviation_axis.axhline(
+            0.1,
+            color="0.35",
+            linewidth=0.85,
+            linestyle="--",
+            label="0.1%正确性门槛",
+        )
+        density_axis.set_title(f"{solver}：平均密度")
+        deviation_axis.set_title(f"{solver}：相对偏差")
+        for axis in (density_axis, deviation_axis):
+            axis.set_xscale("log")
+            axis.set_xticks([1000, 5000, 10000, 20000, 50000])
+            axis.set_xticklabels(["1k", "5k", "10k", "20k", "50k"])
+            axis.grid(True, which="major", linewidth=0.45, alpha=0.35)
+        deviation_axis.set_yscale("log")
+        density_axis.set_ylabel("平均密度")
+        deviation_axis.set_ylabel("相对OpenGL偏差（%）")
+    axes[1][0].set_xlabel("粒子数")
+    axes[1][1].set_xlabel("粒子数")
+    axes[0][0].legend(frameon=False, ncol=3, loc="best")
+    axes[0][1].legend(frameon=False, loc="lower left")
+    figure.tight_layout(h_pad=1.1, w_pad=1.2)
+    save_figure(figure, output_dir, "density-consistency")
+    plt.close(figure)
+
+
+def plot_scalability(plt, grouped, output_dir: Path) -> None:
+    figure, axes = plt.subplots(1, 2, figsize=(7.0, 2.7), sharex=True)
+    reference_particles = 10000.0
+    for axis, solver in zip(axes, SOLVERS, strict=True):
+        for backend in BACKENDS:
+            rows = grouped[(solver, backend)]
+            axis.loglog(
+                [row["particles"] for row in rows],
+                [row["mean"] for row in rows],
+                marker=MARKERS[backend],
                 linewidth=1.25,
                 markersize=4.0,
                 label=backend,
             )
-        axis.axhline(0.1, color="0.35", linewidth=0.85, linestyle="--",
-                     label="0.1%正确性门槛")
+
+        baseline_rows = grouped[(solver, "OpenGL")]
+        anchor = next(
+            row["mean"]
+            for row in baseline_rows
+            if row["particles"] == reference_particles
+        )
+        particles = [row["particles"] for row in baseline_rows]
+        linear_reference = [
+            anchor * particle_count / reference_particles
+            for particle_count in particles
+        ]
+        axis.loglog(
+            particles,
+            linear_reference,
+            color="0.35",
+            linewidth=0.9,
+            linestyle="--",
+            label=r"$O(N)$参考（锚定10k）",
+        )
         axis.set_title(solver)
-        axis.set_xscale("log")
-        axis.set_yscale("log")
         axis.set_xticks([1000, 5000, 10000, 20000, 50000])
         axis.set_xticklabels(["1k", "5k", "10k", "20k", "50k"])
         axis.set_xlabel("粒子数")
         axis.grid(True, which="major", linewidth=0.45, alpha=0.35)
-    axes[0].set_ylabel("相对OpenGL的平均密度偏差（%）")
-    axes[0].legend(frameon=False, loc="lower left")
+    axes[0].set_ylabel("GPU计算耗时（ms，双对数坐标）")
+    axes[0].legend(frameon=False, loc="upper left")
     figure.tight_layout(w_pad=1.2)
-    save_figure(figure, output_dir, "density-consistency")
+    save_figure(figure, output_dir, "scalability-comparison")
     plt.close(figure)
 
 
@@ -414,6 +492,7 @@ def main() -> None:
     plot_compute_time(plt, grouped, output_dir)
     plot_speedup(plt, grouped, output_dir)
     plot_density_consistency(plt, grouped, output_dir)
+    plot_scalability(plt, grouped, output_dir)
     plot_cuda_end_to_end_composition(plt, grouped, output_dir)
     plot_end_to_end_realtime_budget(plt, grouped, output_dir)
     plot_timing_distributions(plt, distributions, output_dir)

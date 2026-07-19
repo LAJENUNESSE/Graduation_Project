@@ -53,5 +53,5 @@ uv run --project docs/thesis/figures/scripted python benchmark/plot_results.py `
 ```
 
 绘图脚本只接受通过正确性门槛的实验组，输出GPU Compute耗时、相对OpenGL
-加速比、跨后端密度一致性、CUDA端到端耗时构成、实时帧预算和逐帧耗时分布图。
-每张图同时生成PDF矢量版和PNG高分辨率预览版。
+加速比、跨后端平均密度与相对偏差、双对数规模扩展性、CUDA端到端耗时构成、
+实时帧预算和逐帧耗时分布图。每张图同时生成PDF矢量版和PNG高分辨率预览版。
