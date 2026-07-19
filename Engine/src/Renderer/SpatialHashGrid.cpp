@@ -37,7 +37,7 @@ namespace Engine
         // 共享的 descriptor pool（每帧 reset 复用）
         // hash 需要 1 个 set，prefix_sum 需要 ≤3 个 set（local/blocksum/propagate 三 pass），
         // scatter 需要 1 个 set，加保险共 8 个 set/帧
-        Ref<VulkanDescriptorPool> Pool;
+        Ref<VulkanDescriptorPool> Pools[2];
 
         VkDevice Device = VK_NULL_HANDLE;
 
@@ -137,7 +137,9 @@ namespace Engine
             return;
         if (!m_VulkanResources || !m_VulkanResources->Initialized)
             return;
-        m_VulkanResources->Pool->Reset();
+        auto* ctx = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(ctx, "SpatialHashGrid::ResetFrameResources: VulkanContext is null");
+        m_VulkanResources->Pools[ctx->GetCurrentFrameIndex()]->Reset();
 #endif
     }
 
@@ -263,7 +265,8 @@ namespace Engine
 
         // 共享 descriptor pool —— 每帧 ResetFrameResources() 复用。
         // 容量 64 覆盖 PCISPH 8 迭代 × 3 set + 单帧多次外部 Build 的余量。
-        m_VulkanResources->Pool = VulkanDescriptorPool::CreateDefaultComputePool(device, 64);
+        for (auto& pool : m_VulkanResources->Pools)
+            pool = VulkanDescriptorPool::CreateDefaultComputePool(device, 64);
 
         m_VulkanResources->Initialized = true;
     }
@@ -292,9 +295,6 @@ namespace Engine
         auto*    ctx    = VulkanContext::Get();
         VkDevice device = ctx->GetDevice();
 
-        // 把 cellCount 清零（host-visible mapped memcpy，vkQueueSubmit 隐式保证 host→device 可见）
-        m_CellCount->ClearToZero();
-
         // BarrierBit::ShaderStorage → Vulkan stage/access 四元组（compute→compute 精确匹配）
         const VulkanBarrierMasks ssboMasks = ResolveBarrierBits(BarrierBit::ShaderStorage);
 
@@ -318,9 +318,25 @@ namespace Engine
         VkBuffer sortedIndicesBuf = bufferOf(m_SortedIndices);
         VkBuffer blockSumsBuf     = bufferOf(m_BlockSums);
 
+        // 清零也录入同一 GPU 命令流，避免 host 写入与上一帧共享网格缓冲发生竞争。
+        vkCmdFillBuffer(cmdHandle, cellCountBuf, 0, VK_WHOLE_SIZE, 0u);
+        VkBufferMemoryBarrier clearBarrier{};
+        clearBarrier.sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        clearBarrier.srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+        clearBarrier.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        clearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        clearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        clearBarrier.buffer              = cellCountBuf;
+        clearBarrier.offset              = 0;
+        clearBarrier.size                = VK_WHOLE_SIZE;
+        vkCmdPipelineBarrier(cmdHandle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0,
+                             nullptr, 1, &clearBarrier, 0, nullptr);
+
+        Ref<VulkanDescriptorPool>& descriptorPool = m_VulkanResources->Pools[ctx->GetCurrentFrameIndex()];
+
         // -------- Pass A: grid_hash --------
         {
-            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->HashLayout->GetHandle());
+            VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->HashLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "SpatialHashGrid: hash descriptor allocate failed");
 
             VulkanDescriptorWriter w;
@@ -364,7 +380,7 @@ namespace Engine
 
         auto dispatchPrefix = [&](int32_t mode, int32_t n, uint32_t groups)
         {
-            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->PrefixSumLayout->GetHandle());
+            VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->PrefixSumLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "SpatialHashGrid: prefix descriptor allocate failed");
 
             VulkanDescriptorWriter w;
@@ -400,7 +416,7 @@ namespace Engine
 
         // -------- Pass C: grid_scatter --------
         {
-            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->ScatterLayout->GetHandle());
+            VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->ScatterLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "SpatialHashGrid: scatter descriptor allocate failed");
 
             VulkanDescriptorWriter w;

@@ -23,14 +23,14 @@ namespace Engine
 
         struct SPHContextImpl
         {
-            uint32_t*      d_cellHash;      // N × uint32
-            uint32_t*      d_cellCount;     // G³ × uint32
-            uint32_t*      d_cellStart;     // G³ × uint32
-            uint32_t*      d_sortedIndices; // N × uint32
-            PCISPHData*    d_pcisph;        // N × 48B
-            RigidBodyData* d_rigidBody;     // maxRB × 112B
+            uint32_t*      d_cellHash;       // N × uint32
+            uint32_t*      d_cellCount;      // G³ × uint32
+            uint32_t*      d_cellStart;      // G³ × uint32
+            uint32_t*      d_sortedIndices;  // N × uint32
+            PCISPHData*    d_pcisph;         // N × 48B
+            RigidBodyData* d_rigidBody;      // maxRB × 112B
             Vec4*          d_surfaceNormals; // N × Vec4 (Akinci 表面法线)
-            void*          d_cubTemp;       // CUB 临时存储
+            void*          d_cubTemp;        // CUB 临时存储
             size_t         cubTempBytes;
             uint32_t       maxParticles;
             uint32_t       gridSize; // 每轴格子数（gridSize³ = 总格子数）
@@ -218,17 +218,17 @@ namespace Engine
                     float ddy = fabsf(ly) - hey;
                     float ddz = fabsf(lz) - hez;
                     float ox = fmaxf(ddx, 0.0f), oy = fmaxf(ddy, 0.0f), oz = fmaxf(ddz, 0.0f);
-                    sdf      = sqrtf(ox * ox + oy * oy + oz * oz) + fminf(fmaxf(ddx, fmaxf(ddy, ddz)), 0.0f);
-                    float sx = (lx >= 0.0f) ? 1.0f : -1.0f;
-                    float sy = (ly >= 0.0f) ? 1.0f : -1.0f;
-                    float sz = (lz >= 0.0f) ? 1.0f : -1.0f;
+                    sdf              = sqrtf(ox * ox + oy * oy + oz * oz) + fminf(fmaxf(ddx, fmaxf(ddy, ddz)), 0.0f);
+                    float sx         = (lx >= 0.0f) ? 1.0f : -1.0f;
+                    float sy         = (ly >= 0.0f) ? 1.0f : -1.0f;
+                    float sz         = (lz >= 0.0f) ? 1.0f : -1.0f;
                     float outsideLen = sqrtf(ox * ox + oy * oy + oz * oz);
                     if (outsideLen > 1e-6f)
                     {
                         float invOL = 1.0f / outsideLen;
-                        lnx = sx * ox * invOL;
-                        lny = sy * oy * invOL;
-                        lnz = sz * oz * invOL;
+                        lnx         = sx * ox * invOL;
+                        lny         = sy * oy * invOL;
+                        lnz         = sz * oz * invOL;
                     }
                     else if (ddx > ddy && ddx > ddz)
                     {
@@ -443,22 +443,25 @@ namespace Engine
                         uint32_t count = d_cellCount[cellIdx];
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            uint32_t j   = d_sortedIndices[start + k];
-                            float    dx2 = px - particles[j].posAndLife.x;
-                            float    dy2 = py - particles[j].posAndLife.y;
-                            float    dz2 = pz - particles[j].posAndLife.z;
-                            float    r2  = dx2 * dx2 + dy2 * dy2 + dz2 * dz2;
+                            uint32_t j = d_sortedIndices[start + k];
+                            if (j == i)
+                                continue;
+                            float dx2 = px - particles[j].posAndLife.x;
+                            float dy2 = py - particles[j].posAndLife.y;
+                            float dz2 = pz - particles[j].posAndLife.z;
+                            float r2  = dx2 * dx2 + dy2 * dy2 + dz2 * dz2;
                             density += p.particleMass * Poly6(r2, h2, p.poly6Coeff);
 
                             // Akinci 表面法线: n += (m / ρ_j) * ∇W_spiky
                             if (p.surfaceTension > 0.0f && r2 > 1e-12f && r2 < h2)
                             {
-                                float r       = sqrtf(r2);
-                                float densJ   = particles[j].params.z;
-                                if (densJ < 0.0001f) densJ = 0.0001f;
-                                float spikyG  = SpikyGrad(r, h, p.spikyCoeff);
-                                float invR    = 1.0f / r;
-                                float coeff   = (p.particleMass / densJ) * spikyG * invR;
+                                float r     = sqrtf(r2);
+                                float densJ = particles[j].params.z;
+                                if (densJ < 0.0001f)
+                                    densJ = 0.0001f;
+                                float spikyG = SpikyGrad(r, h, p.spikyCoeff);
+                                float invR   = 1.0f / r;
+                                float coeff  = (p.particleMass / densJ) * spikyG * invR;
                                 snx += coeff * dx2;
                                 sny += coeff * dy2;
                                 snz += coeff * dz2;
@@ -467,6 +470,7 @@ namespace Engine
                     }
 
             particles[i].params.z = density; // z=density
+            particles[i].params.w = fmaxf(0.0f, p.gasConstant * (density - p.restDensity));
 
             // 写出 Akinci 表面法线 (乘以 h)
             d_surfaceNormals[i] = Vec4{h * snx, h * sny, h * snz, 0.0f};
@@ -482,7 +486,8 @@ namespace Engine
             GPUParticle*    devP = static_cast<GPUParticle*>(particles);
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
-            DensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount, ctx->d_sortedIndices, ctx->d_surfaceNormals, p);
+            DensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount, ctx->d_sortedIndices,
+                                                    ctx->d_surfaceNormals, p);
             CUDA_CHECK_KERNEL("DensityKernel");
         }
 
@@ -510,7 +515,7 @@ namespace Engine
             float vy_i      = particles[i].velAndMaxLife.y;
             float vz_i      = particles[i].velAndMaxLife.z;
             float densityI  = particles[i].params.z;
-            float pressureI = p.gasConstant * (densityI - p.restDensity);
+            float pressureI = particles[i].params.w;
 
             float h  = p.smoothingRadius;
             float h2 = h * h;
@@ -555,7 +560,7 @@ namespace Engine
                             float densityJ = particles[j].params.z;
                             if (densityJ < 0.0001f)
                                 densityJ = 0.0001f;
-                            float pressureJ = p.gasConstant * (densityJ - p.restDensity);
+                            float pressureJ = particles[j].params.w;
 
                             // 压力力: f_press = -m * (P_i + P_j) / (2 * ρ_j) * ∇W_spiky
                             float spikyG    = SpikyGrad(r, h, p.spikyCoeff);
@@ -642,13 +647,13 @@ namespace Engine
         // PCISPH Init 内核（移植自 sph_pcisph_init.glsl）
         // ======================================================================
 
-        __global__ static void PCISPHInitKernel(GPUParticle*   particles,
-                                                PCISPHData*    pcisph,
-                                                uint32_t*      d_cellStart,
-                                                uint32_t*      d_cellCount,
-                                                uint32_t*      d_sortedIndices,
-                                                const Vec4*    d_surfaceNormals,
-                                                SPHParams      p)
+        __global__ static void PCISPHInitKernel(GPUParticle* particles,
+                                                PCISPHData*  pcisph,
+                                                uint32_t*    d_cellStart,
+                                                uint32_t*    d_cellCount,
+                                                uint32_t*    d_sortedIndices,
+                                                const Vec4*  d_surfaceNormals,
+                                                SPHParams    p)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= (uint32_t)p.aliveCount)
@@ -876,6 +881,7 @@ namespace Engine
             // 累加压力: P += δ * max(0, ρ* - ρ₀)
             float densityErr = fmaxf(0.0f, density - p.restDensity);
             pcisph[i].predictedPosAndPressure.w += pcisphDelta * densityErr;
+            pcisph[i].predictedPosAndPressure.w = fminf(pcisph[i].predictedPosAndPressure.w, 50000.0f);
         }
 
         void
@@ -959,12 +965,12 @@ namespace Engine
                                 continue;
 
                             // 用预测位置或原始位置计算距离（与 PCISPHDensityKernel 策略一致）
-                            float njx = ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.x
-                                                           : particles[j].posAndLife.x;
-                            float njy = ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.y
-                                                           : particles[j].posAndLife.y;
-                            float njz = ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.z
-                                                           : particles[j].posAndLife.z;
+                            float njx =
+                                ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.x : particles[j].posAndLife.x;
+                            float njy =
+                                ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.y : particles[j].posAndLife.y;
+                            float njz =
+                                ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.z : particles[j].posAndLife.z;
                             float rx = px - njx;
                             float ry = py - njy;
                             float rz = pz - njz;
@@ -981,7 +987,8 @@ namespace Engine
                             // 压力加速度 (Solenthaler 2009): -m * (P_i/ρ_i² + P_j/ρ_j²) * ∇W_spiky
                             float spikyG    = SpikyGrad(r, h, p.spikyCoeff);
                             float invR      = 1.0f / r;
-                            float pressTerm = -p.particleMass * (pressureI / (densityI * densityI) + pressureJ / (densityJ * densityJ));
+                            float pressTerm = -p.particleMass *
+                                              (pressureI / (densityI * densityI) + pressureJ / (densityJ * densityJ));
                             fpx += pressTerm * spikyG * rx * invR;
                             fpy += pressTerm * spikyG * ry * invR;
                             fpz += pressTerm * spikyG * rz * invR;

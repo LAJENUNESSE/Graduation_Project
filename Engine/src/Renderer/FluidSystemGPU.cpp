@@ -963,7 +963,8 @@ namespace Engine
             int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
             for (int iter = 0; iter < iterations; ++iter)
             {
-                ip.usePredictedPos = (iter == 0) ? 0 : 1;
+                // 与 OpenGL 基准路径一致：所有迭代复用原始位置构建的网格。
+                ip.usePredictedPos = 0;
                 CudaInterop::LaunchPCISPHPredict(m_CudaImpl->SPHCtx, devParticles, clampedDt,
                                                  static_cast<int>(m_ParticleCount), strm);
                 CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
@@ -1467,14 +1468,8 @@ namespace Engine
                 int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
                 for (int iter = 0; iter < iterations; ++iter)
                 {
-                    // iter>0 用预测位置重建 grid（同帧多次 BuildVulkan，pool 已扩容支持）
-                    if (iter > 0)
-                    {
-                        m_Grid.BuildVulkan(cmd, m_ParticleCount, /*predicted=*/true);
-                        ssboBarrierFn();
-                    }
-
-                    uint32_t usePred = (iter > 0) ? 1u : 0u;
+                    // 与 OpenGL/CUDA 基准路径一致：所有迭代复用原始位置构建的网格。
+                    constexpr uint32_t usePred = 0u;
 
                     // Predict: bindings 0(P), 1(PCISPH), 2(alive)
                     dispatchSPH(m_VulkanResources->PCISPHPredictPipeline, m_VulkanResources->PCISPHPredictLayout,
