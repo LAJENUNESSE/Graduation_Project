@@ -198,8 +198,7 @@ namespace Engine
         shaderc::CompileOptions options;
         options.SetSourceLanguage(shaderc_source_language_glsl);
         options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-        // 注入 VULKAN macro，让共享 shader 用 #ifdef VULKAN 切换 push_constant / set 显式 binding 等 Vulkan-only 语法
-        options.AddMacroDefinition("VULKAN", "1");
+        // glslang/shaderc 在 Vulkan 目标环境下会预定义 VULKAN；不要重复注入不同替换值。
 #if !defined(NDEBUG)
         options.SetGenerateDebugInfo();
 #endif

@@ -140,7 +140,8 @@ find_package(OpenAL CONFIG REQUIRED)
 
 # Vulkan (optional)
 if(ENGINE_ENABLE_VULKAN)
-    find_package(Vulkan REQUIRED)
+    # 显式请求 shaderc_combined；FindVulkan 只会为已请求的可选组件创建对应 target。
+    find_package(Vulkan REQUIRED OPTIONAL_COMPONENTS shaderc_combined)
     target_compile_definitions(Engine PUBLIC ENGINE_ENABLE_VULKAN)
     target_include_directories(Engine PRIVATE ${Vulkan_INCLUDE_DIRS})
 
