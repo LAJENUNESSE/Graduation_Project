@@ -48,6 +48,11 @@ pic/
 
 # Performance logs
 logs/
+benchmark/results/
+
+# Python cache
+__pycache__/
+*.pyc
 
 # Doc
 docs/
