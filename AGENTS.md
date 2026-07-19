@@ -52,6 +52,40 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 
 **Run:** exe 启动时会自动检测项目根目录，因此可从任意目录启动。
 
+## Python / uv Environment
+
+项目中的 Python 脚本统一使用 **uv** 管理依赖与虚拟环境，不要直接向系统 Python 安装依赖，也不要使用裸 `pip install`。
+
+### Windows uv 位置
+
+```text
+C:\Users\liu69\.local\bin\uv.exe
+```
+
+当前已安装版本：`uv 0.11.17`。`uv` 已加入 `PATH`，通常直接执行 `uv` 即可；若当前 Shell 无法识别，再使用上面的绝对路径，不要重新搜索或重复安装。
+
+论文绘图环境位于 `docs/thesis/figures/scripted/`，其中 `pyproject.toml` 声明依赖，`uv.lock` 固定依赖版本，虚拟环境默认创建在该目录的 `.venv/` 中。
+
+```powershell
+# 同步锁定的依赖并创建/更新 .venv
+cd docs/thesis/figures/scripted
+uv sync
+
+# 在项目环境中运行脚本
+uv run python scripts/generate_formula_figures.py
+uv run python scripts/generate_method_figures.py
+
+# 从仓库根目录复用该环境运行其他 Python 脚本
+uv run --project docs/thesis/figures/scripted python benchmark/plot_results.py --help
+```
+
+Python 依赖管理约定：
+
+* 新增依赖使用 `uv add <package>`，开发依赖使用 `uv add --dev <package>`。
+* 修改依赖后必须同时提交 `pyproject.toml` 和 `uv.lock`。
+* `.venv/`、缓存和临时文件不得提交到 Git。
+* 可复现脚本优先通过 `uv run` 执行；不要假定全局 Python 已安装项目所需的包。
+
 ## Architecture
 
 | 目录                      | 职责                                                                                                                        |
@@ -112,6 +146,30 @@ Always follow this workflow:
 6. Continue
 
 **频繁提交：** 每完成一个小步骤就立即 `git commit`，保存快照。不要攒一大堆改动再提交。
+
+### Git Commit 编写要求
+
+提交主题统一采用 Conventional Commits 格式：
+
+```text
+<type>(<scope>): <简体中文摘要>
+```
+
+* `type` 使用小写英文，常用值：`feat`、`fix`、`docs`、`refactor`、`perf`、`test`、`build`、`ci`、`chore`、`revert`。
+* `scope` 使用小写英文并对应实际模块，例如 `cuda`、`benchmark`、`renderer`、`editor`、`thesis`；无法准确归类时可省略。
+* 摘要使用简体中文，直接说明本次提交完成的动作，不加句号，不写“更新代码”“修复问题”等模糊描述。
+* 一次提交只处理一个逻辑变更；禁止混入无关格式化、临时文件或用户已有修改。
+* 提交前检查 `git diff --check` 和 `git status --short`，并完成与改动风险相匹配的构建、测试或脚本运行验证。
+* C/C++ 文件提交前必须按下方要求执行 clang-format；生成文件应与对应脚本或源数据一起提交，确保结果可复现。
+* 若变更需要正文说明，在空行后的 commit body 中写清“为什么这样改”和验证方式，不要只复述 diff。
+
+示例：
+
+```text
+feat(cuda): 增加 SPH 粒子计算旁路
+fix(benchmark): 拒绝越界的流体状态结果
+docs(thesis): 补充可复现的论文技术图
+```
 
 **提交前格式化：** 提交代码之前，对本次修改的 C/C++ 源文件（`.h`/`.cpp`）运行 clang-format，确保代码风格一致。不要格式化 `vendor/` 下的第三方代码。
 
