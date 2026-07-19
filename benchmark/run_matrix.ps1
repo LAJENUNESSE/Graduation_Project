@@ -71,7 +71,8 @@ function Test-CompleteResult {
                 ([uint32]$row.Frame -gt $ExpectedFrames) -or
                 ([uint32]$row.Run -lt 1) -or
                 ([uint32]$row.Run -gt $ExpectedRuns) -or
-                ($row.SampleValid -ne "1")) {
+                ($row.SampleValid -ne "1") -or
+                ([uint32]$row.OutOfBoundsCount -ne 0)) {
                 return $false
             }
             if (-not $sampleKeys.Add(("{0}:{1}" -f $row.Run, $row.Frame))) {

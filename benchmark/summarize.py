@@ -94,10 +94,14 @@ def main() -> int:
 
         particles = key[2]
         alive_valid = all(int(row["AliveCount"]) == particles for row in rows)
+        out_of_bounds_values = [int(row["OutOfBoundsCount"]) for row in rows]
+        bounds_valid = all(value == 0 for value in out_of_bounds_values)
         density_values = [parse_finite(row, "MeanDensity") for row in rows]
         density_errors = [parse_finite(row, "MaxDensityError") for row in rows]
         rms_errors = [parse_finite(row, "RMSDensityError") for row in rows]
-        correctness_valid = alive_valid and all(value >= 0.0 for value in density_errors + rms_errors)
+        correctness_valid = alive_valid and bounds_valid and all(
+            value >= 0.0 for value in density_errors + rms_errors
+        )
 
         summaries[key] = {
             "Backend": key[0],
@@ -114,6 +118,7 @@ def main() -> int:
             "MeanDensity": statistics.fmean(density_values),
             "MaxDensityError": max(density_errors),
             "RMSDensityError": max(rms_errors),
+            "MaxOutOfBoundsCount": max(out_of_bounds_values),
             "CorrectnessValid": correctness_valid,
             "Speedup": "",
         }
@@ -151,6 +156,7 @@ def main() -> int:
         "MeanDensity",
         "MaxDensityError",
         "RMSDensityError",
+        "MaxOutOfBoundsCount",
         "CorrectnessValid",
         "Speedup",
     ]
