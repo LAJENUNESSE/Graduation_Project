@@ -66,7 +66,8 @@ MeanDensity,MaxDensityError,RMSDensityError,OutOfBoundsCount,StateHash,Device
 
 ```text
 Backend,Solver,Particles,Samples,Mean_ms,StdDev_ms,
-P50_ms,P95_ms,Min_ms,Max_ms,Speedup
+P50_ms,P95_ms,Min_ms,Max_ms,MeanInterop_ms,P95Interop_ms,
+MeanEndToEnd_ms,P95EndToEnd_ms,Speedup
 ```
 
 原始数据必须保留，不允许只保存汇总表。

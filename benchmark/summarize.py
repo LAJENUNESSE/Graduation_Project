@@ -20,6 +20,8 @@ REQUIRED_COLUMNS = {
     "Run",
     "SampleValid",
     "Compute_ms",
+    "Interop_ms",
+    "EndToEnd_ms",
     "AliveCount",
     "MeanDensity",
     "MaxDensityError",
@@ -91,6 +93,12 @@ def main() -> int:
         compute_values = [parse_finite(row, "Compute_ms") for row in rows]
         if any(value <= 0.0 for value in compute_values):
             raise ValueError(f"group {key} contains a non-positive Compute_ms sample")
+        interop_values = [parse_finite(row, "Interop_ms") for row in rows]
+        end_to_end_values = [parse_finite(row, "EndToEnd_ms") for row in rows]
+        if any(value < 0.0 for value in interop_values):
+            raise ValueError(f"group {key} contains a negative Interop_ms sample")
+        if any(value <= 0.0 for value in end_to_end_values):
+            raise ValueError(f"group {key} contains a non-positive EndToEnd_ms sample")
 
         particles = key[2]
         alive_valid = all(int(row["AliveCount"]) == particles for row in rows)
@@ -115,6 +123,10 @@ def main() -> int:
             "P95_ms": percentile(compute_values, 0.95),
             "Min_ms": min(compute_values),
             "Max_ms": max(compute_values),
+            "MeanInterop_ms": statistics.fmean(interop_values),
+            "P95Interop_ms": percentile(interop_values, 0.95),
+            "MeanEndToEnd_ms": statistics.fmean(end_to_end_values),
+            "P95EndToEnd_ms": percentile(end_to_end_values, 0.95),
             "MeanDensity": statistics.fmean(density_values),
             "MaxDensityError": max(density_errors),
             "RMSDensityError": max(rms_errors),
@@ -153,6 +165,10 @@ def main() -> int:
         "P95_ms",
         "Min_ms",
         "Max_ms",
+        "MeanInterop_ms",
+        "P95Interop_ms",
+        "MeanEndToEnd_ms",
+        "P95EndToEnd_ms",
         "MeanDensity",
         "MaxDensityError",
         "RMSDensityError",
