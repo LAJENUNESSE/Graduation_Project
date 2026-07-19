@@ -57,7 +57,7 @@ namespace Engine
     {
         if (!HasPrevTiming || !PrevStart || !PrevStop)
             return -1.0f;
-        return CudaInterop::CudaEventElapsedMs(PrevStart, PrevStop);
+        return CudaInterop::CudaEventElapsedMs(PrevStart, PrevStop, BlockingReadback);
     }
 
 } // namespace Engine

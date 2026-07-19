@@ -73,6 +73,7 @@ namespace Engine
                     entt::registry*              registry = nullptr);
         bool SetBenchmarkParticles(const std::vector<FluidBenchmarkParticle>& particles);
         bool ReadBenchmarkParticles(std::vector<FluidBenchmarkParticle>& particles, std::string& error) const;
+        void SetBenchmarkTimingReadback(bool blocking);
 
         uint32_t                             GetParticleCount() const { return m_ParticleCount; }
         Ref<ShaderStorageBuffer>             GetParticleBuffer() const { return m_ParticleBuffer; }

@@ -65,8 +65,8 @@ namespace Engine
         void* CreateCudaEvent();
         void  DestroyCudaEvent(void* event);
         void  RecordCudaEvent(void* event, void* stream);
-        // 查询两个事件之间的 GPU 耗时（毫秒）。调用前必须确保 stop 事件已完成。
-        float CudaEventElapsedMs(void* start, void* stop);
+        // 查询两个事件之间的 GPU 耗时（毫秒）。离线基准可选择阻塞等待，确保事件槽不会被覆盖。
+        float CudaEventElapsedMs(void* start, void* stop, bool blocking = false);
 
     } // namespace CudaInterop
 } // namespace Engine

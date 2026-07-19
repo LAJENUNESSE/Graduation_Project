@@ -67,6 +67,7 @@ namespace Engine
 
         m_FluidSystem = CreateScope<FluidSystemGPU>(m_Config.ParticleCount, ToComputeBackend(m_Config.Backend));
         m_FluidSystem->Init();
+        m_FluidSystem->SetBenchmarkTimingReadback(true);
         if (!m_FluidSystem->IsBackendReady())
         {
             Fail("backend initialization failed: " + m_FluidSystem->GetBackendFailureReason());
@@ -94,6 +95,8 @@ namespace Engine
             PerformanceMonitor::Get().GetFluidComputeGPUTimer().SetBlockingReadback(false);
         if (m_Output.is_open())
             m_Output.close();
+        if (m_FluidSystem)
+            m_FluidSystem->SetBenchmarkTimingReadback(false);
         m_FluidSystem.reset();
     }
 

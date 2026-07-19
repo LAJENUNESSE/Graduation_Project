@@ -507,6 +507,15 @@ namespace Engine
         m_LastTimingSample.Valid = true;
     }
 
+    void FluidSystemGPU::SetBenchmarkTimingReadback(bool blocking)
+    {
+#ifdef ENGINE_ENABLE_CUDA
+        m_CudaImpl->Timing.SetBlockingReadback(blocking);
+#else
+        (void)blocking;
+#endif
+    }
+
     void FluidSystemGPU::Update(float                        dt,
                                 const glm::vec3&             emitterPos,
                                 const FluidEmitterComponent& emitter,
@@ -934,6 +943,10 @@ namespace Engine
         // Pass a: Grid Build
         CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles, m_ParticleCount, gridSize, cellSize, strm);
 
+        // 与 OpenGL/Vulkan 保持相同顺序：PCISPH Init 也依赖当前粒子密度，
+        // 因此基础 density pass 不能只在 WCSPH 分支执行。
+        CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
+
         if (emitter.PCISPHEnabled)
         {
             // Pass b: PCISPH 全套
@@ -968,7 +981,6 @@ namespace Engine
             ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
             ip.usePredictedPos   = 0;
 
-            CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
             CudaInterop::LaunchSPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
         }
 

@@ -16,11 +16,12 @@ namespace Engine
 
     struct CudaTimingHelper
     {
-        void* EventStart    = nullptr;
-        void* EventStop     = nullptr;
-        void* PrevStart     = nullptr;
-        void* PrevStop      = nullptr;
-        bool  HasPrevTiming = false;
+        void* EventStart       = nullptr;
+        void* EventStop        = nullptr;
+        void* PrevStart        = nullptr;
+        void* PrevStop         = nullptr;
+        bool  HasPrevTiming    = false;
+        bool  BlockingReadback = false;
 
         void Init();
         void Destroy();
@@ -33,6 +34,9 @@ namespace Engine
         // 把当前帧的 start/stop 转为 prev，prev 转为当前可用 slot。每帧调用一次。
         // 在 RecordStop 之后调用——下一帧 GetPrevElapsedMs() 才能读到这帧的结果。
         void SwapEvents();
+
+        // 仅供离线 benchmark 使用；普通编辑器必须保持非阻塞。
+        void SetBlockingReadback(bool enabled) { BlockingReadback = enabled; }
 
         // 读上一帧已完成的 CUDA 段耗时（毫秒）。
         // stop 事件未完成时返回 -1（调用方应保留上一帧缓存值）。

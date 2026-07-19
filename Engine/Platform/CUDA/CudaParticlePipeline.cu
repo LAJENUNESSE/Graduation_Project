@@ -324,12 +324,13 @@ namespace Engine
             CUDA_CHECK(cudaEventRecord(static_cast<cudaEvent_t>(event), static_cast<cudaStream_t>(stream)));
         }
 
-        float CudaEventElapsedMs(void* start, void* stop)
+        float CudaEventElapsedMs(void* start, void* stop, bool blocking)
         {
             if (IsCudaPoisoned() || !start || !stop)
                 return 0.0f;
-            // 非阻塞查询：避免每帧 CPU/GPU 同步
-            cudaError_t queryErr = cudaEventQuery(static_cast<cudaEvent_t>(stop));
+            // 编辑器保持非阻塞；离线基准阻塞到 stop 完成，避免 ping-pong 槽位被覆盖。
+            cudaError_t queryErr = blocking ? cudaEventSynchronize(static_cast<cudaEvent_t>(stop))
+                                            : cudaEventQuery(static_cast<cudaEvent_t>(stop));
             if (queryErr == cudaErrorNotReady)
                 return -1.0f; // 事件未完成，调用方应保留上一帧缓存值
             if (queryErr != cudaSuccess)
