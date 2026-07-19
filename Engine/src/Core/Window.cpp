@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Core/Window.h"
 #include "Core/Assert.h"
+#include "Core/FluidBenchmarkConfig.h"
 #include "Core/KeyCodes.h"
 #include "Core/Log.h"
 #include "Core/MouseCodes.h"
@@ -451,9 +452,12 @@ namespace Engine
                 m_SwapBurstLen       = 0;
                 m_SwapBurstMaxMs     = 0.0f;
                 m_SwapBurstMissedMax = 0;
-                ENGINE_CORE_WARN(
-                    "[Perf][SwapBurst] START id={0} swap={1:.3f}ms threshold={2:.3f}ms refresh={3:.1f}Hz vsync={4}",
-                    m_SwapBurstSeq, swapMs, burstThreshold, refreshHz, m_Data.VSync ? 1 : 0);
+                if (!FluidBenchmarkConfig::Get().Enabled)
+                {
+                    ENGINE_CORE_WARN(
+                        "[Perf][SwapBurst] START id={0} swap={1:.3f}ms threshold={2:.3f}ms refresh={3:.1f}Hz vsync={4}",
+                        m_SwapBurstSeq, swapMs, burstThreshold, refreshHz, m_Data.VSync ? 1 : 0);
+                }
             }
 
             m_SwapBurstLen++;
@@ -467,9 +471,12 @@ namespace Engine
             m_LastSwapBurstMaxMs     = m_SwapBurstMaxMs;
             m_LastSwapBurstMissedMax = m_SwapBurstMissedMax;
 
-            ENGINE_CORE_WARN(
-                "[Perf][SwapBurst] END id={0} len={1} maxSwap={2:.3f}ms maxMissedVBlank={3} refresh={4:.1f}Hz",
-                m_LastSwapBurstId, m_LastSwapBurstLen, m_LastSwapBurstMaxMs, m_LastSwapBurstMissedMax, refreshHz);
+            if (!FluidBenchmarkConfig::Get().Enabled)
+            {
+                ENGINE_CORE_WARN(
+                    "[Perf][SwapBurst] END id={0} len={1} maxSwap={2:.3f}ms maxMissedVBlank={3} refresh={4:.1f}Hz",
+                    m_LastSwapBurstId, m_LastSwapBurstLen, m_LastSwapBurstMaxMs, m_LastSwapBurstMissedMax, refreshHz);
+            }
 
             m_SwapBurstActive    = false;
             m_SwapBurstLen       = 0;

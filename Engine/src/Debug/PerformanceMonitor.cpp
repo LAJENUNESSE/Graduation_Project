@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Debug/PerformanceMonitor.h"
+#include "Core/FluidBenchmarkConfig.h"
 #include "Core/Log.h"
 
 #include <chrono>
@@ -12,6 +13,11 @@ namespace Engine
 
     void PerformanceMonitor::Init()
     {
+        m_FrameNumber  = 0;
+        m_FlushCounter = 0;
+        if (FluidBenchmarkConfig::Get().Enabled)
+            return;
+
         // Create logs directory
         std::filesystem::create_directories("logs");
 
@@ -44,9 +50,6 @@ namespace Engine
         {
             ENGINE_CORE_WARN("Failed to open performance CSV: {}", filename.str());
         }
-
-        m_FrameNumber  = 0;
-        m_FlushCounter = 0;
     }
 
     void PerformanceMonitor::Shutdown()

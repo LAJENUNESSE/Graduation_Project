@@ -3,6 +3,7 @@
 #include "Asset/PathUtils.h"
 #include "Core/Application.h"
 #include "Core/Log.h"
+#include "Debug/PerformanceMonitor.h"
 #include "Renderer/RendererCapabilities.h"
 
 #include <algorithm>
@@ -33,6 +34,8 @@ namespace Engine
         auto& app = Application::Get();
         app.GetWindow().SetVSync(false);
         app.SetFrameRateLimitEnabled(false);
+        if (m_Config.Backend == FluidBenchmarkBackend::OpenGL)
+            PerformanceMonitor::Get().GetFluidComputeGPUTimer().SetBlockingReadback(true);
 
         m_Emitter.ParticleCount     = m_Config.ParticleCount;
         m_Emitter.EmitRate          = 0.0f;
@@ -87,6 +90,8 @@ namespace Engine
 
     void FluidBenchmarkLayer::OnDetach()
     {
+        if (m_Config.Backend == FluidBenchmarkBackend::OpenGL)
+            PerformanceMonitor::Get().GetFluidComputeGPUTimer().SetBlockingReadback(false);
         if (m_Output.is_open())
             m_Output.close();
         m_FluidSystem.reset();

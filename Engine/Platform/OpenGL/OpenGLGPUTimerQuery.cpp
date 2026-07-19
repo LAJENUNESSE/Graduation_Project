@@ -74,8 +74,9 @@ namespace Engine
         if (m_FrameCount >= 2)
         {
             int    previousIndex = 1 - m_CurrentIndex;
-            GLuint available     = 0;
-            glGetQueryObjectuiv(m_QueryIDs[previousIndex], GL_QUERY_RESULT_AVAILABLE, &available);
+            GLuint available     = m_BlockingReadback ? GL_TRUE : GL_FALSE;
+            if (!m_BlockingReadback)
+                glGetQueryObjectuiv(m_QueryIDs[previousIndex], GL_QUERY_RESULT_AVAILABLE, &available);
             if (available == GL_TRUE)
             {
                 GLuint64 elapsed = 0;

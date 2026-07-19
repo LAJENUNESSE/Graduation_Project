@@ -28,19 +28,21 @@ namespace Engine
         // Returns the GPU elapsed time in milliseconds (from the previous frame).
         float GetElapsedMs() const { return m_ElapsedMs; }
         bool  HasValidResult() const { return m_HasValidResult; }
+        void  SetBlockingReadback(bool enabled) { m_BlockingReadback = enabled; }
 
         // Non-copyable
         GPUTimerQuery(const GPUTimerQuery&)            = delete;
         GPUTimerQuery& operator=(const GPUTimerQuery&) = delete;
 
     private:
-        uint32_t m_QueryIDs[2]    = {0, 0};
-        int      m_CurrentIndex   = 0;
-        float    m_ElapsedMs      = 0.0f;
-        bool     m_QueryActive    = false; // Is there an active query in End() waiting?
-        int      m_FrameCount     = 0;     // Track frames to know when results are available
-        bool     m_Disabled       = false; // Disabled on unstable drivers (e.g., VMware) or env override
-        bool     m_HasValidResult = false; // Begin() fetched a new result for this frame
+        uint32_t m_QueryIDs[2]      = {0, 0};
+        int      m_CurrentIndex     = 0;
+        float    m_ElapsedMs        = 0.0f;
+        bool     m_QueryActive      = false; // Is there an active query in End() waiting?
+        int      m_FrameCount       = 0;     // Track frames to know when results are available
+        bool     m_Disabled         = false; // Disabled on unstable drivers (e.g., VMware) or env override
+        bool     m_HasValidResult   = false; // Begin() fetched a new result for this frame
+        bool     m_BlockingReadback = false; // Offline benchmark: never overwrite an unread query slot
     };
 
 } // namespace Engine
