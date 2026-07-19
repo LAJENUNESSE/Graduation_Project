@@ -11,12 +11,21 @@
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <string>
 #include <vector>
 
 namespace Engine
 {
 
     struct FluidEmitterComponent;
+
+    enum class FluidComputeBackend : uint8_t
+    {
+        Automatic = 0,
+        OpenGL,
+        CUDA,
+        Vulkan
+    };
 
     class FluidSystemGPU
     {
@@ -43,7 +52,7 @@ namespace Engine
             bool     Enabled          = false;
         };
 
-        FluidSystemGPU(uint32_t particleCount);
+        explicit FluidSystemGPU(uint32_t particleCount, FluidComputeBackend backend = FluidComputeBackend::Automatic);
         ~FluidSystemGPU();
 
         void Init();
@@ -58,9 +67,19 @@ namespace Engine
         Ref<VertexArray>                     GetEmptyVAO() const { return m_EmptyVAO; }
         const std::vector<MeshSDFDebugBody>& GetMeshSDFDebugBodies() const { return m_MeshSDFDebugBodies; }
         const MeshSDFDebugStats&             GetMeshSDFDebugStats() const { return m_MeshSDFDebugStats; }
+        FluidComputeBackend                  GetRequestedBackend() const { return m_RequestedBackend; }
+        FluidComputeBackend                  GetActiveBackend() const { return m_ActiveBackend; }
+        bool                                 IsBackendReady() const { return m_BackendReady; }
+        const std::string&                   GetBackendFailureReason() const { return m_BackendFailureReason; }
+
+        static const char* BackendLabel(FluidComputeBackend backend);
 
     private:
-        uint32_t m_ParticleCount;
+        uint32_t            m_ParticleCount;
+        FluidComputeBackend m_RequestedBackend = FluidComputeBackend::Automatic;
+        FluidComputeBackend m_ActiveBackend    = FluidComputeBackend::Automatic;
+        bool                m_BackendReady     = false;
+        std::string         m_BackendFailureReason;
 
         // GPU buffers
         Ref<ShaderStorageBuffer> m_ParticleBuffer; // binding 0

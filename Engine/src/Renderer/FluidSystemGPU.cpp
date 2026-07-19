@@ -48,8 +48,8 @@ namespace Engine
         bool                        UseCudaPath   = false;
         bool                        InitAttempted = false;
 
-        int     SlotParticle = -1;
-        void*   SPHCtx       = nullptr;
+        int   SlotParticle = -1;
+        void* SPHCtx       = nullptr;
 
         CudaTimingHelper Timing;
 
@@ -61,12 +61,9 @@ namespace Engine
         }
 
         void* GetStream() const { return GLInterop ? GLInterop->GetStream() : nullptr; }
-        void* GetMappedPointer(int slot) const
-        {
-            return GLInterop ? GLInterop->GetMappedPointer(slot) : nullptr;
-        }
-        bool MapAll() { return GLInterop ? GLInterop->MapAll() : false; }
-        void UnmapAll()
+        void* GetMappedPointer(int slot) const { return GLInterop ? GLInterop->GetMappedPointer(slot) : nullptr; }
+        bool  MapAll() { return GLInterop ? GLInterop->MapAll() : false; }
+        void  UnmapAll()
         {
             if (GLInterop)
                 GLInterop->UnmapAll();
@@ -221,10 +218,27 @@ namespace Engine
     };
 #endif
 
-    FluidSystemGPU::FluidSystemGPU(uint32_t particleCount)
-        : m_ParticleCount(particleCount), m_CudaImpl(CreateScope<CudaImpl>()),
+    FluidSystemGPU::FluidSystemGPU(uint32_t particleCount, FluidComputeBackend backend)
+        : m_ParticleCount(particleCount), m_RequestedBackend(backend), m_CudaImpl(CreateScope<CudaImpl>()),
           m_VulkanResources(CreateScope<VulkanResources>())
     {
+    }
+
+    const char* FluidSystemGPU::BackendLabel(FluidComputeBackend backend)
+    {
+        switch (backend)
+        {
+        case FluidComputeBackend::Automatic:
+            return "Automatic";
+        case FluidComputeBackend::OpenGL:
+            return "OpenGL Compute";
+        case FluidComputeBackend::CUDA:
+            return "CUDA";
+        case FluidComputeBackend::Vulkan:
+            return "Vulkan Compute";
+        default:
+            return "Unknown";
+        }
     }
 
     FluidSystemGPU::~FluidSystemGPU()
@@ -241,6 +255,29 @@ namespace Engine
             return;
 
         ENGINE_INFO("[Fluid] Init() called, particleCount={}", m_ParticleCount);
+
+        const RendererAPI::API rendererAPI     = RendererAPI::GetAPI();
+        const bool             requestedVulkan = m_RequestedBackend == FluidComputeBackend::Vulkan;
+        const bool             requestedGLFamily =
+            m_RequestedBackend == FluidComputeBackend::OpenGL || m_RequestedBackend == FluidComputeBackend::CUDA;
+
+        if (requestedVulkan && rendererAPI != RendererAPI::API::Vulkan)
+        {
+            m_BackendFailureReason = "Vulkan Compute requires the Vulkan renderer context";
+            m_Initialized          = true;
+            ENGINE_CORE_ERROR("[Fluid] {}", m_BackendFailureReason);
+            return;
+        }
+        if (requestedGLFamily && rendererAPI != RendererAPI::API::OpenGL)
+        {
+            m_BackendFailureReason = "OpenGL Compute and CUDA require the OpenGL renderer context";
+            m_Initialized          = true;
+            ENGINE_CORE_ERROR("[Fluid] {}", m_BackendFailureReason);
+            return;
+        }
+
+        m_ActiveBackend =
+            rendererAPI == RendererAPI::API::Vulkan ? FluidComputeBackend::Vulkan : FluidComputeBackend::OpenGL;
 
         // Fluid-specific shaders
         m_EmitShader     = Shader::Create("assets/shaders/fluid_emit.glsl");
@@ -284,39 +321,80 @@ namespace Engine
         // ---- CUDA compute sidecar 初始化（仅 OpenGL 路径 + 未强制 GL） ----
         // fluid 没有 Particle 的 forceGL AB config；CUDA 路径默认开启，可通过
         // 环境变量 ENGINE_FLUID_FORCE_GL=1 在诊断对比时停用走 GL compute。
-        if (!m_CudaImpl->InitAttempted && RendererAPI::GetAPI() == RendererAPI::API::OpenGL &&
+        const bool allowCuda =
+            m_RequestedBackend == FluidComputeBackend::Automatic || m_RequestedBackend == FluidComputeBackend::CUDA;
+        if (allowCuda && !m_CudaImpl->InitAttempted && RendererAPI::GetAPI() == RendererAPI::API::OpenGL &&
             !CudaInterop::IsCudaPoisoned())
         {
             m_CudaImpl->InitAttempted = true;
 
-            bool forceGL = false;
-            if (const char* env = std::getenv("ENGINE_FLUID_FORCE_GL"))
-                forceGL = (env[0] == '1');
+            bool forceGL = m_RequestedBackend == FluidComputeBackend::OpenGL;
+            if (m_RequestedBackend == FluidComputeBackend::Automatic)
+            {
+                if (const char* env = std::getenv("ENGINE_FLUID_FORCE_GL"))
+                    forceGL = (env[0] == '1');
+            }
 
             if (!forceGL && CudaGLInteropContext::ProbeDeviceMatch())
             {
-                m_CudaImpl->GLInterop  = CreateScope<CudaGLInteropContext>();
+                m_CudaImpl->GLInterop = CreateScope<CudaGLInteropContext>();
                 m_CudaImpl->SlotParticle =
                     m_CudaImpl->GLInterop->RegisterBuffer(m_ParticleBuffer->GetRendererID(), "FluidParticleBuffer");
 
                 if (m_CudaImpl->SlotParticle >= 0)
                 {
-                    m_CudaImpl->UseCudaPath = true;
-                    m_CudaImpl->Timing.Init();
                     m_CudaImpl->SPHCtx = CudaInterop::CreateSPHContext(m_ParticleCount, 64, MAX_RIGID_BODIES);
-                    ENGINE_CORE_INFO("[Fluid][CUDA] FluidSystemGPU CUDA 路径启用 ({0} slots)",
-                                     m_CudaImpl->GLInterop->GetSlotCount());
+                    if (m_CudaImpl->SPHCtx)
+                    {
+                        m_CudaImpl->UseCudaPath = true;
+                        m_CudaImpl->Timing.Init();
+                        m_ActiveBackend = FluidComputeBackend::CUDA;
+                        ENGINE_CORE_INFO("[Fluid][CUDA] FluidSystemGPU CUDA 路径启用 ({0} slots)",
+                                         m_CudaImpl->GLInterop->GetSlotCount());
+                    }
+                    else
+                    {
+                        m_BackendFailureReason = "Failed to create CUDA SPH context";
+                        ENGINE_WARN("[Fluid][CUDA] {}", m_BackendFailureReason);
+                        m_CudaImpl->GLInterop.reset();
+                    }
                 }
                 else
                 {
+                    m_BackendFailureReason = "Failed to register the fluid particle buffer with CUDA";
                     ENGINE_WARN("[Fluid][CUDA] RegisterBuffer failed; CUDA path disabled");
                     m_CudaImpl->GLInterop.reset();
                 }
             }
+            else if (!forceGL)
+            {
+                m_BackendFailureReason = "CUDA device does not match the active OpenGL device";
+            }
         }
+#else
+        if (m_RequestedBackend == FluidComputeBackend::CUDA)
+            m_BackendFailureReason = "CUDA support is not compiled into this build";
 #endif
 
-        m_Initialized = true;
+        if (m_RequestedBackend == FluidComputeBackend::CUDA && m_ActiveBackend != FluidComputeBackend::CUDA)
+        {
+            if (m_BackendFailureReason.empty())
+            {
+#ifdef ENGINE_ENABLE_CUDA
+                m_BackendFailureReason = CudaInterop::IsCudaPoisoned() ? CudaInterop::GetCudaPoisonReason()
+                                                                       : "CUDA backend initialization failed";
+#else
+                m_BackendFailureReason = "CUDA support is not compiled into this build";
+#endif
+            }
+            m_BackendReady = false;
+            m_Initialized  = true;
+            ENGINE_CORE_ERROR("[Fluid][CUDA] Strict backend request failed: {}", m_BackendFailureReason);
+            return;
+        }
+
+        m_BackendReady = true;
+        m_Initialized  = true;
     }
 
     void FluidSystemGPU::InitSPH(float smoothingRadius)
@@ -411,7 +489,17 @@ namespace Engine
             PerformanceMonitor::Get().SetFluidComputeCudaActive(cudaRan);
             if (cudaRan)
                 return;
-            // CUDA 失败 → fall through 到 GL compute 路径
+            if (m_RequestedBackend == FluidComputeBackend::CUDA)
+            {
+                m_BackendReady = false;
+                m_BackendFailureReason =
+                    CudaInterop::IsCudaPoisoned() ? CudaInterop::GetCudaPoisonReason() : "CUDA dispatch failed";
+                ENGINE_CORE_ERROR("[Fluid][CUDA] Strict backend request failed during update: {}",
+                                  m_BackendFailureReason);
+                return;
+            }
+            m_ActiveBackend = FluidComputeBackend::OpenGL;
+            // Automatic 模式下 CUDA 失败 → fall through 到 GL compute 路径
         }
         PerformanceMonitor::Get().SetFluidComputeCudaActive(false);
 #endif
@@ -737,7 +825,7 @@ namespace Engine
             return false;
         }
 
-        cudaStream_t strm        = static_cast<cudaStream_t>(m_CudaImpl->GetStream());
+        cudaStream_t strm         = static_cast<cudaStream_t>(m_CudaImpl->GetStream());
         void*        devParticles = m_CudaImpl->GetMappedPointer(m_CudaImpl->SlotParticle);
         if (!devParticles)
         {
@@ -752,21 +840,21 @@ namespace Engine
 
         CudaInterop::SPHParams sphP{};
         sphP.smoothingRadius = emitter.SmoothingRadius;
-        sphP.poly6Coeff     = kp.poly6Coeff;
-        sphP.spikyCoeff     = kp.spikyCoeff;
-        sphP.particleMass   = emitter.ParticleMass;
-        sphP.restDensity    = emitter.RestDensity;
-        sphP.gasConstant    = emitter.GasConstant;
-        sphP.viscosity      = emitter.Viscosity;
-        sphP.surfaceTension = emitter.SurfaceTension;
-        sphP.deltaTime      = clampedDt;
-        sphP.gridSize       = gridSize;
-        sphP.cellSize       = cellSize;
-        sphP.aliveCount     = static_cast<int>(m_ParticleCount);
-        sphP.gravity[0]     = emitter.Gravity.x;
-        sphP.gravity[1]     = emitter.Gravity.y;
-        sphP.gravity[2]     = emitter.Gravity.z;
-        sphP.warmupTime     = 0.0f; // fluid 永久存活，无 warm-up concept
+        sphP.poly6Coeff      = kp.poly6Coeff;
+        sphP.spikyCoeff      = kp.spikyCoeff;
+        sphP.particleMass    = emitter.ParticleMass;
+        sphP.restDensity     = emitter.RestDensity;
+        sphP.gasConstant     = emitter.GasConstant;
+        sphP.viscosity       = emitter.Viscosity;
+        sphP.surfaceTension  = emitter.SurfaceTension;
+        sphP.deltaTime       = clampedDt;
+        sphP.gridSize        = gridSize;
+        sphP.cellSize        = cellSize;
+        sphP.aliveCount      = static_cast<int>(m_ParticleCount);
+        sphP.gravity[0]      = emitter.Gravity.x;
+        sphP.gravity[1]      = emitter.Gravity.y;
+        sphP.gravity[2]      = emitter.Gravity.z;
+        sphP.warmupTime      = 0.0f; // fluid 永久存活，无 warm-up concept
 
         // 收集刚体数据并上传到 SPHCtx
         std::vector<GPURigidBodyData> rigidBodies;
@@ -791,10 +879,10 @@ namespace Engine
         {
             // Pass b: PCISPH 全套
             CudaInterop::PCISPHIterParams ip{};
-            ip.pcisphDelta        = SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
-                                                                      emitter.RestDensity, clampedDt);
+            ip.pcisphDelta       = SPHKernelMath::ComputePCISPHDelta(emitter.SmoothingRadius, emitter.ParticleMass,
+                                                                     emitter.RestDensity, clampedDt);
             ip.boundaryStiffness = emitter.BoundaryStiffness;
-            ip.boundaryDamping    = emitter.BoundaryDamping;
+            ip.boundaryDamping   = emitter.BoundaryDamping;
             ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
             ip.usePredictedPos   = 0;
 
@@ -810,15 +898,14 @@ namespace Engine
                 CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
             }
 
-            CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles,
-                                           static_cast<int>(m_ParticleCount), strm);
+            CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles, static_cast<int>(m_ParticleCount), strm);
         }
         else
         {
             // Pass b alt: WCSPH Density + Force
             CudaInterop::PCISPHIterParams ip{};
             ip.boundaryStiffness = emitter.BoundaryStiffness;
-            ip.boundaryDamping    = emitter.BoundaryDamping;
+            ip.boundaryDamping   = emitter.BoundaryDamping;
             ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
             ip.usePredictedPos   = 0;
 
@@ -840,7 +927,7 @@ namespace Engine
         sp.boundaryMax[1] = emitterPos.y + emitter.BoundaryMax.y;
         sp.boundaryMax[2] = emitterPos.z + emitter.BoundaryMax.z;
         sp.useBoundary    = emitter.UseBoundary ? 1 : 0;
-        sp.particleCount = static_cast<int>(m_ParticleCount);
+        sp.particleCount  = static_cast<int>(m_ParticleCount);
         CudaInterop::LaunchSPHSimulate(devParticles, sp, strm);
 
         m_CudaImpl->Timing.RecordStop(strm);
