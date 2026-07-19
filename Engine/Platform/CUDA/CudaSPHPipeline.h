@@ -41,6 +41,7 @@ namespace Engine
             float gravity[3];
             float boundaryMin[3], boundaryMax[3];
             int   useBoundary, particleCount;
+            int   pcisphMode;
         };
 
         // 流体发射参数
@@ -81,7 +82,7 @@ namespace Engine
         LaunchPCISPHDensity(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream);
         void
         LaunchPCISPHForce(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream);
-        void LaunchPCISPHApply(void* ctx, void* particles, int aliveCount, void* stream);
+        void LaunchPCISPHApply(void* ctx, void* particles, int aliveCount, bool writePosition, void* stream);
 
         // ---- 积分 + 边界 ----
         void LaunchSPHSimulate(void* particles, const SPHSimulateParams& p, void* stream);

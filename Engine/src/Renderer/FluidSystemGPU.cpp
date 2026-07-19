@@ -971,7 +971,8 @@ namespace Engine
                 CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
             }
 
-            CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles, static_cast<int>(m_ParticleCount), strm);
+            CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles, static_cast<int>(m_ParticleCount), true,
+                                           strm);
         }
         else
         {
@@ -1000,6 +1001,7 @@ namespace Engine
         sp.boundaryMax[2] = emitterPos.z + emitter.BoundaryMax.z;
         sp.useBoundary    = emitter.UseBoundary ? 1 : 0;
         sp.particleCount  = static_cast<int>(m_ParticleCount);
+        sp.pcisphMode     = emitter.PCISPHEnabled ? 1 : 0;
         CudaInterop::LaunchSPHSimulate(devParticles, sp, strm);
 
         m_CudaImpl->Timing.RecordStop(strm);

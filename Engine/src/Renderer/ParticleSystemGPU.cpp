@@ -916,8 +916,9 @@ namespace Engine
                             CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
                         }
 
+                        // 粒子系统的 simulate pass 仍负责位置积分；仅 FluidSystemGPU 使用 PCISPH 预测位置。
                         CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles,
-                                                       static_cast<int>(m_LastAliveCount), strm);
+                                                       static_cast<int>(m_LastAliveCount), false, strm);
                     }
                     else
                     {

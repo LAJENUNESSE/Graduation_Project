@@ -1050,7 +1050,8 @@ namespace Engine
         // PCISPH Apply 内核（移植自 sph_pcisph_apply.glsl）
         // ======================================================================
 
-        __global__ static void PCISPHApplyKernel(GPUParticle* particles, PCISPHData* pcisph, uint32_t aliveCount)
+        __global__ static void
+        PCISPHApplyKernel(GPUParticle* particles, PCISPHData* pcisph, uint32_t aliveCount, bool writePosition)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= aliveCount)
@@ -1059,9 +1060,15 @@ namespace Engine
             particles[i].velAndMaxLife.x = pcisph[i].predictedVelAndDensity.x;
             particles[i].velAndMaxLife.y = pcisph[i].predictedVelAndDensity.y;
             particles[i].velAndMaxLife.z = pcisph[i].predictedVelAndDensity.z;
+            if (writePosition)
+            {
+                particles[i].posAndLife.x = pcisph[i].predictedPosAndPressure.x;
+                particles[i].posAndLife.y = pcisph[i].predictedPosAndPressure.y;
+                particles[i].posAndLife.z = pcisph[i].predictedPosAndPressure.z;
+            }
         }
 
-        void LaunchPCISPHApply(void* ctxPtr, void* particles, int aliveCount, void* stream)
+        void LaunchPCISPHApply(void* ctxPtr, void* particles, int aliveCount, bool writePosition, void* stream)
         {
             if (IsCudaPoisoned())
                 return;
@@ -1071,7 +1078,7 @@ namespace Engine
             GPUParticle*    devP = static_cast<GPUParticle*>(particles);
 
             uint32_t blocks = ((uint32_t)aliveCount + 255) / 256;
-            PCISPHApplyKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, (uint32_t)aliveCount);
+            PCISPHApplyKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, (uint32_t)aliveCount, writePosition);
             CUDA_CHECK_KERNEL("PCISPHApplyKernel");
         }
 
@@ -1089,19 +1096,28 @@ namespace Engine
             float vy = particles[i].velAndMaxLife.y;
             float vz = particles[i].velAndMaxLife.z;
 
-            // 重力积分
-            vx += p.gravity[0] * p.deltaTime;
-            vy += p.gravity[1] * p.deltaTime;
-            vz += p.gravity[2] * p.deltaTime;
+            // PCISPH 已在 init pass 中叠加重力，避免重复积分。
+            if (!p.pcisphMode)
+            {
+                vx += p.gravity[0] * p.deltaTime;
+                vy += p.gravity[1] * p.deltaTime;
+                vz += p.gravity[2] * p.deltaTime;
+            }
 
             // 阻尼
             vx *= p.damping;
             vy *= p.damping;
             vz *= p.damping;
 
-            float px = particles[i].posAndLife.x + vx * p.deltaTime;
-            float py = particles[i].posAndLife.y + vy * p.deltaTime;
-            float pz = particles[i].posAndLife.z + vz * p.deltaTime;
+            float px = particles[i].posAndLife.x;
+            float py = particles[i].posAndLife.y;
+            float pz = particles[i].posAndLife.z;
+            if (!p.pcisphMode)
+            {
+                px += vx * p.deltaTime;
+                py += vy * p.deltaTime;
+                pz += vz * p.deltaTime;
+            }
 
             // 边界碰撞（穿透深度反射，与 GLSL fluid_simulate 一致）
             if (p.useBoundary)
