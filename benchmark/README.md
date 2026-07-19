@@ -41,3 +41,14 @@ python benchmark/summarize.py benchmark/results/raw_results.csv --density-relati
 ```
 
 在没有冻结容差时，汇总脚本会保留 `Speedup` 为空，避免把数值偏差明显的后端结果写成论文加速比。
+
+生成论文用的矢量图和高分辨率预览图：
+
+```powershell
+python benchmark/plot_results.py `
+  --summary benchmark/results/summary.csv `
+  --output-dir benchmark/results/figures
+```
+
+绘图脚本只接受通过正确性门槛的实验组，并输出 GPU Compute 耗时与相对 OpenGL
+加速比两组图（PDF + PNG）。
