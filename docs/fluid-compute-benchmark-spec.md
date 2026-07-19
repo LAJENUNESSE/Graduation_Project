@@ -59,7 +59,7 @@ Editor.exe --benchmark-fluid `
 ```text
 Timestamp,Backend,Solver,Particles,Iterations,Run,Frame,Warmup,
 SampleValid,Compute_ms,Interop_ms,EndToEnd_ms,AliveCount,
-MeanDensity,MaxDensityError,StateHash,Device
+MeanDensity,MaxDensityError,RMSDensityError,OutOfBoundsCount,StateHash,Device
 ```
 
 汇总 CSV 每行表示一组实验：

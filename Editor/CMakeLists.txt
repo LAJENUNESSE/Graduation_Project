@@ -1,5 +1,6 @@
 set(EDITOR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorApp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Benchmark/FluidBenchmarkLayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorAssetDescriptor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorBootstrapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/EditorLayer.cpp
