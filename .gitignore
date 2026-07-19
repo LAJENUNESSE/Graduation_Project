@@ -66,9 +66,16 @@ docs/*
 !docs/vulkan-migration/**
 !docs/decisions/
 !docs/decisions/**
+!docs/thesis/
+docs/thesis/*
+!docs/thesis/figures/
+!docs/thesis/figures/scripted/
+!docs/thesis/figures/scripted/**
 
 # Scripts (build scripts, ignored)
 scripts/
+!docs/thesis/figures/scripted/scripts/
+!docs/thesis/figures/scripted/scripts/*.py
 
 # Lua game scripts (tracked!)
 !assets/scripts/

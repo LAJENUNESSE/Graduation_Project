@@ -1,0 +1,10 @@
+[project]
+name = "gameengine-thesis-figures"
+version = "0.1.0"
+description = "Reproducible formula and benchmark figures for the GameEngine thesis"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.10,<4",
+    "numpy>=2.2,<3",
+]
+
