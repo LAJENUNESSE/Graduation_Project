@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
 #include "Renderer/Shader.h"
@@ -64,6 +65,21 @@ namespace Engine
         const std::vector<ReflectedBinding>&      GetReflectedBindings() const { return m_ReflectedBindings; }
         const std::vector<ReflectedPushConstant>& GetReflectedPushConstants() const { return m_ReflectedPushConstants; }
 
+        // ---- uniform 值记录（Phase 8.2 地基）----
+        // Vulkan 无全局 uniform 状态机，SetXxx 仅把值缓存到 CPU 侧 map，
+        // 供后续 UBO 打包 + descriptor set 写入使用（本阶段不真正上传）。
+        const std::unordered_map<std::string, int>&              GetIntUniforms() const { return m_IntUniforms; }
+        const std::unordered_map<std::string, std::vector<int>>& GetIntArrayUniforms() const
+        {
+            return m_IntArrayUniforms;
+        }
+        const std::unordered_map<std::string, float>&     GetFloatUniforms() const { return m_FloatUniforms; }
+        const std::unordered_map<std::string, glm::vec2>& GetFloat2Uniforms() const { return m_Float2Uniforms; }
+        const std::unordered_map<std::string, glm::vec3>& GetFloat3Uniforms() const { return m_Float3Uniforms; }
+        const std::unordered_map<std::string, glm::vec4>& GetFloat4Uniforms() const { return m_Float4Uniforms; }
+        const std::unordered_map<std::string, glm::mat3>& GetMat3Uniforms() const { return m_Mat3Uniforms; }
+        const std::unordered_map<std::string, glm::mat4>& GetMat4Uniforms() const { return m_Mat4Uniforms; }
+
     private:
         void CompileFromFile(const std::string& filepath);
         void CompileFromSourceMap(const std::unordered_map<std::string, std::string>& stageSources,
@@ -79,6 +95,16 @@ namespace Engine
         VkDevice                                               m_ModuleDevice = VK_NULL_HANDLE;
         std::vector<ReflectedBinding>                          m_ReflectedBindings;
         std::vector<ReflectedPushConstant>                     m_ReflectedPushConstants;
+
+        // uniform 值缓存（Phase 8.2 地基；Vulkan 无全局 uniform 状态机）
+        std::unordered_map<std::string, int>              m_IntUniforms;
+        std::unordered_map<std::string, std::vector<int>> m_IntArrayUniforms;
+        std::unordered_map<std::string, float>            m_FloatUniforms;
+        std::unordered_map<std::string, glm::vec2>        m_Float2Uniforms;
+        std::unordered_map<std::string, glm::vec3>        m_Float3Uniforms;
+        std::unordered_map<std::string, glm::vec4>        m_Float4Uniforms;
+        std::unordered_map<std::string, glm::mat3>        m_Mat3Uniforms;
+        std::unordered_map<std::string, glm::mat4>        m_Mat4Uniforms;
     };
 
 } // namespace Engine

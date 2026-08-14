@@ -342,51 +342,42 @@ namespace Engine
 
     void VulkanShader::SetInt(const std::string& name, int value)
     {
-        (void)name;
-        (void)value;
+        m_IntUniforms[name] = value;
     }
 
     void VulkanShader::SetIntArray(const std::string& name, int* values, uint32_t count)
     {
-        (void)name;
-        (void)values;
-        (void)count;
+        m_IntArrayUniforms[name] = std::vector<int>(values, values + count);
     }
 
     void VulkanShader::SetFloat(const std::string& name, float value)
     {
-        (void)name;
-        (void)value;
+        m_FloatUniforms[name] = value;
     }
 
     void VulkanShader::SetFloat2(const std::string& name, const glm::vec2& value)
     {
-        (void)name;
-        (void)value;
+        m_Float2Uniforms[name] = value;
     }
 
     void VulkanShader::SetFloat3(const std::string& name, const glm::vec3& value)
     {
-        (void)name;
-        (void)value;
+        m_Float3Uniforms[name] = value;
     }
 
     void VulkanShader::SetFloat4(const std::string& name, const glm::vec4& value)
     {
-        (void)name;
-        (void)value;
+        m_Float4Uniforms[name] = value;
     }
 
     void VulkanShader::SetMat3(const std::string& name, const glm::mat3& value)
     {
-        (void)name;
-        (void)value;
+        m_Mat3Uniforms[name] = value;
     }
 
     void VulkanShader::SetMat4(const std::string& name, const glm::mat4& value)
     {
-        (void)name;
-        (void)value;
+        m_Mat4Uniforms[name] = value;
     }
 
 } // namespace Engine
