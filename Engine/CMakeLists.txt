@@ -105,6 +105,7 @@ if(ENGINE_ENABLE_VULKAN)
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanShader.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanTexture.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSynchronization.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanVertexArray.cpp
     )
 endif()
 
