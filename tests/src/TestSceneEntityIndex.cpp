@@ -65,7 +65,7 @@ TEST(SceneEntityIndex, Size)
     EXPECT_EQ(index.Size(), 2u);
 }
 
-TEST(SceneEntityIndex, OverwriteExisting)
+TEST(SceneEntityIndex, DuplicateInsertKeepsFirst)
 {
     SceneEntityIndex index;
     UUID             uuid(100);
@@ -73,9 +73,10 @@ TEST(SceneEntityIndex, OverwriteExisting)
     auto             entity2 = static_cast<entt::entity>(2);
 
     index.Insert(uuid, entity1);
+    // 重复 UUID 是数据错误：Insert 拒绝覆盖并保留第一个映射
     index.Insert(uuid, entity2);
 
-    EXPECT_EQ(index.Find(uuid), entity2);
+    EXPECT_EQ(index.Find(uuid), entity1);
     EXPECT_EQ(index.Size(), 1u);
 }
 
