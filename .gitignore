@@ -119,6 +119,9 @@ Game_Engine/
 # Agent work plans
 .sisyphus/
 
+# Codex runtime state
+.codex-tmp/
+
 # OpenCode runtime state
 .omo/
 
