@@ -41,12 +41,9 @@ namespace Engine
         const CatStyle& CatStyleOf(GpuMemCategory cat)
         {
             static const CatStyle kStyles[] = {
-                {"纹理",       IM_COL32(0, 115, 217, 255)},
-                {"网格缓冲",    IM_COL32(47, 168, 79, 255)},
-                {"UBO/SSBO",  IM_COL32(230, 179, 0, 255)},
-                {"粒子",       IM_COL32(242, 113, 28, 255)},
-                {"帧缓冲附件",  IM_COL32(154, 92, 208, 255)},
-                {"其他",       IM_COL32(85, 85, 85, 255)},
+                {"纹理", IM_COL32(0, 115, 217, 255)},        {"网格缓冲", IM_COL32(47, 168, 79, 255)},
+                {"UBO/SSBO", IM_COL32(230, 179, 0, 255)},    {"粒子", IM_COL32(242, 113, 28, 255)},
+                {"帧缓冲附件", IM_COL32(154, 92, 208, 255)}, {"其他", IM_COL32(85, 85, 85, 255)},
             };
             static_assert((size_t)GpuMemCategory::Count == 6, "分类样式表与枚举不同步");
             return kStyles[(size_t)cat];
@@ -71,6 +68,7 @@ namespace Engine
         std::string FormatRateMBps(float mbps)
         {
             std::ostringstream oss;
+            oss << std::fixed;
             if (mbps >= 1024.0f)
             {
                 oss.precision(2);
@@ -120,14 +118,14 @@ namespace Engine
             if (GlobalMemoryStatusEx(&status))
                 totalPhysBytes = status.ullTotalPhys;
 
-            using K32Fn = BOOL(*)(HANDLE, ProcessMemoryCountersLocal*, DWORD);
-            static K32Fn fn = nullptr;
+            using K32Fn        = BOOL (*)(HANDLE, ProcessMemoryCountersLocal*, DWORD);
+            static K32Fn fn    = nullptr;
             static bool  tried = false;
             if (!tried)
             {
                 tried = true;
-                fn = reinterpret_cast<K32Fn>(reinterpret_cast<void*>(::GetProcAddress(
-                    ::GetModuleHandleW(L"kernel32.dll"), "K32GetProcessMemoryInfo")));
+                fn    = reinterpret_cast<K32Fn>(reinterpret_cast<void*>(
+                    ::GetProcAddress(::GetModuleHandleW(L"kernel32.dll"), "K32GetProcessMemoryInfo")));
                 if (!fn)
                 {
                     HMODULE psapi = ::LoadLibraryA("psapi.dll");
@@ -158,9 +156,9 @@ namespace Engine
 
         const auto entries = GpuMemoryStats::Get().CollectLiveEntries();
 
-        uint64_t catBytes[(size_t)GpuMemCategory::Count]  = {};
-        uint32_t catCount[(size_t)GpuMemCategory::Count]  = {};
-        uint64_t residentTriangles                        = 0;
+        uint64_t catBytes[(size_t)GpuMemCategory::Count] = {};
+        uint32_t catCount[(size_t)GpuMemCategory::Count] = {};
+        uint64_t residentTriangles                       = 0;
         for (const auto& e : entries)
         {
             catBytes[(size_t)e.Category] += e.Bytes;
@@ -195,7 +193,7 @@ namespace Engine
     {
         auto& gmem = GpuMemoryStats::Get();
 
-        const auto now     = std::chrono::steady_clock::now();
+        const auto now      = std::chrono::steady_clock::now();
         const bool firstRun = m_LastSampleTime.time_since_epoch().count() == 0;
         if (firstRun)
         {
@@ -243,12 +241,12 @@ namespace Engine
         ImGui::TextUnformatted(totalLabel.c_str());
 
         // ---- 单一堆叠块 ----
-        const float  barWidth = ImGui::GetContentRegionAvail().x;
+        const float  barWidth  = ImGui::GetContentRegionAvail().x;
         const float  barHeight = 30.0f;
         const ImVec2 origin    = ImGui::GetCursorScreenPos();
         ImDrawList*  dl        = ImGui::GetWindowDrawList();
 
-        float x      = origin.x;
+        float  x        = origin.x;
         size_t hoverCat = (size_t)GpuMemCategory::Count;
         for (size_t i = 0; i < (size_t)GpuMemCategory::Count; ++i)
         {
@@ -293,8 +291,8 @@ namespace Engine
             if (hoverCat != (size_t)GpuMemCategory::Count)
             {
                 const auto& style = CatStyleOf((GpuMemCategory)hoverCat);
-                ImGui::SetTooltip("%s\n%s · %u 个 · %.1f%%", style.Name,
-                                  GpuMemFormatBytes(catBytes[hoverCat]).c_str(), catCounts[hoverCat],
+                ImGui::SetTooltip("%s\n%s · %u 个 · %.1f%%", style.Name, GpuMemFormatBytes(catBytes[hoverCat]).c_str(),
+                                  catCounts[hoverCat],
                                   total ? float(catBytes[hoverCat]) / float(total) * 100.0f : 0.0f);
             }
         }
@@ -341,10 +339,9 @@ namespace Engine
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize(wsLabel.c_str()).x);
         ImGui::TextUnformatted(wsLabel.c_str());
 
-        const float cpuWidth = ImGui::GetContentRegionAvail().x;
+        const float  cpuWidth  = ImGui::GetContentRegionAvail().x;
         const ImVec2 cpuOrigin = ImGui::GetCursorScreenPos();
-        dl->AddRectFilled(cpuOrigin, ImVec2(cpuOrigin.x + cpuWidth, cpuOrigin.y + 12.0f),
-                          IM_COL32(74, 122, 154, 255));
+        dl->AddRectFilled(cpuOrigin, ImVec2(cpuOrigin.x + cpuWidth, cpuOrigin.y + 12.0f), IM_COL32(74, 122, 154, 255));
         dl->AddRect(cpuOrigin, ImVec2(cpuOrigin.x + cpuWidth, cpuOrigin.y + 12.0f), IM_COL32(31, 31, 31, 255));
         ImGui::Dummy(ImVec2(cpuWidth, 12.0f));
 
@@ -369,8 +366,8 @@ namespace Engine
         // ~500ms 节流采样
         static std::chrono::steady_clock::time_point lastSample{};
         const auto                                   now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSample).count() > 500 || lastSample ==
-            std::chrono::steady_clock::time_point{})
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSample).count() > 500 ||
+            lastSample == std::chrono::steady_clock::time_point{})
         {
             lastSample = now;
             nvml.Sample();
@@ -391,20 +388,20 @@ namespace Engine
         ImGui::Columns(1);
         ImGui::ProgressBar(nvml.GetGpuUtilPct() / 100.0f, ImVec2(-1, 4.0f), "");
         if (!nvml.GetDeviceName().empty())
-            ImGui::TextDisabled("%s · 数据来源 NVML，非 N 卡自动隐藏本节", nvml.GetDeviceName().c_str());
-        else
-            ImGui::TextDisabled("数据来源 NVML，非 N 卡自动隐藏本节");
+            ImGui::TextDisabled("%s", nvml.GetDeviceName().c_str());
+        ImGui::TextDisabled("数据来源 NVML · 非 N 卡自动隐藏本节");
     }
 
     void MemoryStatsPanel::DrawBandwidth()
     {
-        auto row = [](const char* name, float rate, float peak) {
+        auto row = [](const char* name, float rate, float peak)
+        {
             ImGui::Text("%s %s", name, FormatRateMBps(rate).c_str());
             ImGui::SameLine();
             ImGui::TextDisabled("· 峰值 %s", FormatRateMBps(peak).c_str());
         };
 
-        const bool hasUp   = !m_UpHistoryMBps.empty();
+        const bool  hasUp   = !m_UpHistoryMBps.empty();
         const float curUp   = hasUp ? m_UpHistoryMBps.back() : 0.0f;
         const float curDown = !m_DownHistoryMBps.empty() ? m_DownHistoryMBps.back() : 0.0f;
         row("上传:", curUp, m_PeakUpMBps);
@@ -457,7 +454,7 @@ namespace Engine
             const size_t count = std::min<size_t>(sorted.size(), 5);
             for (size_t i = 0; i < count; ++i)
             {
-                const auto* e = sorted[i];
+                const auto* e     = sorted[i];
                 const auto& style = CatStyleOf(e->Category);
                 ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(style.Color));
                 ImGui::TableNextRow();
