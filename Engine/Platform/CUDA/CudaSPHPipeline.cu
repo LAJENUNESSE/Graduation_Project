@@ -497,6 +497,16 @@ namespace Engine
         {
             const uint32_t numBlocks = (totalElements + kScanBlockSize - 1u) / kScanBlockSize;
 
+            // Step 2 依赖单 workgroup 的 shared temp[512] 扫描块和，超限时结果会静默
+            // 截断为错误前缀和——按项目约定显式中毒回退，而非带病输出
+            if (numBlocks > kScanBlockSize)
+            {
+                fprintf(stderr, "[CUDA] Blelloch scan: numBlocks %u exceeds single-workgroup limit %u (%s:%d)\n",
+                        numBlocks, kScanBlockSize, __FILE__, __LINE__);
+                PoisonCuda("Blelloch scan block count exceeds single-workgroup limit");
+                return;
+            }
+
             // Step 1: block-local scan（values → outScan，块和写入 blockSums）
             ScanLocalKernel<<<numBlocks, kScanBlockThreads, 0, strm>>>(d_values, d_outScan, d_blockSums,
                                                                        (int)totalElements);

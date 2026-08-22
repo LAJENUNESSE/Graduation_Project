@@ -186,6 +186,12 @@ namespace Engine
         // Step 2: Scan block sums (single dispatch, ≤512 blocks fits in 1 workgroup)
         if (numBlocks > 1)
         {
+            // grid_prefix_sum.glsl 的 Mode1 用单 workgroup shared temp[512] 扫描块和，
+            // numBlocks 超过 512 会静默截断导致前缀和错误——在此显式拦截
+            ENGINE_CORE_RELEASE_ASSERT(numBlocks <= 512,
+                                       "Prefix-sum block count {} exceeds single-workgroup limit 512 "
+                                       "(gridSize too large)",
+                                       numBlocks);
             m_PrefixSumShader->SetInt("u_Mode", 1);
             m_PrefixSumShader->SetInt("u_N", static_cast<int>(numBlocks));
             RenderCommand::DispatchCompute(1);
