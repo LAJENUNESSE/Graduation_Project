@@ -60,4 +60,5 @@ paths:
 - SPH 流体 WCSPH 模式对负压力做 clamp 处理
 - PCISPH 变体在预测步骤后需恢复预测位置
 - 新增纯数学函数应提取到 header-only 文件（如 SPHKernelMath.h），保持可测试性
-- 添加新的 GPU 资源/状态调用时，必须同步设计 OpenGL + Vulkan 两路径，禁止仅写一边
+- 添加新的**抽象层** GPU 资源/状态调用时，必须同步设计 OpenGL + Vulkan 两路径，禁止仅写一边
+- 例外：Platform 目录内的**后端私有优化/工具**不受双路径约束——如 `VulkanPipelineCache`（pipeline 懒创建缓存）、`VulkanBarrierUtil`（barrier 位映射）、`VulkanDescriptor` 三层均无 OpenGL 对应物（OpenGL 有隐式同步与全局状态机，无此需求）；判断标准是"是否出现在 `Engine/src/Renderer/` 抽象接口中"
