@@ -1,16 +1,9 @@
-# LaTeX 中间产物与输出
-*.aux
-*.log
+*.bcf-SAVE-ERROR
 *.fls
 *.fdb_latexmk
+*.aux
+*.log
 *.xdv
 *.toc
-*.lof
-*.lot
 *.out
-*.synctex.gz
-*.bbl
-*.bcf
-*.blg
-*.run.xml
 main.pdf
