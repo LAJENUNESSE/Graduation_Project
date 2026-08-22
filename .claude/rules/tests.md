@@ -13,18 +13,23 @@ paths:
 tests/
 ├── CMakeLists.txt          — 构建配置
 └── src/
-    ├── TestMain.cpp              — gtest 主入口
-    ├── TestAssetHandle.cpp       — Asset/AssetHandle
-    ├── TestSlotMap.cpp           — Asset/SlotMap
-    ├── TestSceneEntityIndex.cpp  — Scene/SceneEntityIndex
-    ├── TestSceneHierarchy.cpp    — Scene/SceneHierarchyService
-    ├── TestWorldTransform.cpp    — Scene/WorldTransformService
-    ├── TestSDFMath.cpp           — Physics/SDFMath
-    ├── TestSPHKernel.cpp         — Renderer/SPHKernelMath
-    ├── TestCommandHistory.cpp    — Editor/CommandHistory
-    ├── TestUUID.cpp              — Core/UUID
-    ├── TestEvents.cpp            — Core/Events
-    └── TestTimestep.cpp          — Core/Timestep
+    ├── TestMain.cpp                 — gtest 主入口
+    ├── TestAssetHandle.cpp          — Asset/AssetHandle
+    ├── TestSlotMap.cpp              — Asset/SlotMap
+    ├── TestSceneEntityIndex.cpp     — Scene/SceneEntityIndex
+    ├── TestSceneHierarchy.cpp       — Scene/SceneHierarchyService
+    ├── TestWorldTransform.cpp       — Scene/WorldTransformService
+    ├── TestSDFMath.cpp              — Physics/SDFMath
+    ├── TestSPHKernel.cpp            — Renderer/SPHKernelMath
+    ├── TestSPHCommon.cpp            — Renderer/SPHCommon
+    ├── TestCommandHistory.cpp       — Editor/CommandHistory
+    ├── TestFluidBenchmarkConfig.cpp — Core/FluidBenchmarkConfig
+    ├── TestFluidBenchmarkData.cpp   — Renderer/FluidBenchmarkData
+    ├── TestCudaParticleTypes.cpp    — CUDA 粒子类型（CPU 侧结构）
+    ├── TestCudaPoisonState.cpp      — CUDA 中毒回退状态机
+    ├── TestUUID.cpp                 — Core/UUID
+    ├── TestEvents.cpp               — Core/Events
+    └── TestTimestep.cpp             — Core/Timestep
 ```
 
 ## EngineTestCore 静态库
@@ -32,9 +37,10 @@ tests/
 轻量静态库，仅编译测试所需的少量 Engine 源文件，**避免链接完整 Engine 库**（OpenGL/Vulkan/OpenAL/Bullet3 等重依赖）：
 
 包含源文件：
-- `Core/UUID.cpp`, `Core/Log.cpp`
+- `Core/UUID.cpp`, `Core/Log.cpp`, `Core/FluidBenchmarkConfig.cpp`
+- `Renderer/FluidBenchmarkData.cpp`, `Renderer/SPHRigidBodyCollector.cpp`
 - `Scene/SceneEntityIndex.cpp`, `SceneHierarchyService.cpp`, `WorldTransformService.cpp`, `SceneCamera.cpp`
-- `Editor/CommandHistory.cpp`
+- `Editor/src/CommandHistory.cpp`（跨目录引用）
 
 依赖：entt（header-only）、glm（header-only）、spdlog
 

@@ -5,7 +5,7 @@ paths:
 
 # Platform/Vulkan
 
-`Engine/src/Renderer/` 中抽象接口的 Vulkan 1.2+ 具体实现，已合并到主分支。
+`Engine/src/Renderer/` 中抽象接口的 Vulkan 1.2+ 具体实现，已合并到主分支（39 个文件）。
 
 > **事实源**: `docs/vulkan-migration/SPEC.md`（实时进度 + 决策日志）。修改前先读。
 > **阶段定义**: `docs/vulkan-migration-roadmap.md`（长期不变）。
@@ -26,8 +26,9 @@ paths:
 | StorageBuffer (SSBO) | VulkanStorageBuffer（6 种构造变体） |
 | UniformBuffer | VulkanUniformBuffer |
 | Texture2D | VulkanTexture2D（VMA Image + view + sampler + staging） |
-| TextureCubemap | ⬜ stub（Phase 7 待办，目前 warn only） |
+| TextureCubemap | VulkanTextureCubemap（已实装：stbi 加载 6 面 + magenta fallback，见 `VulkanTexture.cpp:344`） |
 | Framebuffer | VulkanFramebuffer（VkRenderPass + 多附件） |
+| VertexArray | VulkanVertexArray（已接入 `VertexArray::Create` 工厂分派） |
 | Shader | VulkanShader（shaderc 编译 + spirv-cross 反射） |
 | IBLGenerator | VulkanIBLGenerator（3 个 compute dispatch） |
 | — | VulkanCommandBuffer（录制抽象） |
@@ -35,6 +36,7 @@ paths:
 | — | VulkanDescriptor（SetLayout / Pool / Writer 三层） |
 | — | VulkanAllocator（VMA allocator 生命周期） |
 | — | VulkanBarrierUtil（`BarrierBit::*` → stage/access 映射） |
+| — | VulkanPipelineCache（graphics pipeline 懒创建缓存，Phase 8.2 骨架，**尚未接入主帧渲染**） |
 
 ## 关键决策（摘自 SPEC.md §3）
 
@@ -50,15 +52,18 @@ paths:
 
 - prefix_sum 三 pass 之间 `ResolveBarrierBits(ShaderStorage)` barrier 不能省
 - 每帧路径调用 `BeginSingleTimeCommands` 会 stall 主帧 → 见 D-3
-- `VulkanTextureCubemap` 未实装 → IBL 用占位 env atlas，Irradiance/Prefilter 输出暂无实际意义
-- `--vulkan` 当前走 `VulkanSmokeLayer`，Editor 主路径空场景非 bug（PBR 接入是 Phase 8）
+- `--vulkan` 已走 EditorLayer 主路径（Phase 8 双后端接通，见 `Editor/src/EditorApp.cpp:23-26` 注释）；`VulkanSmokeLayer.{h,cpp}` 为遗留死代码，勿再引用
 
 ## 注意事项
 
 - 所有 Vulkan 资源走 **VMA**（VulkanAllocator），禁止裸 `vkAllocateMemory`
 - Descriptor set 三层抽象：`VulkanDescriptorSetLayout`（layout） / `VulkanDescriptorPool`（per-frame reset 复用） / `VulkanDescriptorWriter`（Builder 风格累积 writes）
 - `VulkanShader` 暴露 SPIR-V 字节码 + 懒创建 `VkShaderModule` 缓存 + 反射 binding / push constant
+- `VulkanShader` 的 `SetXxx` 不再是 no-op：值记录到 CPU 侧 `unordered_map`（8 组 `GetXxxUniforms()` getter，见 `VulkanShader.h:68-81`），供后续 UBO 打包 + descriptor 写入；本阶段不真正上传
+- `VulkanPipelineCache`：key = `{Shader*, VkRenderPass, VertexLayoutHash}`，`GetOrCreate/Contains/Clear` 接口，entry 持有 pipeline+layout 所有权；接入主帧渲染是后续 Phase 8.2 工作
 - Memory barrier 通过 `VulkanBarrierUtil::ResolveBarrierBits(bits)` 将 `BarrierBit::{ShaderStorage|Command|BufferUpdate|All}` 解析为 `VkPipelineStageFlags` + `VkAccessFlags` 四元组（多 bit 取并集）
 - ImGui 通过 `imgui_impl_vulkan` 初始化，独立 RenderPass + 自动 descriptor pool
+- IBL 输出经 `GetIrradianceView()/GetPrefilterView()/GetBRDFLutView()`（`VulkanIBLGenerator.h:45-47`）以 `void*` 透传 VkImageView，`SceneRenderer` 按 API 分派 ID vs View（`RenderCommand::BindCubemapView`）
+- `VulkanIBLGenerator::Generate(skybox)` 已消费真实 `VulkanTextureCubemap`（view/sampler），skybox 无效时只生成 BRDF LUT 并跳过 Irradiance/Prefilter（`VulkanIBLGenerator.h:23-24` 注释）
 - 每个迁移 commit 必须能单独构建通过（`cmake --build build --config RelWithDebInfo --target Editor`）
 - 新增 compute shader 时双路径并存，`#ifdef VULKAN` 分支用 push constant 替代 default uniform

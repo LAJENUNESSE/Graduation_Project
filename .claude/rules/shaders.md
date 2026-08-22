@@ -40,6 +40,7 @@ layout(local_size_x = 256) in;
 | grid_* | 空间哈希网格 | `grid_hash.glsl`, `grid_prefix_sum.glsl`, `grid_scatter.glsl` |
 | IBL_* | IBL 预计算 | `IBL_Irradiance.glsl`, `IBL_Prefilter.glsl`, `IBL_BRDF_LUT.glsl` |
 | 后处理 | 屏幕空间效果 | `SSAO.glsl`, `GaussianBlur.glsl`, `ToneMapping.glsl` |
+| 场景辅助 | 深度/天空盒/物理调试线 | `Depth.glsl`, `Skybox.glsl`, `PhysicsDebugLine.glsl` |
 
 ## 顶点布局约定
 
@@ -47,6 +48,7 @@ layout(local_size_x = 256) in;
 - `location 1` = normal
 - `location 2` = texcoord
 - `location 3` = tangent
+- PBR 片段着色器：`location 1` out = Entity ID（`o_EntityID`，供拾取）
 
 ## OpenGL / Vulkan 双路径（`#ifdef VULKAN`）
 
@@ -73,8 +75,8 @@ uniform float u_CellSize;
 约定：
 - **OpenGL 分支保持不变**，main 分支行为零回归
 - **push_constant 限于 ≤128 bytes 的高频小常量**（cell_count / roughness / particle_count 等），避免新建 UBO（决策 D-1）
-- 已迁移到 `#ifdef VULKAN` 双路径：`grid_hash`、`grid_prefix_sum`、`grid_scatter`、`IBL_BRDF_LUT`、`IBL_Irradiance`、`IBL_Prefilter`
-- 未迁移（仅 OpenGL）：particle_*、sph_*、fluid_*
+- 已迁移到 `#ifdef VULKAN` 双路径的共 **20 个**：PBR、grid_* ×3、IBL_* ×3、particle_{emit,simulate,render_args,compact}、sph_density/sph_force、sph_pcisph_* 全套 ×5、fluid_{emit,simulate}
+- 未迁移（仅 OpenGL）：grass_* ×3、particle_billboard、fluid_{composite,depth,smooth,thickness,compact} 及后处理/Skybox/Depth 等非 compute shader
 
 ## 注意事项
 

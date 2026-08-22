@@ -11,8 +11,8 @@ paths:
 
 | 目录 | 职责 |
 |------|------|
-| `src/Core/` | 应用主循环、Layer、事件系统、输入、窗口、CrashHandler |
-| `src/Renderer/` | 渲染抽象层、多 Pass 管线、材质、粒子、流体、IBL、SPHKernelMath、SpatialHashGrid |
+| `src/Core/` | 应用主循环、Layer、事件系统、输入、窗口、CrashHandler（namespace，`Install()` 由 EntryPoint 调用）、FluidBenchmarkConfig |
+| `src/Renderer/` | 渲染抽象层、多 Pass 管线、材质、粒子、流体、IBL、SPHKernelMath、SPHRigidBodyCollector、SpatialHashGrid |
 | `src/Scene/` | ECS（EnTT）、组件、渲染系统、façade 架构 + 服务层 |
 | `src/Reflection/` | 编译期反射宏、组件注册、自动序列化/Inspector |
 | `src/Asset/` | SlotMap 资源池、异步加载、热重载 |
@@ -25,7 +25,7 @@ paths:
 | `src/Debug/` | 调试工具（PerformanceMonitor、ProfileTimer、GPUTimerQuery） |
 | `src/ImGui/` | ImGui 后端集成与辅助（OpenGL/Vulkan 双后端分派） |
 | `Platform/OpenGL/` | OpenGL 4.3 具体实现（默认后端） |
-| `Platform/Vulkan/` | Vulkan 1.2+ 具体实现（可选，35 文件，`--vulkan` 命令行启用） |
+| `Platform/Vulkan/` | Vulkan 1.2+ 具体实现（可选，39 文件，`--vulkan` 命令行启用） |
 
 ## 后端选择
 
@@ -45,7 +45,9 @@ paths:
 | TestWorldTransform | Scene/WorldTransformService |
 | TestSceneEntityIndex | Scene/SceneEntityIndex |
 | TestCommandHistory | Editor/CommandHistory |
-| TestSPHKernel | Renderer/SPHKernelMath |
+| TestSPHKernel / TestSPHCommon | Renderer/SPHKernelMath, SPHCommon |
+| TestFluidBenchmarkConfig / TestFluidBenchmarkData | Benchmark 配置与数据结构 |
+| TestCudaParticleTypes / TestCudaPoisonState | CUDA 粒子类型 + 中毒回退状态机（CPU 侧） |
 | TestSlotMap | Asset/SlotMap |
 | TestAssetHandle | Asset/AssetHandle |
 | TestUUID / TestEvents / TestTimestep | Core 基础类型 |

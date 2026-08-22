@@ -11,14 +11,14 @@ paths:
 
 - 初始化时设置重力
 - 从 RigidBodyComponent + Collider 组件创建刚体
-- `Step()` 推进模拟 → `SyncToECS()` 回写 Transform
+- `Step(float dt, entt::registry&, const SceneEntityIndex&)` 推进模拟 → `SyncToECS()` 回写 Transform
 - 运动学体（Kinematic）需双向同步：`SyncFromECS()` → Step → `SyncToECS()`
-- 碰撞事件通过 `GetCollisionEvents()` 获取，仅在当前帧有效
+- 碰撞事件通过 `GetCollisionEvents()` 获取，含 Enter/Stay/Exit，仅在当前帧有效（`BulletPhysicsWorld.h:56-68`）
 - 碰撞体偏移使用 `btCompoundShape` 包装实现
 
 ## PhysicsDebugDraw
 
-继承 `btIDebugDraw`，把 Bullet 的 debug 几何（接触点、AABB、约束等）转发到引擎的 line renderer（走 `RenderCommand::DrawLines`，与具体后端无关）。
+**不**继承 `btIDebugDraw`——是独立类（`Init/DrawColliders/DrawMeshSDFBounds`），直接遍历 registry 的 Collider 组件画线框，经 `RenderCommand::DrawLines` 提交线段（`PhysicsDebugDraw.cpp:270`，使用 `assets/shaders/PhysicsDebugLine.glsl`），与具体后端无关。
 
 ## SDFMath（header-only）
 
