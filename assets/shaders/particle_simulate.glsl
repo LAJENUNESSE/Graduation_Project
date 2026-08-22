@@ -69,6 +69,16 @@ void main()
 
     float life = particles[idx].posAndLife.w;
 
+    // NaN/Inf 生命值直接判死（NaN 比较恒为 false 会绕过下方所有分支）
+    if (isnan(life) || isinf(life))
+    {
+        particles[idx].posAndLife.w = 0.0;
+        uint slot                   = atomicAdd(counters.deadCount, 1u);
+        if (slot < MAX_PARTICLES)
+            deadIndices[slot] = idx;
+        return;
+    }
+
     // Skip already-dead particles (life == 0 means already recycled)
     if (life <= 0.0)
         return;
@@ -94,10 +104,24 @@ void main()
         // Apply damping (simple multiplicative)
         vel *= DAMPING;
 
+        vec3 pos = particles[idx].posAndLife.xyz + vel * DELTA_TIME;
+
+        // NaN/Inf 防扩散：异常粒子按死亡回收——一个 NaN 粒子会经密度/压力计算
+        // 传染整个邻域，且边界反射对 NaN 两分支皆 false 无法拦截
+        if (any(isnan(pos)) || any(isinf(pos)) || any(isnan(vel)) || any(isinf(vel)))
+        {
+            particles[idx].velAndMaxLife.xyz = vec3(0.0);
+            particles[idx].posAndLife.w      = 0.0;
+            uint slot                        = atomicAdd(counters.deadCount, 1u);
+            if (slot < MAX_PARTICLES)
+                deadIndices[slot] = idx;
+            return;
+        }
+
         particles[idx].velAndMaxLife.xyz = vel;
 
         // Update position
-        particles[idx].posAndLife.xyz += vel * DELTA_TIME;
+        particles[idx].posAndLife.xyz = pos;
 
         // Push to alive list for rendering
         uint slot = atomicAdd(counters.aliveCount, 1u);

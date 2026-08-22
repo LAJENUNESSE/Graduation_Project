@@ -139,6 +139,17 @@ namespace Engine
                 return;
 
             float life = particles[idx].posAndLife.w;
+
+            // NaN/Inf 生命值直接判死（NaN 比较恒为 false 会绕过下方所有分支）
+            if (isnan(life) || isinf(life))
+            {
+                particles[idx].posAndLife.w = 0.0f;
+                uint32_t slot               = atomicAdd(&counter->deadCount, 1u);
+                if (slot < p.maxParticles)
+                    deadList[slot] = idx;
+                return;
+            }
+
             if (life <= 0.0f)
                 return;
 
@@ -167,13 +178,32 @@ namespace Engine
                 vy *= p.damping;
                 vz *= p.damping;
 
+                float px = particles[idx].posAndLife.x + vx * p.deltaTime;
+                float py = particles[idx].posAndLife.y + vy * p.deltaTime;
+                float pz = particles[idx].posAndLife.z + vz * p.deltaTime;
+
+                // NaN/Inf 防扩散：异常粒子按死亡回收，避免经密度计算传染邻域
+                // （与 particle_simulate.glsl 一致）
+                if (isnan(px) || isnan(py) || isnan(pz) || isinf(px) || isinf(py) || isinf(pz) || isnan(vx) ||
+                    isnan(vy) || isnan(vz) || isinf(vx) || isinf(vy) || isinf(vz))
+                {
+                    particles[idx].velAndMaxLife.x = 0.0f;
+                    particles[idx].velAndMaxLife.y = 0.0f;
+                    particles[idx].velAndMaxLife.z = 0.0f;
+                    particles[idx].posAndLife.w    = 0.0f;
+                    uint32_t slot                  = atomicAdd(&counter->deadCount, 1u);
+                    if (slot < p.maxParticles)
+                        deadList[slot] = idx;
+                    return;
+                }
+
                 particles[idx].velAndMaxLife.x = vx;
                 particles[idx].velAndMaxLife.y = vy;
                 particles[idx].velAndMaxLife.z = vz;
 
-                particles[idx].posAndLife.x += vx * p.deltaTime;
-                particles[idx].posAndLife.y += vy * p.deltaTime;
-                particles[idx].posAndLife.z += vz * p.deltaTime;
+                particles[idx].posAndLife.x = px;
+                particles[idx].posAndLife.y = py;
+                particles[idx].posAndLife.z = pz;
 
                 uint32_t slot = atomicAdd(&counter->aliveCount, 1u);
                 if (slot < p.maxParticles)

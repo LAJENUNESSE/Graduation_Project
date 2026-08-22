@@ -1390,6 +1390,17 @@ namespace Engine
                 }
             }
 
+            // NaN/Inf 防扩散：与 fluid_simulate.glsl 一致——流体无生命周期无法回收，
+            // 钳回有限值阻断经密度计算向邻域传播
+            if (isnan(px) || isnan(py) || isnan(pz) || isinf(px) || isinf(py) || isinf(pz) || isnan(vx) || isnan(vy) ||
+                isnan(vz) || isinf(vx) || isinf(vy) || isinf(vz))
+            {
+                px = p.useBoundary ? 0.5f * (p.boundaryMin[0] + p.boundaryMax[0]) : 0.0f;
+                py = p.useBoundary ? 0.5f * (p.boundaryMin[1] + p.boundaryMax[1]) : 0.0f;
+                pz = p.useBoundary ? 0.5f * (p.boundaryMin[2] + p.boundaryMax[2]) : 0.0f;
+                vx = vy = vz = 0.0f;
+            }
+
             particles[i].posAndLife.x    = px;
             particles[i].posAndLife.y    = py;
             particles[i].posAndLife.z    = pz;

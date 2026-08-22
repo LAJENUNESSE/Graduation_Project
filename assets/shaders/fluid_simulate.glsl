@@ -112,6 +112,14 @@ void main()
         }
     }
 
+    // NaN/Inf 防扩散：流体粒子无生命周期无法回收，钳回有限值阻断经密度
+    // 计算向邻域传播（边界反射对 NaN 两分支皆 false，拦不住）
+    if (any(isnan(pos)) || any(isinf(pos)) || any(isnan(vel)) || any(isinf(vel)))
+    {
+        pos = USE_BOUNDARY ? 0.5 * (BMIN_VAL + BMAX_VAL) : vec3(0.0);
+        vel = vec3(0.0);
+    }
+
     particles[idx].posAndLife.xyz = pos;
     particles[idx].velAndMaxLife.xyz = vel;
 }
