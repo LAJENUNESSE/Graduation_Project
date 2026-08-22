@@ -188,17 +188,23 @@ namespace Engine
         }
 
         // 刚体 SDF 边界力（WCSPH/PCISPH 共用）
-        __device__ static void ComputeRigidBodyForce(float                px,
-                                                     float                py,
-                                                     float                pz,
-                                                     float                vx,
-                                                     float                vy,
-                                                     float                vz,
+        // hardProjection=true（仅 WCSPH，对齐 sph_force.glsl）：sdf<0 的粒子被硬投影回
+        // 表面并消除内向法向速度，修正即时写回粒子池并在后续刚体迭代间传播；
+        // px..vz 按引用传入正是为了传播该修正。PCISPH 迭代期不做投影（与 GL 一致）。
+        __device__ static void ComputeRigidBodyForce(GPUParticle*         particles,
+                                                     uint32_t             pid,
+                                                     float&               px,
+                                                     float&               py,
+                                                     float&               pz,
+                                                     float&               vx,
+                                                     float&               vy,
+                                                     float&               vz,
                                                      float                h,
                                                      float                boundaryStiffness,
                                                      float                boundaryDamping,
                                                      const RigidBodyData* d_rigidBody,
                                                      int                  rigidBodyCount,
+                                                     bool                 hardProjection,
                                                      float&               fbx,
                                                      float&               fby,
                                                      float&               fbz)
@@ -302,6 +308,27 @@ namespace Engine
                     float vrx = vx - rbvx, vry = vy - rbvy, vrz = vz - rbvz;
                     float penetration = fmaxf(0.0f, h - sdf);
                     float vnDot       = vrx * wnx + vry * wny + vrz * wnz;
+
+                    // 硬投影：位置推回表面并消除内向法向速度（对齐 sph_force.glsl Hard projection）
+                    if (hardProjection && sdf < 0.0f)
+                    {
+                        px += (-sdf + 0.001f) * wnx;
+                        py += (-sdf + 0.001f) * wny;
+                        pz += (-sdf + 0.001f) * wnz;
+                        particles[pid].posAndLife.x = px;
+                        particles[pid].posAndLife.y = py;
+                        particles[pid].posAndLife.z = pz;
+
+                        if (vnDot < 0.0f)
+                        {
+                            vx -= vnDot * wnx;
+                            vy -= vnDot * wny;
+                            vz -= vnDot * wnz;
+                            particles[pid].velAndMaxLife.x = vx;
+                            particles[pid].velAndMaxLife.y = vy;
+                            particles[pid].velAndMaxLife.z = vz;
+                        }
+                    }
 
                     fbx += boundaryStiffness * penetration * wnx - boundaryDamping * vnDot * wnx;
                     fby += boundaryStiffness * penetration * wny - boundaryDamping * vnDot * wny;
@@ -752,10 +779,10 @@ namespace Engine
                         }
                     }
 
-            // 刚体 SDF 边界力
+            // 刚体 SDF 边界力（含硬投影，与 sph_force.glsl 一致）
             float fbx, fby, fbz;
-            ComputeRigidBodyForce(px, py, pz, vx_i, vy_i, vz_i, h, ip.boundaryStiffness, ip.boundaryDamping,
-                                  d_rigidBody, ip.rigidBodyCount, fbx, fby, fbz);
+            ComputeRigidBodyForce(particles, pid, px, py, pz, vx_i, vy_i, vz_i, h, ip.boundaryStiffness,
+                                  ip.boundaryDamping, d_rigidBody, ip.rigidBodyCount, true, fbx, fby, fbz);
 
             // SPH warmup
             float life    = particles[pid].posAndLife.w;
@@ -1176,13 +1203,13 @@ namespace Engine
                         }
                     }
 
-            // 刚体 SDF 边界力
+            // 刚体 SDF 边界力（PCISPH 迭代期不做硬投影，与 sph_pcisph_force.glsl 一致）
             float fbx, fby, fbz;
             float predVx = pcisph[i].predictedVelAndDensity.x;
             float predVy = pcisph[i].predictedVelAndDensity.y;
             float predVz = pcisph[i].predictedVelAndDensity.z;
-            ComputeRigidBodyForce(px, py, pz, predVx, predVy, predVz, h, ip.boundaryStiffness, ip.boundaryDamping,
-                                  d_rigidBody, ip.rigidBodyCount, fbx, fby, fbz);
+            ComputeRigidBodyForce(particles, pid, px, py, pz, predVx, predVy, predVz, h, ip.boundaryStiffness,
+                                  ip.boundaryDamping, d_rigidBody, ip.rigidBodyCount, false, fbx, fby, fbz);
 
             // SPH warmup
             float life    = particles[pid].posAndLife.w;
