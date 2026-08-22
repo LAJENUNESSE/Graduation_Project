@@ -33,7 +33,7 @@ namespace Engine
         // EndSingleTimeCommands（内部 vkQueueWaitIdle）。调用点均为低频路径
         // （初始化 / 基准 SetData），D-3 约束不受影响。
         // ------------------------------------------------------------------
-        void UploadViaStaging(VkDevice device, VkBuffer dstBuffer, const void* data, uint32_t size)
+        void UploadViaStaging(VkBuffer dstBuffer, const void* data, uint32_t size)
         {
             ENGINE_CORE_RELEASE_ASSERT(data != nullptr, "Upload source data must not be null");
 
@@ -86,7 +86,7 @@ namespace Engine
         // 同步回读（device-local 模式专用）：vkCmdCopyBuffer(device->staging) 后读出。
         // 仅调试可视化 / 基准 ReadBenchmarkParticles 等低频路径使用。
         // ------------------------------------------------------------------
-        void DownloadViaStaging(VkDevice device, VkBuffer srcBuffer, void* outData, uint32_t size)
+        void DownloadViaStaging(VkBuffer srcBuffer, void* outData, uint32_t size)
         {
             ENGINE_CORE_RELEASE_ASSERT(outData != nullptr, "Readback output pointer must not be null");
 

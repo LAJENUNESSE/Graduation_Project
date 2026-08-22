@@ -29,7 +29,7 @@ namespace Engine
         VkBuffer GetBuffer() const { return m_Buffer; }
 
     private:
-        void Create(uint32_t size, const void* initialData);
+        void Create(uint32_t size, const void* initialData, bool deviceLocal = true);
 
     private:
         VkBuffer      m_Buffer     = VK_NULL_HANDLE;
