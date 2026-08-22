@@ -763,10 +763,12 @@ namespace Engine
             float age     = maxLife - life;
             float warmup  = (p.warmupTime > 0.0f) ? fminf(fmaxf(age / p.warmupTime, 0.0f), 1.0f) : 1.0f;
 
-            // 加速度 = (fPressure * warmup + fViscosity + fSurfaceTension + fBoundary) / ρ_i
-            float ax = (fpx * warmup + fvx + fsx + fbx) / densityI;
-            float ay = (fpy * warmup + fvy + fsy + fby) / densityI;
-            float az = (fpz * warmup + fvz + fsz + fbz) / densityI;
+            // 加速度 = (fPressure*warmup + fViscosity + fSurfaceTension)/ρ_i + fBoundary
+            // 边界碰撞力作为直接加速度不除密度——保证碰撞力足以抵抗高速穿透，
+            // 与 sph_force.glsl 的 SPH 加速度组装方式一致
+            float ax = (fpx * warmup + fvx + fsx) / densityI + fbx;
+            float ay = (fpy * warmup + fvy + fsy) / densityI + fby;
+            float az = (fpz * warmup + fvz + fsz) / densityI + fbz;
 
             // 安全限幅
             float accelMag = sqrtf(ax * ax + ay * ay + az * az);
