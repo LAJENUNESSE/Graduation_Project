@@ -1,12 +1,155 @@
-% 第 7 章 物理系统（占位）
-锚点：\texttt{Physics/BulletPhysicsWorld.cpp}、\texttt{SDFMath.h}
-（header-only 可测）、\texttt{PhysicsDebugDraw}。
+% ============================================================
+% 第 7 章 物理系统：从手写冲量到 Bullet3
+% 锚点：Engine/src/Physics/BulletPhysicsWorld.h/.cpp, SDFMath.h
+% 时间线：7341800(Phase 9 手写+Bullet) → 89fe5b4(审计10bug)
+%         → 9cff9ce(移除自研强制Bullet)
+% ============================================================
+\section{问题引入：两个方块穿过了彼此}
 
-叙事线：Phase 9 手写冲量响应起步（\texttt{7341800}）→ 审计发现穿模等
-10 bug（\texttt{89fe5b4}）→ 移除自研 Custom PhysicsWorld 强制 Bullet3
-（\texttt{9cff9ce}）。手写阶段遗产仍存活：OBB SAT 碰撞数学、惯性张量
-mat3 升级 + 平行轴修正、陀螺力矩积分、接触面计算——大量 fix commit
-（\texttt{1e3a12e}/\texttt{ecf3017}/\texttt{b85497d} 等）构成"碰撞数学
-是怎么被做对的"完整案例。docs/CollisionMath SAT 退化轴文档可作素材。
+物理是``不做不知道难，做了才知道有多难''的模块。第一版手写物理上线当天
+就能复现经典惨案：快速移动的方块一帧位移超过对方厚度，穿透检测失效；
+斜面上的盒子抖动不止；堆叠的箱子越叠越陷。审计报告一次性列出十项 bug
+（修复提交 \texttt{89fe5b4}），其中``手写物理穿模''位列榜首。
 
-% TODO(M3): 冲量法原理；SAT 详解；为什么最终交给 Bullet 但保留 SDFMath。
+本章讲一个诚实的故事：项目先手写了一遍冲量法物理（Phase 9，
+\texttt{7341800}），在理解了它难在哪里之后，把动力学部分整体换成了
+Bullet3（\texttt{9cff9ce} ``移除 Custom PhysicsWorld，强制使用 Bullet3''）——
+但手写阶段的碰撞数学遗产至今仍在服役。
+
+\section{通用原理：冲量法动力学}
+
+刚体物理的主流解法是顺序冲量法（sequential impulse）：每个约束（接触、
+关节）迭代求解冲量 $\lambda$，使相对速度满足约束方程；位置误差用 Baumgarte
+稳定项修正。要让它工作，至少需要：宽相检测（AABB 树/扫掠剪枝）、窄相检测
+（精确几何相交与接触点生成）、接触流形管理（防止抖动）、摩擦与恢复系数
+模型、惯性张量（旋转响应的正确性全靠它）。
+
+每一项单看都不复杂，合起来就是数万行成熟库代码。Bullet3 的价值正在于此：
+它的 \texttt{btSequentialImpulseConstraintSolver} 是这套方法二十年的工程
+结晶。
+
+\section{本项目的设计与决策}
+
+\subsection{双轨制：ECS 与 Bullet 世界并行}
+
+BulletPhysicsWorld 不接管实体，而是作为 ECS 的``影子世界''运行
+（Engine/src/Physics/BulletPhysicsWorld.h）：
+
+\begin{lstlisting}
+// 碰撞事件 —— 面向 gameplay 的三态语义
+enum class CollisionEventType { Enter, Stay, Exit };
+
+struct CollisionEvent
+{
+    CollisionEventType Type;
+    entt::entity EntityA, EntityB;
+    glm::vec3 ContactPoint;
+    glm::vec3 ContactNormal;   // A -> B 方向
+    float     Impulse;
+    bool      IsTrigger;
+};
+
+class BulletPhysicsWorld
+{
+public:
+    void Init(glm::vec3 gravity = {0, -9.81f, 0});
+    void Step(float dt, entt::registry& reg,
+              const SceneEntityIndex& index);
+    void CreateBodies(entt::registry& reg,
+                      const SceneEntityIndex& index);
+    void SyncToECS(entt::registry& reg,
+                   const SceneEntityIndex& index);   // 模拟结果回写
+    void SyncFromECS(entt::registry& reg,
+                     const SceneEntityIndex& index); // Kinematic 同步
+};
+\end{lstlisting}
+
+每帧流程：CreateBodies 补建新实体的 btRigidBody → Step 推进仿真 →
+SyncToECS 把 Bullet 的变换写回 TransformComponent。事件系统维护上一帧
+接触对集合，差分出 Enter/Stay/Exit 三态——这是 gameplay 脚本最想要的
+接口形态，而不是 Bullet 原生的回调风暴。
+
+\subsection{碰撞体包装：偏移量与复合形状}
+
+组件里声明的 ColliderOffset（碰撞体相对实体原点的偏移）不能直接喂给
+Bullet——btRigidBody 的质心变换有自己的约定。项目用 \texttt{btCompoundShape}
+包装子形状并设置子形状局部偏移来承载这一信息（修复提交 \texttt{a4aa1ad}，
+第 4 章的 UUID 索引在这里再次发挥作用：ECS 实体到 Bullet body 的映射靠
+UUID 稳定锚定）。地形则用 \texttt{btTriangleMesh} 从高度图网格构建，
+BodyInfo 聚合初始化还曾因漏掉 childShape 字段编译失败
+（\texttt{adbe4a8} 小修）。
+
+\subsection{手写遗产：仍然服役的碰撞数学}
+
+移除 Custom PhysicsWorld 删掉的是动力学求解器；碰撞几何数学被完整保留。
+Box-Box 从 AABB 近似升级为 OBB-OBB SAT（分离轴定理，
+\texttt{1e3a12e}）、接触点从两中心中点改为真实接触面计算
+（\texttt{31fefb5}）、球-球零距离边界条件（\texttt{bff156f}）——这些
+修复沉淀为 SDFMath.h 与碰撞数学工具。SAT 的退化轴处理、惯性张量变换公式
+甚至有专门的数学文档（docs/ 下 CollisionMath 与 PhysicsWorld 笔记）。
+
+SDFMath.h 展示了``可测性提取''的典型手法：
+
+\begin{lstlisting}
+// 纯数学函数 —— header-only，兼容 CUDA 和 C++。
+// 从 CudaSPHPipeline.cu 提取以便单元测试。
+#ifdef __CUDACC__
+#define SDF_DEVICE __device__ __host__
+#else
+#define SDF_DEVICE
+#endif
+
+namespace Engine { namespace SDFMath {
+    struct SDFResult { float sdf; float normalX, normalY, normalZ; };
+
+    // Box SDF: 点到 AABB 的有符号距离（局部坐标系）
+    SDF_DEVICE inline SDFResult BoxSDF(float lx, float ly, float lz,
+                                       float hex, float hey, float hez);
+}}
+\end{lstlisting}
+
+同一份头文件同时服务 C++ 单元测试与 CUDA kernel（第 9 章 SPH 流体的
+网格碰撞用它），一份数学两处消费，测试只需编译 C++ 侧。
+
+\section{实现走读:旋转的三个深坑}
+
+手写阶段留下的最有价值的教训集中在旋转积分上，每一条都有对应修复提交：
+
+\begin{itemize}
+  \item \textbf{万向节锁}：用欧拉角积分角速度，特定姿态下自由度丢失。
+        修复（\texttt{e45b642}）：改持久四元数积分——四元数无奇点，
+        且必须持久保存而非每帧由欧拉角重建。
+  \item \textbf{陀螺力矩}：角动量守恒要求 $\dot{L} = \omega \times L$，
+        漏掉这项会让非对称刚体旋转漂移（\texttt{ecf3017} 补上陀螺力矩项）。
+  \item \textbf{惯性张量}：标量惯性矩对旋转刚体根本不够，升级为 mat3 并
+        加平行轴定理修正（\texttt{b85497d}，配套旋转/缩放测试覆盖）。
+\end{itemize}
+
+这三个坑共同指向同一句话：\emph{3D 旋转没有免费午餐}。2D 物理里标量角速度
++标量惯量的直觉在 3D 全部失效。
+
+\section{踩坑记录}
+
+\begin{description}
+  \item[双重位置矫正] 手写阶段对同一接触先后施加两次位置修正，堆叠场景
+        能量凭空增加导致``爆炸''。\texttt{e45b642} 一并移除。
+  \item[外力清零时机] 施加的外力若不在 Step 末尾清零，会持续累积下一帧
+        加速度——表现为物体``自己加速''。
+  \item[负缩放] 变换矩阵含负缩放（镜像）时 AABB 尺寸计算出负值，
+        宽相直接失明，需 abs 处理（\texttt{7dc27ef} 系列 Phase 1 修复）。
+  \item[世界坐标 vs 本地坐标] 碰撞检测曾误用本地坐标比较不同父级下的
+        实体（\texttt{ad0bf7d} 改世界坐标）——与第 8 章 FluidPass 的
+        世界坐标 bug 同源，见该章踩坑录。
+\end{description}
+
+\section{小结与延伸思考}
+
+物理系统的叙事弧线——手写、碰壁、换库、留其精华——本身就是一堂工程课：
+\emph{造轮子的目的不是用上这个轮子，而是理解轮子}。最终架构里，Bullet 负责
+动力学求解（信任其二十年打磨），自研代码负责 ECS 桥接、事件语义、以及
+SPH 流体需要的 SDF 碰撞查询——后者恰是 Bullet 不擅长而本项目刚需的部分。
+
+延伸思考：如果重做，会一开始就用 Bullet 吗？大概率不会。正是手写阶段对
+穿透、抖动、万向锁的亲历，让后来读 Bullet 文档时每个参数都``认识''——
+restitution 怎么调、ERP/CFM 在解决什么，不再是抽象名词。教学价值与工程
+效率的取舍，毕业设计显然应该偏向前者。

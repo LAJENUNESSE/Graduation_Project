@@ -1,19 +1,129 @@
-% 第 8 章 SPH 流体与 GPU 粒子（占位）
-锚点：\texttt{Renderer/ParticleSystemGPU.cpp}（Compute 4-Pass：emit →
-simulate → render\_args → billboard + Indirect Draw）、
-\texttt{FluidSystemGPU.cpp}（WCSPH/PCISPH + SSFR 表面渲染）、
-\texttt{SpatialHashGrid}（hash/prefix\_sum 三 pass/scatter）、
-\texttt{SPHKernelMath.h}（header-only 可测）、\texttt{GPUAsyncReadback}
-（fence + persistent map）、assets/shaders/ 下 14 个 sph/fluid/grid 着色器。
+% ============================================================
+% 第 8 章 SPH 流体与 GPU 粒子：Compute 管线三部曲
+% 锚点：ParticleSystemGPU, FluidSystemGPU, SpatialHashGrid,
+%       SPHKernelMath.h, GPUAsyncReadback + 14 个 sph/fluid/grid shader
+% 时间线：29d41cc/beb5ac0(Phase 10) → 58a69bf(PCISPH)
+%         → e46f088(SSFR) → 6cf61fb(Akinci 表面张力)
+% ============================================================
+\section{问题引入:一万颗粒子的 CPU 瓶颈}
 
-学术素材：docs/thesis/chapter4-sph.tex（完整 SPH 章）；
-Solenthaler 2009 PCISPH（δ 自动推导，\texttt{00146b7}）；
-Akinci 2013 表面张力（\texttt{6cf61fb}，GLSL+CUDA 双实现）；
-GB/T 7714 文献清单。
+粒子系统初版跑在 CPU 上，五万粒子时单帧模拟耗时超过 30ms——还没渲染就
+已经跌破 30 FPS。而 GPU 正闲着。Phase 10 系列（\texttt{29d41cc} 基础设施
+与 4-Pass 管线、\texttt{beb5ac0} 空间哈希网格与 SPH 流体）把整个模拟搬上
+GPU Compute Shader，随后一路演进：PCISPH（\texttt{58a69bf}）、Screen-Space
+Fluid Rendering（\texttt{e46f088}）、Akinci 表面张力（\texttt{6cf61fb}）。
+本章是全书技术密度最高的一章，也是踩坑最多的一章。
 
-踩坑富矿：SSBO slot 1 被 Grid.Build 覆盖致流体不可见（\texttt{e63d819}）；
-SSFR 管道 GL\_BLEND 泄漏（\texttt{b85f9d5}）；同步回读 28ms GPU stall
-（\texttt{01de4e3}）；CUDA/GLSL 一致性三连修（\texttt{dc72895}）；
-emit 后 compact 重建差一帧（\texttt{547e3ad}）。
+\section{通用原理:SPH 与邻域搜索}
 
-% TODO(M3): SPH 原理推导（可复用论文图）；4-Pass 管线 TikZ 图；SSFR。
+SPH（Smoothed Particle Hydrodynamics）把流体离散为携带质量/速度/密度的
+粒子，任意场量用光滑核 $W(r,h)$ 加权求和近似：
+$\rho_i = \sum_j m_j W(\lvert \mathbf{r}_i - \mathbf{r}_j\rvert, h)$，
+压力由状态方程给出，加速度含压力梯度、粘性与外力。WCSPH 每步直接解压力；
+PCISPH（Solenthaler 2009）则迭代预测位置修正密度误差，允许更大时间步。
+本项目两者都实现，共享同一套核函数数学（SPHKernelMath.h，header-only 可测）。
+
+朴素邻域查找是 $O(N^2)$——对每对粒子算距离。空间哈希把它降到近似
+$O(N)$：粒子按格子哈希分桶，只查邻居桶。GPU 实现的经典三段式是
+hash $\to$ prefix sum $\to$ scatter。
+
+\section{本项目的设计与决策}
+
+\subsection{Compute 4-Pass 粒子管线}
+
+ParticleSystemGPU 把粒子生命周期拆成四个 compute dispatch：
+
+\begin{itemize}
+  \item \textbf{emit}：按发射参数生成新粒子写入粒子池；
+  \item \textbf{simulate}：积分速度与位置（可挂接 SPH 力或 Bullet 刚体碰撞）；
+  \item \texttt{render\_args}：在 GPU 上统计存活数并填充 Indirect Draw 参数块；
+  \item \textbf{billboard}：顶点着色器按粒子属性展开面向相机的四边形。
+\end{itemize}
+
+关键决策是第 3 步：存活计数与绘制参数完全在 GPU 上生成，CPU 全程不知道
+具体粒子数，DrawArraysIndirect 一条命令完成提交——CPU-GPU 数据往返被
+压缩到零。VMware SVGA3D 不支持 indirect 时回退实例化绘制（renderer.md
+规则记录的兼容性分支）。
+
+\subsection{SpatialHashGrid:三段式与 binding 布局}
+
+Engine/src/Renderer/SpatialHashGrid.h 是网格的完整自述：
+
+\begin{lstlisting}
+// Grid SSBOs —— binding 编号是跨 shader 的全局契约
+Ref<ShaderStorageBuffer> m_CellHash;      // per-particle hash (binding 1)
+Ref<ShaderStorageBuffer> m_CellCount;     // cell histogram   (binding 6)
+Ref<ShaderStorageBuffer> m_CellStart;     // prefix sum 结果  (binding 5)
+Ref<ShaderStorageBuffer> m_SortedIndices; // 重排索引         (binding 7)
+
+void Build(uint32_t aliveCount, bool usePredictedPos = false);
+// Vulkan 主帧 cmd 录制版本（避免 SingleTime stall，见 SPEC D-3）
+void BuildVulkan(VkCommandBuffer cmd, uint32_t aliveCount,
+                 bool usePredictedPos = false);
+\end{lstlisting}
+
+prefix sum 本身又是三个 pass（块内扫描 / 块和扫描 / 块偏移加回），pass 间
+必须插 memory barrier——省略任何一个都会读到脏数据。binding 编号表是
+14 个 sph/fluid/grid shader 共同遵守的全局布局契约，它的脆弱性本章踩坑录
+有血泪案例。
+
+\subsection{PCISPH 与表面张力:站在文献肩膀上}
+
+PCISPH 的 $\delta$ 参数没有手抄论文数值，而是按 Solenthaler 2009 的公式
+在初始化时自动推导（\texttt{00146b7}）；表面张力实现 Akinci 2013 的曲率
+修正项，且 GLSL 与 CUDA 双实现同步落地（\texttt{6cf61fb}）。学术参数的
+``自动推导优于魔法数字''在这里得到验证：改光滑核半径时一切自适应。
+
+\subsection{SSFR:从粒子到水面}
+
+粒子本身不像流体。SSFR（Screen-Space Fluid Rendering）管线用五个额外
+pass 把粒子变成液体：thickness（厚度累积染色）$\to$ depth（椭圆 splat
+写最小深度）$\to$ bilateral smooth（深度域平滑）$\to$ 从深度重建法线
+$\to$ composite（折射+反射+泡沫合成进主场景）。它牺牲了物体空间一致性
+换取巨大性能优势——屏幕空间的平滑天然只在可见处花钱。
+
+\section{实现走读:异步回读与 fence}
+
+CPU 需要知道存活数（如发射器停止条件），最初实现每帧
+\texttt{glGetBufferSubData} 同步回读——GPU 必须等所有在途工作完成才能
+服务这个读取，实测造成 28ms 的每帧 stall（修复提交 \texttt{01de4e3}）。
+方案是 GPUAsyncReadback 抽象：N 个 host-visible 缓冲轮转，第 $k$ 帧发起
+copy、读第 $k-N$ 帧的结果，fence 保证就绪。代价是数据延迟 N 帧——对
+``上一帧存活数''这种用途完全无感。这次教训后来直接塑造了 Vulkan 路径的
+D-11 决策（3 槽 ring + 独立 fence，见第 14 章）。
+
+\section{踩坑记录}
+
+这一章的坑值得单独成节——每个都是 GPU 并发世界的经典陷阱：
+
+\begin{description}
+  \item[SSBO slot 被 Grid.Build 覆盖] PCISPH 迭代中途调用 Grid.Build()
+        重建网格，后者绑定的 SSBO 恰好占了 slot 1——预测位置缓冲被顶掉，
+        流体整场不可见且不报任何错（\texttt{e63d819}）。排查花了三天，
+        最终靠逐 pass 二分绑定才定位。\emph{OpenGL 全局 binding 空间里，
+        ``谁绑了什么''是隐式契约}。
+  \item[GL\_BLEND 泄漏] SSFR 深度 pass 继承了上游未关闭的混合状态，
+        最小深度混合成了``平均深度''，水面法线重建全错（\texttt{b85f9d5}
+        在深度与平滑通道显式禁 blend）。全局状态机的又一记闷棍。
+  \item[CUDA/GLSL 一致性] 密度自贡献项遗漏、预测位置恢复时机、积分顺序
+        三处差异让两后端结果分道扬镳（\texttt{dc72895} 三连修）。浮点
+        求和顺序不同本属正常，但算法级差异必须消灭——这正是附录 A 容差
+        协议存在的原因。
+  \item[差一帧的 alive list] emit 之后不重建 alive list 就 simulate，
+        新粒子晚一帧参与模拟（\texttt{547e3ad}）。GPU 数据结构没有
+        ``自动维护的不变量''，每次写入都要想清楚下游谁在读。
+  \item[cellSize=2h 的冗余] 早期邻居搜索半径设 2h，27 邻域扫描近半无效；
+        收紧为 h 后消除冗余（\texttt{7c6c746}）。理论最优与实现常量
+        要对齐验证。
+\end{description}
+
+\section{小结与延伸思考}
+
+三部曲的主线：4-Pass 管线确立 CPU 极简参与；三段式网格把邻域查询摊平到
+GPU；文献算法（PCISPH/Akinci）以``自动推导 + 双端一致''方式落地；SSFR
+补上最后一公里的观感。性能上，这套管线支撑了附录 A 五万粒子的正式基准。
+
+延伸思考：屏幕空间流体在粒子被遮挡或飞出屏幕时会丢失厚度信息（边缘
+``融化''伪影）；物体空间方法（如 Marching Cubes 提取 mesh）能根治但代价
+高昂。另一个值得探索的方向是把 PCISPH 迭代也做进 indirect 结构，进一步
+减少 CPU 参与——目前迭代次数仍是启动时常量。
