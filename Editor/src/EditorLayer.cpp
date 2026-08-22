@@ -292,6 +292,8 @@ namespace Engine
             m_Boot->GetCommandHistory().RedoCommand();
         if (actions.ToggleStatsPanel)
             m_Boot->PanelCoordinator().ToggleStatsPanelVisible();
+        if (actions.ToggleMemoryPanel)
+            m_Boot->PanelCoordinator().ToggleMemoryPanelVisible();
         if (actions.ToggleScriptEditorPanel)
             m_Boot->PanelCoordinator().ToggleScriptEditorVisible();
         if (actions.ToggleFpsOverlay)
@@ -318,6 +320,7 @@ namespace Engine
         state.UndoDescription       = allowHistoryActions ? m_Boot->GetCommandHistory().GetUndoDescription() : "";
         state.RedoDescription       = allowHistoryActions ? m_Boot->GetCommandHistory().GetRedoDescription() : "";
         state.ShowStatsPanel        = m_Boot->PanelCoordinator().IsStatsPanelVisible();
+        state.ShowMemoryPanel       = m_Boot->PanelCoordinator().IsMemoryPanelVisible();
         state.ShowScriptEditorPanel = m_Boot->PanelCoordinator().IsScriptEditorVisible();
         state.IsDirty               = m_Boot->SceneSession().IsDirty();
         state.ShowFpsOverlay        = m_Boot->ViewportController().IsShowFpsOverlay();

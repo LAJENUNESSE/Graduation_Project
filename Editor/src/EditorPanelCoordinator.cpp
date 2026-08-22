@@ -4,6 +4,7 @@
 #include "Platform/CUDA/CudaPoisonState.h"
 #include "Panels/AssetBrowserPanel.h"
 #include "Panels/ConsolePanel.h"
+#include "Panels/MemoryStatsPanel.h"
 #include "Panels/PropertiesPanel.h"
 #include "Panels/RenderSettingsPanel.h"
 #include "Panels/SceneHierarchyPanel.h"
@@ -25,6 +26,9 @@ namespace Engine
             return ParticleSystemGPU::ABConfigSourceLabel(source);
         }
     } // namespace
+
+    EditorPanelCoordinator::EditorPanelCoordinator()  = default;
+    EditorPanelCoordinator::~EditorPanelCoordinator() = default;
 
     void EditorPanelCoordinator::Initialize(SceneHierarchyPanel* hierarchyPanel,
                                             PropertiesPanel*     propertiesPanel,
@@ -77,6 +81,10 @@ namespace Engine
             m_RenderSettingsPanel->OnImGuiRender();
         if (m_ScriptEditorPanel)
             m_ScriptEditorPanel->OnImGuiRender();
+
+        if (!m_MemoryStatsPanel)
+            m_MemoryStatsPanel = CreateScope<MemoryStatsPanel>();
+        m_MemoryStatsPanel->OnImGuiRender(&m_ShowMemoryPanel);
 
         RenderStatsPanel();
     }
@@ -205,9 +213,7 @@ namespace Engine
             // Compute Backend 状态总览（演示用：观众能一眼看出 CUDA 路径是否启用 / 中毒回退到 GL）
             const char* particleBackend = pm.IsParticleComputeCudaActive() ? "CudaGL" : "GL Compute";
             const char* fluidBackend    = pm.IsFluidComputeCudaActive() ? "CudaGL" : "GL Compute";
-            const char* poisonReason    = CudaInterop::IsCudaPoisoned()
-                                              ? CudaInterop::GetCudaPoisonReason()
-                                              : nullptr;
+            const char* poisonReason    = CudaInterop::IsCudaPoisoned() ? CudaInterop::GetCudaPoisonReason() : nullptr;
             ImGui::Separator();
             ImGui::Text("Compute Backend:");
             ImGui::Text("  粒子: %s", particleBackend);

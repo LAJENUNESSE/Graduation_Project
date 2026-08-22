@@ -21,6 +21,7 @@ namespace Engine
         std::string RedoDescription;
         bool        ShowStatsPanel        = true;
         bool        ShowScriptEditorPanel = true;
+        bool        ShowMemoryPanel       = false;
         bool        ShowFpsOverlay        = true;
         bool        IsDirty               = false;
         bool        IsLayoutLocked        = false;
@@ -38,6 +39,7 @@ namespace Engine
         bool RequestRedo             = false;
         bool ToggleStatsPanel        = false;
         bool ToggleScriptEditorPanel = false;
+        bool ToggleMemoryPanel       = false;
         bool ToggleFpsOverlay        = false;
         bool RequestResetLayout      = false;
         bool ToggleLayoutLock        = false;

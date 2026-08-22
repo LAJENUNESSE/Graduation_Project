@@ -127,6 +127,8 @@ namespace Engine
                     actions.ToggleFpsOverlay = true;
                 if (ImGui::MenuItem("性能监控", nullptr, state.ShowStatsPanel))
                     actions.ToggleStatsPanel = true;
+                if (ImGui::MenuItem("显存与内存监控", nullptr, state.ShowMemoryPanel))
+                    actions.ToggleMemoryPanel = true;
                 if (ImGui::MenuItem("脚本编辑器", nullptr, state.ShowScriptEditorPanel))
                     actions.ToggleScriptEditorPanel = true;
                 ImGui::EndMenu();

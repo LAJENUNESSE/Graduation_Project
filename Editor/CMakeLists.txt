@@ -13,6 +13,7 @@ set(EDITOR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/VulkanSmokeLayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/AssetBrowserPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/ConsolePanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/MemoryStatsPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/PropertiesPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/PropertiesPanelCustomDrawers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels/RenderSettingsPanel.cpp
