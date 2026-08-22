@@ -1,11 +1,102 @@
-% 附录 A 三后端流体基准（占位）
-素材：docs/fluid-compute-benchmark-spec.md（协议固化）+
-docs/thesis/experiment-data-summary.md（正式数据）+
-git 提交群 37daaef..3cfee23（约 30 个 benchmark 工程 commit：
-确定性初始状态、等步数一致性校验、密度误差容差校准、断点续跑、
-实验矩阵自动化汇总）。
+% ============================================================
+% 附录 A 三后端流体基准实验协议
+% 素材：docs/fluid-compute-benchmark-spec.md
+%       docs/thesis/experiment-data-summary.md
+% 提交群：37daaef..3cfee23（约 30 个 benchmark 工程 commit）
+% ============================================================
+\section{为什么需要一个``基准协议''}
 
-可复用图表：docs/thesis/figures/generated/ 下 17 张 matplotlib 图
-（公式示意 + 实验结果 PDF/PNG）。
+第 8、9、14 章分别讲了 OpenGL Compute、CUDA sidecar 与 Vulkan Compute
+三条流体计算路径。它们各自``能跑''不等于``可比''——CUDA 路径曾经自动
+交替 A/B 运行（\texttt{0d5c4fd}），拿这种数据写论文等于自欺。要让三后端
+的对比站得住脚，需要一份事先冻结的实验协议，而不是跑完数据后再挑好看的。
 
-% TODO(M3): 协议表格；三后端语义对齐的坑（c801216）；复现指南。
+本附录整理 docs/fluid-compute-benchmark-spec.md 固化的协议要点与工程实现，
+它服务于毕业论文第五章，也是本书所有性能结论的数据来源。整个体系由约
+30 个提交逐步建成（\texttt{37daaef} 起），每一步解决一个方法论问题。
+
+\section{公平性约束：先定义什么叫``同一场比赛''}
+
+协议的核心条款：
+
+\begin{itemize}
+  \item \textbf{确定性输入}：三后端必须使用同一份初始粒子状态，固定随机
+        种子（42）、时间步长（1/120s）与求解器参数；禁止依赖墙钟时间生成
+        随机状态（\texttt{66b3117} 实现确定性初始化）。
+  \item \textbf{等步数比较}：每后端执行固定 120 个不计时验证帧后才能
+        比较，杜绝``步数不一致导致密度天然不同''的假差异
+        （\texttt{9dd4274} 校验等步数一致性）。
+  \item \textbf{独立进程}：每个后端单独进程运行，禁止把逐帧交替 A/B 的
+        结果当论文数据。
+  \item \textbf{计时边界冻结}：GPU Compute 时间只覆盖网格/密度/力/积分
+        四阶段；初始化、正确性回读、CSV 写入不计入。CUDA 的 CUB Prefix
+        Sum 必须算进 Compute，而 CUDA-GL Map/Unmap 的主机调用单列为
+        Interop 时间。
+  \item \textbf{回退即失败}：后端中毒或回退时该组实验判失败，禁止用
+        回退后端的数据冒充目标后端。
+\end{itemize}
+
+\section{实验矩阵与命令行接口}
+
+固定矩阵三维展开：后端（OpenGL/CUDA/Vulkan）$\times$ 求解器（WCSPH/
+PCISPH，PCISPH 固定 6 迭代）$\times$ 粒子规模（1k/5k/10k/20k/50k），
+每组预热 100 帧、采样 1000 帧、独立重复 5 次。全部参数经命令行显式传入并做范围校验，无效组合返回非零退出码：
+
+\begin{lstlisting}[language=bash]
+Editor.exe --benchmark-fluid --backend opengl --solver pcisph \
+  --particles 10000 --iterations 6 --warmup 100 \
+  --frames 1000 --runs 5 --fixed-dt 0.008333333 \
+  --seed 42 --output benchmark/results.csv
+\end{lstlisting}
+
+工程侧配套三件套：断点续跑（\texttt{328d936}，已完成组跳过，矩阵中断后
+可恢复）、实验矩阵自动执行与统计汇总（\texttt{738f7e2}）、互操作与端到端
+耗时汇总（\texttt{3f1acce}）。原始逐帧 CSV 必须保留——协议明文禁止只存
+汇总表，这是可复现性的底线。
+
+\section{数值容差：从校准数据到冻结阈值}
+
+不同着色器编译器、不同浮点执行顺序决定了三后端不可能逐位一致。容差不能
+拍脑袋，也不能看结果再定（那是 p-hacking）。协议采用两步法：
+
+\begin{enumerate}
+  \item \textbf{短矩阵校准}：2026-07-19 用 1000 粒子跑六组三后端对照，
+        相对 OpenGL 基线的平均密度最大相对偏差为 0.0261\%（CUDA/PCISPH）。
+  \item \textbf{冻结容差}：正式矩阵前冻结平均密度相对容差 0.1\%
+        （约为校准最大偏差的 3.8 倍，\texttt{ea56c76} 固化）。它足以容纳
+        编译器差异，又能拒绝此前由压力语义错误造成的百分比级算法偏差。
+\end{enumerate}
+
+任一组超容差即标记正确性失败、不计算加速比——宁可缺数据，不可假数据。
+
+容差条款不是凭空设防。三后端曾存在真实的语义分歧：压力求解的积分方式在
+GLSL 与 CUDA 实现中不一致，密度结果差出百分比级。排查与对齐由修复提交
+\texttt{c801216} 完成（对齐三后端流体求解语义），PCISPH 的位置积分随后也
+做了同样对齐（\texttt{94f6091}）。\emph{先修语义、再定容差、后跑矩阵}——
+这个顺序反过来就是灾难。
+
+\section{统计规则}
+
+丢弃全部预热帧；保留正常慢帧、不按主观阈值删离群点（只剔除查询未就绪/
+设备错误等明确无效样本）；报告均值、标准差、中位数、P95、极值；加速比
+定义为基线均值除以目标均值。协议特别强调：论文同时报 GPU Compute 时间与
+端到端时间，禁止用不含 Swap/Present 的引擎帧时间冒充真实显示帧时间。
+
+正式数据快照见 docs/thesis/experiment-data-summary.md；可视化图表由
+docs/thesis/figures/scripted/ 下的 Python/uv 脚本从原始 CSV 再生成
+（generated/ 目录含公式示意与实验结果共 17 组 PDF/PNG），保证``图能从
+数据重算出来''。
+
+\section{复现指南}
+
+在本仓库复现全部实验的最短路径：(1) 按各后端要求构建（Vulkan 需 SDK
+1.4+ preset，CUDA 需 ENGINE\_ENABLE\_CUDA=ON）；(2) 依次执行上节命令行
+形式的 $3\times2\times5=30$ 组参数；(3) 用汇总脚本生成统计表；(4) 对照
+experiment-data-summary.md 的冻结参数核验场景配置未漂移。断点续跑机制
+让第 (2) 步可以随时中断重入。
+
+\section{延伸思考}
+
+这份协议最大的经验是：\emph{基准的价值在跑之前就决定了}。确定性种子、
+计时边界、容差冻结、回退判失败——每一条都是在``数据出来之后想改规则''
+的冲动被制度提前锁死。这套纪律适用于任何性能声明场景，与具体引擎无关。

@@ -1,11 +1,188 @@
-% 第 6 章 资产管理（占位）
-锚点：\texttt{Asset/SlotMap.h}（世代槽资源池）、\texttt{AssetHandle.h}
-（强类型句柄）、\texttt{AssetManager.cpp}、\texttt{AsyncLoadQueue}
-（后台加载）、\texttt{FileWatcher}（热重载）。
+% ============================================================
+% 第 6 章 资产管理：SlotMap、异步加载与热重载
+% 锚点：Engine/src/Asset/SlotMap.h, AssetHandle.h, AssetManager.h/.cpp,
+%       AsyncLoadQueue, FileWatcher
+% 时间线：3955e2e(2026-02-24 完整实现) → d05ea6b → 576116a/6ef37c9
+%         → 182f5e7(Type 字段)
+% ============================================================
+\section{问题引入：纹理指针悬垂事件}
 
-素材线索：提交 \texttt{3955e2e}``AssetManager 完整实现，SlotMap 资源池 +
-异步加载 + 热重载''；SlotMap::Remove 屏蔽保留槽防 freelist 污染
-（\texttt{d05ea6b}）；AssetHandle 加 Type 字段根治 SlotMap 冲撞断言
-（\texttt{182f5e7}）；线程安全 LoadAsync 去重（\texttt{576116a}/\texttt{6ef37c9}）。
+场景里十个实体共享同一张贴纹理，其中一个实体被删除——如果组件直接持有
+\texttt{Ref<Texture2D>}，shared\_ptr 引用计数让纹理活得好好的，但``谁负责
+卸载''从此变成罗生门；如果持有裸指针，删除后其余九个实体立即悬垂。
+更现实的需求还有三个：同一文件加载两次应命中缓存；大纹理加载时编辑器不能
+卡顿；改了磁盘上的贴图文件希望编辑器自动刷新。
 
-% TODO(M3): SlotMap 世代计数原理；句柄 vs 裸指针；异步队列去重。
+2026-02-24 的提交 \texttt{3955e2e}（``AssetManager 完整实现，SlotMap 资源池
++ 异步加载 + 热重载''）一次性给出了答案。本章解剖它的三层结构：
+句柄、池、管理器。
+
+\section{通用原理：句柄为什么优于指针}
+
+资源引用的三种方案对比：
+
+\begin{itemize}
+  \item \textbf{裸指针}：零开销但生命周期完全失控，悬垂即崩溃。
+  \item \textbf{shared\_ptr}：生命周期安全，但所有权语义模糊（资源该在
+        最后一个引用者消失时释放吗？对纹理这种``逻辑上属于项目''的资产，
+        答案是否定的），且无法表达``缓存 + 按名复用''。
+  \item \textbf{句柄（handle）}：一个普通整数对 \{Index, Generation\}。
+        访问时经池校验世代号，失效则安全返回空。所有权归池单例，
+        引用方只持有``取货凭证''。
+\end{itemize}
+
+句柄方案的精髓在 Generation 字段：槽位被释放再复用时世代号加一，
+旧句柄的世代号与新槽位不匹配，访问被拒绝——\emph{悬垂从未定义行为降级为
+可检测的空值}。这是游戏工业界（如 Bitsquid/Stingray 引擎随笔所普及的）
+经典手法。
+
+\section{本项目的设计与决策}
+
+\subsection{SlotMap 全解剖}
+
+Engine/src/Asset/SlotMap.h 不足 120 行，却是整个资产体系的承重墙：
+
+\begin{lstlisting}
+template <typename T> class SlotMap
+{
+    struct Slot {
+        Ref<T>      Resource;
+        std::string Path;
+        uint32_t    Generation = 1;
+    };
+    std::vector<Slot>     m_Slots;
+    std::vector<uint32_t> m_FreeList;   // 回收槽位栈
+    size_t                m_ActiveCount = 0;
+
+public:
+    AssetHandle Insert(Ref<T> resource, const std::string& path,
+                       AssetType type = AssetType::None)
+    {
+        uint32_t index;
+        if (!m_FreeList.empty()) {
+            index = m_FreeList.back();
+            assert(index != 0 && "reserved slot 0 must never "
+                                 "enter freelist");
+            m_FreeList.pop_back();
+            // Generation was already incremented on Remove
+        } else {
+            index = static_cast<uint32_t>(m_Slots.size());
+            m_Slots.push_back({std::move(resource), path, 1});
+        }
+        ++m_ActiveCount;
+        return {index, m_Slots[index].Generation, type};
+    }
+
+    T* Get(AssetHandle h) const
+    {
+        if (h.Index >= m_Slots.size()) return nullptr;
+        auto& slot = m_Slots[h.Index];
+        if (slot.Generation != h.Generation) return nullptr;  // 失效!
+        return slot.Resource.get();
+    }
+};
+\end{lstlisting}
+
+三个细节值得驻足。\textbf{其一}，构造函数先压入一个占位槽 0
+（generation=0），让``索引 0''永远表示无效句柄——C++ 值初始化的默认句柄
+天然失效，不需要额外标志位。\textbf{其二}，世代号在 Remove 时自增而非
+Insert 时，保证``删除瞬间''起所有旧句柄即刻失效，不存在窗口期。
+\textbf{其三}，freelist 是栈语义（后进先出），复用最近释放的槽位以获得
+更好的缓存局部性。
+
+\subsection{Remove 屏蔽槽 0：一行断言背后的真实事故}
+
+\begin{lstlisting}
+void Remove(AssetHandle h)
+{
+    if (h.Index == 0 || h.Index >= m_Slots.size())
+        return;                      // 屏蔽保留槽!
+    auto& slot = m_Slots[h.Index];
+    if (slot.Generation != h.Generation)
+        return;
+    slot.Resource.reset();
+    slot.Generation++;
+    m_FreeList.push_back(h.Index);
+    --m_ActiveCount;
+}
+\end{lstlisting}
+
+修复提交 \texttt{d05ea6b} 的信息写得很直白：``SlotMap::Remove 屏蔽保留槽
+index=0，防止 freelist 污染与 ActiveCount 下溢''。若不屏蔽，一个全零句柄
+会把保留槽推进 freelist，下次 Insert 从 freelist 弹出槽 0 复用——此后所有
+``默认无效''的句柄突然指向这个新资源，且 \texttt{--m\_ActiveCount} 在无
+对应 Insert 的情况下把计数打成负数。防御性检查只有一行，但它守住的
+是``值初始化即无效''这条全系统赖以成立的不变量。
+
+\subsection{Type 字段：三张 SlotMap 的冲撞事故}
+
+系统里有三张独立 SlotMap（Texture/Mesh/Cubemap），各自维护自己的
+Index/Generation 序列——两张表出现相同 \{Index, Generation\} 完全正常。
+早期句柄不含类型，跨表误用时触发 type mismatch 断言且难以定位源头。
+根治方案（\texttt{182f5e7}）：把 AssetType 直接烧进句柄：
+
+\begin{lstlisting}
+// AssetHandle.h —— 三元组句柄
+struct AssetHandle
+{
+    uint32_t  Index      = 0;
+    uint32_t  Generation = 0;
+    AssetType Type       = AssetType::None;
+
+    bool IsValid() const { return Index != 0 && Generation != 0; }
+};
+
+// 自定义 hash 把 Type 也混入，支持 unordered_map 作 key
+\end{lstlisting}
+
+这同时消灭了旧的 ``s\_HandleTypes 全局 map''——类型随句柄走，
+不再需要旁路查询表。教训：\emph{当多实例并存时，标识符必须携带实例
+判别信息}。
+
+\subsection{异步加载与热重载}
+
+AsyncLoadQueue 用后台线程加载纹理：立即返回一张 $1\times1$ 灰色占位纹理，
+完成后经主线程 Update 回调替换真身，失败则替换品红占位——``看得见的
+加载状态''远好于白屏等待。线程安全的引入分两步走（\texttt{576116a} 加
+mutex 与 pending map，\texttt{6ef37c9} 补去重）：同一文件并发请求两次时，
+pending map 保证只入队一次、两个调用方拿到同一句柄。
+
+热重载由 FileWatcher 驱动：AssetManager::Update() 内部轮询
+CheckChanges()，发现文件变更即 ReloadAsset() 并 Replace 进原槽位——
+注意 Replace 保持 Index/Generation 不变，\emph{所有持有旧句柄的组件无需
+任何感知就拿到了新纹理}。这是句柄方案的又一个红利时刻。
+
+路径去重靠 s\_TexturePathIndex 等按类型的路径 map：Load 同一文件第二次
+直接返回既有句柄。
+
+\section{实现走读:可测试性设计}
+
+SlotMap 和 AssetHandle 都是零引擎依赖的纯模板/纯结构体，tests/ 下
+TestSlotMap、TestAssetHandle 两套单元测试覆盖了世代回绕、槽 0 保护、
+Replace 后句柄稳定性等边界。第 4 章提过``纯逻辑提取成可测单元''的约定，
+这里是最佳范例——数据结构本身不出错，上层管理器的 bug 才能被隔离定位。
+
+\section{踩坑记录}
+
+\begin{description}
+  \item[忘记每帧 Update] 异步回调与热重载都挂在 AssetManager::Update()
+        上，主循环漏调它时症状是``占位纹理永远不换''——不是崩溃而是
+        功能静默失效，靠日志才定位到。
+  \item[跨表句柄误用] Type 字段加入前的冲撞断言（182f5e7）曾浪费大量
+        调试时间，教训已内化为句柄三元组设计。
+  \item[Mesh 只同步] 异步仅覆盖纹理；Mesh 因 assimp 加载的 OpenGL 上下文
+        亲和性保持同步加载——能力边界要显式声明而不是假装统一。
+\end{description}
+
+\section{小结与延伸思考}
+
+本章三层结构的分工：AssetHandle 是``凭证''（含类型防冲撞）、SlotMap 是
+``仓库''（世代校验防悬垂）、AssetManager 是``柜台''（去重/异步/热重载/
+生命周期）。它们共同把资源管理的四个经典难题——悬垂、重复、阻塞、过期
+——分别用世代号、路径索引、后台队列、FileWatcher 化解。
+
+延伸思考：当前句柄是 64 位明文（Index+Generation+Type），没有做混淆，
+意味着用户可以伪造句柄。编辑器场景下这不是威胁，但如果未来支持网络
+对战或用户生成内容分发，需要升级为带校验码的加密句柄。另外三张独立的
+SlotMap 可以泛型化为 ``AssetPool<T>'' 家族，进一步压缩样板代码——这是
+重构成瘾者最容易动手的地方，也是收益最小的地方。

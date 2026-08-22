@@ -1,13 +1,177 @@
-% 第 5 章 编译期反射（占位）
-锚点：\texttt{Reflection/ComponentMeta.h}（ENGINE\_COMPONENT 宏家族）、
-\texttt{ComponentRegistry.cpp}、\texttt{AutoInspector.cpp}（自动 ImGui 面板）、
-\texttt{AutoSerializer.cpp}（自动 YAML 序列化）。
+% ============================================================
+% 第 5 章 编译期反射：一套宏驱动的编辑器数据流
+% 锚点：Engine/src/Reflection/ComponentMeta.h, ComponentRegistry.cpp,
+%       AutoInspector.cpp, AutoSerializer.cpp, PropertyInfo.h
+% 时间线：0399e21(2026-02-25 反射首现) → 83dcf39(Phase 3 元数据统一)
+% ============================================================
+\section{问题引入：每加一个组件要改五处}
 
-核心机制：宏展开创建 \texttt{\_Reflect\_<Type>} 命名空间 + \texttt{offsetof}
-属性注册 + REGISTER\_COMPONENT\_BEGIN/END 内 static bool lambda 类型擦除
-Has/Add/Get/Remove/Copy/Snapshot/Restore 七操作。新组件注册后自动获得
-编辑器 UI 与序列化能力——这是``一套宏吃遍编辑器数据流''的设计。
+没有反射的日子里，新增一个组件的代价是这样的：在 Components.h 定义结构体
+只是第一步；属性面板要手写一段 ImGui 控件；序列化器要手写一对 YAML 读写；
+Add Component 菜单要加一项；Undo 系统还要为它写快照逻辑。五处改动、四种
+风格、无数漏改的机会——``加了字段但忘了存盘''是当时的高频 bug。
 
-对比素材：docs/ue-reflection-research.md（UE 反射调研）。
+2026-02-25，提交 \texttt{0399e21} 引入轻量级反射系统，此后 Phase 3 重构
+（\texttt{83dcf39}）统一组件元数据。最终形态下，新组件只需声明一次元数据，
+Inspector 面板、YAML 序列化、Undo 快照三处能力自动到位。
 
-% TODO(M3): 宏逐层解剖；类型擦除 lambda 的代价；与 UE/Qt 元对象系统对比。
+\section{通用原理：C++ 为什么没有反射（以及替代品们)}
+
+截至 C++20，标准 C++ 仍无法在运行期回答``这个结构体有哪些成员''。
+工程界的补位方案大致四类：
+
+\begin{itemize}
+  \item \textbf{代码生成}：Unreal 的 UHT 在编译前解析宏生成 .generated.h，
+        元数据与二进制同源、永远同步，代价是构建管线复杂度陡增
+        （参见 docs/ue-reflection-research.md 调研）。
+  \item \textbf{运行时注册 + 宏}：宏展开出自描述函数，程序启动时注册进
+        全局表。实现轻巧，但成员列表与结构体定义物理分离。
+  \item \textbf{第三方库}：rttr、Boost.PFR 等。PFR 需 C++17 结构化绑定
+        黑魔法且对嵌套类型支持有限；rttr 引入重依赖。
+  \item \textbf{等标准}：C++26 静态反射提案仍在路上。
+\end{itemize}
+
+本项目选了第二类——对一个毕业设计体量的项目，``不引入构建步骤、不引入
+依赖、半小时能讲清楚''的权重远高于``成员列表零分离''的美学诉求。
+
+\section{本项目的设计与决策}
+
+\subsection{宏的三层分工}
+
+反射宏分三层，各司其职（Engine/src/Reflection/ComponentMeta.h）。
+第一层声明组件身份：
+
+\begin{lstlisting}
+// 声明组件显示名 —— 展开为命名空间 + inline 函数
+#define ENGINE_COMPONENT(CompType, displayName)              \
+    namespace _Reflect_##CompType                            \
+    {                                                        \
+        inline ::Engine::ComponentMeta& GetMeta()            \
+        {                                                    \
+            static ::Engine::ComponentMeta s_Meta;           \
+            s_Meta.TypeName    = #CompType;                  \
+            s_Meta.DisplayName = displayName;                \
+            s_Meta.Properties.clear();                       \
+            return s_Meta;                                   \
+        }                                                    \
+    }
+\end{lstlisting}
+
+关键技巧：\texttt{\#CompType} 把模板参数字符串化，每个组件获得独立的
+\texttt{\_Reflect\_XXX} 命名空间——同名属性互不冲突。\texttt{inline}
+函数内的 static 局部变量保证全进程单例。
+
+第二层逐个登记属性：
+
+\begin{lstlisting}
+#define ENGINE_PROPERTY(CompType, field, displayName, propType) \
+    namespace _Reflect_##CompType {                             \
+      namespace _Prop_##field {                                 \
+        inline void Register(::Engine::ComponentMeta& meta)     \
+        {                                                       \
+            ::Engine::PropertyInfo info;                        \
+            info.Name        = #field;                          \
+            info.Type        = PropertyType::propType;          \
+            info.Offset      = offsetof(CompType, field);       \
+            meta.Properties.push_back(info);                    \
+        }                                                       \
+      }                                                         \
+    }
+\end{lstlisting}
+
+\texttt{offsetof} 是整套方案的核心魔法：运行期拿到成员偏移量后，
+\texttt{(char*)component + offset} 即可无类型地访问任意组件的任意字段——
+这正是 AutoSerializer 与 AutoInspector 都不需要知道具体类型的底气。
+
+第三层把一切组装并触发注册（.cpp 中使用）：
+
+\begin{lstlisting}
+// ComponentRegistry.cpp 中 —— 以 RigidBodyComponent 为例
+REGISTER_COMPONENT_BEGIN(RigidBodyComponent)
+    REGISTER_COMPONENT_PROPERTY(RigidBodyComponent, BodyType)
+    REGISTER_COMPONENT_PROPERTY(RigidBodyComponent, Mass)
+    REGISTER_COMPONENT_PROPERTY(RigidBodyComponent, LinearVelocity)
+REGISTER_COMPONENT_END(RigidBodyComponent)
+
+// END 展开的关键尾部：
+//   ::Engine::ComponentRegistry::Instance().Register(meta);
+//   return true; } ();
+\end{lstlisting}
+
+\texttt{BEGIN} 展开成 \texttt{static bool s\_Registered\_X = []() -> bool \{}
+——一个立即执行的静态初始化 lambda。它在 main() 之前运行，顺手把七个
+类型擦除操作挂上 meta：Has/Add/Get/Remove/Copy 五个操作 EnTT registry，
+而 \textbf{Snapshot/Restore} 用 \texttt{std::any} 携带整个组件 POD 的值拷贝
+——这两个槽位正是第 12 章 Undo 系统的钩子。反射系统在这里埋下了
+编辑器撤销能力的地基。
+
+\subsection{一次遍历，两处消费}
+
+消费端是两个高度对称的遍历器。AutoSerializer 按 PropertyType 分支写 YAML：
+
+\begin{lstlisting}
+// AutoSerializer.cpp —— 反射驱动序列化
+void AutoSerializer::Serialize(YAML::Emitter& out,
+                               const ComponentMeta& meta, void* component)
+{
+    for (auto& prop : meta.Properties)
+    {
+        if (prop.Hints.Transient) continue;   // 跳过瞬态字段
+        void* ptr = static_cast<char*>(component) + prop.Offset;
+        switch (prop.Type) {
+        case PropertyType::Float:
+            out << YAML::Key << prop.Name << YAML::Value
+                << *static_cast<float*>(ptr);
+            break;
+        // Int/Bool/String/Vec2-4/Enum ... 同构分支
+        }
+    }
+}
+\end{lstlisting}
+
+AutoInspector 几乎是它的镜像——同样的循环、同样的 switch，只是 case 里
+换成 ImGui::DragFloat / Checkbox / DragFloat3。这种对称不是巧合：
+\emph{属性面板和存档文件本来就是同一份元数据的两种投影}。hints 系统
+（Min/Max/Speed/Format/Group/Transient，PropertyTypes.h）进一步让 UI 行为
+（拖动速度、范围钳制）与序列化行为（Transient 跳过）都由声明处一处控制。
+
+\subsection{策略标志：自动化留后门}
+
+并非所有组件都适合全自动。\texttt{CustomUI}/\texttt{CustomSerial} 两个
+Flag 允许组件保留手写 Inspector 或手写序列化（如 MeshRendererComponent
+的材质预览需要特殊绘制）。自动化的价值在于覆盖那 80\% 规整组件，
+而不是强行吞掉剩下 20\% 的特例。
+
+\section{实现走读:注册表的运行时形态}
+
+ComponentRegistry 是个单例 map：TypeName $\to$ ComponentMeta。编辑器的
+Add Component 菜单遍历它列出所有可加组件；属性面板按实体的组件集合查表
+绘制；场景反序列化时用 TypeName 字符串找回 Meta 并驱动 Deserialize。
+一条链路串起三个子系统——这也是``未注册的组件不会出现在编辑器中也不会被
+序列化''这条规则（.claude/rules/reflection.md）的原因：没进表就没有
+任何消费者认识你。
+
+\section{踩坑记录}
+
+\begin{description}
+  \item[PropertyType 与实际类型不匹配] 宏只记录声明的枚举，若某字段实际
+        是 double 却声明成 Float，offsetof 照常工作但读出的字节被错误
+        解释——画面错乱且难排查。纪律：声明即契约，改字段必须同步改宏。
+  \item[Enum 属性忘配 EnumNames] Enum 类型需要外部提供名字数组并设置
+        hints.EnumCount，漏掉后面板下拉框为空。
+  \item[u8 字面量陷阱] C++20 下 \texttt{u8"中文"} 是 char8\_t 数组，
+        无法传给 ImGui 的 const char* 参数；项目以 MSVC /utf-8 +
+        普通字面量绕开（迁移文档 P-7 同款教训）。
+\end{description}
+
+\section{小结与延伸思考}
+
+这套约 150 行宏代码换来的杠杆率惊人：20 余个组件、数百个属性的
+UI+序列化+快照全部声明式搞定，新增组件的心智负担从``改五处''降到
+``写三行宏''。它是编辑器（第 11 章）、Undo（第 12 章）两个后续章节
+共同的基石。
+
+延伸思考：宏方案的真正成本在``声明与定义分离''——结构体改了字段名，
+宏这边的字符串不会报错，只能靠 code review 拦截。C++26 静态反射落地后，
+同样的架构可以用 constexpr 元编程重写，届时 offsetof 与字符串化都将
+成为历史。
