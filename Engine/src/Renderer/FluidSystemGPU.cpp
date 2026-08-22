@@ -3,6 +3,7 @@
 #include "Renderer/SPHCommon.h"
 #include "Renderer/SPHKernelMath.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
 #include "Scene/Components.h"
@@ -293,13 +294,17 @@ namespace Engine
         // Particle buffer: zero-initialized, 80 bytes per particle
         uint32_t             totalBytes = m_ParticleCount * sizeof(FluidGPUParticle);
         std::vector<uint8_t> zeroData(totalBytes, 0);
-        m_ParticleBuffer = ShaderStorageBuffer::CreateGPUDynamic(zeroData.data(), totalBytes, 0);
+        m_ParticleBuffer =
+            ShaderStorageBuffer::CreateGPUDynamic(zeroData.data(), totalBytes, 0, GpuMemCategory::Particle);
 
         // Identity alive list: [0, 1, 2, ..., N-1]
         std::vector<uint32_t> aliveIndices(m_ParticleCount);
         for (uint32_t i = 0; i < m_ParticleCount; i++)
             aliveIndices[i] = i;
-        m_AliveList = ShaderStorageBuffer::CreateGPUDynamic(aliveIndices.data(), m_ParticleCount * sizeof(uint32_t), 2);
+        m_AliveList = ShaderStorageBuffer::CreateGPUDynamic(aliveIndices.data(), m_ParticleCount * sizeof(uint32_t), 2,
+                                                            GpuMemCategory::Particle);
+
+        GpuMemoryStats::Get().SetParticleCount(m_ParticleCount);
 
         // Empty VAO for instanced draw
         m_EmptyVAO = VertexArray::Create();

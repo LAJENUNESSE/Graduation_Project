@@ -3,6 +3,7 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Platform/OpenGL/OpenGLBuffer.h"
 #include "Renderer/RendererAPI.h"
 
@@ -83,68 +84,91 @@ namespace Engine
 
     Ref<VertexBuffer> VertexBuffer::Create(uint32_t size)
     {
+        Ref<VertexBuffer> ref;
         switch (RendererAPI::GetAPI())
         {
         case RendererAPI::API::None:
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
-            return CreateRef<OpenGLVertexBuffer>(size);
+            ref = CreateRef<OpenGLVertexBuffer>(size);
+            break;
         case RendererAPI::API::Vulkan:
 #ifdef ENGINE_ENABLE_VULKAN
-            return CreateRef<VulkanVertexBuffer>(size);
+            ref = CreateRef<VulkanVertexBuffer>(size);
+            break;
 #else
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
 #endif
         }
 
-        ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
-        return nullptr;
+        if (!ref)
+            return nullptr;
+
+        GpuMemoryStats::Get().TrackResource(ref, GpuMemCategory::MeshBuffer, size, "VBO " + GpuMemFormatBytes(size));
+        return ref;
     }
 
     Ref<VertexBuffer> VertexBuffer::Create(float* vertices, uint32_t size)
     {
+        Ref<VertexBuffer> ref;
         switch (RendererAPI::GetAPI())
         {
         case RendererAPI::API::None:
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
-            return CreateRef<OpenGLVertexBuffer>(vertices, size);
+            ref = CreateRef<OpenGLVertexBuffer>(vertices, size);
+            break;
         case RendererAPI::API::Vulkan:
 #ifdef ENGINE_ENABLE_VULKAN
-            return CreateRef<VulkanVertexBuffer>(vertices, size);
+            ref = CreateRef<VulkanVertexBuffer>(vertices, size);
+            break;
 #else
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
 #endif
         }
 
-        ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
-        return nullptr;
+        if (!ref)
+            return nullptr;
+
+        auto& gmem = GpuMemoryStats::Get();
+        gmem.TrackResource(ref, GpuMemCategory::MeshBuffer, size, "VBO " + GpuMemFormatBytes(size));
+        gmem.AddUploaded(size);
+        return ref;
     }
 
     Ref<IndexBuffer> IndexBuffer::Create(uint32_t* indices, uint32_t count)
     {
+        Ref<IndexBuffer> ref;
         switch (RendererAPI::GetAPI())
         {
         case RendererAPI::API::None:
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
-            return CreateRef<OpenGLIndexBuffer>(indices, count);
+            ref = CreateRef<OpenGLIndexBuffer>(indices, count);
+            break;
         case RendererAPI::API::Vulkan:
 #ifdef ENGINE_ENABLE_VULKAN
-            return CreateRef<VulkanIndexBuffer>(indices, count);
+            ref = CreateRef<VulkanIndexBuffer>(indices, count);
+            break;
 #else
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
 #endif
         }
 
-        ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
-        return nullptr;
+        if (!ref)
+            return nullptr;
+
+        auto& gmem = GpuMemoryStats::Get();
+        gmem.TrackResource(ref, GpuMemCategory::MeshBuffer, uint64_t(count) * 4,
+                           "IBO " + std::to_string(count) + " idx", count / 3);
+        gmem.AddUploaded(uint64_t(count) * 4);
+        return ref;
     }
 
 } // namespace Engine

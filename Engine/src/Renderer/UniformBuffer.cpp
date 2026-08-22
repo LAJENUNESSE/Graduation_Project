@@ -2,6 +2,7 @@
 #include "Renderer/UniformBuffer.h"
 
 #include "Core/Assert.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Platform/OpenGL/OpenGLUniformBuffer.h"
 #include "Renderer/RendererAPI.h"
 
@@ -14,24 +15,31 @@ namespace Engine
 
     Ref<UniformBuffer> UniformBuffer::Create(uint32_t size, uint32_t binding)
     {
+        Ref<UniformBuffer> ref;
         switch (RendererAPI::GetAPI())
         {
         case RendererAPI::API::None:
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
-            return CreateRef<OpenGLUniformBuffer>(size, binding);
+            ref = CreateRef<OpenGLUniformBuffer>(size, binding);
+            break;
         case RendererAPI::API::Vulkan:
 #ifdef ENGINE_ENABLE_VULKAN
-            return CreateRef<VulkanUniformBuffer>(size, binding);
+            ref = CreateRef<VulkanUniformBuffer>(size, binding);
+            break;
 #else
             ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
             return nullptr;
 #endif
         }
 
-        ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
-        return nullptr;
+        if (!ref)
+            return nullptr;
+
+        GpuMemoryStats::Get().TrackResource(ref, GpuMemCategory::UniformStorage, size,
+                                            "UBO " + GpuMemFormatBytes(size) + " @" + std::to_string(binding));
+        return ref;
     }
 
 } // namespace Engine

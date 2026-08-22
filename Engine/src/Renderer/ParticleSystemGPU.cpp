@@ -3,6 +3,7 @@
 #include "Renderer/SPHCommon.h"
 #include "Renderer/SPHKernelMath.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/RendererAPI.h"
 #include "Renderer/RendererCapabilities.h"
@@ -582,25 +583,31 @@ namespace Engine
         uint32_t             particleSize = sizeof(GPUParticleData); // 80 bytes
         uint32_t             totalBytes   = m_MaxParticles * particleSize;
         std::vector<uint8_t> zeroData(totalBytes, 0);
-        m_ParticleBuffer = ShaderStorageBuffer::CreateGPUDynamic(zeroData.data(), totalBytes, 0);
+        m_ParticleBuffer =
+            ShaderStorageBuffer::CreateGPUDynamic(zeroData.data(), totalBytes, 0, GpuMemCategory::Particle);
 
         // Fill dead list with indices [0, 1, 2, ..., MAX-1]
         std::vector<uint32_t> deadIndices(m_MaxParticles);
         for (uint32_t i = 0; i < m_MaxParticles; i++)
             deadIndices[i] = i;
-        m_DeadList = ShaderStorageBuffer::CreateGPUDynamic(deadIndices.data(), m_MaxParticles * sizeof(uint32_t), 1);
+        m_DeadList = ShaderStorageBuffer::CreateGPUDynamic(deadIndices.data(), m_MaxParticles * sizeof(uint32_t), 1,
+                                                           GpuMemCategory::Particle);
 
         // Alive list (empty at start)
-        m_AliveList = ShaderStorageBuffer::CreateGPUDynamic(m_MaxParticles * sizeof(uint32_t), 2);
+        m_AliveList =
+            ShaderStorageBuffer::CreateGPUDynamic(m_MaxParticles * sizeof(uint32_t), 2, GpuMemCategory::Particle);
 
         // Counter buffer: deadCount=MAX, aliveCount=0, emitCount=0, pad=0
         // Kept as DYNAMIC — CPU writes aliveCount/emitCount every frame
         CounterData counters{m_MaxParticles, 0, 0, 0};
-        m_CounterBuffer = ShaderStorageBuffer::Create(&counters, sizeof(CounterData), 3);
+        m_CounterBuffer = ShaderStorageBuffer::Create(&counters, sizeof(CounterData), 3, GpuMemCategory::Particle);
 
         // Indirect draw args: count=6, instanceCount=0, first=0, baseInstance=0
         IndirectDrawCommand cmd{6, 0, 0, 0};
-        m_IndirectArgs = ShaderStorageBuffer::CreateGPUDynamic(&cmd, sizeof(IndirectDrawCommand), 4);
+        m_IndirectArgs =
+            ShaderStorageBuffer::CreateGPUDynamic(&cmd, sizeof(IndirectDrawCommand), 4, GpuMemCategory::Particle);
+
+        GpuMemoryStats::Get().SetParticleCount(m_MaxParticles);
 
         // Empty VAO for billboard rendering
         m_EmptyVAO = VertexArray::Create();
