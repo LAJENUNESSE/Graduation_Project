@@ -691,8 +691,9 @@ namespace Engine
         if (m_SPHInitialized)
             return;
 
-        // Grid cell size = 2 * smoothing radius (保证邻域在 3x3x3 cell 内)
-        float    cellSize = 2.0f * smoothingRadius;
+        // Grid cell size = smoothing radius：27-cell stencil 覆盖搜索半径 h，
+        // 距离过滤保证结果与 2h 版本一致，扫描体积从 (6h)³ 收紧到 (3h)³。
+        float    cellSize = smoothingRadius;
         uint32_t gridSize = (m_MaxParticles <= 8000) ? 16 : (m_MaxParticles <= 30000) ? 32 : 64;
 
         m_Grid.Init(m_MaxParticles, gridSize, cellSize);

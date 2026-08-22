@@ -416,7 +416,10 @@ namespace Engine
         if (m_SPHInitialized)
             return;
 
-        float    cellSize = 2.0f * smoothingRadius;
+        // Grid cell size = smoothing radius：27-cell stencil 覆盖搜索半径 h
+        // （轴向邻居偏移 ≤ h = cellSize），距离过滤保证结果与 2h 版本一致，
+        // 但扫描体积从 (6h)³ 收紧到 (3h)³，消除约 8 倍冗余遍历。
+        float    cellSize = smoothingRadius;
         uint32_t gridSize = 64;
         m_Grid.Init(m_ParticleCount, gridSize, cellSize);
 
@@ -903,7 +906,8 @@ namespace Engine
 
         m_CudaImpl->Timing.RecordStart(strm);
 
-        const float cellSize = 2.0f * emitter.SmoothingRadius;
+        // 与 InitSPH 一致：cellSize = h（CUDA 路径网格参数必须与 GL/Vulkan 相同）
+        const float cellSize = emitter.SmoothingRadius;
         const int   gridSize = static_cast<int>(m_Grid.GetGridSize());
 
         CudaInterop::SPHParams sphP{};

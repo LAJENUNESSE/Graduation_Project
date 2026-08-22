@@ -78,7 +78,7 @@ namespace Engine
         void InitVulkanResources();
 
         uint32_t m_GridSize     = 64;   // 64^3 = 262144 cells
-        float    m_CellSize     = 0.2f; // = 2 * smoothing radius
+        float    m_CellSize     = 0.2f; // = smoothing radius（27-cell stencil 覆盖搜索半径 h）
         uint32_t m_MaxParticles = 0;
 
         bool m_Initialized = false;
