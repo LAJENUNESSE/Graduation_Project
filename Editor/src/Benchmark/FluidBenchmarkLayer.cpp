@@ -3,6 +3,7 @@
 #include "Asset/PathUtils.h"
 #include "Core/Application.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Debug/PerformanceMonitor.h"
 #include "Renderer/RendererCapabilities.h"
 
@@ -161,11 +162,23 @@ namespace Engine
         }
 
         SampleRow row;
-        row.Timestamp  = CurrentTimestamp();
-        row.Frame      = static_cast<uint32_t>(m_Samples.size()) + 1;
-        row.ComputeMs  = timing.ComputeMs;
-        row.InteropMs  = timing.InteropMs;
-        row.EndToEndMs = timestep.GetMilliseconds();
+        row.Timestamp         = CurrentTimestamp();
+        row.Frame             = static_cast<uint32_t>(m_Samples.size()) + 1;
+        row.ComputeMs         = timing.ComputeMs;
+        row.InteropMs         = timing.InteropMs;
+        row.EndToEndMs        = timestep.GetMilliseconds();
+        row.GpuAllocatedBytes = m_RunGpuAllocatedBytes;
+        row.WorkingSetBytes   = m_RunWorkingSetBytes;
+
+        // 本采样帧内的传输字节差分
+        auto&          gmem    = GpuMemoryStats::Get();
+        const uint64_t upNow   = gmem.GetUploadedBytes();
+        const uint64_t downNow = gmem.GetDownloadedBytes();
+        row.UploadedBytes      = upNow - m_LastUploadedBytes;
+        row.DownloadedBytes    = downNow - m_LastDownloadedBytes;
+        m_LastUploadedBytes    = upNow;
+        m_LastDownloadedBytes  = downNow;
+
         m_Samples.push_back(std::move(row));
 
         if (m_Samples.size() >= m_Config.SampleFrames)
@@ -194,7 +207,8 @@ namespace Engine
 
         m_Output << "Timestamp,Backend,Solver,Particles,Iterations,Run,Frame,Warmup,SampleValid,Compute_ms,"
                     "Interop_ms,EndToEnd_ms,AliveCount,MeanDensity,MaxDensityError,RMSDensityError,"
-                    "OutOfBoundsCount,StateHash,Device\n";
+                    "OutOfBoundsCount,StateHash,Device,GpuAllocatedBytes,WorkingSetBytes,UploadedBytes,"
+                    "DownloadedBytes\n";
         return true;
     }
 
@@ -211,7 +225,15 @@ namespace Engine
         m_PrimingSamples     = 0;
         m_WarmupSamples      = 0;
         m_LastTimingSequence = 0;
-        m_State              = State::Running;
+
+        // 每轮开始抓取内存基线，并把带宽游标对齐到当前累计值
+        auto& gmem             = GpuMemoryStats::Get();
+        m_RunGpuAllocatedBytes = gmem.TotalAllocatedBytes();
+        m_RunWorkingSetBytes   = GpuMemoryStats::QueryProcessWorkingSetBytes();
+        m_LastUploadedBytes    = gmem.GetUploadedBytes();
+        m_LastDownloadedBytes  = gmem.GetDownloadedBytes();
+
+        m_State = State::Running;
         ENGINE_CORE_INFO("[Benchmark] Run {}/{} initialized", m_RunIndex, m_Config.Runs);
         return true;
     }
@@ -310,7 +332,9 @@ namespace Engine
                      << sample.EndToEndMs << ',' << correctness.AliveCount << ',' << correctness.MeanDensity << ','
                      << correctness.MaxDensityError << ',' << correctness.RMSDensityError << ','
                      << correctness.OutOfBoundsCount << ",0x" << std::hex << std::setw(16) << std::setfill('0')
-                     << correctness.StateHash << std::dec << std::setfill(' ') << ',' << EscapeCSV(device) << '\n';
+                     << correctness.StateHash << std::dec << std::setfill(' ') << ',' << EscapeCSV(device) << ','
+                     << sample.GpuAllocatedBytes << ',' << sample.WorkingSetBytes << ',' << sample.UploadedBytes << ','
+                     << sample.DownloadedBytes << '\n';
         }
     }
 

@@ -56,6 +56,12 @@
 运行器会为每个后端、求解器和粒子数启动独立的 `Editor.exe` 进程，并将分组文件合并为
 `benchmark/results/raw_results.csv`。结果目录是本地实验产物，不提交到 Git。
 
+自 2026-08 起 CSV 追加四列显存/内存口径：`GpuAllocatedBytes`（引擎门面 GL/Vulkan
+分配的 GPU 资源总字节，每轮开始时抓取、轮内恒定）、`WorkingSetBytes`（进程工作集）、
+`UploadedBytes` / `DownloadedBytes`（本采样帧内 GPU↔CPU 传输字节差分）。注意
+`GpuAllocatedBytes` 不含 CUDA 后端 `cudaMalloc` 的粒子缓冲显存（CUDA 侧未接入记账），
+跨后端对比显存列时以 OpenGL/Vulkan 两组为准。
+
 先生成不含加速比的统计表：
 
 ```powershell

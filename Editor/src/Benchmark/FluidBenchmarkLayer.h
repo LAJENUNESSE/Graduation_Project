@@ -41,6 +41,14 @@ namespace Engine
             float       ComputeMs  = 0.0f;
             float       InteropMs  = 0.0f;
             float       EndToEndMs = 0.0f;
+            // 显存/内存口径：GpuAllocated/WorkingSet 每轮开始时抓取（轮内恒定），
+            // Uploaded/Downloaded 为本采样帧内的传输字节差分。
+            // 注意 GpuAllocated 仅含引擎门面（GL/Vulkan）分配，CUDA 后端的
+            // cudaMalloc 显存不在其中。
+            uint64_t GpuAllocatedBytes = 0;
+            uint64_t WorkingSetBytes   = 0;
+            uint64_t UploadedBytes     = 0;
+            uint64_t DownloadedBytes   = 0;
         };
 
         struct CorrectnessResult
@@ -79,6 +87,11 @@ namespace Engine
         uint32_t                            m_WarmupSamples      = 0;
         uint32_t                            m_CorrectnessFrames  = 0;
         uint64_t                            m_LastTimingSequence = 0;
+        // 每轮抓取的内存基线与上一采样帧的带宽累计游标
+        uint64_t m_RunGpuAllocatedBytes = 0;
+        uint64_t m_RunWorkingSetBytes   = 0;
+        uint64_t m_LastUploadedBytes    = 0;
+        uint64_t m_LastDownloadedBytes  = 0;
     };
 
 } // namespace Engine
