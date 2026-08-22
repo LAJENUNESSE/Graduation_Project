@@ -137,3 +137,7 @@ vcpkg_installed/
 
 # Installer: VC++ Redistributable（手动下载，不入库）
 installer/redist/*.exe
+
+# DSH 本地审批工具诊断脚本
+.dsh-toast-*.ps1
+.dsh-toast-*.log
