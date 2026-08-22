@@ -1,0 +1,11 @@
+% 第 12 章 Undo/Redo（占位）
+锚点：\texttt{Editor/UndoSystem.h/.cpp} + \texttt{CommandHistory.h/.cpp}
+（执行/记录语义分离，14 单元测试用例）。
+
+机制：命令模式 + 反射系统 Snapshot/Restore（\texttt{std::any} 携带组件
+POD 快照）。踩坑素材：EntityCreateCommand Redo 保留原始 UUID
+（\texttt{fd1eaee}）；EntityDeleteCommand 递归保存/恢复子树
+（\texttt{27f6c4c} 系）；多选变换 undo（\texttt{62479f9}）；Play 模式
+暂停命令记录（\texttt{2371ecf}）。
+
+% TODO(M3): 命令 vs 快照两种 Undo 流派对比；与反射系统的耦合设计。

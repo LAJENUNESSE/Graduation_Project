@@ -1,0 +1,19 @@
+% 第 13 章 性能工程（占位）
+三个完整案例（docs/perf/ 三部曲，均有方法论 + 前后数据）：
+(1) VTune Hotspots → uarch 定位鼠标卡顿：GetFileAttributesExW 文件系统
+热点，修复后对比（mouse-lag 文档）；
+(2) NSight + CSV 交叉分析 50k 粒子 SPH 帧时间，VSync 量化阶梯根因
+（round3 文档）；
+(3) uarch 探索：Retiring 仅 13.8%、Back-End 47% 瓶颈 + CUDA 同步自旋
+分析（vtune-optimization-guide）。
+
+代码锚点：\texttt{Debug/PerformanceMonitor}（DrawCalls/Triangles 统计
+内联在 RenderCommand）、\texttt{ProfileTimer}、\texttt{GPUTimerQuery}
+（GL + CUDA 双路径计时埋点 \texttt{aa38854}）。
+
+其他素材：spin-wait 限帧 56%→0%（\texttt{9eb9a79}）；immutable storage
++ SPH kernel 预计算 + Bloom 半分辨率（\texttt{d9d9168}）；
+AssetBrowserPanel 每帧遍历文件系统修复（\texttt{ce1e31c}）；
+normalMatrix GPU→CPU（\texttt{a328224}）。
+
+% TODO(M3): 每案例一节：症状→工具→定位→修复→数据。

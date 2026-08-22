@@ -1,0 +1,12 @@
+% 第 7 章 物理系统（占位）
+锚点：\texttt{Physics/BulletPhysicsWorld.cpp}、\texttt{SDFMath.h}
+（header-only 可测）、\texttt{PhysicsDebugDraw}。
+
+叙事线：Phase 9 手写冲量响应起步（\texttt{7341800}）→ 审计发现穿模等
+10 bug（\texttt{89fe5b4}）→ 移除自研 Custom PhysicsWorld 强制 Bullet3
+（\texttt{9cff9ce}）。手写阶段遗产仍存活：OBB SAT 碰撞数学、惯性张量
+mat3 升级 + 平行轴修正、陀螺力矩积分、接触面计算——大量 fix commit
+（\texttt{1e3a12e}/\texttt{ecf3017}/\texttt{b85497d} 等）构成"碰撞数学
+是怎么被做对的"完整案例。docs/CollisionMath SAT 退化轴文档可作素材。
+
+% TODO(M3): 冲量法原理；SAT 详解；为什么最终交给 Bullet 但保留 SDFMath。

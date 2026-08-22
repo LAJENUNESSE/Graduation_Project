@@ -1,0 +1,11 @@
+% 第 6 章 资产管理（占位）
+锚点：\texttt{Asset/SlotMap.h}（世代槽资源池）、\texttt{AssetHandle.h}
+（强类型句柄）、\texttt{AssetManager.cpp}、\texttt{AsyncLoadQueue}
+（后台加载）、\texttt{FileWatcher}（热重载）。
+
+素材线索：提交 \texttt{3955e2e}``AssetManager 完整实现，SlotMap 资源池 +
+异步加载 + 热重载''；SlotMap::Remove 屏蔽保留槽防 freelist 污染
+（\texttt{d05ea6b}）；AssetHandle 加 Type 字段根治 SlotMap 冲撞断言
+（\texttt{182f5e7}）；线程安全 LoadAsync 去重（\texttt{576116a}/\texttt{6ef37c9}）。
+
+% TODO(M3): SlotMap 世代计数原理；句柄 vs 裸指针；异步队列去重。

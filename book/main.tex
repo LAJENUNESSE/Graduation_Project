@@ -1,0 +1,130 @@
+% ============================================================
+% 《从一个窗口到一个引擎》—— C++ 游戏引擎与可视化编辑器构建实录
+% 主文件：ElegantBook 模板 + XeLaTeX 编译
+% ============================================================
+\documentclass[%
+  lang=cn,          % 中文支持（ctex）
+  newtx,            % Times 风格字体
+  12pt,             % 教材正文偏大字号
+  oneside,          % 单面排版（屏幕阅读）
+  scheme=warmgreen, % 主题色
+]{elegantbook}
+
+% ---------- 项目信息 ----------
+\title{从一个窗口到一个引擎}
+\subtitle{C++ 游戏引擎与可视化编辑器构建实录}
+\author{LAJENUNESSE}
+\date{\today}
+
+% ---------- 全局代码样式 ----------
+% 引擎代码为 C++20，中文注释；listings 对 UTF-8 中文注释的支持有限，
+% 故代码清单中的注释以英文呈现，讲解文字承载中文说明。
+\lstset{
+  language=C++,
+  basicstyle=\small\ttfamily,
+  keywordstyle=\bfseries,
+  commentstyle=\color{gray!70}\itshape,
+  stringstyle=\color{teal},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=8pt,
+  frame=single,
+  breaklines=true,
+  tabsize=4,
+  showstringspaces=false,
+  columns=flexible,
+  keepspaces=true,
+  escapeinside={(*@}{@*)},
+  morekeywords={uint32_t,uint64_t,Scope,Ref,override,consteval,constinit,concept,requires}
+}
+
+% 注：ElegantBook 已内置加载 natbib，此处不再重复引入
+
+\begin{document}
+
+\frontmatter
+\maketitle
+
+\begin{introduction}
+  \item 本书以一个真实完成的毕业设计项目为载体——约 4.6 万行 C++20 代码的
+        3D 游戏引擎与可视化编辑器——按照它实际被构建出来的顺序逐章展开，
+        讲述每项技术\emph{为什么被引入}、\emph{有哪些备选方案}、
+        \emph{最终如何实现}，以及\emph{作者踩过哪些坑}。
+  \item 全书不是教程式的理想化重演：所有代码锚点均指向仓库当前的真实文件，
+        所有设计决策均有 git 提交历史或项目文档背书。
+  \item 关键词：游戏引擎；C++20；ECS；OpenGL；Vulkan；反射系统；可视化编辑器
+\end{introduction}
+
+\tableofcontents
+
+\mainmatter
+
+% ---- 第 I 部分：地基 ----
+\chapter{绪论：这本书讲什么、怎么读}
+\label{ch:intro}
+\input{chapters/ch01-intro}
+
+\chapter{引擎骨架：Application 与主循环}
+\label{ch:core-loop}
+\input{chapters/ch02-core-loop}
+
+% ---- 第 II 部分：看见画面 ----
+\chapter{渲染抽象层：在 OpenGL 之上筑墙}
+\label{ch:render-abstraction}
+\input{chapters/ch03-render-abstraction}
+
+\chapter{场景与 ECS：EnTT 与 façade 架构}
+\label{ch:scene-ecs}
+\input{chapters/ch04-scene-ecs}
+
+\chapter{编译期反射：一套宏驱动的编辑器数据流}
+\label{ch:reflection}
+\input{chapters/ch05-reflection}
+
+\chapter{资产管理：SlotMap、异步加载与热重载}
+\label{ch:asset}
+\input{chapters/ch06-asset}
+
+% ---- 第 III 部分：让世界可信 ----
+\chapter{物理系统：从手写冲量到 Bullet3}
+\label{ch:physics}
+\input{chapters/ch07-physics}
+
+\chapter{SPH 流体与 GPU 粒子：Compute 管线三部曲}
+\label{ch:sph-gpu}
+\input{chapters/ch08-sph-gpu}
+
+\chapter{CUDA sidecar：引入、移除与重引入}
+\label{ch:cuda-sidecar}
+\input{chapters/ch09-cuda-sidecar}
+
+\chapter{音视频与地形脚本：外围模块速写}
+\label{ch:peripherals}
+\input{chapters/ch10-peripherals}
+
+% ---- 第 IV 部分：编辑器与工程化 ----
+\chapter{编辑器架构：EditorLayer 的膨胀与瘦身}
+\label{ch:editor}
+\input{chapters/ch11-editor}
+
+\chapter{Undo/Redo：命令模式与反射快照}
+\label{ch:undo}
+\input{chapters/ch12-undo}
+
+\chapter{性能工程：三次真实调优案例}
+\label{ch:performance}
+\input{chapters/ch13-performance}
+
+\chapter{Vulkan 后端迁移：一次受控的双后端改造}
+\label{ch:vulkan}
+\input{chapters/ch14-vulkan}
+
+% ---- 附录 ----
+\appendix
+\chapter{三后端流体基准实验协议}
+\input{chapters/appx-benchmark}
+
+\backmatter
+% \bibliography{references}
+
+\end{document}

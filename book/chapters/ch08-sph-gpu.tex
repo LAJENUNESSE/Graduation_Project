@@ -1,0 +1,19 @@
+% 第 8 章 SPH 流体与 GPU 粒子（占位）
+锚点：\texttt{Renderer/ParticleSystemGPU.cpp}（Compute 4-Pass：emit →
+simulate → render\_args → billboard + Indirect Draw）、
+\texttt{FluidSystemGPU.cpp}（WCSPH/PCISPH + SSFR 表面渲染）、
+\texttt{SpatialHashGrid}（hash/prefix\_sum 三 pass/scatter）、
+\texttt{SPHKernelMath.h}（header-only 可测）、\texttt{GPUAsyncReadback}
+（fence + persistent map）、assets/shaders/ 下 14 个 sph/fluid/grid 着色器。
+
+学术素材：docs/thesis/chapter4-sph.tex（完整 SPH 章）；
+Solenthaler 2009 PCISPH（δ 自动推导，\texttt{00146b7}）；
+Akinci 2013 表面张力（\texttt{6cf61fb}，GLSL+CUDA 双实现）；
+GB/T 7714 文献清单。
+
+踩坑富矿：SSBO slot 1 被 Grid.Build 覆盖致流体不可见（\texttt{e63d819}）；
+SSFR 管道 GL\_BLEND 泄漏（\texttt{b85f9d5}）；同步回读 28ms GPU stall
+（\texttt{01de4e3}）；CUDA/GLSL 一致性三连修（\texttt{dc72895}）；
+emit 后 compact 重建差一帧（\texttt{547e3ad}）。
+
+% TODO(M3): SPH 原理推导（可复用论文图）；4-Pass 管线 TikZ 图；SSFR。

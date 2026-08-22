@@ -1,0 +1,15 @@
+% 第 3 章 渲染抽象层（占位）
+锚点：\texttt{RendererAPI.h}（纯虚接口）、\texttt{RenderCommand.h}
+（静态转发门面 + 性能统计内联）、\texttt{Buffer.h/Shader.h/Texture.h/
+Framebuffer.h/VertexArray.h} 工厂族、\texttt{Platform/OpenGL/} 22 文件实现。
+
+叙事线：项目早期直接调 GL（Phase R1 前后对比，提交 \texttt{5043e83}）；
+2026-05 Vulkan 迁移 Phase 1``抽象泄漏归零''——Engine/src 下零
+glad include（终态 \texttt{27398fc}），SSAO 噪声/blend 状态/异步回读/
+能力查询/IBL 全部下沉 Platform 层。
+
+关键代码：DrawIndexed 内嵌 stats 统计；BindTextureView(void*) 避开
+vulkan.h 泄漏的设计；Material 的 Set-缓存 + Bind-刷新 dirty flag 模式。
+
+% TODO(M3): RenderPacket/RenderQueue 按 Shader 排序减状态切换；HDR
+% Framebuffer 附件布局；多 Pass 管线总览图（TikZ）。

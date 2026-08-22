@@ -1,0 +1,208 @@
+% ============================================================
+% 第 2 章 引擎骨架：Application 与主循环（样章）
+% 代码锚点：Engine/src/Core/Application.h / Application.cpp
+%           Engine/src/Core/LayerStack.h
+% 时间线：2026-02-21 首个提交即包含 Application 骨架
+% ============================================================
+\section{问题引入：一个窗口背后需要什么}
+
+一切从最小的问题开始：在屏幕上打开一个窗口，让它响应鼠标拖动、键盘输入，
+并且不卡死操作系统。裸写 Win32 API 需要 200 余行样板代码，且与平台强绑定。
+但"跨平台窗口"只是表象——真正的需求是：\textbf{引擎的其余所有子系统
+（渲染、物理、音频）都必须挂在一个统一的节拍器上运转}。这个节拍器就是主循环。
+
+本项目选择 GLFW 作为窗口库，但它只解决"窗口 + 输入事件"，不解决：
+帧与帧之间该按什么顺序更新？谁拥有这些子系统？窗口关闭时如何优雅退出？
+这些问题由 \texttt{Application} 类回答。
+
+\section{通用原理：游戏循环的三种形态}
+
+教科书上的游戏循环通常有三种实现策略：
+
+\begin{enumerate}
+  \item \textbf{自由奔跑}：能跑多快跑多快，用帧间隔作为时间步。简单，
+        但不同机器上模拟速度不一致，且 GPU 空转烧电。
+  \item \textbf{固定时间步}：以固定 $\Delta t$ 累积更新，渲染插值。
+        物理仿真的黄金标准，但实现复杂度高。
+  \item \textbf{限帧混合睡眠}：目标帧率下，先粗粒度 sleep 让出 CPU，
+        最后几毫秒自旋等待以提高唤醒精度。
+\end{enumerate}
+
+本项目的选择是第 3 种——这个决策值得玩味：它不是学术最优解，而是工程
+权衡解。物理系统（Bullet3）内部自带固定步长累积器，所以主循环无需再背
+这份责任；而编辑器场景下"144 FPS 上限 + 低 CPU 占用"比"完美确定性"
+重要得多。
+
+\section{本项目的设计与决策}
+
+\subsection{单例还是依赖注入？}
+
+\texttt{Application} 采用了经典的 Meyer's 单例模式：
+
+\begin{lstlisting}
+class Application
+{
+public:
+    static Application& Get() { return *s_Instance; }
+    // ...
+private:
+    static Application* s_Instance;
+};
+
+// To be defined by the client application
+Scope<Application> CreateApplication();
+\end{lstlisting}
+
+这是从 Hazel 引擎教学项目继承的模式。它的争议点在于全局状态不利于测试，
+但对引擎这种"天然进程唯一"的对象，单例换来的访问便利性是划算的。
+值得注意的是 \texttt{CreateApplication()} 自由函数：\emph{引擎不知道客户端是谁}，
+由客户端 exe（Editor 或 Sandbox）提供入口——这是控制反转的最小实践。
+
+\subsection{层栈：编辑器的组织单元}
+
+\texttt{LayerStack}（\texttt{Core/LayerStack.h}）把每一帧的工作切分为若干
+\texttt{Layer}，每层有 \texttt{OnAttach/OnUpdate/OnImGuiRender/OnEvent/OnDetach}
+五个生命周期钩子。Overlay（如 ImGui 层）永远最后更新、最先收到事件。
+编辑器本体就是一个被推入栈中的 \texttt{EditorLayer}。
+
+\subsection{帧边界的显式化：为 Vulkan 埋下的伏笔}
+
+最初的 \texttt{Run()} 循环非常直白：更新层 → 渲染 ImGui → 交换缓冲。
+但半年后的 Vulkan 迁移打破了这个宁静——Vulkan 的命令录制必须发生在
+"acquire swapchain image 之后、submit 之前"，而 OpenGL 没有这个约束。
+最终的主循环长这样：
+
+\begin{lstlisting}
+void Application::Run()
+{
+    while (m_Running)
+    {
+        // ... timestep 计算, PerformanceMonitor::BeginFrame ...
+
+        GraphicsContext* gfx = m_Window->GetGraphicsContext();
+        if (gfx)
+            gfx->BeginRenderFrame();   // Vulkan: acquire + Begin cmd
+
+        if (!m_Minimized)
+        {
+            for (const auto& layer : m_LayerStack)
+                layer->OnUpdate(timestep);   // 录制 dispatch 到主帧 cmd
+
+            m_ImGuiLayer->Begin();
+            for (const auto& layer : m_LayerStack)
+                layer->OnImGuiRender();
+            m_ImGuiLayer->End();
+        }
+
+        if (gfx)
+            gfx->EndRenderFrame();     // Vulkan: submit + present
+
+        m_Window->OnUpdate();
+        PerformanceMonitor::Get().EndFrame();
+        // ... 混合睡眠限帧 ...
+    }
+}
+\end{lstlisting}
+
+关键设计：\texttt{GraphicsContext} 基类的 \texttt{BeginRenderFrame/
+EndRenderFrame} 是\textbf{默认 no-op 的虚函数}\footnote{对应迁移文档
+docs/vulkan-migration/SPEC.md 决策 D-16。}。OpenGL 路径完全不受影响，
+Vulkan 路径 override 它们来驱动帧边界。这是"抽象层吸收后端差异"原则
+在整个项目中最典型的一次应用——代价只是两个空虚函数。
+
+\section{实现走读：那些容易忽略的细节}
+
+\subsection{关闭拦截器：一行代码背后的产品思维}
+
+\begin{lstlisting}
+using CloseInterceptFn = std::function<bool()>;
+void SetCloseInterceptor(CloseInterceptFn fn) { /*...*/ }
+
+bool Application::OnWindowClose(WindowCloseEvent& e)
+{
+    if (m_CloseInterceptor && !m_CloseInterceptor())
+    {
+        glfwSetWindowShouldClose(/*...*/, GLFW_FALSE);
+        return true;   // 取消关闭
+    }
+    m_Running = false;
+    return true;
+}
+\end{lstlisting}
+
+用户点击编辑器右上角 × 时，如果有未保存的场景，应该弹窗询问而非直接退出。
+这个"产品级细节"通过回调注入实现：引擎核心不知道"未保存"是什么，
+编辑器层注册拦截器自行判断。\texttt{OnWindowClose} 里直接调用 GLFW 而非
+走抽象层的细节也值得一提——因为取消关闭本质上是窗口操作，强行抽象反而
+增加无收益的间接层。
+
+\subsection{析构顺序：注释里的事故现场}
+
+\begin{lstlisting}
+Application::~Application()
+{
+    // 先 detach 所有层——OnDetach 可能需要 Application::Get()
+    //（如清除 CloseInterceptor）
+    m_LayerStack.Shutdown();
+
+    if (m_Initialized) { /* PerformanceMonitor / AssetManager */ }
+    Renderer::Shutdown();
+    s_Instance = nullptr;
+}
+\end{lstlisting}
+
+这行注释是真实的踩坑记录：曾因析构顺序错误导致 \texttt{Application::Get()}
+返回悬垂指针崩溃（git 提交 \texttt{2c5ad95}``修复关闭窗口时空指针崩溃''）。
+\textbf{教训：带单例的系统里，销毁顺序必须保证"使用单例者先于单例本身死亡"}。
+
+\subsection{限帧的实现：为什么最后 2ms 要自旋}
+
+\begin{lstlisting}
+// 混合睡眠策略：先粗粒度 sleep 让出 CPU，
+// 最后 2ms 用 _mm_pause 自旋等待以提高精度
+if (m_FrameRateLimitEnabled && !m_Window->IsVSync() && ...)
+{
+    double targetTime = m_LastFrameTime + 1.0 / m_TargetFrameRate;
+    while (glfwGetTime() < targetTime - 0.002)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    while (glfwGetTime() < targetTime)
+    {
+        _mm_pause();   // x86；ARM64 对应 __yield()
+    }
+}
+\end{lstlisting}
+
+纯 \texttt{sleep(1ms)} 的唤醒精度受 Windows 定时器分辨率制约（默认
+15.6ms），实测会造成帧率抖动；纯自旋则把一个核烧满。混合方案在两者间
+取得平衡——注意构造函数里的 \texttt{timeBeginPeriod(1)}：没有它，
+Windows 下 \texttt{sleep(1)} 实际睡约 15ms。这个细节在 git 历史中对应
+提交 \texttt{9eb9a79}``spin-wait 帧率限制器 CPU 空转 56\% $\to$ ~0\%''。
+
+\section{踩坑记录}
+
+\begin{description}
+  \item[Windows.h 宏污染] \texttt{EntryPoint.h} 必须
+        \texttt{\#define NOMINMAX}，否则 \texttt{windows.h} 的
+        \texttt{min/max} 宏会击穿所有 \texttt{std::min/max} 调用
+        （提交 \texttt{8d67964}）。Windows 平台开发的第一课，
+        但几乎每个人都要亲自中招一次。
+  \item[float 计时的精度陷阱] 帧计时成员最初是 \texttt{float}，
+        引擎运行数十分钟后秒级时间戳的 float 精度不足导致 timestep
+        异常，后改为 \texttt{double}（提交 \texttt{80fccb2}）。
+        "时间相关字段一律 double"由此成为项目约定。
+\end{description}
+
+\section{小结与延伸思考}
+
+本章的 \texttt{Application} 只有约 200 行，却确立了三个贯穿全书的原则：
+\begin{itemize}
+  \item \textbf{引擎不认识客户端}——控制反转让 Editor/Sandbox 复用同一内核；
+  \item \textbf{层栈是一切的容器}——后续的功能扩展几乎都以新 Layer 或
+        Layer 内控制器形式出现；
+  \item \textbf{抽象层的虚函数可以很便宜}——no-op 默认实现是吸收后端差异
+        的低成本手段，Vulkan 帧边界改造证明了这一点。
+\end{itemize}
+
+延伸思考：如果重做一次，是否会选固定时间步 + 渲染插值？答案可能是否定
+的——编辑器的交互流畅度优先级高于模拟确定性，且 Bullet 内部已有自己的
+固定步长机制。"在正确的层级解决问题"比"用最先进的方案"更重要。

@@ -1,0 +1,16 @@
+# LaTeX 中间产物与输出
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+*.xdv
+*.toc
+*.lof
+*.lot
+*.out
+*.synctex.gz
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+main.pdf

@@ -1,0 +1,19 @@
+% 第 14 章 Vulkan 后端迁移（占位——全书最重章，素材最富）
+锚点：\texttt{Platform/Vulkan/} 40 文件约 6000 行（Context/Swapchain/
+Allocator(VMA)/RenderPass/Pipeline/PipelineCache/Descriptor 三层/Shader
+(shaderc+spirv-cross)/Buffer/Texture/VertexArray/Synchronization/
+BarrierUtil/AsyncReadback/IBLGenerator）。
+
+叙事骨架（SPEC.md Phase 1-8 即章节骨架）：
+Phase 1 抽象泄漏归零（前置工程）→ Phase 2 基础设施清屏 →
+Phase 3 RendererAPI 核心 → Phase 4 shaderc 运行时编译 →
+Phase 5 VMA 资源族 → Phase 6 ImGui 多视口 → Phase 7 Compute 全家桶迁移
+（IBL/草地/网格/粒子/SPH）→ Phase 8 PBR 主路径接通（进行中，
+DrawIndexed 待实装）。
+
+决策素材：SPEC §3 十六条 D-x 决策全部按``背景+结论+影响范围''格式现成；
+ADR-0001（shader 单源双路径三方案对比）/ADR-0002（主帧 cmd 暴露策略）
+标准 MADR 格式；Pitfalls 表 17 条即本章``踩坑录''小节初稿。
+
+% TODO(M3): 与 OpenGL 抽象层的映射表；双路径 shader 宏策略；验证方法学
+%（validation layer + 冒烟层）。

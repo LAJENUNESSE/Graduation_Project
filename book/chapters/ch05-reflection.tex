@@ -1,0 +1,13 @@
+% 第 5 章 编译期反射（占位）
+锚点：\texttt{Reflection/ComponentMeta.h}（ENGINE\_COMPONENT 宏家族）、
+\texttt{ComponentRegistry.cpp}、\texttt{AutoInspector.cpp}（自动 ImGui 面板）、
+\texttt{AutoSerializer.cpp}（自动 YAML 序列化）。
+
+核心机制：宏展开创建 \texttt{\_Reflect\_<Type>} 命名空间 + \texttt{offsetof}
+属性注册 + REGISTER\_COMPONENT\_BEGIN/END 内 static bool lambda 类型擦除
+Has/Add/Get/Remove/Copy/Snapshot/Restore 七操作。新组件注册后自动获得
+编辑器 UI 与序列化能力——这是``一套宏吃遍编辑器数据流''的设计。
+
+对比素材：docs/ue-reflection-research.md（UE 反射调研）。
+
+% TODO(M3): 宏逐层解剖；类型擦除 lambda 的代价；与 UE/Qt 元对象系统对比。

@@ -1,0 +1,12 @@
+% 第 11 章 编辑器架构（占位）
+锚点：\texttt{EditorLayer.h/.cpp}（最大文件，总协调器）、
+\texttt{EditorSceneSession}（场景会话 + Play/Stop 双场景模型）、
+\texttt{EditorShell}（菜单快捷键）、\texttt{EditorPanelCoordinator}（七面板）、
+\texttt{EditorRenderController}、\texttt{EditorViewportController}（拾取映射）、
+\texttt{EditorSelectionGizmoController}（ImGuizmo）。
+
+叙事线：2026-03 连环重构——十余个 refactor commit 将上帝类 EditorLayer
+逐块拆出（提取 RenderSettingsPanel → SceneSession → Shell → Viewport →
+Gizmo → PanelCoordinator），docs/plans/refactor-* 五份计划 + 收口总结。
+
+% TODO(M3): 上帝类是怎么形成的；拆分顺序与依赖方向；崩溃转储钩子。

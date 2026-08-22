@@ -1,0 +1,15 @@
+% 第 9 章 CUDA sidecar（占位）
+锚点：\texttt{Platform/CUDA/} 11 文件约 2370 行——
+\texttt{CudaGLInteropContext}、\texttt{CudaParticlePipeline.cu}/
+\texttt{CudaSPHPipeline.cu}、\texttt{CudaTimingHelper}、
+\texttt{CudaErrorHandling.h}、\texttt{CudaPoisonState.h}
+（进程级 atomic 中毒标志 + 永久回退 OpenGL Compute 路径）。
+
+三幕剧叙事（构建历程最佳素材）：引入（\texttt{7290534} 起 CUDA 四部曲
+调研文档）→ 移除（\texttt{e71ea47}/\texttt{a18fd0c}``移除全部 CUDA 代码''
+23 文件 4566 行）→ 重引入（\texttt{a1f9def} 起 wip 系列 + Pimpl 隐藏
+CUDA 依赖 \texttt{6969f20}/\texttt{708eba8} + 数据布局静态断言
+\texttt{1fd159d}）。
+
+% TODO(M3): 互操作内存共享机制；中毒回退状态机（有单元测试）；A/B
+% 自动交替基准。

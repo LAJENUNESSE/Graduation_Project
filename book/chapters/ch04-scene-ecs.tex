@@ -1,0 +1,16 @@
+% 第 4 章 场景与 ECS（占位）
+锚点：\texttt{Scene/Scene.h}（façade：registry + EntityIndex +
+TransformCache + LifecycleCoordinator + EnvironmentState +
+RuntimeCoordinator 六成员）、\texttt{Components.h}（20+ POD 组件）、
+\texttt{Entity.h}、\texttt{SceneHierarchyService/WorldTransformService}
+（静态服务）、\texttt{Systems/} 八个静态渲染系统。
+
+叙事线：Phase 2 引入 EnTT（\texttt{8150251}，2026-02-21）；Phase 1
+运行时资源剥离引入 RuntimeStore（\texttt{4dab189}）；Phase 2 边界收束
+Scene 瘦身为 façade（\texttt{a6676de}）；Phase 3 统一组件元数据
+（\texttt{83dcf39}）。Play/Stop 双场景快照模型。
+
+踩坑素材：DestroyEntity O(N²) → 先收集再删（\texttt{641f8ae}）；
+SceneEntityIndex 拒绝重复 UUID；EnTT size\_hint 兼容性。
+
+% TODO(M3): ECS 原理与 EnTT sparse-set 实现；façade+service 演化动机。
