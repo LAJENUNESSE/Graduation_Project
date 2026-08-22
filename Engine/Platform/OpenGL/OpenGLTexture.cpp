@@ -7,6 +7,8 @@
 #include "Asset/PathUtils.h"
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
+
 namespace Engine
 {
 
@@ -110,8 +112,7 @@ namespace Engine
     }
 
     OpenGLTexture2D::OpenGLTexture2D(uint32_t width, uint32_t height, const TextureSpecification& spec)
-        : m_Width(width), m_Height(height),
-          m_InternalFormat(TextureFormatToGL(spec.Format)), m_DataFormat(GL_RGBA)
+        : m_Width(width), m_Height(height), m_InternalFormat(TextureFormatToGL(spec.Format)), m_DataFormat(GL_RGBA)
     {
         glGenTextures(1, &m_RendererID);
         glBindTexture(GL_TEXTURE_2D, m_RendererID);
@@ -126,10 +127,11 @@ namespace Engine
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, TextureWrapToGL(spec.WrapT));
     }
 
-    OpenGLTexture2D::OpenGLTexture2D(const void* data, uint32_t width, uint32_t height,
+    OpenGLTexture2D::OpenGLTexture2D(const void*                 data,
+                                     uint32_t                    width,
+                                     uint32_t                    height,
                                      const TextureSpecification& spec)
-        : m_Width(width), m_Height(height),
-          m_InternalFormat(TextureFormatToGL(spec.Format)), m_DataFormat(GL_RGBA)
+        : m_Width(width), m_Height(height), m_InternalFormat(TextureFormatToGL(spec.Format)), m_DataFormat(GL_RGBA)
     {
         GLenum uploadFmt = GL_RGBA, uploadType = GL_UNSIGNED_BYTE;
         GetUploadParams(spec.UploadLayout, uploadFmt, uploadType);
@@ -158,6 +160,7 @@ namespace Engine
             ENGINE_CORE_ERROR("Texture SetData size mismatch: expected {0}, got {1}", expected, size);
             return;
         }
+        GpuMemoryStats::Get().AddUploaded(size);
         glBindTexture(GL_TEXTURE_2D, m_RendererID);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_Width, m_Height, m_DataFormat, GL_UNSIGNED_BYTE, data);
     }

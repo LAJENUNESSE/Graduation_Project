@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLAsyncReadback.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Renderer/StorageBuffer.h"
 
 #include <glad/gl.h>
@@ -7,8 +8,7 @@
 namespace Engine
 {
 
-    OpenGLAsyncReadback::OpenGLAsyncReadback(uint32_t size)
-        : m_Size(size)
+    OpenGLAsyncReadback::OpenGLAsyncReadback(uint32_t size) : m_Size(size)
     {
         glGenBuffers(1, &m_StagingBuffer);
         glBindBuffer(GL_COPY_WRITE_BUFFER, m_StagingBuffer);
@@ -26,6 +26,8 @@ namespace Engine
 
     void OpenGLAsyncReadback::CopyFrom(const Ref<ShaderStorageBuffer>& src, uint32_t size, uint32_t srcOffset)
     {
+        GpuMemoryStats::Get().AddDownloaded(size);
+
         // Delete previous fence
         if (m_Fence)
         {

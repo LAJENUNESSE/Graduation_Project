@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLStorageBuffer.h"
 #include "Core/Assert.h"
+#include "Debug/GpuMemoryStats.h"
 
 #include <glad/gl.h>
 
@@ -90,6 +91,7 @@ namespace Engine
     void OpenGLStorageBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
     {
         ENGINE_CORE_ASSERT(offset + size <= m_Size, "StorageBuffer::SetData out of bounds");
+        GpuMemoryStats::Get().AddUploaded(size);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RendererID);
         glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, size, data);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);

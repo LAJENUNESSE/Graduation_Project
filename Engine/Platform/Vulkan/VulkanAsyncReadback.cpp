@@ -3,6 +3,7 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Platform/Vulkan/VulkanAllocator.h"
 #include "Platform/Vulkan/VulkanBuffer.h"
 #include "Platform/Vulkan/VulkanContext.h"
@@ -74,6 +75,7 @@ namespace Engine
     void VulkanAsyncReadback::CopyFrom(const Ref<ShaderStorageBuffer>& src, uint32_t size, uint32_t srcOffset)
     {
         ENGINE_CORE_RELEASE_ASSERT(size <= m_Size, "VulkanAsyncReadback::CopyFrom size exceeds allocation");
+        GpuMemoryStats::Get().AddDownloaded(size);
 
         VulkanContext* ctx = VulkanContext::Get();
         ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "VulkanAsyncReadback::CopyFrom requires VulkanContext");

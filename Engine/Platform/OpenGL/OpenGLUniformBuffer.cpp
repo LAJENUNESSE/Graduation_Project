@@ -1,6 +1,8 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLUniformBuffer.h"
 
+#include "Debug/GpuMemoryStats.h"
+
 #include <glad/gl.h>
 
 namespace Engine
@@ -21,6 +23,7 @@ namespace Engine
 
     void OpenGLUniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
     {
+        GpuMemoryStats::Get().AddUploaded(size);
         glBindBuffer(GL_UNIFORM_BUFFER, m_RendererID);
         glBufferSubData(GL_UNIFORM_BUFFER, offset, size, data);
     }

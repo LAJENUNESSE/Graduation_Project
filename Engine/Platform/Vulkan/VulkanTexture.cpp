@@ -4,6 +4,7 @@
 #include "Asset/PathUtils.h"
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Platform/Vulkan/VulkanAllocator.h"
 #include "Platform/Vulkan/VulkanContext.h"
 
@@ -138,6 +139,7 @@ namespace Engine
             ENGINE_CORE_ERROR("Texture SetData size mismatch: expected {0}, got {1}", expected, size);
             return;
         }
+        GpuMemoryStats::Get().AddUploaded(size);
         UploadPixels(data, size);
     }
 

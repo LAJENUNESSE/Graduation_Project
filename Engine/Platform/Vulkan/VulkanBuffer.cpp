@@ -3,6 +3,7 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Debug/GpuMemoryStats.h"
 #include "Platform/Vulkan/VulkanAllocator.h"
 #include "Platform/Vulkan/VulkanContext.h"
 
@@ -213,6 +214,7 @@ namespace Engine
     void VulkanVertexBuffer::SetData(const void* data, uint32_t size)
     {
         ENGINE_CORE_RELEASE_ASSERT(size <= m_Size, "Vertex buffer SetData exceeds allocation size");
+        GpuMemoryStats::Get().AddUploaded(size);
         UploadViaStaging(m_Buffer, data, size);
     }
 
@@ -296,6 +298,7 @@ namespace Engine
     void VulkanStorageBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
     {
         ENGINE_CORE_ASSERT(offset + size <= m_Size, "StorageBuffer::SetData out of bounds");
+        GpuMemoryStats::Get().AddUploaded(size);
         if (m_DeviceLocal)
             UploadViaStaging(m_Buffer, data, size);
         else
@@ -402,6 +405,7 @@ namespace Engine
     void VulkanUniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
     {
         ENGINE_CORE_ASSERT(offset + size <= m_Size, "UniformBuffer::SetData out of bounds");
+        GpuMemoryStats::Get().AddUploaded(size);
         UploadToAllocation(m_Allocation, data, size, offset);
     }
 

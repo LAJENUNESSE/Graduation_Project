@@ -1,6 +1,8 @@
 #include "engpch.h"
 #include "Platform/OpenGL/OpenGLBuffer.h"
 
+#include "Debug/GpuMemoryStats.h"
+
 #include <glad/gl.h>
 
 namespace Engine
@@ -39,6 +41,7 @@ namespace Engine
 
     void OpenGLVertexBuffer::SetData(const void* data, uint32_t size)
     {
+        GpuMemoryStats::Get().AddUploaded(size);
         glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
         glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
     }
