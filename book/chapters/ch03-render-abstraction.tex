@@ -1,15 +1,203 @@
-% 第 3 章 渲染抽象层（占位）
-锚点：\texttt{RendererAPI.h}（纯虚接口）、\texttt{RenderCommand.h}
-（静态转发门面 + 性能统计内联）、\texttt{Buffer.h/Shader.h/Texture.h/
-Framebuffer.h/VertexArray.h} 工厂族、\texttt{Platform/OpenGL/} 22 文件实现。
+% ============================================================
+% 第 3 章 渲染抽象层：在 OpenGL 之上筑墙
+% 锚点：Engine/src/Renderer/RendererAPI.h, RenderCommand.h,
+%       Shader.h, Material.h/.cpp, Engine/Platform/OpenGL/
+% 时间线：Phase R1 重构（5043e83）→ R2-R4（2124989）→
+%         Vulkan Phase 1 抽象泄漏归零（27398fc）
+% ============================================================
+\section{问题引入：当渲染代码长满全身}
 
-叙事线：项目早期直接调 GL（Phase R1 前后对比，提交 \texttt{5043e83}）；
-2026-05 Vulkan 迁移 Phase 1``抽象泄漏归零''——Engine/src 下零
-glad include（终态 \texttt{27398fc}），SSAO 噪声/blend 状态/异步回读/
-能力查询/IBL 全部下沉 Platform 层。
+项目最初的日子里，``画一个东西''的代码是这样的：直接调用
+\texttt{glBindVertexArray}、\texttt{glDrawElements}、\texttt{glUniform3f}……
+这些调用散布在场景更新、粒子系统、流体模拟的各个角落。对一个只打算支持
+OpenGL 的项目来说，这似乎无可厚非——GL 就是事实上的渲染 API。
 
-关键代码：DrawIndexed 内嵌 stats 统计；BindTextureView(void*) 避开
-vulkan.h 泄漏的设计；Material 的 Set-缓存 + Bind-刷新 dirty flag 模式。
+转折发生在决定做 Vulkan 后端的那天。Vulkan 与 OpenGL 是两种世界观：
+前者是全局状态机，后者是显式命令录制。如果 \texttt{gl*} 调用仍然散落各处，
+Vulkan 迁移就等于重写整个引擎。于是有了两场前后呼应的战役：
+\textbf{Phase R1 重构}（提交 \texttt{5043e83}，消除 raw GL 调用）和半年后的
+\textbf{Vulkan Phase 1 ``抽象泄漏归零''}（终态提交 \texttt{27398fc}，
+\texttt{Engine/src/} 下零 \texttt{glad/gl.h} include）。
 
-% TODO(M3): RenderPacket/RenderQueue 按 Shader 排序减状态切换；HDR
-% Framebuffer 附件布局；多 Pass 管线总览图（TikZ）。
+本章讲的就是这堵墙是怎么砌起来的。
+
+\section{通用原理：硬件抽象层的两种流派}
+
+渲染抽象层有两种经典组织方式：
+
+\begin{itemize}
+  \item \textbf{虚接口 + 全局实例}：定义纯虚基类（本项目的
+        \texttt{RendererAPI.h}），每个后端实现之。灵活、可运行时切换，
+        代价是每次调用一次虚表跳转。
+  \item \textbf{编译期选择}：用宏或链接期替换直接绑死后端。零开销，
+        但双后端无法共存于同一二进制。
+\end{itemize}
+
+本项目需要``同一个 Editor.exe 用 \texttt{--vulkan} 开关切换后端''
+（见第 14 章），所以只能选前者。但在这个大前提下，仍有大量微观决策
+值得推敲——门面怎么设计、统计放哪里、头文件怎么隔离。
+
+\section{本项目的设计与决策}
+
+\subsection{RendererAPI + RenderCommand：接口与门面分离}
+
+\begin{lstlisting}
+// RendererAPI.h —— 纯虚接口，由 Platform 层实现
+class RendererAPI
+{
+public:
+    enum class API { None = 0, OpenGL = 1, Vulkan = 2 };
+
+    virtual void Init()  = 0;
+    virtual void DrawIndexed(const Ref<VertexArray>& vertexArray,
+                             uint32_t indexCount = 0) = 0;
+    // ... 约 40 个纯虚函数 ...
+    virtual void DispatchCompute(uint32_t groupsX, uint32_t groupsY = 1,
+                                 uint32_t groupsZ = 1) = 0;
+
+    static API GetAPI() { return s_API; }
+private:
+    static API s_API;
+};
+\end{lstlisting}
+
+注意静态成员 \texttt{s\_API}：它不是枚举全局变量那么简单，而是整个工厂体系的
+分派依据。所有资源类（Shader/Texture/Framebuffer……）的静态工厂都按它分流：
+
+\begin{lstlisting}
+// Shader.h —— 工厂声明；实现在 .cpp 中按 s_API 分派
+class Shader
+{
+public:
+    virtual void SetInt(const std::string& name, int value) = 0;
+    virtual void SetMat4(const std::string& name, const glm::mat4&) = 0;
+    // ...
+    static Ref<Shader> Create(const std::string& filepath);
+};
+\end{lstlisting}
+
+而调用方永远不接触 \texttt{OpenGLShader} 或 \texttt{VulkanShader} 类型名，
+只通过 \texttt{RenderCommand} 静态门面说话：
+
+\begin{lstlisting}
+// RenderCommand.h —— 静态转发门面
+class RenderCommand
+{
+public:
+    static void DrawIndexed(const Ref<VertexArray>& vertexArray,
+                            uint32_t indexCount = 0)
+    {
+        s_RendererAPI->DrawIndexed(vertexArray, indexCount);
+
+        // Performance stats tracking
+        uint32_t count = indexCount ? indexCount
+                       : vertexArray->GetIndexBuffer()->GetCount();
+        auto& stats = PerformanceMonitor::Get().GetStats();
+        stats.DrawCalls++;
+        stats.Vertices += count;
+        stats.Triangles += count / 3;
+    }
+private:
+    static Scope<RendererAPI> s_RendererAPI;
+};
+\end{lstlisting}
+
+为什么门面用静态函数而非把 \texttt{s\_RendererAPI} 暴露出去？因为调用点
+遍布全引擎，静态调用书写最短；且门面是安插横切逻辑（如上面的性能统计）
+的唯一收口——\emph{每一次 DrawIndexed 调用自动累计 DrawCalls/Triangles，
+上层系统一行额外代码都不用写}。这个设计让第 13 章的性能监控体系几乎
+零成本覆盖了全部渲染路径。
+
+\subsection{void* 绑定接口：与 vulkan.h 划清界限}
+
+抽象层最隐蔽的泄漏源是\textbf{头文件}。哪怕只有一行
+\texttt{\#include <vulkan/vulkan.h>} 出现在 \texttt{Engine/src/}，
+整个引擎就被迫依赖 Vulkan SDK 头路径。PBR 的 IBL 纹理绑定接口是这样处理的：
+
+\begin{lstlisting}
+// view / sampler 是 void* 透传 (VkImageView / VkSampler)，
+// 避免 vulkan.h 泄漏 Engine/src/。
+virtual void BindCubemapView(uint32_t slot, void* view, void* sampler)
+{
+    (void)slot; (void)view; (void)sampler;   // OpenGL 默认 no-op
+}
+virtual void BindTextureView(uint32_t slot, void* view, void* sampler);
+\end{lstlisting}
+
+类型安全在这里被主动放弃了——换来的是抽象层对任何后端头文件的零依赖。
+调用方（SceneRenderer）按 \texttt{RendererAPI::GetAPI()} 分派走
+\texttt{Bind*Unit}（OpenGL 纹理 ID）还是 \texttt{Bind*View}（Vulkan 视图）。
+这是``不完美的抽象好过完美的耦合''的一次典型实践。
+
+\subsection{Material：Set 缓存、Bind 上传的两段式}
+
+材质系统解决的是另一个痛点：同一物体每帧重复上传几十个 uniform。
+\texttt{Material} 把值缓存在自己的 map 里，只在 \texttt{Bind()} 时统一刷新：
+
+\begin{lstlisting}
+// Material.cpp —— Set 只写缓存，Bind 才真正上传
+void Material::Set(const std::string& name, float value)
+{
+    m_FloatUniforms[name] = value;      // 不触碰 GPU
+}
+
+void Material::Bind() const
+{
+    m_Shader->Bind();
+    for (const auto& [name, value] : m_FloatUniforms)
+        m_Shader->SetFloat(name, value);   // 此刻才上传
+    for (const auto& [slot, texture] : m_Textures)
+        if (texture) texture->Bind(slot);
+}
+\end{lstlisting}
+
+使用约定由此确立：\emph{渲染循环里先改参数再 Bind}。若在 Bind 之后调 Set，
+修改要等下一次 Bind 才生效——这是新人最容易踩的语义坑（.claude/rules/
+renderer.md 特意用加粗字体记录了它）。
+
+\section{实现走读:抽象泄漏归零战役}
+
+Vulkan 迁移 Phase 1 是对这堵墙的全面验收。工程做法不是一次性大重构，
+而是逐个击破的清单式推进：SSAO 噪声纹理生成下沉到 Platform、blend 状态
+保存恢复下沉、异步回读下沉、能力查询下沉……直到最后一个
+\texttt{glad/gl.h} 从 \texttt{Window.cpp} 和 \texttt{FluidSystemGPU.cpp}
+中被清除（\texttt{27398fc}）。
+
+本书写作时验证：\texttt{grep -r "glad/gl.h" Engine/src/} 至今返回空——
+封堵保持完好。这条纪律也写进了迁移文档的全局约束
+（docs/vulkan-migration/SPEC.md §5）：新 Vulkan 资源必须经 VMA、禁止裸
+\texttt{vkAllocateMemory}，正是当年反 GL 泄漏战役的制度化延续。
+
+8-Pass 场景管线（Shadow $\to$ Terrain $\to$ Grass $\to$ Geometry $\to$
+Skybox $\to$ Particle $\to$ Fluid $\to$ Post-Processing）由
+\texttt{SceneRenderer} 编排，全部经由本章的门面发出指令——它是第 4 章
+场景系统与底层 API 之间的总调度台。
+
+\section{踩坑记录}
+
+\begin{description}
+  \item[统计代码放错层] 早期 DrawCalls 统计散在各渲染系统里手动累加，
+        新增 Pass 忘记加统计是常态。收口进 RenderCommand 门面后，
+        这类遗漏从结构上不可能再发生。
+  \item[uniform 名字符串断裂] shader 改名 uniform 而 C++ 侧未同步时，
+        OpenGL 静默返回 $-1$ location，画面错误但不报错。排查手段：
+        渲染调试器抓帧比对。Vulkan 路径下 spirv-cross 反射（第 14 章）
+        让这类错误更早暴露。
+  \item[immutable storage 教训] compute shader 里用
+        \texttt{imageLoad/imageStore} 的纹理必须以
+        \texttt{glTexStorage2D} 创建；\texttt{glTexImage2D} 创建的可变
+        存储纹理配 imageLoad 是未定义行为，IBL 生成曾因此输出全黑，
+        排查耗时远超预期。
+\end{description}
+
+\section{小结与延伸思考}
+
+本章的三条主线：接口/门面分离给双后端共存留出空间；void* 透传守住头文件
+边界；统计收口进门面让横切关注点免费获得。它们共同指向一个原则——
+\textbf{抽象层的价值不在"屏蔽了多少细节"，而在"约束了多少调用方式"}。
+
+延伸思考：约 40 个纯虚函数是否太宽？确实宽。其中 FBO 读写、blend 状态等
+接口明显带着 OpenGL 味道（如 \texttt{SetReadBuffer(attachment)}），Vulkan
+实现不得不做语义映射。更彻底的做法是把 Pass 抽象整体上移（render graph），
+但那是另一个量级的工程。抽象层的边界画在哪里，永远是当下成本与未来
+自由度的折中。

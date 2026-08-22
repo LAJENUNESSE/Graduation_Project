@@ -1,16 +1,183 @@
-% 第 4 章 场景与 ECS（占位）
-锚点：\texttt{Scene/Scene.h}（façade：registry + EntityIndex +
-TransformCache + LifecycleCoordinator + EnvironmentState +
-RuntimeCoordinator 六成员）、\texttt{Components.h}（20+ POD 组件）、
-\texttt{Entity.h}、\texttt{SceneHierarchyService/WorldTransformService}
-（静态服务）、\texttt{Systems/} 八个静态渲染系统。
+% ============================================================
+% 第 4 章 场景与 ECS：EnTT 与 façade 架构
+% 锚点：Engine/src/Scene/Scene.h, Components.h, Entity.h,
+%       SceneHierarchyService.cpp, WorldTransformService.cpp,
+%       Runtime/SceneRuntimeCoordinator, Systems/
+% 时间线：8150251(2026-02-21) → 4dab189 → a6676de → 83dcf39
+% ============================================================
+\section{问题引入：对象之间说不清的关系}
 
-叙事线：Phase 2 引入 EnTT（\texttt{8150251}，2026-02-21）；Phase 1
-运行时资源剥离引入 RuntimeStore（\texttt{4dab189}）；Phase 2 边界收束
-Scene 瘦身为 façade（\texttt{a6676de}）；Phase 3 统一组件元数据
-（\texttt{83dcf39}）。Play/Stop 双场景快照模型。
+有了渲染能力后，下一个问题是：场景里的东西怎么组织？一个``点光源挂在
+移动的汽车上''的需求，就同时牵出了实体表示、组件组合、父子变换传播、
+按类型遍历四件事。用面向对象的实体继承树（GameObject $\to$
+LightObject/PhysicsObject……）很快会陷入菱形继承泥潭——这正是 ECS
+（Entity-Component-System）要解决的问题。
 
-踩坑素材：DestroyEntity O(N²) → 先收集再删（\texttt{641f8ae}）；
-SceneEntityIndex 拒绝重复 UUID；EnTT size\_hint 兼容性。
+本项目在首个提交日（2026-02-21）就选定了 EnTT 作为 ECS 底座
+（提交 \texttt{8150251} ``Phase 2 Scene/ECS 场景系统 + 编辑器''），
+此后经历三轮架构演进：运行时资源剥离（\texttt{4dab189}）、façade 收束
+（\texttt{a6676de}）、组件元数据统一（\texttt{83dcf39}）。本章沿这条
+演化线展开。
 
-% TODO(M3): ECS 原理与 EnTT sparse-set 实现；façade+service 演化动机。
+\section{通用原理：ECS 与 sparse-set 存储}
+
+ECS 的核心三分法：\emph{实体}是 ID，\emph{组件}是纯数据 POD，
+\emph{系统}是操作特定组件组合的逻辑。数据导向设计让缓存命中率成为
+一等公民。
+
+EnTT 的存储方案是 sparse-set：每个组件类型维护一个``稀疏数组（实体 ID
+$\to$ 稠密下标）+ 稠密数组（紧凑的组件数据）''对。迭代某类组件时只走稠密
+数组，内存连续、缓存友好；查询``拥有 A 且 B 的实体''则取两个集合的交集。
+代价是非连续访问（如随机查询单个实体）需要一次稀疏跳转。理解这一点，
+才能理解为什么本项目的渲染系统全部写成
+\texttt{registry.view<TransformComponent, MeshRendererComponent>()}
+式的批量遍历。
+
+\section{本项目的设计与决策}
+
+\subsection{组件即 POD}
+
+\begin{lstlisting}
+// Components.h —— 组件是纯数据 + 默认/拷贝构造
+struct TransformComponent
+{
+    glm::vec3 Translation = {0.0f, 0.0f, 0.0f};
+    glm::vec3 Rotation    = {0.0f, 0.0f, 0.0f};
+    glm::vec3 Scale       = {1.0f, 1.0f, 1.0f};
+
+    // 获取本地变换矩阵（TR S 复合）
+    glm::mat4 GetTransform() const
+    {
+        glm::mat4 rotation = glm::toMat4(glm::quat(Rotation));
+        return glm::translate(glm::mat4(1.0f), Translation)
+             * rotation * glm::scale(glm::mat4(1.0f), Scale);
+    }
+};
+
+struct RelationshipComponent
+{
+    UUID              ParentID = 0;   // 父实体 UUID，0 = 根节点
+    std::vector<UUID> Children;       // 子实体 UUID 列表
+};
+\end{lstlisting}
+
+两条纪律贯穿全部 20 余个组件：必须有默认构造和拷贝构造（序列化与 Undo
+快照依赖值语义）；跨实体引用一律存 UUID 而非指针或 entt::entity
+（RelationshipComponent 的 ParentID/Children 就是例证）。UUID 是唯一能
+在``保存 $\to$ 重载 $\to$ 快照恢复''全流程中稳定存活的标识符。
+
+\subsection{façade 化：Scene 是门面，不是仓库}
+
+最初的 Scene 是个胖类：注册表、层级逻辑、世界变换计算、运行时资源、
+音频视频容器全都塞在里面。三轮重构后它瘦成了六成员 façade
+（Engine/src/Scene/Scene.h）：
+
+\begin{lstlisting}
+class Scene
+{
+public:
+    Entity CreateEntity(const std::string& name = "Entity");
+    void SetParent(Entity child, Entity parent);   // 委托 HierarchyService
+    glm::mat4 GetWorldTransform(Entity entity);    // 委托 WorldTransformService
+    void OnRuntimeStart();                         // 委托 RuntimeCoordinator
+    entt::registry& GetRegistry() { return m_Registry; }
+private:
+    entt::registry m_Registry;
+    SceneEntityIndex m_EntityIndex;          // UUID -> entity O(1) 索引
+    WorldTransformCache m_TransformCache;
+    ResourceLifecycleCoordinator m_LifecycleCoordinator;
+    SceneEnvironmentState m_EnvironmentState;
+    std::unique_ptr<SceneRuntimeCoordinator> m_RuntimeCoordinator;
+};
+\end{lstlisting}
+
+拆出去的逻辑去哪了？变成无状态静态服务类。\texttt{WorldTransformService}
+沿 RelationshipComponent 递归上溯父链复合世界矩阵：
+
+\begin{lstlisting}
+// WorldTransformService.cpp —— 递归 + 缓存 + 深度防御
+glm::mat4 ComputeWorldTransformImpl(reg, entity, index,
+                                    cache, depth)
+{
+    if (depth >= kMaxDepth)   // kMaxDepth=64
+    {
+        ENGINE_CORE_WARN("... possible cycle in hierarchy");
+        return reg.get<TransformComponent>(entity).GetTransform();
+    }
+    if (cache && cache->TryGet(entity, cached))
+        return cached;
+
+    auto& result = reg.get<TransformComponent>(entity).GetTransform();
+    if (reg.all_of<RelationshipComponent>(entity))
+    {
+        auto& rel = reg.get<RelationshipComponent>(entity);
+        if (rel.ParentID != 0) {
+            entt::entity parent = index.Find(rel.ParentID);
+            if (parent != entt::null && reg.valid(parent))
+                result = ComputeWorldTransformImpl(
+                    reg, parent, index, cache, depth + 1) * result;
+        }
+    }
+    if (cache) cache->Put(entity, result);
+    return result;
+}
+\end{lstlisting}
+
+三个防御细节值得注意：\textbf{kMaxDepth=64 兜底循环层级}（数据损坏时不至
+栈溢出）；\textbf{缓存命中短路递归}（编辑器每帧对全场景求世界变换）；而
+\texttt{SetParent} 时会先记下子实体的旧世界矩阵，换父后用
+$\mathrm{local} = P_{new}^{-1} \cdot W_{old}$ 反解本地变换——保证``拖拽换父
+时物体在世界空间里纹丝不动''（Engine/src/Scene/SceneHierarchyService.cpp，
+配合 GLM \texttt{matrix\_decompose} 分解回 T/R/S）。
+
+\subsection{双场景快照：Play 按钮的安全网}
+
+点击 Play 会进入物理与脚本的运行态，但编辑器必须能在 Stop 后回到进入前的
+精确状态。实现方式不是记录 diff，而是\textbf{整场复制}：EditorSceneSession
+维护编辑态与运行态两个 Scene 实例（重构提交 \texttt{b8bceb1}），Play 时把
+编辑场景 Copy 一份供模拟使用，Stop 时直接丢弃运行副本。OpenAL Source、
+FFmpeg 解码器这类无法安全复制的原生资源由 RuntimeStore 在 Stop 时强制回收
+（Phase 1 提交 \texttt{4dab189} 的``运行时资源剥离''正是为此铺路）。
+粗暴、简单、可靠——快照成本对一个编辑器会话完全可以接受。
+
+\subsection{Systems 目录：渲染逻辑的静态归拢}
+
+MeshRenderSystem / ShadowSystem / SkyboxSystem / LightSystem /
+TerrainRenderSystem / GrassRenderSystem / AudioSystem / VideoSystem 八个
+静态系统类构成 Systems/ 目录。它们没有状态、不互相调用，入口全是静态方法，
+通过 registry view 批量处理组件。``系统无状态''让渲染管线的执行顺序完全
+由 SceneRenderer 编排层决定（第 3 章 8-Pass），职责切分干净。
+
+\section{实现走读:删除一个实体有多难}
+
+DestroyEntity 要处理：递归删除整个子树、清理 UUID 索引、触发资源回调、
+从父节点的 Children 列表移除自己。最初实现里``找子树''用的是对每个节点
+做全场景扫描，复杂度 $O(N^2)$；优化版（\texttt{641f8ae}）先一次性收集
+子树再批量删除。另一个隐蔽 bug 是 UUID 索引允许重复插入
+（\texttt{595e461} 修复为检测并拒绝），否则 Find 返回歧义结果，拾取与
+序列化都会错乱。EnTT 自身也有兼容性暗礁——\texttt{size\_hint} API 在
+版本间行为变化导致实体计数错误（\texttt{2490c50} 改用兼容写法）。
+
+\section{踩坑记录}
+
+\begin{description}
+  \item[组件里藏指针] 早期曾有组件直接持有裸指针，Play/Stop 快照恢复后
+        变悬垂。教训固化为纪律：组件只存 POD 与 UUID，重资源走 AssetHandle
+        （第 6 章）。
+  \item[层级环] 手滑把自己设为自己的祖先，世界变换递归立即爆栈。
+        kMaxDepth 防御 + IsAncestorOf 前置检查双重保险。
+  \item[O(N²) 删除] 大场景删除根节点卡顿数秒，profiler 定位到逐节点
+        全表扫描；先收集后删降到 $O(N)$（641f8ae）。
+\end{description}
+
+\section{小结与延伸思考}
+
+本章的演化路径——胖 Scene $\to$ façade + 无状态服务 + 协调器——本质是
+把``数据（registry）/ 规则（service）/ 流程（coordinator）''三种变化
+频率不同的东西分开放。它带来的副产品是可测试性：HierarchyService、
+WorldTransformService、EntityIndex 都因此获得了独立单元测试
+（tests/ 下 TestSceneHierarchy/TestWorldTransform/TestSceneEntityIndex）。
+
+延伸思考：EnTT 的 sparse-set 对``按类型批量遍历''最优，但对``按实体随机
+访问多组件''并不友好。如果未来要做大规模开放世界流式加载，可能需要在
+其上再建一层空间索引。当前项目规模下，简单性红利仍然大于替代方案的收益。
