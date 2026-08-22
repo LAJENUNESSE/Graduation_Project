@@ -736,6 +736,14 @@ namespace Engine
         TickParticleAutoAlternateIfNeeded();
         const ABConfigSnapshot abConfig = GetABConfigSnapshot();
 
+        // ---- 跨后端等价性冒烟自检（ENGINE_PARTICLE_EQUIV_SMOKE=1）----
+        // 覆盖后端选择、固定 dt、禁发射；详见 EquivalenceSmoke 注释
+        bool  forceGL         = abConfig.ForceGL;
+        bool  suppressEmit    = false;
+        float smokeAdjustedDt = std::min(dt, 0.05f);
+        if (m_EquivSmoke.Enabled)
+            TickEquivalenceSmoke(forceGL, smokeAdjustedDt, suppressEmit);
+
         float counterReadbackCpuMs = 0.0f;
 
         const bool sphEnabled = emitter.SPH.Enabled && !m_DisableSPHOnDriver;
@@ -750,14 +758,17 @@ namespace Engine
         m_CounterBuffer->SetData(&zero, sizeof(uint32_t), 4); // aliveCount = 0
 
         // Compute how many particles to emit (clamp dt to prevent first-frame spike)
-        float clampedDt = std::min(dt, 0.05f);
-        m_EmitAccumulator += emitter.EmitRate * clampedDt;
+        float clampedDt = smokeAdjustedDt;
+        if (!suppressEmit)
+        {
+            m_EmitAccumulator += emitter.EmitRate * clampedDt;
+        }
         uint32_t emitCount = static_cast<uint32_t>(m_EmitAccumulator);
         m_EmitAccumulator -= static_cast<float>(emitCount);
 
         // Add burst (user-triggered + collision-triggered)
         int totalBurst = emitter.PendingBurst + emitter.CollisionBurstCount;
-        if (totalBurst > 0)
+        if (totalBurst > 0 && !suppressEmit)
             emitCount += static_cast<uint32_t>(totalBurst);
 
         // Clamp to MaxParticles — prevent shader atomic underflow
@@ -775,8 +786,8 @@ namespace Engine
         // 原实现 emit 与 SPH/simulate 各持一对独立 MapAll/UnmapAll，每帧两次 GPU 所有权转移；
         // 同一 stream 内 kernel 天然有序，GL 端仅在 Unmap 之后消费结果，合并语义安全，
         // 且把 WDDM 隐式 barrier 的暴露面减半。
-        if (!abConfig.ForceGL && m_CudaImpl->UseCudaPath &&
-            m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned())
+        if (!forceGL && m_CudaImpl->UseCudaPath && m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL &&
+            !CudaInterop::IsCudaPoisoned())
         {
             if (m_CudaImpl->MapAll())
             {
@@ -1269,6 +1280,126 @@ namespace Engine
                         .count();
             }
         }
+
+        if (m_EquivSmoke.Enabled && m_EquivSmoke.Phase < 2)
+            CaptureEquivalenceFrame();
+    }
+
+    // ======================================================================
+    // 跨后端等价性冒烟自检（ENGINE_PARTICLE_EQUIV_SMOKE=1 启用，仅调试）
+    //
+    // Phase 0：强制 GL、固定 dt、禁发射跑 FramesPerPass 帧，帧末快照全池；
+    // Phase 1：恢复初始态后切 CUDA 重跑同样帧数并快照；随后对比两份终态。
+    // compact/散射的原子操作使邻居遍历顺序逐帧不定，浮点求和非结合，
+    // 逐位一致不可达——按最大位置/速度偏差容差判定结构性分歧（如 alive-list
+    // 误索引、边界力语义差异会在数十帧内放大出 O(1) 级偏差）。
+    // ======================================================================
+    void ParticleSystemGPU::TickEquivalenceSmoke(bool& forceGL, float& dt, bool& suppressEmit)
+    {
+#ifndef ENGINE_ENABLE_CUDA
+        (void)forceGL;
+        (void)dt;
+        (void)suppressEmit;
+        m_EquivSmoke.Phase   = 2;
+        m_EquivSmoke.Enabled = false;
+#else
+        if (m_EquivSmoke.Phase >= 2)
+            return;
+
+        if (!m_EquivSmoke.Initialized)
+        {
+            if (!(m_CudaImpl->UseCudaPath && m_CudaImpl->ActiveInteropBackend == InteropBackend::CudaGL &&
+                  !CudaInterop::IsCudaPoisoned()))
+            {
+                ENGINE_WARN("[Particle][Equiv] CUDA 后端不可用，冒烟自检跳过。");
+                m_EquivSmoke.Phase   = 2;
+                m_EquivSmoke.Enabled = false;
+                return;
+            }
+
+            // 保存初始全池状态（WaitIdle + 全量同步回读，仅调试路径可接受）
+            RenderCommand::WaitIdle();
+            m_EquivSmoke.InitialState.resize(m_MaxParticles * sizeof(GPUParticleData));
+            m_ParticleBuffer->GetData(m_EquivSmoke.InitialState.data(),
+                                      static_cast<uint32_t>(m_EquivSmoke.InitialState.size()));
+            m_EquivSmoke.Initialized = true;
+            m_EquivSmoke.Phase       = 0;
+            m_EquivSmoke.FrameIndex  = 0;
+            ENGINE_CORE_INFO("[Particle][Equiv] 冒烟自检启动：GL/CUDA 各 {0} 帧，固定 dt={1}",
+                             m_EquivSmoke.FramesPerPass, m_EquivSmoke.FixedDt);
+        }
+
+        forceGL      = (m_EquivSmoke.Phase == 0);
+        dt           = m_EquivSmoke.FixedDt;
+        suppressEmit = true;
+#endif
+    }
+
+    void ParticleSystemGPU::CaptureEquivalenceFrame()
+    {
+#ifndef ENGINE_ENABLE_CUDA
+        return;
+#else
+        if (++m_EquivSmoke.FrameIndex < m_EquivSmoke.FramesPerPass)
+            return;
+        m_EquivSmoke.FrameIndex = 0;
+
+        const uint32_t       stateBytes = m_MaxParticles * sizeof(GPUParticleData);
+        std::vector<uint8_t> snap(stateBytes);
+        RenderCommand::WaitIdle();
+        m_ParticleBuffer->GetData(snap.data(), stateBytes);
+
+        if (m_EquivSmoke.Phase == 0)
+        {
+            m_EquivSmoke.FinalGl = std::move(snap);
+            m_EquivSmoke.Phase   = 1;
+
+            // 恢复初始态，Phase 1 起强制走 CUDA
+            RenderCommand::WaitIdle();
+            m_ParticleBuffer->SetData(m_EquivSmoke.InitialState.data(), stateBytes);
+            m_LastAliveCount = m_MaxParticles;
+            ENGINE_CORE_INFO("[Particle][Equiv] GL 采集完成，恢复初始态切换 CUDA。");
+            return;
+        }
+
+        // Phase 1 完成：对比两份终态
+        m_EquivSmoke.FinalCuda = std::move(snap);
+        m_EquivSmoke.Phase     = 2;
+        m_EquivSmoke.Enabled   = false;
+
+        const auto* glState       = reinterpret_cast<const GPUParticleData*>(m_EquivSmoke.FinalGl.data());
+        const auto* cudaState     = reinterpret_cast<const GPUParticleData*>(m_EquivSmoke.FinalCuda.data());
+        double      maxPosDelta   = 0.0;
+        double      maxVelDelta   = 0.0;
+        int         aliveMismatch = 0;
+        for (uint32_t idx = 0; idx < m_MaxParticles; ++idx)
+        {
+            const glm::vec3 posDelta =
+                glm::abs(glm::vec3(glState[idx].posAndLife) - glm::vec3(cudaState[idx].posAndLife));
+            const glm::vec3 velDelta =
+                glm::abs(glm::vec3(glState[idx].velAndMaxLife) - glm::vec3(cudaState[idx].velAndMaxLife));
+            maxPosDelta = glm::max(maxPosDelta, static_cast<double>(glm::compMax(posDelta)));
+            maxVelDelta = glm::max(maxVelDelta, static_cast<double>(glm::compMax(velDelta)));
+            if ((glState[idx].posAndLife.w > 0.0f) != (cudaState[idx].posAndLife.w > 0.0f))
+                ++aliveMismatch;
+        }
+
+        // 容差按"结构性分歧会在数十帧内放大出 O(1) 偏差"设定；混沌系统长跑
+        // 的浮点噪声预期远低于此。阈值仅告警用，不做硬失败。
+        constexpr double kPosTolerance = 0.05; // 米（h=0.1 的一半）
+        constexpr double kVelTolerance = 0.5;  // 米/秒
+        const bool       pass = maxPosDelta <= kPosTolerance && maxVelDelta <= kVelTolerance && aliveMismatch == 0;
+
+        if (pass)
+            ENGINE_CORE_INFO("[Particle][Equiv] 冒烟自检通过：max|Δpos|={0:.4f} m, max|Δvel|={1:.4f} m/s, "
+                             "存活分歧={2}（{3} 帧后）",
+                             maxPosDelta, maxVelDelta, aliveMismatch, m_EquivSmoke.FramesPerPass);
+        else
+            ENGINE_CORE_WARN("[Particle][Equiv] 冒烟自检发现分歧：max|Δpos|={0:.4f} m (阈值 {1:.3f}), "
+                             "max|Δvel|={2:.4f} m/s (阈值 {3:.3f}), 存活分歧={4}——存在跨后端语义差异，"
+                             "请检查 CUDA 与 GL 的 pass 实现",
+                             maxPosDelta, kPosTolerance, maxVelDelta, kVelTolerance, aliveMismatch);
+#endif
     }
 
     void ParticleSystemGPU::Render(const glm::mat4& viewMatrix, const glm::mat4& projection)

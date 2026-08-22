@@ -114,6 +114,27 @@ namespace Engine
         // 上一帧的活跃粒子数（用于 SPH dispatch）
         uint32_t m_LastAliveCount = 0;
 
+        // ---- 跨后端等价性冒烟自检（ENGINE_PARTICLE_EQUIV_SMOKE=1 启用）----
+        // 同一确定性初始态分别强制 GL / CUDA 各跑 FramesPerPass 帧后对比全池
+        // 最大位置/速度偏差，用于捕获 alive-list 误索引、边界力语义等结构性
+        // 分歧。原子散射顺序导致逐位一致不可达，故按容差判定。仅调试用途。
+        struct EquivalenceSmoke
+        {
+            bool                 Enabled       = false;
+            bool                 Initialized   = false;
+            int                  Phase         = 0; // 0=GL 采集, 1=CUDA 采集, 2=完成/跳过
+            int                  FrameIndex    = 0;
+            int                  FramesPerPass = 60;
+            float                FixedDt       = 1.0f / 60.0f;
+            uint32_t             MaxParticles  = 0;
+            std::vector<uint8_t> InitialState; // 全池 GPUParticleData 原始字节
+            std::vector<uint8_t> FinalGl;
+            std::vector<uint8_t> FinalCuda;
+        };
+        EquivalenceSmoke m_EquivSmoke;
+        void             TickEquivalenceSmoke(bool& forceGL, float& dt, bool& suppressEmit);
+        void             CaptureEquivalenceFrame();
+
         // 异步回读（避免同步阻塞）
         Ref<GPUAsyncReadback> m_Readback;
 
