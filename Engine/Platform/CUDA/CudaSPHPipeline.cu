@@ -316,14 +316,17 @@ namespace Engine
 
         // 步骤 1：计算每个粒子的 cell hash + 原子累计 cellCount
         // usePredictedPos=true 时从 PCISPHData 读取预测位置（PCISPH 迭代 1+）
-        __global__ static void HashKernel(GPUParticle* particles,
-                                          PCISPHData*  d_pcisph,
-                                          uint32_t*    d_cellHash,
-                                          uint32_t*    d_cellCount,
-                                          uint32_t     aliveCount,
-                                          int          gridSize,
-                                          float        cellSize,
-                                          int          usePredictedPos)
+        // d_alive 非空时 i 为存活槽索引，经其间接取池索引（与 GLSL aliveIndices 一致）；
+        // d_cellHash / d_pcisph 始终按槽索引
+        __global__ static void HashKernel(GPUParticle*    particles,
+                                          PCISPHData*     d_pcisph,
+                                          uint32_t*       d_cellHash,
+                                          uint32_t*       d_cellCount,
+                                          const uint32_t* d_alive,
+                                          uint32_t        aliveCount,
+                                          int             gridSize,
+                                          float           cellSize,
+                                          int             usePredictedPos)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= aliveCount)
@@ -338,9 +341,10 @@ namespace Engine
             }
             else
             {
-                px = particles[i].posAndLife.x;
-                py = particles[i].posAndLife.y;
-                pz = particles[i].posAndLife.z;
+                uint32_t pid = d_alive ? d_alive[i] : i;
+                px           = particles[pid].posAndLife.x;
+                py           = particles[pid].posAndLife.y;
+                pz           = particles[pid].posAndLife.z;
             }
 
             int gx, gy, gz;
@@ -390,12 +394,12 @@ namespace Engine
                                                int             n)
         {
             __shared__ uint32_t temp[kScanBlockSize];
-            uint32_t tid  = threadIdx.x;
-            uint32_t base = blockIdx.x * kScanBlockSize;
-            uint32_t ai   = tid;
-            uint32_t bi   = tid + kScanBlockThreads;
-            uint32_t gAI  = base + ai;
-            uint32_t gBI  = base + bi;
+            uint32_t            tid  = threadIdx.x;
+            uint32_t            base = blockIdx.x * kScanBlockSize;
+            uint32_t            ai   = tid;
+            uint32_t            bi   = tid + kScanBlockThreads;
+            uint32_t            gAI  = base + ai;
+            uint32_t            gBI  = base + bi;
 
             temp[ai] = (gAI < (uint32_t)n) ? values[gAI] : 0u;
             temp[bi] = (gBI < (uint32_t)n) ? values[gBI] : 0u;
@@ -445,9 +449,7 @@ namespace Engine
                 outScan[gBI] = temp[bi];
         }
 
-        __global__ static void ScanPropagateKernel(uint32_t*       cellStart,
-                                                   const uint32_t* blockSums,
-                                                   int             n)
+        __global__ static void ScanPropagateKernel(uint32_t* cellStart, const uint32_t* blockSums, int n)
         {
             if (blockIdx.x == 0u)
                 return;
@@ -463,11 +465,8 @@ namespace Engine
 
         // Blelloch exclusive scan 入口：values → outScan（等价于 CUB ExclusiveSum）。
         // values/outScan 可为不同缓冲；blockSums 为辅助缓冲（≥ ceil(n/512) 元素）。
-        static void LaunchBlellochExclusiveScan(uint32_t*     d_values,
-                                                uint32_t*     d_outScan,
-                                                uint32_t*     d_blockSums,
-                                                uint32_t      totalElements,
-                                                cudaStream_t  strm)
+        static void LaunchBlellochExclusiveScan(
+            uint32_t* d_values, uint32_t* d_outScan, uint32_t* d_blockSums, uint32_t totalElements, cudaStream_t strm)
         {
             const uint32_t numBlocks = (totalElements + kScanBlockSize - 1u) / kScanBlockSize;
 
@@ -479,8 +478,7 @@ namespace Engine
             if (numBlocks > 1u)
             {
                 // Step 2: 扫描块和（in-place，单 workgroup；要求 numBlocks ≤ 512）
-                ScanLocalKernel<<<1, kScanBlockThreads, 0, strm>>>(d_blockSums, d_blockSums, nullptr,
-                                                                   (int)numBlocks);
+                ScanLocalKernel<<<1, kScanBlockThreads, 0, strm>>>(d_blockSums, d_blockSums, nullptr, (int)numBlocks);
                 CUDA_CHECK_KERNEL("Blelloch::ScanBlockSums");
 
                 // Step 3: 把块前缀加回各元素
@@ -490,20 +488,22 @@ namespace Engine
             }
         }
 
-        void LaunchSPHGridBuild(void*    ctxPtr,
-                                void*    particles,
-                                uint32_t aliveCount,
-                                int      gridSize,
-                                float    cellSize,
-                                void*    stream,
-                                bool     usePredictedPos)
+        void LaunchSPHGridBuild(void*       ctxPtr,
+                                void*       particles,
+                                uint32_t    aliveCount,
+                                int         gridSize,
+                                float       cellSize,
+                                void*       stream,
+                                bool        usePredictedPos,
+                                const void* aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t totalCells = (uint32_t)(gridSize * gridSize * gridSize);
             uint32_t blockCells = (totalCells + 255) / 256;
@@ -514,8 +514,8 @@ namespace Engine
             CUDA_CHECK_KERNEL("ClearGridKernel");
 
             // 步骤 1：Hash（可选使用预测位置）
-            HashKernel<<<blockParts, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellHash, ctx->d_cellCount, aliveCount,
-                                                     gridSize, cellSize, usePredictedPos ? 1 : 0);
+            HashKernel<<<blockParts, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellHash, ctx->d_cellCount, dAlive,
+                                                     aliveCount, gridSize, cellSize, usePredictedPos ? 1 : 0);
             CUDA_CHECK_KERNEL("HashKernel");
 
             // 步骤 2：exclusive scan（cellCount → cellStart）
@@ -554,20 +554,23 @@ namespace Engine
         // SPH Density 内核（移植自 sph_density.glsl）
         // ======================================================================
 
-        __global__ static void DensityKernel(GPUParticle* particles,
-                                             uint32_t*    d_cellStart,
-                                             uint32_t*    d_cellCount,
-                                             uint32_t*    d_sortedIndices,
-                                             Vec4*        d_surfaceNormals,
-                                             SPHParams    p)
+        // i 为存活槽索引（d_alive 非空时经其映射到池索引）；d_surfaceNormals 按槽索引
+        __global__ static void DensityKernel(GPUParticle*    particles,
+                                             uint32_t*       d_cellStart,
+                                             uint32_t*       d_cellCount,
+                                             uint32_t*       d_sortedIndices,
+                                             const uint32_t* d_alive,
+                                             Vec4*           d_surfaceNormals,
+                                             SPHParams       p)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= (uint32_t)p.aliveCount)
                 return;
 
-            float px = particles[i].posAndLife.x;
-            float py = particles[i].posAndLife.y;
-            float pz = particles[i].posAndLife.z;
+            uint32_t pid = d_alive ? d_alive[i] : i;
+            float    px  = particles[pid].posAndLife.x;
+            float    py  = particles[pid].posAndLife.y;
+            float    pz  = particles[pid].posAndLife.z;
 
             float h  = p.smoothingRadius;
             float h2 = h * h;
@@ -591,20 +594,21 @@ namespace Engine
                         uint32_t count = d_cellCount[cellIdx];
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            uint32_t j = d_sortedIndices[start + k];
-                            if (j == i)
+                            uint32_t ja = d_sortedIndices[start + k];
+                            if (ja == i)
                                 continue;
-                            float dx2 = px - particles[j].posAndLife.x;
-                            float dy2 = py - particles[j].posAndLife.y;
-                            float dz2 = pz - particles[j].posAndLife.z;
-                            float r2  = dx2 * dx2 + dy2 * dy2 + dz2 * dz2;
+                            uint32_t pj  = d_alive ? d_alive[ja] : ja;
+                            float    dx2 = px - particles[pj].posAndLife.x;
+                            float    dy2 = py - particles[pj].posAndLife.y;
+                            float    dz2 = pz - particles[pj].posAndLife.z;
+                            float    r2  = dx2 * dx2 + dy2 * dy2 + dz2 * dz2;
                             density += p.particleMass * Poly6(r2, h2, p.poly6Coeff);
 
                             // Akinci 表面法线: n += (m / ρ_j) * ∇W_spiky
                             if (p.surfaceTension > 0.0f && r2 > 1e-12f && r2 < h2)
                             {
                                 float r     = sqrtf(r2);
-                                float densJ = particles[j].params.z;
+                                float densJ = particles[pj].params.z;
                                 if (densJ < 0.0001f)
                                     densJ = 0.0001f;
                                 float spikyG = SpikyGrad(r, h, p.spikyCoeff);
@@ -617,25 +621,26 @@ namespace Engine
                         }
                     }
 
-            particles[i].params.z = density; // z=density
-            particles[i].params.w = fmaxf(0.0f, p.gasConstant * (density - p.restDensity));
+            particles[pid].params.z = density; // z=density
+            particles[pid].params.w = fmaxf(0.0f, p.gasConstant * (density - p.restDensity));
 
             // 写出 Akinci 表面法线 (乘以 h)
             d_surfaceNormals[i] = Vec4{h * snx, h * sny, h * snz, 0.0f};
         }
 
-        void LaunchSPHDensity(void* ctxPtr, void* particles, const SPHParams& p, void* stream)
+        void LaunchSPHDensity(void* ctxPtr, void* particles, const SPHParams& p, void* stream, const void* aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
             DensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount, ctx->d_sortedIndices,
-                                                    ctx->d_surfaceNormals, p);
+                                                    dAlive, ctx->d_surfaceNormals, p);
             CUDA_CHECK_KERNEL("DensityKernel");
         }
 
@@ -647,6 +652,7 @@ namespace Engine
                                            uint32_t*        d_cellStart,
                                            uint32_t*        d_cellCount,
                                            uint32_t*        d_sortedIndices,
+                                           const uint32_t*  d_alive,
                                            RigidBodyData*   d_rigidBody,
                                            const Vec4*      d_surfaceNormals,
                                            SPHParams        p,
@@ -656,14 +662,15 @@ namespace Engine
             if (i >= (uint32_t)p.aliveCount)
                 return;
 
-            float px        = particles[i].posAndLife.x;
-            float py        = particles[i].posAndLife.y;
-            float pz        = particles[i].posAndLife.z;
-            float vx_i      = particles[i].velAndMaxLife.x;
-            float vy_i      = particles[i].velAndMaxLife.y;
-            float vz_i      = particles[i].velAndMaxLife.z;
-            float densityI  = particles[i].params.z;
-            float pressureI = particles[i].params.w;
+            uint32_t pid       = d_alive ? d_alive[i] : i;
+            float    px        = particles[pid].posAndLife.x;
+            float    py        = particles[pid].posAndLife.y;
+            float    pz        = particles[pid].posAndLife.z;
+            float    vx_i      = particles[pid].velAndMaxLife.x;
+            float    vy_i      = particles[pid].velAndMaxLife.y;
+            float    vz_i      = particles[pid].velAndMaxLife.z;
+            float    densityI  = particles[pid].params.z;
+            float    pressureI = particles[pid].params.w;
 
             float h  = p.smoothingRadius;
             float h2 = h * h;
@@ -693,22 +700,23 @@ namespace Engine
                         uint32_t count = d_cellCount[cellIdx];
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            uint32_t j = d_sortedIndices[start + k];
-                            if (j == i)
+                            uint32_t ja = d_sortedIndices[start + k];
+                            if (ja == i)
                                 continue;
+                            uint32_t pj = d_alive ? d_alive[ja] : ja;
 
-                            float rx = px - particles[j].posAndLife.x;
-                            float ry = py - particles[j].posAndLife.y;
-                            float rz = pz - particles[j].posAndLife.z;
+                            float rx = px - particles[pj].posAndLife.x;
+                            float ry = py - particles[pj].posAndLife.y;
+                            float rz = pz - particles[pj].posAndLife.z;
                             float r2 = rx * rx + ry * ry + rz * rz;
                             if (r2 >= h2 || r2 < 1e-12f)
                                 continue;
                             float r = sqrtf(r2);
 
-                            float densityJ = particles[j].params.z;
+                            float densityJ = particles[pj].params.z;
                             if (densityJ < 0.0001f)
                                 densityJ = 0.0001f;
-                            float pressureJ = particles[j].params.w;
+                            float pressureJ = particles[pj].params.w;
 
                             // 压力力: f_press = -m * (P_i + P_j) / (2 * ρ_j) * ∇W_spiky
                             float spikyG    = SpikyGrad(r, h, p.spikyCoeff);
@@ -721,9 +729,9 @@ namespace Engine
                             // 粘性力: f_visc = μ * m * (v_j - v_i) / ρ_j * ∇²W_visc
                             float viscLap = ViscLaplacian(r, h, p.spikyCoeff);
                             float viscMul = p.viscosity * p.particleMass / densityJ * viscLap;
-                            fvx += viscMul * (particles[j].velAndMaxLife.x - vx_i);
-                            fvy += viscMul * (particles[j].velAndMaxLife.y - vy_i);
-                            fvz += viscMul * (particles[j].velAndMaxLife.z - vz_i);
+                            fvx += viscMul * (particles[pj].velAndMaxLife.x - vx_i);
+                            fvy += viscMul * (particles[pj].velAndMaxLife.y - vy_i);
+                            fvz += viscMul * (particles[pj].velAndMaxLife.z - vz_i);
 
                             // Akinci 2013 表面张力: cohesion + curvature
                             if (p.surfaceTension > 0.0f && r > 0.001f)
@@ -735,7 +743,7 @@ namespace Engine
                                 fsy += stMul * ry * invR;
                                 fsz += stMul * rz * invR;
                                 // 曲率修正: f_curvature = -γ * m_j * (n_i - n_j)
-                                Vec4  normalJ = d_surfaceNormals[j];
+                                Vec4  normalJ = d_surfaceNormals[ja];
                                 float curvMul = -p.surfaceTension * p.particleMass;
                                 fsx += curvMul * (normalI.x - normalJ.x);
                                 fsy += curvMul * (normalI.y - normalJ.y);
@@ -750,8 +758,8 @@ namespace Engine
                                   d_rigidBody, ip.rigidBodyCount, fbx, fby, fbz);
 
             // SPH warmup
-            float life    = particles[i].posAndLife.w;
-            float maxLife = particles[i].velAndMaxLife.w;
+            float life    = particles[pid].posAndLife.w;
+            float maxLife = particles[pid].velAndMaxLife.w;
             float age     = maxLife - life;
             float warmup  = (p.warmupTime > 0.0f) ? fminf(fmaxf(age / p.warmupTime, 0.0f), 1.0f) : 1.0f;
 
@@ -771,23 +779,29 @@ namespace Engine
             }
 
             // 积分速度（注意：不加重力，重力在 Simulate 阶段叠加）
-            particles[i].velAndMaxLife.x += ax * p.deltaTime;
-            particles[i].velAndMaxLife.y += ay * p.deltaTime;
-            particles[i].velAndMaxLife.z += az * p.deltaTime;
+            particles[pid].velAndMaxLife.x += ax * p.deltaTime;
+            particles[pid].velAndMaxLife.y += ay * p.deltaTime;
+            particles[pid].velAndMaxLife.z += az * p.deltaTime;
         }
 
-        void LaunchSPHForce(void* ctxPtr, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream)
+        void LaunchSPHForce(void*                   ctxPtr,
+                            void*                   particles,
+                            const SPHParams&        p,
+                            const PCISPHIterParams& ip,
+                            void*                   stream,
+                            const void*             aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
             ForceKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_cellStart, ctx->d_cellCount, ctx->d_sortedIndices,
-                                                  ctx->d_rigidBody, ctx->d_surfaceNormals, p, ip);
+                                                  dAlive, ctx->d_rigidBody, ctx->d_surfaceNormals, p, ip);
             CUDA_CHECK_KERNEL("ForceKernel");
         }
 
@@ -795,28 +809,30 @@ namespace Engine
         // PCISPH Init 内核（移植自 sph_pcisph_init.glsl）
         // ======================================================================
 
-        __global__ static void PCISPHInitKernel(GPUParticle* particles,
-                                                PCISPHData*  pcisph,
-                                                uint32_t*    d_cellStart,
-                                                uint32_t*    d_cellCount,
-                                                uint32_t*    d_sortedIndices,
-                                                const Vec4*  d_surfaceNormals,
-                                                SPHParams    p)
+        __global__ static void PCISPHInitKernel(GPUParticle*    particles,
+                                                PCISPHData*     pcisph,
+                                                uint32_t*       d_cellStart,
+                                                uint32_t*       d_cellCount,
+                                                uint32_t*       d_sortedIndices,
+                                                const uint32_t* d_alive,
+                                                const Vec4*     d_surfaceNormals,
+                                                SPHParams       p)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= (uint32_t)p.aliveCount)
                 return;
 
             // 计算非压力加速度（粘性 + 表面张力 + 重力）
-            float px       = particles[i].posAndLife.x;
-            float py       = particles[i].posAndLife.y;
-            float pz       = particles[i].posAndLife.z;
-            float vx_i     = particles[i].velAndMaxLife.x;
-            float vy_i     = particles[i].velAndMaxLife.y;
-            float vz_i     = particles[i].velAndMaxLife.z;
-            float densityI = particles[i].params.z;
-            float h        = p.smoothingRadius;
-            float h2       = h * h;
+            uint32_t pid      = d_alive ? d_alive[i] : i;
+            float    px       = particles[pid].posAndLife.x;
+            float    py       = particles[pid].posAndLife.y;
+            float    pz       = particles[pid].posAndLife.z;
+            float    vx_i     = particles[pid].velAndMaxLife.x;
+            float    vy_i     = particles[pid].velAndMaxLife.y;
+            float    vz_i     = particles[pid].velAndMaxLife.z;
+            float    densityI = particles[pid].params.z;
+            float    h        = p.smoothingRadius;
+            float    h2       = h * h;
 
             if (densityI < 0.0001f)
                 densityI = 0.0001f;
@@ -842,28 +858,29 @@ namespace Engine
                         uint32_t count = d_cellCount[cellIdx];
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            uint32_t j = d_sortedIndices[start + k];
-                            if (j == i)
+                            uint32_t ja = d_sortedIndices[start + k];
+                            if (ja == i)
                                 continue;
+                            uint32_t pj = d_alive ? d_alive[ja] : ja;
 
-                            float rx = px - particles[j].posAndLife.x;
-                            float ry = py - particles[j].posAndLife.y;
-                            float rz = pz - particles[j].posAndLife.z;
+                            float rx = px - particles[pj].posAndLife.x;
+                            float ry = py - particles[pj].posAndLife.y;
+                            float rz = pz - particles[pj].posAndLife.z;
                             float r2 = rx * rx + ry * ry + rz * rz;
                             if (r2 >= h2 || r2 < 1e-12f)
                                 continue;
                             float r = sqrtf(r2);
 
-                            float densityJ = particles[j].params.z;
+                            float densityJ = particles[pj].params.z;
                             if (densityJ < 0.0001f)
                                 densityJ = 0.0001f;
 
                             // 粘性力: f_visc = μ * m * (v_j - v_i) / ρ_j * ∇²W_visc
                             float viscLap = ViscLaplacian(r, h, p.spikyCoeff);
                             float viscMul = p.viscosity * p.particleMass / densityJ * viscLap;
-                            fvx += viscMul * (particles[j].velAndMaxLife.x - vx_i);
-                            fvy += viscMul * (particles[j].velAndMaxLife.y - vy_i);
-                            fvz += viscMul * (particles[j].velAndMaxLife.z - vz_i);
+                            fvx += viscMul * (particles[pj].velAndMaxLife.x - vx_i);
+                            fvy += viscMul * (particles[pj].velAndMaxLife.y - vy_i);
+                            fvz += viscMul * (particles[pj].velAndMaxLife.z - vz_i);
 
                             // Akinci 2013 表面张力: cohesion + curvature
                             if (p.surfaceTension > 0.0f && r > 0.001f)
@@ -876,7 +893,7 @@ namespace Engine
                                 fsy += stMul * ry * invR;
                                 fsz += stMul * rz * invR;
                                 // 曲率修正: f_curvature = -γ * m_j * (n_i - n_j)
-                                Vec4  normalJ = d_surfaceNormals[j];
+                                Vec4  normalJ = d_surfaceNormals[ja];
                                 float curvMul = -p.surfaceTension * p.particleMass;
                                 fsx += curvMul * (normalI.x - normalJ.x);
                                 fsy += curvMul * (normalI.y - normalJ.y);
@@ -918,18 +935,19 @@ namespace Engine
             pcisph[i].predictedPosAndPressure.w = 0.0f;
         }
 
-        void LaunchPCISPHInit(void* ctxPtr, void* particles, const SPHParams& p, void* stream)
+        void LaunchPCISPHInit(void* ctxPtr, void* particles, const SPHParams& p, void* stream, const void* aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
             PCISPHInitKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellStart, ctx->d_cellCount,
-                                                       ctx->d_sortedIndices, ctx->d_surfaceNormals, p);
+                                                       ctx->d_sortedIndices, dAlive, ctx->d_surfaceNormals, p);
             CUDA_CHECK_KERNEL("PCISPHInitKernel");
         }
 
@@ -937,30 +955,33 @@ namespace Engine
         // PCISPH Predict 内核（移植自 sph_pcisph_predict.glsl）
         // ======================================================================
 
-        __global__ static void
-        PCISPHPredictKernel(GPUParticle* particles, PCISPHData* pcisph, float dt, uint32_t aliveCount)
+        __global__ static void PCISPHPredictKernel(
+            GPUParticle* particles, PCISPHData* pcisph, const uint32_t* d_alive, float dt, uint32_t aliveCount)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= aliveCount)
                 return;
 
+            uint32_t pid = d_alive ? d_alive[i] : i;
             // x* = pos + dt * v*
-            pcisph[i].predictedPosAndPressure.x = particles[i].posAndLife.x + dt * pcisph[i].predictedVelAndDensity.x;
-            pcisph[i].predictedPosAndPressure.y = particles[i].posAndLife.y + dt * pcisph[i].predictedVelAndDensity.y;
-            pcisph[i].predictedPosAndPressure.z = particles[i].posAndLife.z + dt * pcisph[i].predictedVelAndDensity.z;
+            pcisph[i].predictedPosAndPressure.x = particles[pid].posAndLife.x + dt * pcisph[i].predictedVelAndDensity.x;
+            pcisph[i].predictedPosAndPressure.y = particles[pid].posAndLife.y + dt * pcisph[i].predictedVelAndDensity.y;
+            pcisph[i].predictedPosAndPressure.z = particles[pid].posAndLife.z + dt * pcisph[i].predictedVelAndDensity.z;
         }
 
-        void LaunchPCISPHPredict(void* ctxPtr, void* particles, float dt, int aliveCount, void* stream)
+        void LaunchPCISPHPredict(
+            void* ctxPtr, void* particles, float dt, int aliveCount, void* stream, const void* aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t blocks = ((uint32_t)aliveCount + 255) / 256;
-            PCISPHPredictKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, dt, (uint32_t)aliveCount);
+            PCISPHPredictKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, dAlive, dt, (uint32_t)aliveCount);
             CUDA_CHECK_KERNEL("PCISPHPredictKernel");
         }
 
@@ -968,19 +989,20 @@ namespace Engine
         // PCISPH Density 内核（移植自 sph_pcisph_density.glsl）
         // ======================================================================
 
-        __global__ static void PCISPHDensityKernel(GPUParticle* particles,
-                                                   PCISPHData*  pcisph,
-                                                   uint32_t*    d_cellStart,
-                                                   uint32_t*    d_cellCount,
-                                                   uint32_t*    d_sortedIndices,
-                                                   SPHParams    p,
-                                                   float        pcisphDelta)
+        __global__ static void PCISPHDensityKernel(GPUParticle*    particles,
+                                                   PCISPHData*     pcisph,
+                                                   uint32_t*       d_cellStart,
+                                                   uint32_t*       d_cellCount,
+                                                   uint32_t*       d_sortedIndices,
+                                                   const uint32_t* d_alive,
+                                                   SPHParams       p,
+                                                   float           pcisphDelta)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= (uint32_t)p.aliveCount)
                 return;
 
-            // 我的预测位置（用于距离计算）
+            // 我的预测位置（用于距离计算）——pcisph 按槽索引，与 GLSL 一致
             float predPx = pcisph[i].predictedPosAndPressure.x;
             float predPy = pcisph[i].predictedPosAndPressure.y;
             float predPz = pcisph[i].predictedPosAndPressure.z;
@@ -992,9 +1014,10 @@ namespace Engine
             float density = p.particleMass * Poly6(0.0f, h2, p.poly6Coeff);
 
             // 用原始位置进行 cell 查找（grid 基于原始位置构建）
-            float origPx = particles[i].posAndLife.x;
-            float origPy = particles[i].posAndLife.y;
-            float origPz = particles[i].posAndLife.z;
+            uint32_t pid    = d_alive ? d_alive[i] : i;
+            float    origPx = particles[pid].posAndLife.x;
+            float    origPy = particles[pid].posAndLife.y;
+            float    origPz = particles[pid].posAndLife.z;
 
             int gx0, gy0, gz0;
             PosToCell(origPx, origPy, origPz, p.cellSize, gx0, gy0, gz0);
@@ -1010,14 +1033,14 @@ namespace Engine
                         uint32_t count = d_cellCount[cellIdx];
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            uint32_t j = d_sortedIndices[start + k];
-                            if (j == i)
+                            uint32_t ja = d_sortedIndices[start + k];
+                            if (ja == i)
                                 continue;
 
-                            // 用邻居的预测位置计算距离
-                            float rx = predPx - pcisph[j].predictedPosAndPressure.x;
-                            float ry = predPy - pcisph[j].predictedPosAndPressure.y;
-                            float rz = predPz - pcisph[j].predictedPosAndPressure.z;
+                            // 用邻居的预测位置计算距离（pcisph 按槽索引）
+                            float rx = predPx - pcisph[ja].predictedPosAndPressure.x;
+                            float ry = predPy - pcisph[ja].predictedPosAndPressure.y;
+                            float rz = predPz - pcisph[ja].predictedPosAndPressure.z;
                             float r2 = rx * rx + ry * ry + rz * rz;
                             density += p.particleMass * Poly6(r2, h2, p.poly6Coeff);
                         }
@@ -1032,19 +1055,24 @@ namespace Engine
             pcisph[i].predictedPosAndPressure.w = fminf(pcisph[i].predictedPosAndPressure.w, 50000.0f);
         }
 
-        void
-        LaunchPCISPHDensity(void* ctxPtr, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream)
+        void LaunchPCISPHDensity(void*                   ctxPtr,
+                                 void*                   particles,
+                                 const SPHParams&        p,
+                                 const PCISPHIterParams& ip,
+                                 void*                   stream,
+                                 const void*             aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
             PCISPHDensityKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellStart, ctx->d_cellCount,
-                                                          ctx->d_sortedIndices, p, ip.pcisphDelta);
+                                                          ctx->d_sortedIndices, dAlive, p, ip.pcisphDelta);
             CUDA_CHECK_KERNEL("PCISPHDensityKernel");
         }
 
@@ -1057,6 +1085,7 @@ namespace Engine
                                                  uint32_t*        d_cellStart,
                                                  uint32_t*        d_cellCount,
                                                  uint32_t*        d_sortedIndices,
+                                                 const uint32_t*  d_alive,
                                                  RigidBodyData*   d_rigidBody,
                                                  SPHParams        p,
                                                  PCISPHIterParams ip)
@@ -1065,6 +1094,7 @@ namespace Engine
             if (i >= (uint32_t)p.aliveCount)
                 return;
 
+            uint32_t pid = d_alive ? d_alive[i] : i;
             // 用原始位置进行 cell 查找（grid 基于原始位置构建）
             // 距离计算：迭代 1+ 使用预测位置（与 GLSL u_UsePredictedPos 一致）
             float px, py, pz;
@@ -1076,9 +1106,9 @@ namespace Engine
             }
             else
             {
-                px = particles[i].posAndLife.x;
-                py = particles[i].posAndLife.y;
-                pz = particles[i].posAndLife.z;
+                px = particles[pid].posAndLife.x;
+                py = particles[pid].posAndLife.y;
+                pz = particles[pid].posAndLife.z;
             }
             float pressureI = pcisph[i].predictedPosAndPressure.w;
             float densityI  = pcisph[i].predictedVelAndDensity.w;
@@ -1092,9 +1122,9 @@ namespace Engine
 
             int gx0, gy0, gz0;
             // grid cell 查找仍用原始位置（grid 基于原始位置构建）
-            float origPx = particles[i].posAndLife.x;
-            float origPy = particles[i].posAndLife.y;
-            float origPz = particles[i].posAndLife.z;
+            float origPx = particles[pid].posAndLife.x;
+            float origPy = particles[pid].posAndLife.y;
+            float origPz = particles[pid].posAndLife.z;
             PosToCell(origPx, origPy, origPz, p.cellSize, gx0, gy0, gz0);
 
             for (int dz = -1; dz <= 1; dz++)
@@ -1108,27 +1138,28 @@ namespace Engine
                         uint32_t count = d_cellCount[cellIdx];
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            uint32_t j = d_sortedIndices[start + k];
-                            if (j == i)
+                            uint32_t ja = d_sortedIndices[start + k];
+                            if (ja == i)
                                 continue;
 
                             // 用预测位置或原始位置计算距离（与 PCISPHDensityKernel 策略一致）
-                            float njx =
-                                ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.x : particles[j].posAndLife.x;
-                            float njy =
-                                ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.y : particles[j].posAndLife.y;
-                            float njz =
-                                ip.usePredictedPos ? pcisph[j].predictedPosAndPressure.z : particles[j].posAndLife.z;
-                            float rx = px - njx;
-                            float ry = py - njy;
-                            float rz = pz - njz;
-                            float r2 = rx * rx + ry * ry + rz * rz;
+                            // pcisph 按槽索引，particles 经 alive list 间接取池索引
+                            float njx = ip.usePredictedPos ? pcisph[ja].predictedPosAndPressure.x
+                                                           : particles[d_alive ? d_alive[ja] : ja].posAndLife.x;
+                            float njy = ip.usePredictedPos ? pcisph[ja].predictedPosAndPressure.y
+                                                           : particles[d_alive ? d_alive[ja] : ja].posAndLife.y;
+                            float njz = ip.usePredictedPos ? pcisph[ja].predictedPosAndPressure.z
+                                                           : particles[d_alive ? d_alive[ja] : ja].posAndLife.z;
+                            float rx  = px - njx;
+                            float ry  = py - njy;
+                            float rz  = pz - njz;
+                            float r2  = rx * rx + ry * ry + rz * rz;
                             if (r2 >= h2 || r2 < 1e-12f)
                                 continue;
                             float r = sqrtf(r2);
 
-                            float pressureJ = pcisph[j].predictedPosAndPressure.w;
-                            float densityJ  = pcisph[j].predictedVelAndDensity.w;
+                            float pressureJ = pcisph[ja].predictedPosAndPressure.w;
+                            float densityJ  = pcisph[ja].predictedVelAndDensity.w;
                             if (densityJ < 0.0001f)
                                 densityJ = 0.0001f;
 
@@ -1152,8 +1183,8 @@ namespace Engine
                                   d_rigidBody, ip.rigidBodyCount, fbx, fby, fbz);
 
             // SPH warmup
-            float life    = particles[i].posAndLife.w;
-            float maxLife = particles[i].velAndMaxLife.w;
+            float life    = particles[pid].posAndLife.w;
+            float maxLife = particles[pid].velAndMaxLife.w;
             float age     = maxLife - life;
             float warmup  = (p.warmupTime > 0.0f) ? fminf(fmaxf(age / p.warmupTime, 0.0f), 1.0f) : 1.0f;
 
@@ -1178,19 +1209,24 @@ namespace Engine
             pcisph[i].predictedVelAndDensity.z += az * p.deltaTime;
         }
 
-        void
-        LaunchPCISPHForce(void* ctxPtr, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream)
+        void LaunchPCISPHForce(void*                   ctxPtr,
+                               void*                   particles,
+                               const SPHParams&        p,
+                               const PCISPHIterParams& ip,
+                               void*                   stream,
+                               const void*             aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t blocks = ((uint32_t)p.aliveCount + 255) / 256;
             PCISPHForceKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, ctx->d_cellStart, ctx->d_cellCount,
-                                                        ctx->d_sortedIndices, ctx->d_rigidBody, p, ip);
+                                                        ctx->d_sortedIndices, dAlive, ctx->d_rigidBody, p, ip);
             CUDA_CHECK_KERNEL("PCISPHForceKernel");
         }
 
@@ -1198,35 +1234,42 @@ namespace Engine
         // PCISPH Apply 内核（移植自 sph_pcisph_apply.glsl）
         // ======================================================================
 
-        __global__ static void
-        PCISPHApplyKernel(GPUParticle* particles, PCISPHData* pcisph, uint32_t aliveCount, bool writePosition)
+        __global__ static void PCISPHApplyKernel(GPUParticle*    particles,
+                                                 PCISPHData*     pcisph,
+                                                 const uint32_t* d_alive,
+                                                 uint32_t        aliveCount,
+                                                 bool            writePosition)
         {
             uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= aliveCount)
                 return;
 
-            particles[i].velAndMaxLife.x = pcisph[i].predictedVelAndDensity.x;
-            particles[i].velAndMaxLife.y = pcisph[i].predictedVelAndDensity.y;
-            particles[i].velAndMaxLife.z = pcisph[i].predictedVelAndDensity.z;
+            uint32_t pid                   = d_alive ? d_alive[i] : i;
+            particles[pid].velAndMaxLife.x = pcisph[i].predictedVelAndDensity.x;
+            particles[pid].velAndMaxLife.y = pcisph[i].predictedVelAndDensity.y;
+            particles[pid].velAndMaxLife.z = pcisph[i].predictedVelAndDensity.z;
             if (writePosition)
             {
-                particles[i].posAndLife.x = pcisph[i].predictedPosAndPressure.x;
-                particles[i].posAndLife.y = pcisph[i].predictedPosAndPressure.y;
-                particles[i].posAndLife.z = pcisph[i].predictedPosAndPressure.z;
+                particles[pid].posAndLife.x = pcisph[i].predictedPosAndPressure.x;
+                particles[pid].posAndLife.y = pcisph[i].predictedPosAndPressure.y;
+                particles[pid].posAndLife.z = pcisph[i].predictedPosAndPressure.z;
             }
         }
 
-        void LaunchPCISPHApply(void* ctxPtr, void* particles, int aliveCount, bool writePosition, void* stream)
+        void LaunchPCISPHApply(
+            void* ctxPtr, void* particles, int aliveCount, bool writePosition, void* stream, const void* aliveList)
         {
             if (IsCudaPoisoned())
                 return;
 
-            SPHContextImpl* ctx  = static_cast<SPHContextImpl*>(ctxPtr);
-            cudaStream_t    strm = static_cast<cudaStream_t>(stream);
-            GPUParticle*    devP = static_cast<GPUParticle*>(particles);
+            SPHContextImpl* ctx    = static_cast<SPHContextImpl*>(ctxPtr);
+            cudaStream_t    strm   = static_cast<cudaStream_t>(stream);
+            GPUParticle*    devP   = static_cast<GPUParticle*>(particles);
+            const uint32_t* dAlive = static_cast<const uint32_t*>(aliveList);
 
             uint32_t blocks = ((uint32_t)aliveCount + 255) / 256;
-            PCISPHApplyKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, (uint32_t)aliveCount, writePosition);
+            PCISPHApplyKernel<<<blocks, 256, 0, strm>>>(devP, ctx->d_pcisph, dAlive, (uint32_t)aliveCount,
+                                                        writePosition);
             CUDA_CHECK_KERNEL("PCISPHApplyKernel");
         }
 

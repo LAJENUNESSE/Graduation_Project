@@ -63,26 +63,50 @@ namespace Engine
 
         // ---- Grid Build（3 步合 1 调用，内部用 CUB prefix sum）----
         // usePredictedPos=true 时从 PCISPHData 读取预测位置（PCISPH 迭代 1+）
-        void LaunchSPHGridBuild(void*    ctx,
-                                void*    particles,
-                                uint32_t aliveCount,
-                                int      gridSize,
-                                float    cellSize,
-                                void*    stream,
-                                bool     usePredictedPos = false);
+        // aliveList：存活槽→池索引映射表（粒子系统传入；nullptr = 全池存活直接索引，流体路径）
+        void LaunchSPHGridBuild(void*       ctx,
+                                void*       particles,
+                                uint32_t    aliveCount,
+                                int         gridSize,
+                                float       cellSize,
+                                void*       stream,
+                                bool        usePredictedPos = false,
+                                const void* aliveList       = nullptr);
 
         // ---- WCSPH 路径 ----
-        void LaunchSPHDensity(void* ctx, void* particles, const SPHParams& p, void* stream);
-        void LaunchSPHForce(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream);
+        // aliveList 语义同上：nullptr 时 kernel 直接以池索引访问 particles[0..aliveCount)
+        void
+        LaunchSPHDensity(void* ctx, void* particles, const SPHParams& p, void* stream, const void* aliveList = nullptr);
+        void LaunchSPHForce(void*                   ctx,
+                            void*                   particles,
+                            const SPHParams&        p,
+                            const PCISPHIterParams& ip,
+                            void*                   stream,
+                            const void*             aliveList = nullptr);
 
         // ---- PCISPH 路径 ----
-        void LaunchPCISPHInit(void* ctx, void* particles, const SPHParams& p, void* stream);
-        void LaunchPCISPHPredict(void* ctx, void* particles, float dt, int aliveCount, void* stream);
         void
-        LaunchPCISPHDensity(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream);
-        void
-        LaunchPCISPHForce(void* ctx, void* particles, const SPHParams& p, const PCISPHIterParams& ip, void* stream);
-        void LaunchPCISPHApply(void* ctx, void* particles, int aliveCount, bool writePosition, void* stream);
+        LaunchPCISPHInit(void* ctx, void* particles, const SPHParams& p, void* stream, const void* aliveList = nullptr);
+        void LaunchPCISPHPredict(
+            void* ctx, void* particles, float dt, int aliveCount, void* stream, const void* aliveList = nullptr);
+        void LaunchPCISPHDensity(void*                   ctx,
+                                 void*                   particles,
+                                 const SPHParams&        p,
+                                 const PCISPHIterParams& ip,
+                                 void*                   stream,
+                                 const void*             aliveList = nullptr);
+        void LaunchPCISPHForce(void*                   ctx,
+                               void*                   particles,
+                               const SPHParams&        p,
+                               const PCISPHIterParams& ip,
+                               void*                   stream,
+                               const void*             aliveList = nullptr);
+        void LaunchPCISPHApply(void*       ctx,
+                               void*       particles,
+                               int         aliveCount,
+                               bool        writePosition,
+                               void*       stream,
+                               const void* aliveList = nullptr);
 
         // ---- 积分 + 边界 ----
         void LaunchSPHSimulate(void* particles, const SPHSimulateParams& p, void* stream);

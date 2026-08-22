@@ -867,8 +867,11 @@ namespace Engine
                     const uint32_t rigidBodyCount = static_cast<uint32_t>(rigidBodies.size());
 
                     // Pass 2a: Grid Build (CUB ExclusiveSum 替代 GL 3-pass prefix sum)
+                    // 传存活槽→池索引映射表：CUDA SPH 内核与 GL 一致地经 alive list
+                    // 间接寻址，死粒子不再被误算、池后段活粒子不再被漏算
                     CudaInterop::LaunchSPHGridBuild(m_CudaImpl->SPHCtx, devParticles,
-                                                    static_cast<uint32_t>(m_LastAliveCount), gridSize, cellSize, strm);
+                                                    static_cast<uint32_t>(m_LastAliveCount), gridSize, cellSize, strm,
+                                                    false, devAliveList);
 
                     if (emitter.SPH.PCISPHEnabled)
                     {
@@ -881,21 +884,23 @@ namespace Engine
                         ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
                         ip.usePredictedPos   = 0;
 
-                        CudaInterop::LaunchPCISPHInit(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
+                        CudaInterop::LaunchPCISPHInit(m_CudaImpl->SPHCtx, devParticles, sphP, strm, devAliveList);
 
                         int iterations = std::clamp(emitter.SPH.PCISPHIterations, 1, 8);
                         for (int iter = 0; iter < iterations; ++iter)
                         {
                             ip.usePredictedPos = (iter == 0) ? 0 : 1;
                             CudaInterop::LaunchPCISPHPredict(m_CudaImpl->SPHCtx, devParticles, clampedDt,
-                                                             static_cast<int>(m_LastAliveCount), strm);
-                            CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
-                            CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+                                                             static_cast<int>(m_LastAliveCount), strm, devAliveList);
+                            CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm,
+                                                             devAliveList);
+                            CudaInterop::LaunchPCISPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm,
+                                                           devAliveList);
                         }
 
                         // 粒子系统的 simulate pass 仍负责位置积分；仅 FluidSystemGPU 使用 PCISPH 预测位置。
                         CudaInterop::LaunchPCISPHApply(m_CudaImpl->SPHCtx, devParticles,
-                                                       static_cast<int>(m_LastAliveCount), false, strm);
+                                                       static_cast<int>(m_LastAliveCount), false, strm, devAliveList);
                     }
                     else
                     {
@@ -906,8 +911,8 @@ namespace Engine
                         ip.rigidBodyCount    = static_cast<int>(rigidBodyCount);
                         ip.usePredictedPos   = 0;
 
-                        CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, strm);
-                        CudaInterop::LaunchSPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm);
+                        CudaInterop::LaunchSPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, strm, devAliveList);
+                        CudaInterop::LaunchSPHForce(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm, devAliveList);
                     }
                 }
 
