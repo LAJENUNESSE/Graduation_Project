@@ -66,7 +66,7 @@ namespace Engine
                 vmaUnmapMemory(VulkanAllocator::GetAllocator(), stagingAllocation);
 
                 VkCommandBuffer cmd = context->BeginSingleTimeCommands();
-                VkBufferCopy   region{};
+                VkBufferCopy    region{};
                 region.srcOffset = 0;
                 region.dstOffset = 0;
                 region.size      = size;
@@ -111,7 +111,7 @@ namespace Engine
             ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create readback staging buffer");
 
             VkCommandBuffer cmd = context->BeginSingleTimeCommands();
-            VkBufferCopy   region{};
+            VkBufferCopy    region{};
             region.srcOffset = 0;
             region.dstOffset = 0;
             region.size      = size;
@@ -167,8 +167,8 @@ namespace Engine
                 allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
             }
 
-            const VkResult result = vmaCreateBuffer(VulkanAllocator::GetAllocator(), &bufferInfo, &allocInfo,
-                                                    &buffer, &allocation, nullptr);
+            const VkResult result = vmaCreateBuffer(VulkanAllocator::GetAllocator(), &bufferInfo, &allocInfo, &buffer,
+                                                    &allocation, nullptr);
             ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create Vulkan buffer via VMA");
 
             if (initialData != nullptr)
@@ -340,8 +340,8 @@ namespace Engine
         {
             // GPU 端 vkCmdFillBuffer 清零（防御性：当前 Vulkan 路径网格清零走
             // SpatialHashGrid::BuildVulkan 的 vkCmdFillBuffer，不触达此方法）
-            auto*         context = VulkanContext::Get();
-            VkCommandBuffer cmd   = context->BeginSingleTimeCommands();
+            auto*           context = VulkanContext::Get();
+            VkCommandBuffer cmd     = context->BeginSingleTimeCommands();
             vkCmdFillBuffer(cmd, m_Buffer, 0, VK_WHOLE_SIZE, 0u);
             context->EndSingleTimeCommands(cmd);
         }
@@ -370,10 +370,10 @@ namespace Engine
         ENGINE_CORE_RELEASE_ASSERT(hint == ExternalMemoryHint::None,
                                    "ExternalMemoryHint::CudaInterop is reserved for Phase 7.5; not yet implemented");
 
-        m_Size       = size;
-        m_Binding    = binding;
-        m_GPUOnly    = gpuOnly;
-        m_Dynamic    = dynamicStorage;
+        m_Size        = size;
+        m_Binding     = binding;
+        m_GPUOnly     = gpuOnly;
+        m_Dynamic     = dynamicStorage;
         m_DeviceLocal = gpuOnly || dynamicStorage; // GPUOnly/GPUDynamic 语义兑现：device-local 显存
 
         CreateBuffer(m_Buffer, m_Allocation, size,
