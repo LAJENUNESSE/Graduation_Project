@@ -50,8 +50,8 @@ namespace Engine
 
         // 登记资源；triangles 仅索引缓冲填写（count/3），用于驻留三角面统计
         template <typename T>
-        void TrackResource(const Ref<T>& res, GpuMemCategory category, uint64_t bytes, std::string label,
-                           uint32_t triangles = 0)
+        void TrackResource(
+            const Ref<T>& res, GpuMemCategory category, uint64_t bytes, std::string label, uint32_t triangles = 0)
         {
             if (!res)
                 return;
@@ -80,6 +80,12 @@ namespace Engine
         // 收集存活资源快照，并顺带清理已销毁资源的条目（编辑器面板每帧调用）
         std::vector<GpuMemEntrySnapshot> CollectLiveEntries();
 
+        // 存活资源字节总数（顺带清理已销毁条目；基准测试每轮开始时调用）
+        uint64_t TotalAllocatedBytes();
+
+        // 进程工作集字节数（Windows 实现，其他平台返回 0）
+        static uint64_t QueryProcessWorkingSetBytes();
+
     private:
         GpuMemoryStats() = default;
 
@@ -92,12 +98,12 @@ namespace Engine
             std::string               Label;
         };
 
-        std::mutex                           m_Mutex;
-        std::unordered_map<uint64_t, Entry>  m_Entries;
-        uint64_t                             m_NextHandle = 1;
-        std::atomic<uint64_t>                m_UploadedBytes{0};
-        std::atomic<uint64_t>                m_DownloadedBytes{0};
-        std::atomic<uint32_t>                m_ParticleCount{0};
+        std::mutex                          m_Mutex;
+        std::unordered_map<uint64_t, Entry> m_Entries;
+        uint64_t                            m_NextHandle = 1;
+        std::atomic<uint64_t>               m_UploadedBytes{0};
+        std::atomic<uint64_t>               m_DownloadedBytes{0};
+        std::atomic<uint32_t>               m_ParticleCount{0};
     };
 
 } // namespace Engine
