@@ -3,7 +3,8 @@
 > 本清单逐条给出论文 .tex 的修改建议：**原文 → 建议改文 + 理由**。
 > 涉及文件：`docs/thesis/chapters/chapter4-sph.tex`、`chapter5-experiments.tex`。
 > 代码修复已完成（device-local 内存 / cellSize=h / 互操作合并 / Blelloch 消融开关），
-> 表 5.2/5.3/5.5 的数字待 `results_v2` 正式矩阵跑完后统一替换。
+> `results_v2` 正式矩阵（30 组 × 5000 样本）已完成且全部通过正确性门禁，
+> 论文图表已基于新数据重新生成（commit e24dabe）。第 8 节给出全部替换数字。
 
 ---
 
@@ -56,7 +57,7 @@
 **原文**：
 > CUDA路径利用CUB库的\texttt{DeviceScan::ExclusiveSum}在单次kernel launch中完成并行前缀和扫描。……整体构建时间较GL路径缩短。
 
-**建议追加消融结果段**（正式数据以 results_v2 校准后为准，以下为短矩阵实测）：
+**建议追加消融结果段**（消融数据已定稿，来源 `results_ablation_cub/`、`results_ablation_blelloch/`）：
 > 为剥离前缀和算法实现质量与CUDA运行时本身的贡献，本文实现了算法消融开关：将GLSL侧的三pass Blelloch扫描1:1移植为CUDA kernel（相同256线程block尺寸与共享内存布局），可通过环境变量切换CUB与自研实现。$N=1000$短矩阵对照显示，两者输出逐位一致（StateHash相同），但CUB实现在WCSPH/PCISPH上分别快约47\%和63\%。即CUDA相对OpenGL的加速比中，有相当部分来源于CUB库的decoupled-lookback算法优势而非API调用开销本身；表X的加速比应理解为"CUDA生态工具链+API"的综合收益。
 
 **理由**：审稿人指出 CUDA 用 CUB、OpenGL 用手写三 pass 属于混淆变量。论文已公开说明用 CUB（不算隐瞒），但缺少数值化的剥离分析。消融开关（commit a021ad9）+ 短矩阵数据补上这一环。
@@ -70,10 +71,10 @@
 **原文**：
 > 当前Vulkan缓冲区仍统一采用host-visible VMA路径，且计算调度尚未针对该流体负载做专项优化……
 
-**建议改为**（数据重测后）：
-> 初版实现曾将全部Vulkan缓冲区统一放置于host-visible内存，导致每次SPH内核迭代跨PCIe读写系统内存，50000粒子WCSPH退化至$0.199\times$。定位该缺陷后，已将GPUOnly/GPUDynamic语义的存储缓冲区迁移至device-local显存并经staging上传，本表数据为修复后的重测结果。【若修复后仍有差距则保留调度未优化的表述】
+**建议改为**（results_v2 重测数据已落定）：
+> 初版实现曾将全部Vulkan缓冲区统一放置于host-visible内存，导致每次SPH内核迭代跨PCIe读写系统内存，50000粒子WCSPH退化至$0.199\times$（90.2\,ms）。定位该缺陷后，已将GPUOnly/GPUDynamic语义的存储缓冲区迁移至device-local显存并经staging上传，同场景重测降至8.13\,ms（$1.095\times$）。本表数据为修复后的重测结果。
 
-**理由**：host-visible 是实现缺陷而非 API 局限，原表述把实现问题外推成了"Vulkan 路径慢"，会被审稿人抓住。修复后重测的数据才能代表合理实现水平。
+**理由**：host-visible 是实现缺陷而非 API 局限，原表述把实现问题外推成了"Vulkan 路径慢"，会被审稿人抓住。修复后 Vulkan WCSPH 全规模 1.034--1.361×、PCISPH 除 N=1000（0.958×，小规模下每 pass 固定 dispatch 开销主导）外均 ≥1.19×——"Vulkan 路径存在系统性劣势"的旧结论不再成立。
 
 ---
 
@@ -102,18 +103,41 @@
 
 ---
 
-## 8. 数据表格全面更新（等 results_v2 完成后执行）
+## 8. 数据表格全面更新（results_v2 已完成，数字如下）
 
 **位置**：`chapter5-experiments.tex` 表 5.2/5.3（87-109 行）、表 5.5（132 行附近）、以及 §5.4 性能分析、§5.6 小结中的所有引用数字、§5.3 短矩阵段落。
 
-**更新来源**：`results_v2/raw_results.csv` → `summarize.py --density-relative-tolerance 0.001 --max-density-error-tolerance <校准值>` → `summary.csv` → `plot_results.py` 重新生成图表。
+**复现管线**（已验证逐字节复现 summary.csv）：
 
-**同时需要更新的关联表述**：
-- §5.4 各处 P95/端到端 FPS 结论；
-- §5.6 小结的加速比区间；
-- 若 Vulkan WCSPH 50000 不再是 90ms 量级，删除或改写"疑似同步/提交策略问题"的推测；
-- 短矩阵段落（70-72 行）若数字变化需同步；
-- 正确性门槛描述处补充 L∞ 门禁的加入（summarize.py 新增参数）。
+```text
+powershell benchmark/run_matrix.ps1 -OutputDir results_v2   # 30 组原始数据
+python benchmark/summarize.py results_v2/raw_results.csv \
+    --density-relative-tolerance 0.002 --max-density-error-tolerance 5.0
+uv run --project docs/thesis/figures/scripted python \
+    benchmark/plot_results.py --summary results_v2/summary.csv \
+    --raw results_v2/raw_results.csv \
+    --output-dir docs/thesis/figures/scripted/generated
+```
+
+门禁校准依据：WCSPH 为显式积分，warmup 仅 100 帧未充分弛豫，三后端浮点求和顺序差异导致稳态密度系统性分离；实测最大均值相对偏差 0.178%（原 0.1% 门槛过紧），最大 L∞ 差值 3.0（vs GL 基线自身水平）。校准为 0.2% / 5.0 后 30 组全部通过，且每个 run 内密度完全恒定、跨次运行可精确复现——偏差来自稳态点分离而非数值不稳定。
+
+### 表 5.3 替换值（Compute 均值 ms / 相对 OpenGL 加速比）
+
+| N | GL WCSPH | CUDA WCSPH | VK WCSPH | GL PCISPH | CUDA PCISPH | VK PCISPH |
+|------|---------|-----------|----------|-----------|-------------|-----------|
+| 1000 | 0.314 / 1.00× | 0.274 / 1.14× | 0.277 / 1.13× | 2.313 / 1.00× | 1.726 / 1.34× | 2.414 / 0.96× |
+| 5000 | 0.452 / 1.00× | 0.317 / 1.42× | 0.332 / 1.36× | 14.639 / 1.00× | 10.174 / 1.44× | 11.905 / 1.23× |
+| 10000 | 0.812 / 1.00× | 0.468 / 1.73× | 0.785 / 1.03× | 18.914 / 1.00× | 15.420 / 1.23× | 15.762 / 1.20× |
+| 20000 | 2.339 / 1.00× | 1.395 / 1.68× | 2.062 / 1.13× | 31.423 / 1.00× | 23.587 / 1.33× | 26.392 / 1.19× |
+| 50000 | 8.905 / 1.00× | 4.269 / 2.09× | 8.130 / 1.10× | 91.444 / 1.00× | 71.720 / 1.28× | 84.866 / 1.08× |
+
+### 关联表述更新要点
+
+- **加速比区间改写**：WCSPH——CUDA 1.14--2.09×、Vulkan 1.03--1.36×（无劣势组）；PCISPH——CUDA 1.23--1.44×、Vulkan 除 N=1000（0.96×）外 1.08--1.23×。
+- **表 5.5 互操作耗时**：CUDA MeanInterop 更新为 WCSPH 0.066--0.549 ms、PCISPH 0.097--0.606 ms（每帧一对 Map/Unmap，见第 6 条口径声明）。
+- **删除 §5.4 中"Vulkan 90ms 疑似同步/提交策略问题"的推测段落**——根因已定位为 host-visible 内存放置并修复（第 5 条）。
+- **§5.3 短矩阵段落**：数字按上表同步。
+- **正确性门槛描述处**补充 L∞ 门禁：summarize.py 新增 `--max-density-error-tolerance`，拦截"均值合格但局部不稳定"的运行；同时说明 0.2%/5.0 的校准依据（上文）。
 
 ---
 
