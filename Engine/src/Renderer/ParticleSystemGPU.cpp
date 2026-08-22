@@ -889,7 +889,9 @@ namespace Engine
                         int iterations = std::clamp(emitter.SPH.PCISPHIterations, 1, 8);
                         for (int iter = 0; iter < iterations; ++iter)
                         {
-                            ip.usePredictedPos = (iter == 0) ? 0 : 1;
+                            // 三端统一恒 0：网格按原始位置构建且跨迭代复用，用预测位置
+                            // 查原始位置的网格本身不自洽；GL/Vulkan/流体路径均为 0
+                            ip.usePredictedPos = 0;
                             CudaInterop::LaunchPCISPHPredict(m_CudaImpl->SPHCtx, devParticles, clampedDt,
                                                              static_cast<int>(m_LastAliveCount), strm, devAliveList);
                             CudaInterop::LaunchPCISPHDensity(m_CudaImpl->SPHCtx, devParticles, sphP, ip, strm,
