@@ -29,6 +29,8 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/Log.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/UUID.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Core/Window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Debug/GpuMemoryStats.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Debug/NvmlSampler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Debug/PerformanceMonitor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImGui/ImGuiBuild.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImGui/ImGuiLayer.cpp
