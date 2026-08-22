@@ -1,6 +1,7 @@
 // SPH/PCISPH 流体管线的 CUDA 内核。
 // 1:1 移植自对应 GLSL compute shader（sph_density/sph_force/sph_pcisph_*/fluid_simulate/fluid_emit）。
-// Grid Build 使用 CUB DeviceScan::ExclusiveSum，替代 3 次 GL dispatch。
+// Grid Build 默认使用 CUB DeviceScan::ExclusiveSum；ENGINE_CUDA_SCAN=blelloch 时
+// 切换到三 pass Blelloch 扫描（与 grid_prefix_sum.glsl 算法一致），用于消融实验。
 
 #include "Platform/CUDA/CudaParticleTypes.h"
 #include "Platform/CUDA/CudaSPHPipeline.h"
@@ -9,6 +10,7 @@
 #include <cuda_runtime.h>
 #include <cub/device/device_scan.cuh>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <cmath>
 
@@ -30,11 +32,13 @@ namespace Engine
             PCISPHData*    d_pcisph;         // N × 48B
             RigidBodyData* d_rigidBody;      // maxRB × 112B
             Vec4*          d_surfaceNormals; // N × Vec4 (Akinci 表面法线)
+            uint32_t*      d_blockSums;      // Blelloch 辅助（≥ ceil(G³/512)，消融开关用）
             void*          d_cubTemp;        // CUB 临时存储
             size_t         cubTempBytes;
             uint32_t       maxParticles;
             uint32_t       gridSize; // 每轴格子数（gridSize³ = 总格子数）
             uint32_t       maxRigidBodies;
+            bool           useBlellochScan = false; // 消融开关：true 时用三 pass Blelloch 替代 CUB（ENGINE_CUDA_SCAN）
         };
 
         void* CreateSPHContext(uint32_t maxParticles, uint32_t gridSize, uint32_t maxRigidBodies)
@@ -47,6 +51,11 @@ namespace Engine
             ctx->gridSize       = gridSize;
             ctx->maxRigidBodies = maxRigidBodies;
 
+            // 消融开关：ENGINE_CUDA_SCAN=blelloch 时用三 pass Blelloch 扫描替代 CUB，
+            // 用于剥离"前缀和算法实现质量"与"CUDA API 本身效率"的混淆变量。默认 cub。
+            if (const char* scanEnv = std::getenv("ENGINE_CUDA_SCAN"))
+                ctx->useBlellochScan = (std::strcmp(scanEnv, "blelloch") == 0);
+
             uint32_t totalCells = gridSize * gridSize * gridSize;
 
             bool ok = true;
@@ -57,6 +66,12 @@ namespace Engine
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_pcisph, maxParticles * sizeof(PCISPHData)));
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_rigidBody, maxRigidBodies * sizeof(RigidBodyData)));
             ok      = ok && CUDA_CHECK(cudaMalloc(&ctx->d_surfaceNormals, maxParticles * sizeof(Vec4)));
+            {
+                // Blelloch 辅助缓冲：ceil(G³/512) 个块和（gridSize=64 时恰 512 个）
+                uint32_t totalCellsTmp = totalCells;
+                uint32_t numScanBlocks = (totalCellsTmp + 511u) / 512u;
+                ok = ok && CUDA_CHECK(cudaMalloc(&ctx->d_blockSums, numScanBlocks * sizeof(uint32_t)));
+            }
 
             if (ok)
             {
@@ -88,6 +103,7 @@ namespace Engine
             cudaFree(ctx->d_pcisph);
             cudaFree(ctx->d_rigidBody);
             cudaFree(ctx->d_surfaceNormals);
+            cudaFree(ctx->d_blockSums);
             cudaFree(ctx->d_cubTemp);
             delete ctx;
         }
@@ -358,6 +374,122 @@ namespace Engine
             d_cellStart[i] = 0u;
         }
 
+        // ======================================================================
+        // 三 pass Blelloch exclusive scan（消融路径，1:1 移植 grid_prefix_sum.glsl）
+        // blockDim=256 + shared temp[512]，算法与 OpenGL/Vulkan 路径完全一致，
+        // 用于剥离"前缀和算法实现质量"变量。约束：numBlocks ≤ 512（Step 2 单
+        // workgroup 容量）——gridSize=64 → G³=262144 → 512 blocks 恰好满足。
+        // ======================================================================
+        constexpr uint32_t kScanBlockThreads = 256;
+        constexpr uint32_t kScanBlockSize    = 512; // 2 * threads
+
+        // 注：values/outScan 不加 __restrict__——Step 2 块和扫描时两者同为 d_blockSums（in-place）
+        __global__ static void ScanLocalKernel(const uint32_t* values,
+                                               uint32_t*       outScan,
+                                               uint32_t*       blockSums, // 可空（Step 2 复用时传 nullptr）
+                                               int             n)
+        {
+            __shared__ uint32_t temp[kScanBlockSize];
+            uint32_t tid  = threadIdx.x;
+            uint32_t base = blockIdx.x * kScanBlockSize;
+            uint32_t ai   = tid;
+            uint32_t bi   = tid + kScanBlockThreads;
+            uint32_t gAI  = base + ai;
+            uint32_t gBI  = base + bi;
+
+            temp[ai] = (gAI < (uint32_t)n) ? values[gAI] : 0u;
+            temp[bi] = (gBI < (uint32_t)n) ? values[gBI] : 0u;
+
+            // Up-sweep（reduce）
+            uint32_t offset = 1u;
+            for (uint32_t d = kScanBlockThreads; d > 0u; d >>= 1u)
+            {
+                __syncthreads();
+                if (tid < d)
+                {
+                    uint32_t a = offset * (2u * tid + 1u) - 1u;
+                    uint32_t b = offset * (2u * tid + 2u) - 1u;
+                    temp[b] += temp[a];
+                }
+                offset <<= 1u;
+            }
+
+            // 保存 block 总和并清空末位
+            __syncthreads();
+            if (tid == 0u)
+            {
+                if (blockSums != nullptr)
+                    blockSums[blockIdx.x] = temp[kScanBlockSize - 1u];
+                temp[kScanBlockSize - 1u] = 0u;
+            }
+
+            // Down-sweep
+            for (uint32_t d = 1u; d <= kScanBlockThreads; d <<= 1u)
+            {
+                offset >>= 1u;
+                __syncthreads();
+                if (tid < d)
+                {
+                    uint32_t a = offset * (2u * tid + 1u) - 1u;
+                    uint32_t b = offset * (2u * tid + 2u) - 1u;
+                    uint32_t t = temp[a];
+                    temp[a]    = temp[b];
+                    temp[b] += t;
+                }
+            }
+
+            __syncthreads();
+            if (gAI < (uint32_t)n)
+                outScan[gAI] = temp[ai];
+            if (gBI < (uint32_t)n)
+                outScan[gBI] = temp[bi];
+        }
+
+        __global__ static void ScanPropagateKernel(uint32_t*       cellStart,
+                                                   const uint32_t* blockSums,
+                                                   int             n)
+        {
+            if (blockIdx.x == 0u)
+                return;
+            uint32_t blockAdd = blockSums[blockIdx.x];
+            uint32_t base     = blockIdx.x * kScanBlockSize;
+            uint32_t gAI      = base + threadIdx.x;
+            uint32_t gBI      = base + threadIdx.x + kScanBlockThreads;
+            if (gAI < (uint32_t)n)
+                cellStart[gAI] += blockAdd;
+            if (gBI < (uint32_t)n)
+                cellStart[gBI] += blockAdd;
+        }
+
+        // Blelloch exclusive scan 入口：values → outScan（等价于 CUB ExclusiveSum）。
+        // values/outScan 可为不同缓冲；blockSums 为辅助缓冲（≥ ceil(n/512) 元素）。
+        static void LaunchBlellochExclusiveScan(uint32_t*     d_values,
+                                                uint32_t*     d_outScan,
+                                                uint32_t*     d_blockSums,
+                                                uint32_t      totalElements,
+                                                cudaStream_t  strm)
+        {
+            const uint32_t numBlocks = (totalElements + kScanBlockSize - 1u) / kScanBlockSize;
+
+            // Step 1: block-local scan（values → outScan，块和写入 blockSums）
+            ScanLocalKernel<<<numBlocks, kScanBlockThreads, 0, strm>>>(d_values, d_outScan, d_blockSums,
+                                                                       (int)totalElements);
+            CUDA_CHECK_KERNEL("Blelloch::ScanLocal");
+
+            if (numBlocks > 1u)
+            {
+                // Step 2: 扫描块和（in-place，单 workgroup；要求 numBlocks ≤ 512）
+                ScanLocalKernel<<<1, kScanBlockThreads, 0, strm>>>(d_blockSums, d_blockSums, nullptr,
+                                                                   (int)numBlocks);
+                CUDA_CHECK_KERNEL("Blelloch::ScanBlockSums");
+
+                // Step 3: 把块前缀加回各元素
+                ScanPropagateKernel<<<numBlocks, kScanBlockThreads, 0, strm>>>(d_outScan, d_blockSums,
+                                                                               (int)totalElements);
+                CUDA_CHECK_KERNEL("Blelloch::Propagate");
+            }
+        }
+
         void LaunchSPHGridBuild(void*    ctxPtr,
                                 void*    particles,
                                 uint32_t aliveCount,
@@ -386,20 +518,36 @@ namespace Engine
                                                      gridSize, cellSize, usePredictedPos ? 1 : 0);
             CUDA_CHECK_KERNEL("HashKernel");
 
-            // 步骤 2：CUB prefix sum（ExclusiveSum：cellCount → cellStart）
-            cub::DeviceScan::ExclusiveSum(ctx->d_cubTemp, ctx->cubTempBytes, ctx->d_cellCount, ctx->d_cellStart,
-                                          (int)totalCells, strm);
-            CUDA_CHECK_KERNEL("CUB::ExclusiveSum");
+            // 步骤 2：exclusive scan（cellCount → cellStart）
+            // 消融开关：默认 CUB（decoupled lookback），ENGINE_CUDA_SCAN=blelloch 时
+            // 用与 GL/Vulkan 完全一致的三 pass Blelloch，剥离算法实现质量变量
+            if (ctx->useBlellochScan)
+            {
+                LaunchBlellochExclusiveScan(ctx->d_cellCount, ctx->d_cellStart, ctx->d_blockSums, totalCells, strm);
+            }
+            else
+            {
+                cub::DeviceScan::ExclusiveSum(ctx->d_cubTemp, ctx->cubTempBytes, ctx->d_cellCount, ctx->d_cellStart,
+                                              (int)totalCells, strm);
+                CUDA_CHECK_KERNEL("CUB::ExclusiveSum");
+            }
 
             // 步骤 3：Scatter（将 cellStart 用作临时写偏移，atomicAdd 会破坏其原始值）
             ScatterKernel<<<blockParts, 256, 0, strm>>>(ctx->d_cellHash, ctx->d_cellStart, ctx->d_sortedIndices,
                                                         aliveCount);
             CUDA_CHECK_KERNEL("ScatterKernel");
 
-            // 步骤 4：恢复 cellStart（scatter 的 atomicAdd 把它改坏了，重新用 prefix sum 恢复）
-            cub::DeviceScan::ExclusiveSum(ctx->d_cubTemp, ctx->cubTempBytes, ctx->d_cellCount, ctx->d_cellStart,
-                                          (int)totalCells, strm);
-            CUDA_CHECK_KERNEL("CUB::ExclusiveSum(restore)");
+            // 步骤 4：恢复 cellStart（scatter 的 atomicAdd 把它改坏了，重新用 scan 恢复）
+            if (ctx->useBlellochScan)
+            {
+                LaunchBlellochExclusiveScan(ctx->d_cellCount, ctx->d_cellStart, ctx->d_blockSums, totalCells, strm);
+            }
+            else
+            {
+                cub::DeviceScan::ExclusiveSum(ctx->d_cubTemp, ctx->cubTempBytes, ctx->d_cellCount, ctx->d_cellStart,
+                                              (int)totalCells, strm);
+                CUDA_CHECK_KERNEL("CUB::ExclusiveSum(restore)");
+            }
         }
 
         // ======================================================================
