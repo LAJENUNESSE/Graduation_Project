@@ -66,10 +66,20 @@ def main() -> int:
             "by no more than this relative tolerance (for example 0.05)."
         ),
     )
+    parser.add_argument(
+        "--max-density-error-tolerance",
+        type=float,
+        help=(
+            "Additionally require each target backend's worst per-sample MaxDensityError (L∞ of |rho-rho0|) "
+            "to stay within this absolute tolerance of the OpenGL baseline's own worst value (for example 5.0)."
+        ),
+    )
     args = parser.parse_args()
 
     if args.density_relative_tolerance is not None and args.density_relative_tolerance < 0.0:
         parser.error("--density-relative-tolerance must be non-negative")
+    if args.max_density_error_tolerance is not None and args.max_density_error_tolerance < 0.0:
+        parser.error("--max-density-error-tolerance must be non-negative")
 
     output_path = args.output or args.raw_csv.with_name("summary.csv")
     groups: dict[tuple[str, str, int, int], list[dict[str, str]]] = defaultdict(list)
@@ -136,20 +146,33 @@ def main() -> int:
         }
 
     tolerance = args.density_relative_tolerance
+    linf_tolerance = args.max_density_error_tolerance
     for key, summary in summaries.items():
         baseline_key = ("OpenGL", key[1], key[2], key[3])
         baseline = summaries.get(baseline_key)
-        if tolerance is None or baseline is None:
+        if (tolerance is None and linf_tolerance is None) or baseline is None:
             continue
         if not summary["CorrectnessValid"] or not baseline["CorrectnessValid"]:
             continue
 
-        baseline_density = float(baseline["MeanDensity"])
-        target_density = float(summary["MeanDensity"])
-        density_scale = max(abs(baseline_density), 1.0e-12)
-        if abs(target_density - baseline_density) / density_scale > tolerance:
-            summary["CorrectnessValid"] = False
-            continue
+        # 均值门禁：跨后端平均密度相对偏差（原有）
+        if tolerance is not None:
+            baseline_density = float(baseline["MeanDensity"])
+            target_density = float(summary["MeanDensity"])
+            density_scale = max(abs(baseline_density), 1.0e-12)
+            if abs(target_density - baseline_density) / density_scale > tolerance:
+                summary["CorrectnessValid"] = False
+                continue
+
+        # L∞ 门禁：逐样本最大密度偏差不得显著劣于 OpenGL 基线自身水平，
+        # 拦截"均值合格但局部不稳定"的运行
+        if linf_tolerance is not None:
+            target_linf = float(summary["MaxDensityError"])
+            baseline_linf = float(baseline["MaxDensityError"])
+            if abs(target_linf - baseline_linf) > linf_tolerance:
+                summary["CorrectnessValid"] = False
+                continue
+
         summary["Speedup"] = float(baseline["Mean_ms"]) / float(summary["Mean_ms"])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -187,6 +210,12 @@ def main() -> int:
         print(
             "Speedup is intentionally blank until --density-relative-tolerance is supplied after the short "
             "cross-backend calibration run.",
+            file=sys.stderr,
+        )
+    if linf_tolerance is None:
+        print(
+            "L∞ gate inactive; pass --max-density-error-tolerance to reject runs whose worst per-sample "
+            "density error exceeds the OpenGL baseline beyond the given absolute tolerance.",
             file=sys.stderr,
         )
     return 0
