@@ -116,6 +116,7 @@ namespace Engine
         mutable uint32_t m_LastBinding = 0;
         bool             m_GPUOnly     = false;
         bool             m_Dynamic     = false;
+        bool             m_DeviceLocal = false; // GPUOnly/GPUDynamic → device-local + staging 数据通路
     };
 
     class VulkanUniformBuffer : public UniformBuffer
