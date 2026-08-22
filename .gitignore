@@ -141,3 +141,16 @@ installer/redist/*.exe
 # DSH 本地审批工具诊断脚本
 .dsh-toast-*.ps1
 .dsh-toast-*.log
+
+# Benchmark 结果矩阵（原始数据不入库，惯例同 benchmark/results/）
+results_v2/
+results_ablation_cub/
+results_ablation_blelloch/
+results_*_run.log
+
+# book/ LaTeX 编译产物
+book/main.bbl
+book/main.bcf
+book/main.blg
+book/main.run.xml
+book/main.synctex.gz
