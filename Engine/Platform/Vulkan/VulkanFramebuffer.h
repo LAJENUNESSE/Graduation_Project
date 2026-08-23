@@ -36,6 +36,10 @@ namespace Engine
         VkRenderPass  GetRenderPass() const { return m_RenderPass; }
         VkFramebuffer GetFramebuffer() const { return m_Framebuffer; }
 
+        // Phase 8.2：供 ImGui 采样与 descriptor 绑定取 attachment 视图
+        VkImageView GetColorAttachmentView(uint32_t index = 0) const;
+        VkImageView GetDepthAttachmentView() const { return m_DepthAttachment.ImageView; }
+
     private:
         void Invalidate();
         void Destroy();

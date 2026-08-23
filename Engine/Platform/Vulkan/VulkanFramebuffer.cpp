@@ -346,4 +346,15 @@ namespace Engine
 
     void VulkanFramebuffer::BlitMSAA() {}
 
+    VkImageView VulkanFramebuffer::GetColorAttachmentView(uint32_t index) const
+    {
+        if (index >= m_ColorAttachments.size())
+        {
+            ENGINE_CORE_WARN("[Vulkan] Color attachment view index {0} out of range ({1})", index,
+                             m_ColorAttachments.size());
+            return VK_NULL_HANDLE;
+        }
+        return m_ColorAttachments[index].ImageView;
+    }
+
 } // namespace Engine
