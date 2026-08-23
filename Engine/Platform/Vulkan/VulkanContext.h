@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Platform/Vulkan/VulkanGraphicsPipelineBuilder.h"
 #include "Platform/Vulkan/VulkanSceneState.h"
 #include "Renderer/GraphicsContext.h"
 
@@ -107,6 +108,9 @@ namespace Engine
         // VulkanShader/Texture::Bind 写入、DrawIndexed/DrawArrays 录制时消费。
         VulkanSceneState& GetSceneState() { return m_SceneState; }
 
+        // Phase 8.2 scene graphics pipeline 组装与缓存
+        VulkanGraphicsPipelineBuilder& GetPipelineBuilder() { return m_PipelineBuilder; }
+
     private:
         // Setup helpers (called from Init)
         void CreateInstance();
@@ -208,7 +212,8 @@ namespace Engine
         ImDrawData*                m_PendingImGuiDrawData = nullptr;
         SwapchainInfo              m_SwapchainInfo;
 
-        VulkanSceneState m_SceneState;
+        VulkanSceneState              m_SceneState;
+        VulkanGraphicsPipelineBuilder m_PipelineBuilder;
 
         static VulkanContext* s_Instance;
 

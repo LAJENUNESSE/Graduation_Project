@@ -1185,6 +1185,8 @@ namespace Engine
 
     void VulkanContext::Cleanup()
     {
+        m_PipelineBuilder.Clear(m_Device);
+
         if (m_Device == VK_NULL_HANDLE)
             return;
 

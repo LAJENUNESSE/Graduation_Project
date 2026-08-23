@@ -35,6 +35,8 @@ namespace Engine
         return m_Pipelines.find(key) != m_Pipelines.end();
     }
 
+    // 只销毁 Pipeline。handle.Layout 由持有方（VulkanGraphicsPipelineBuilder 的
+    // per-shader 资源）负责销毁，此处不触碰以避免双重释放。
     void VulkanPipelineCache::Clear(VkDevice device)
     {
         if (device != VK_NULL_HANDLE)
@@ -43,8 +45,6 @@ namespace Engine
             {
                 if (handle.Pipeline != VK_NULL_HANDLE)
                     vkDestroyPipeline(device, handle.Pipeline, nullptr);
-                if (handle.Layout != VK_NULL_HANDLE)
-                    vkDestroyPipelineLayout(device, handle.Layout, nullptr);
             }
         }
         m_Pipelines.clear();

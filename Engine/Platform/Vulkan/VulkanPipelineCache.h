@@ -8,18 +8,21 @@
 namespace Engine
 {
 
-    // graphics pipeline 缓存 key：shader + render pass + 顶点布局指纹。
-    // 本阶段（Phase 8.2 地基）只提供存储/查找/销毁骨架，未被主帧渲染接入。
+    // graphics pipeline 缓存 key：shader + render pass + 顶点布局指纹 + 光栅状态位。
+    // Phase 8.2 起被场景绘制路径消费（VulkanGraphicsPipelineBuilder 组装）。
     struct VulkanGraphicsPipelineKey
     {
-        const void*  Shader           = nullptr; // VulkanShader*（标识，不托管）
-        VkRenderPass RenderPass       = VK_NULL_HANDLE;
-        uint64_t     VertexLayoutHash = 0;
+        const void*  Shader               = nullptr; // VulkanShader*（标识，不托管）
+        VkRenderPass RenderPass           = VK_NULL_HANDLE;
+        uint64_t     VertexLayoutHash     = 0;
+        uint32_t     ColorAttachmentCount = 0;
+        uint32_t     StateBits            = 0; // 深度测试/写入/比较符/面剔除 位域（见 Builder）
 
         bool operator==(const VulkanGraphicsPipelineKey& other) const
         {
             return Shader == other.Shader && RenderPass == other.RenderPass &&
-                   VertexLayoutHash == other.VertexLayoutHash;
+                   VertexLayoutHash == other.VertexLayoutHash && ColorAttachmentCount == other.ColorAttachmentCount &&
+                   StateBits == other.StateBits;
         }
     };
 
@@ -31,6 +34,8 @@ namespace Engine
             h ^= std::hash<uint64_t>{}(reinterpret_cast<uint64_t>(key.RenderPass)) + 0x9e3779b97f4a7c15ULL + (h << 6) +
                  (h >> 2);
             h ^= std::hash<uint64_t>{}(key.VertexLayoutHash) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            h ^= std::hash<uint64_t>{}((static_cast<uint64_t>(key.ColorAttachmentCount) << 32) | key.StateBits) +
+                 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
             return h;
         }
     };
@@ -61,6 +66,20 @@ namespace Engine
 
         // 是否已命中
         bool Contains(const VulkanGraphicsPipelineKey& key) const;
+
+        // 供按 shader 注销条目的遍历接口（ReleaseShader 用；device 为空则只移除不销毁）。
+        // 注意：handle.Layout 由 VulkanGraphicsPipelineBuilder 的 per-shader 资源唯一持有，
+        // 本接口只销毁 Pipeline，不动 Layout。
+        using CacheIterator =
+            std::unordered_map<VulkanGraphicsPipelineKey, PipelineHandle, VulkanGraphicsPipelineKeyHash>::iterator;
+        CacheIterator Begin() { return m_Pipelines.begin(); }
+        CacheIterator End() { return m_Pipelines.end(); }
+        CacheIterator Erase(CacheIterator it, VkDevice device)
+        {
+            if (it->second.Pipeline != VK_NULL_HANDLE && device != VK_NULL_HANDLE)
+                vkDestroyPipeline(device, it->second.Pipeline, nullptr);
+            return m_Pipelines.erase(it);
+        }
 
     private:
         std::unordered_map<VulkanGraphicsPipelineKey, PipelineHandle, VulkanGraphicsPipelineKeyHash> m_Pipelines;

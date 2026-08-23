@@ -117,6 +117,12 @@ namespace Engine
 
     VulkanShader::~VulkanShader()
     {
+        // Phase 8.2：注销 pipeline builder 持有的本 shader 资源（set layouts /
+        // pipeline layout / 缓存 pipeline），防止指针复用导致缓存误命中。
+        // 场景卸载发生在帧边界之外，GPU 已由上层 idle（编辑器关闭场景/退出）。
+        if (auto* context = VulkanContext::Get())
+            context->GetPipelineBuilder().ReleaseShader(context->GetDevice(), this);
+
         DestroyShaderModules();
     }
 
