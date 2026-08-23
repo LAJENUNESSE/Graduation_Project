@@ -559,6 +559,10 @@ namespace Engine
         if (!RendererCapabilities::Get().SupportsComputeShaders)
             return;
 
+        // Phase 8.2：screen-space 流体的深度/厚度链路在 Vulkan path 未接通，跳过
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+            return;
+
         for (auto& pass : m_PassQueue)
         {
             if (pass.Enabled && pass.Name == "FluidPass")
@@ -634,6 +638,9 @@ namespace Engine
         m_Context.SSAODepthTexID = m_HDRFramebuffer->GetDepthAttachmentRendererID();
         for (auto& pass : m_PassQueue)
         {
+            // Phase 8.2：SSAO 链路的深度回读/噪声纹理在 Vulkan path 未接通，跳过
+            if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan && pass.Name == "SSAOPass")
+                continue;
             if (pass.Enabled && pass.Name == "SSAOPass")
                 pass.ExecuteFn(m_Context);
         }

@@ -144,6 +144,8 @@ namespace Engine
         for (uint32_t i = 0; i < kMaxFramesInFlight; ++i)
             CreateFrameResources(i);
 
+        CreatePlaceholder();
+
         m_Initialized = true;
         ENGINE_CORE_INFO("[Vulkan] Scene draw dispatcher initialized");
     }
@@ -213,6 +215,7 @@ namespace Engine
             return;
 
         vkDeviceWaitIdle(device);
+        DestroyPlaceholder();
         for (auto& fr : m_Frames)
         {
             if (fr.Pool != VK_NULL_HANDLE)
@@ -242,6 +245,100 @@ namespace Engine
         fr.MaterialOffset  = 0;
         if (fr.Pool)
             vkResetDescriptorPool(m_Device, fr.Pool, 0);
+    }
+
+    void VulkanSceneDrawDispatcher::CreatePlaceholder()
+    {
+        constexpr uint32_t kSize  = 1;
+        const VkFormat     format = VK_FORMAT_R8G8B8A8_UNORM;
+
+        VkImageCreateInfo imageInfo{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+        imageInfo.imageType     = VK_IMAGE_TYPE_2D;
+        imageInfo.format        = format;
+        imageInfo.extent        = {kSize, kSize, 1};
+        imageInfo.mipLevels     = 1;
+        imageInfo.arrayLayers   = 1;
+        imageInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+        imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+        auto* context = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(context != nullptr, "VulkanContext required for placeholder texture");
+
+        VkResult result = vmaCreateImage(VulkanAllocator::GetAllocator(), &imageInfo, &allocInfo, &m_Placeholder.Image,
+                                         &m_Placeholder.Allocation, nullptr);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder image");
+
+        // 上传白色像素并转 SHADER_READ_ONLY（single-time commands）
+        const uint32_t     whitePixel = 0xFFFFFFFFu;
+        VkBufferCreateInfo stagingInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        stagingInfo.size  = sizeof(whitePixel);
+        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo stagingAlloc{};
+        stagingAlloc.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+        stagingAlloc.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        VkBuffer      stagingBuffer      = VK_NULL_HANDLE;
+        VmaAllocation stagingAllocHandle = nullptr;
+        result = vmaCreateBuffer(VulkanAllocator::GetAllocator(), &stagingInfo, &stagingAlloc, &stagingBuffer,
+                                 &stagingAllocHandle, nullptr);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder staging buffer");
+
+        void* mapped = nullptr;
+        vmaMapMemory(VulkanAllocator::GetAllocator(), stagingAllocHandle, &mapped);
+        memcpy(mapped, &whitePixel, sizeof(whitePixel));
+        vmaUnmapMemory(VulkanAllocator::GetAllocator(), stagingAllocHandle);
+
+        VkCommandBuffer     cmd = context->BeginSingleTimeCommands();
+        VulkanCommandBuffer wrapper(cmd);
+
+        wrapper.ImageBarrier(m_Placeholder.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                             VK_ACCESS_TRANSFER_WRITE_BIT);
+        VkBufferImageCopy region{};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent                 = {kSize, kSize, 1};
+        vkCmdCopyBufferToImage(cmd, stagingBuffer, m_Placeholder.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                               &region);
+        wrapper.ImageBarrier(m_Placeholder.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                             VK_ACCESS_SHADER_READ_BIT);
+        context->EndSingleTimeCommands(cmd);
+
+        vmaDestroyBuffer(VulkanAllocator::GetAllocator(), stagingBuffer, stagingAllocHandle);
+
+        VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        viewInfo.image                       = m_Placeholder.Image;
+        viewInfo.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format                      = format;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.layerCount = 1;
+
+        result = vkCreateImageView(m_Device, &viewInfo, nullptr, &m_Placeholder.View);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder view");
+    }
+
+    void VulkanSceneDrawDispatcher::DestroyPlaceholder()
+    {
+        if (m_Placeholder.View != VK_NULL_HANDLE)
+        {
+            vkDestroyImageView(m_Device, m_Placeholder.View, nullptr);
+            m_Placeholder.View = VK_NULL_HANDLE;
+        }
+        if (m_Placeholder.Image != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Placeholder.Image, m_Placeholder.Allocation);
+            m_Placeholder.Image      = VK_NULL_HANDLE;
+            m_Placeholder.Allocation = nullptr;
+        }
     }
 
     void VulkanSceneDrawDispatcher::PackAndUploadGlobals(VulkanShader* shader, uint32_t frameIndex)
@@ -490,7 +587,7 @@ namespace Engine
                 for (uint32_t elem = 0; elem < b.Count; ++elem)
                 {
                     const auto& slot = scene.GetTextureSlot(slotBase + elem);
-                    if (!slot.Valid)
+                    if (!slot.Valid && !m_Placeholder.View)
                         continue;
 
                     // view 直通绑定（阴影图/FBO attachment）无自带 sampler → 用默认 sampler
@@ -498,12 +595,12 @@ namespace Engine
 
                     if (b.Count > 1)
                         (b.Set == 0 ? w0 : w1)
-                            .WriteImageElement(b.Binding, elem, slot.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                               b.Type, sampler);
+                            .WriteImageElement(b.Binding, elem, slot.Valid ? slot.View : m_Placeholder.View,
+                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type, sampler);
                     else
                         (b.Set == 0 ? w0 : w1)
-                            .WriteImage(b.Binding, slot.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type,
-                                        sampler);
+                            .WriteImage(b.Binding, slot.Valid ? slot.View : m_Placeholder.View,
+                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type, sampler);
                 }
             }
         }

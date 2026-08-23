@@ -9,6 +9,7 @@
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 struct GLFWwindow;
@@ -125,7 +126,13 @@ namespace Engine
         VkRenderPass     GetActiveSceneRenderPass() const { return m_ActiveSceneRenderPass; }
         const glm::vec4& GetClearColor() const { return m_ClearColor; }
         VkSampler        GetDefaultSampler() const { return m_DefaultSampler; }
-        uint32_t         GetActiveSceneColorAttachmentCount() const { return m_ActiveSceneColorAttachmentCount; }
+
+        // Phase 8.2：把 FBO color attachment 的 VkImageView 包装成 ImGui 可用的
+        // ImTextureID（VkDescriptorSet，void* 透传）。带 view→set 缓存；
+        // view 销毁前必须调 RemoveImGuiTexture 防止悬垂。
+        void*    GetImGuiTextureForView(void* imageView);
+        void     RemoveImGuiTexture(void* imageView);
+        uint32_t GetActiveSceneColorAttachmentCount() const { return m_ActiveSceneColorAttachmentCount; }
 
     private:
         // Setup helpers (called from Init)
@@ -229,10 +236,11 @@ namespace Engine
         ImDrawData*                m_PendingImGuiDrawData = nullptr;
         SwapchainInfo              m_SwapchainInfo;
 
-        VulkanSceneState              m_SceneState;
-        VulkanGraphicsPipelineBuilder m_PipelineBuilder;
-        VkSampler                     m_DefaultSampler = VK_NULL_HANDLE;
-        VulkanSceneDrawDispatcher     m_SceneDrawDispatcher;
+        VulkanSceneState                           m_SceneState;
+        VulkanGraphicsPipelineBuilder              m_PipelineBuilder;
+        VkSampler                                  m_DefaultSampler = VK_NULL_HANDLE;
+        std::unordered_map<void*, VkDescriptorSet> m_ImGuiTextures;
+        VulkanSceneDrawDispatcher                  m_SceneDrawDispatcher;
 
         VkRenderPass m_ActiveSceneRenderPass           = VK_NULL_HANDLE;
         uint32_t     m_ActiveSceneColorAttachmentCount = 0;

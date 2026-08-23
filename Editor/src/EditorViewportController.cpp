@@ -1,6 +1,8 @@
 #include "EditorViewportController.h"
 
 #include "Core/Application.h"
+#include "Renderer/RendererAPI.h"
+#include "Platform/Vulkan/VulkanContext.h"
 #include "Debug/PerformanceMonitor.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Scene/Scene.h"
@@ -117,9 +119,16 @@ namespace Engine
                             mousePos.y <= m_Context.Bounds[1].y;
         Application::Get().GetImGuiLayer()->SetBlockEvents(!m_Context.Hovered);
 
-        uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID(0);
-        ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(textureID)), ImVec2(imageSize.x, imageSize.y),
-                     ImVec2(0, 1), ImVec2(1, 0));
+        uint32_t    textureID   = m_Framebuffer->GetColorAttachmentRendererID(0);
+        ImTextureID viewportTex = static_cast<ImTextureID>(static_cast<uintptr_t>(textureID));
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            // Phase 8.2：Vulkan path 以 VkDescriptorSet（void*）作为 ImTextureID
+            void* descriptorSet =
+                VulkanContext::Get()->GetImGuiTextureForView(m_Framebuffer->GetColorAttachmentViewHandle(0));
+            viewportTex = static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(descriptorSet));
+        }
+        ImGui::Image(viewportTex, ImVec2(imageSize.x, imageSize.y), ImVec2(0, 1), ImVec2(1, 0));
 
         // FPS overlay drawn directly on the viewport via ImDrawList (simulated frosted-glass blur)
         if (m_ShowFpsOverlay && imageSize.x > 0.0f && imageSize.y > 0.0f)

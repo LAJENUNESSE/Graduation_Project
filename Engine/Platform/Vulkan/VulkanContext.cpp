@@ -122,9 +122,9 @@ namespace Engine
         CreateDebugDrawResources();
         CreateDefaultSampler();
 
+        // 注意：dispatcher 的占位纹理创建依赖 VulkanContext::Get()，必须在单例注册之后
+        s_Instance                    = this;
         m_SceneDrawDispatcher.Init(m_Device);
-
-        s_Instance = this;
 
         ENGINE_CORE_INFO("Vulkan context initialized successfully");
     }
@@ -863,6 +863,32 @@ namespace Engine
         m_ImGuiRenderPass = VulkanRenderPass::CreateColorOnly(m_Device, desc);
     }
 
+    void* VulkanContext::GetImGuiTextureForView(void* imageView)
+    {
+        if (imageView == nullptr)
+            return nullptr;
+
+        auto it = m_ImGuiTextures.find(imageView);
+        if (it != m_ImGuiTextures.end())
+            return it->second;
+
+        const VkDescriptorSet set = ImGui_ImplVulkan_AddTexture(m_DefaultSampler, static_cast<VkImageView>(imageView),
+                                                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "ImGui_ImplVulkan_AddTexture failed");
+        m_ImGuiTextures[imageView] = set;
+        return set;
+    }
+
+    void VulkanContext::RemoveImGuiTexture(void* imageView)
+    {
+        auto it = m_ImGuiTextures.find(imageView);
+        if (it == m_ImGuiTextures.end())
+            return;
+
+        ImGui_ImplVulkan_RemoveTexture(it->second);
+        m_ImGuiTextures.erase(it);
+    }
+
     // Phase 8.2：场景 descriptor 共用默认采样器（linear + clampToEdge）。
     // 深度图/IBL/材质纹理在 BindTextureView 未显式携带 sampler 时回退到它。
     void VulkanContext::CreateDefaultSampler()
@@ -1209,6 +1235,9 @@ namespace Engine
     {
         m_PipelineBuilder.Clear(m_Device);
         m_SceneDrawDispatcher.Shutdown(m_Device);
+        for (auto& [view, set] : m_ImGuiTextures)
+            ImGui_ImplVulkan_RemoveTexture(set);
+        m_ImGuiTextures.clear();
         if (m_DefaultSampler != VK_NULL_HANDLE)
         {
             vkDestroySampler(m_Device, m_DefaultSampler, nullptr);

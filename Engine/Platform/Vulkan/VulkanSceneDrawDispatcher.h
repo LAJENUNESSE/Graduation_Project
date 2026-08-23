@@ -91,7 +91,20 @@ namespace Engine
         void     PackAndUploadGlobals(VulkanShader* shader, uint32_t frameIndex);
         uint32_t PackMaterial(VulkanShader* shader, uint32_t frameIndex); // 返回 ring 偏移；满时返回 UINT32_MAX
 
+        // 1x1 白色占位纹理：未绑定槽位的 descriptor 兜底（避免空 descriptor 触发
+        // device lost；采样结果为白，配合 u_HasXxxMap 开关语义无害）
+        struct PlaceholderTexture
+        {
+            VkImage       Image      = VK_NULL_HANDLE;
+            VmaAllocation Allocation = nullptr;
+            VkImageView   View       = VK_NULL_HANDLE;
+        };
+
+        void CreatePlaceholder();
+        void DestroyPlaceholder();
+
         std::array<FrameResources, kMaxFramesInFlight> m_Frames{};
+        PlaceholderTexture                             m_Placeholder{};
         VkDevice                                       m_Device      = VK_NULL_HANDLE;
         bool                                           m_Initialized = false;
     };

@@ -280,6 +280,11 @@ namespace Engine
         VkDevice device = context->GetDevice();
         vkDeviceWaitIdle(device);
 
+        // attachment 视图即将销毁：注销 ImGui 纹理缓存中的悬垂 descriptor set
+        for (const auto& att : m_ColorAttachments)
+            context->RemoveImGuiTexture(att.ImageView);
+        context->RemoveImGuiTexture(m_DepthAttachment.ImageView);
+
         if (m_Framebuffer != VK_NULL_HANDLE)
         {
             vkDestroyFramebuffer(device, m_Framebuffer, nullptr);
