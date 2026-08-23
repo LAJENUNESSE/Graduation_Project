@@ -102,6 +102,15 @@ namespace Engine
         Cleanup();
     }
 
+    void VulkanContext::DeferDestroy(std::function<void(VkDevice)>&& fn)
+    {
+        VulkanContext* context = Get();
+        if (!context)
+            return;
+
+        context->m_DeletionQueue.Submit(context->m_CurrentFrame, std::move(fn));
+    }
+
     // =========================================================================
     // Init
     // =========================================================================
@@ -123,7 +132,7 @@ namespace Engine
         CreateDefaultSampler();
 
         // 注意：dispatcher 的占位纹理创建依赖 VulkanContext::Get()，必须在单例注册之后
-        s_Instance                    = this;
+        s_Instance = this;
         m_SceneDrawDispatcher.Init(m_Device);
 
         ENGINE_CORE_INFO("Vulkan context initialized successfully");
@@ -173,6 +182,9 @@ namespace Engine
 
         // Wait for previous frame at this index
         vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+
+        // fence 已确认该槽位上一轮 GPU 工作完成：此刻销毁挂起的资源绝对安全
+        m_DeletionQueue.FlushSlot(m_CurrentFrame, m_Device);
 
         // Acquire next swapchain image
         VkResult result =
@@ -1250,6 +1262,9 @@ namespace Engine
         s_Instance = nullptr;
 
         vkDeviceWaitIdle(m_Device);
+
+        // 所有在途工作已完成：清空两个帧槽位上挂起的延迟销毁
+        m_DeletionQueue.FlushAll(m_Device);
 
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {

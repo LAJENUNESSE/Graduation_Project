@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Platform/Vulkan/VulkanDeletionQueue.h"
 #include "Platform/Vulkan/VulkanGraphicsPipelineBuilder.h"
 #include "Platform/Vulkan/VulkanSceneDrawDispatcher.h"
 #include "Platform/Vulkan/VulkanSceneState.h"
@@ -9,6 +10,7 @@
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
@@ -49,6 +51,12 @@ namespace Engine
 
         // Singleton accessor (set during Init, cleared on destruction)
         static VulkanContext* Get() { return s_Instance; }
+
+        // 把 GPU 对象销毁回调推迟到当前帧槽位的下一轮 fence 确认之后执行。
+        // 录制窗口内（BeginFrame ~ EndFrame）禁止同步 vkDestroy*——vkDeviceWaitIdle
+        // 保护不了尚未提交的命令缓冲；场景切换等运行期资源释放一律走这里。
+        // context 不存在（已析构）时丢弃回调，与资源类 Destroy 的现状语义一致。
+        static void DeferDestroy(std::function<void(VkDevice)>&& fn);
 
         // Accessors for ImGui Vulkan integration
         VkInstance       GetInstance() const { return m_Instance; }
@@ -222,6 +230,11 @@ namespace Engine
         std::vector<VkSemaphore>  m_RenderFinishedSemaphores;
         std::vector<VkFence>      m_InFlightFences;
         uint32_t                  m_CurrentFrame = 0;
+
+        static_assert(VulkanDeletionQueue::kSlotCount == 2, "deletion queue slots must match MAX_FRAMES_IN_FLIGHT");
+
+        // GPU 资源延迟删除（见 VulkanDeletionQueue 注释）
+        VulkanDeletionQueue m_DeletionQueue;
 
         // 高级帧录制状态（BeginFrame/EndFrame）
         bool                 m_FrameInProgress   = false;

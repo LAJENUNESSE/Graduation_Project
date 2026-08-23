@@ -348,16 +348,29 @@ namespace Engine
         if (!context)
             return;
 
-        VkDevice device = context->GetDevice();
+        // GPU 句柄可能在本帧命令缓冲录制期间被释放（场景切换换贴图/天空盒），
+        // 推迟到下一轮 fence 确认后销毁，避免把正在录制的命令缓冲打成 invalid
+        const VkSampler     sampler        = m_Sampler;
+        const VkImageView   imageView      = m_ImageView;
+        const VkImage       image          = m_Image;
+        const VmaAllocation allocation     = m_Allocation;
+        const bool          allocatorReady = (image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized());
 
-        if (m_Sampler != VK_NULL_HANDLE)
-            vkDestroySampler(device, m_Sampler, nullptr);
+        VulkanContext::DeferDestroy(
+            [sampler, imageView, image, allocation, allocatorReady](VkDevice device)
+            {
+                if (sampler != VK_NULL_HANDLE)
+                    vkDestroySampler(device, sampler, nullptr);
+                if (imageView != VK_NULL_HANDLE)
+                    vkDestroyImageView(device, imageView, nullptr);
+                if (image != VK_NULL_HANDLE && allocatorReady)
+                    vmaDestroyImage(VulkanAllocator::GetAllocator(), image, allocation);
+            });
 
-        if (m_ImageView != VK_NULL_HANDLE)
-            vkDestroyImageView(device, m_ImageView, nullptr);
-
-        if (m_Image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-            vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Image, m_Allocation);
+        m_Sampler    = VK_NULL_HANDLE;
+        m_ImageView  = VK_NULL_HANDLE;
+        m_Image      = VK_NULL_HANDLE;
+        m_Allocation = nullptr;
     }
 
     VulkanTextureCubemap::VulkanTextureCubemap(const std::vector<std::string>& facePaths)
@@ -650,16 +663,28 @@ namespace Engine
         if (!context)
             return;
 
-        VkDevice device = context->GetDevice();
+        // 同 VulkanTexture2D::Destroy：录制窗口内的释放推迟到 fence 确认后
+        const VkSampler     sampler        = m_Sampler;
+        const VkImageView   imageView      = m_ImageView;
+        const VkImage       image          = m_Image;
+        const VmaAllocation allocation     = m_Allocation;
+        const bool          allocatorReady = (image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized());
 
-        if (m_Sampler != VK_NULL_HANDLE)
-            vkDestroySampler(device, m_Sampler, nullptr);
+        VulkanContext::DeferDestroy(
+            [sampler, imageView, image, allocation, allocatorReady](VkDevice device)
+            {
+                if (sampler != VK_NULL_HANDLE)
+                    vkDestroySampler(device, sampler, nullptr);
+                if (imageView != VK_NULL_HANDLE)
+                    vkDestroyImageView(device, imageView, nullptr);
+                if (image != VK_NULL_HANDLE && allocatorReady)
+                    vmaDestroyImage(VulkanAllocator::GetAllocator(), image, allocation);
+            });
 
-        if (m_ImageView != VK_NULL_HANDLE)
-            vkDestroyImageView(device, m_ImageView, nullptr);
-
-        if (m_Image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-            vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Image, m_Allocation);
+        m_Sampler    = VK_NULL_HANDLE;
+        m_ImageView  = VK_NULL_HANDLE;
+        m_Image      = VK_NULL_HANDLE;
+        m_Allocation = nullptr;
     }
 
 } // namespace Engine

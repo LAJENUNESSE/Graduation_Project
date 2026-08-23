@@ -280,39 +280,45 @@ namespace Engine
         if (!context)
             return;
 
-        VkDevice device = context->GetDevice();
-        vkDeviceWaitIdle(device);
-
         // attachment 视图即将销毁：注销 ImGui 纹理缓存中的悬垂 descriptor set
         for (const auto& att : m_ColorAttachments)
             context->RemoveImGuiTexture(att.ImageView);
         context->RemoveImGuiTexture(m_DepthAttachment.ImageView);
 
-        if (m_Framebuffer != VK_NULL_HANDLE)
-        {
-            vkDestroyFramebuffer(device, m_Framebuffer, nullptr);
-            m_Framebuffer = VK_NULL_HANDLE;
-        }
+        // GPU 句柄不能在此同步销毁：本函数会在录制窗口内被调用（场景切换/MSAA 重建），
+        // vkDeviceWaitIdle 只能等已提交的工作，保护不了正在录制的命令缓冲。
+        // 打包推迟到下一轮 fence 确认后释放（VulkanDeletionQueue）。
+        const VkFramebuffer                   framebuffer      = m_Framebuffer;
+        const VkRenderPass                    renderPass       = m_RenderPass;
+        const std::vector<AttachmentResource> colorAttachments = m_ColorAttachments;
+        const AttachmentResource              depthAttachment  = m_DepthAttachment;
+        const bool                            allocatorReady   = VulkanAllocator::IsInitialized();
 
-        if (m_RenderPass != VK_NULL_HANDLE)
-        {
-            vkDestroyRenderPass(device, m_RenderPass, nullptr);
-            m_RenderPass = VK_NULL_HANDLE;
-        }
+        VulkanContext::DeferDestroy(
+            [framebuffer, renderPass, colorAttachments, depthAttachment, allocatorReady](VkDevice device)
+            {
+                if (framebuffer != VK_NULL_HANDLE)
+                    vkDestroyFramebuffer(device, framebuffer, nullptr);
+                if (renderPass != VK_NULL_HANDLE)
+                    vkDestroyRenderPass(device, renderPass, nullptr);
 
-        for (auto& att : m_ColorAttachments)
-        {
-            if (att.ImageView != VK_NULL_HANDLE)
-                vkDestroyImageView(device, att.ImageView, nullptr);
-            if (att.Image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-                vmaDestroyImage(VulkanAllocator::GetAllocator(), att.Image, att.Allocation);
-        }
+                for (const auto& att : colorAttachments)
+                {
+                    if (att.ImageView != VK_NULL_HANDLE)
+                        vkDestroyImageView(device, att.ImageView, nullptr);
+                    if (att.Image != VK_NULL_HANDLE && allocatorReady)
+                        vmaDestroyImage(VulkanAllocator::GetAllocator(), att.Image, att.Allocation);
+                }
+
+                if (depthAttachment.ImageView != VK_NULL_HANDLE)
+                    vkDestroyImageView(device, depthAttachment.ImageView, nullptr);
+                if (depthAttachment.Image != VK_NULL_HANDLE && allocatorReady)
+                    vmaDestroyImage(VulkanAllocator::GetAllocator(), depthAttachment.Image, depthAttachment.Allocation);
+            });
+
+        m_Framebuffer = VK_NULL_HANDLE;
+        m_RenderPass  = VK_NULL_HANDLE;
         m_ColorAttachments.clear();
-
-        if (m_DepthAttachment.ImageView != VK_NULL_HANDLE)
-            vkDestroyImageView(device, m_DepthAttachment.ImageView, nullptr);
-        if (m_DepthAttachment.Image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-            vmaDestroyImage(VulkanAllocator::GetAllocator(), m_DepthAttachment.Image, m_DepthAttachment.Allocation);
         m_DepthAttachment = {};
     }
 
