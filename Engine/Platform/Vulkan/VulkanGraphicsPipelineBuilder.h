@@ -49,6 +49,9 @@ namespace Engine
     public:
         VulkanPipelineCache::PipelineHandle GetOrCreate(VkDevice device, const GraphicsPipelineDesc& desc);
 
+        // 返回该 shader 的反射 set layouts（GetOrCreate 后有效），供 descriptor 分配复用
+        const std::vector<Ref<VulkanDescriptorSetLayout>>* GetSetLayouts(VulkanShader* shader) const;
+
         // shader 析构时调用：释放该 shader 的 set layouts / pipeline layout，
         // 并清除缓存中属于它的 pipeline 条目（防止指针复用导致误命中）
         void ReleaseShader(VkDevice device, VulkanShader* shader);

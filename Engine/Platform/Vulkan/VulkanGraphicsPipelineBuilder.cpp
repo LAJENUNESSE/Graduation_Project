@@ -139,6 +139,13 @@ namespace Engine
             });
     }
 
+    const std::vector<Ref<VulkanDescriptorSetLayout>>*
+    VulkanGraphicsPipelineBuilder::GetSetLayouts(VulkanShader* shader) const
+    {
+        auto it = m_ShaderResources.find(shader);
+        return it != m_ShaderResources.end() ? &it->second.SetLayouts : nullptr;
+    }
+
     VkPipelineLayout VulkanGraphicsPipelineBuilder::GetOrCreatePipelineLayout(VkDevice device, VulkanShader* shader)
     {
         auto it = m_ShaderResources.find(shader);

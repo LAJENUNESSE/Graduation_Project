@@ -4,6 +4,8 @@
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Platform/Vulkan/VulkanContext.h"
+#include "Platform/Vulkan/VulkanSceneDrawDispatcher.h"
+#include "Platform/Vulkan/VulkanShader.h"
 #include "Renderer/RendererCapabilities.h"
 
 #include <sstream>
@@ -121,42 +123,90 @@ namespace Engine
             return;
 
         auto* vkContext = VulkanContext::Get();
-        if (vkContext)
+        if (!vkContext)
         {
-            vkContext->QueueDrawIndexed(resolvedIndexCount, firstIndex, vertexOffset);
-
-            static bool warnedIndexedFallback = false;
-            if (!warnedIndexedFallback)
+            static bool warnedNoContext = false;
+            if (!warnedNoContext)
             {
-                warnedIndexedFallback = true;
-                ENGINE_CORE_WARN("[Vulkan] DrawIndexed currently uses non-indexed debug fallback (Phase 3 skeleton)");
+                warnedNoContext = true;
+                ENGINE_CORE_WARN("[Vulkan] DrawIndexed skipped because VulkanContext is unavailable");
             }
             return;
         }
 
-        static bool warnedNoContext = false;
-        if (!warnedNoContext)
+        // Phase 8.2：场景 renderpass 激活时走真实 indexed 绘制（分发失败保留 debug fallback）
+        const VkCommandBuffer cmd = vkContext->GetCurrentFrameCommandBuffer();
+        if (cmd != VK_NULL_HANDLE && vkContext->GetActiveSceneRenderPass() != VK_NULL_HANDLE)
         {
-            warnedNoContext = true;
-            ENGINE_CORE_WARN("[Vulkan] DrawIndexed skipped because VulkanContext is unavailable");
+            VulkanSceneDrawDispatcher::DrawParams params{};
+            params.Cmd                  = cmd;
+            params.RenderPass           = vkContext->GetActiveSceneRenderPass();
+            params.ColorAttachmentCount = vkContext->GetActiveSceneColorAttachmentCount();
+            params.Indexed              = true;
+            params.IndexCount           = resolvedIndexCount;
+            params.FirstIndex           = firstIndex;
+            params.VertexOffset         = vertexOffset;
+            params.DepthTest            = m_DepthTestEnabled && m_DepthMaskEnabled;
+            params.DepthWrite           = m_DepthMaskEnabled;
+            params.DepthLEqual          = (m_DepthFunc == DepthFunc::LEqual);
+            params.CullBack             = m_CullFaceEnabled && m_CullFaceMode == CullFaceMode::Back;
+
+            auto* shader = dynamic_cast<VulkanShader*>(vkContext->GetSceneState().GetCurrentShader());
+            if (shader && vkContext->GetSceneDrawDispatcher().DispatchDraw(vertexArray.get(), shader, params,
+                                                                           vkContext->GetCurrentFrameIndex()))
+                return;
+        }
+
+        vkContext->QueueDrawIndexed(resolvedIndexCount, firstIndex, vertexOffset);
+
+        static bool warnedIndexedFallback = false;
+        if (!warnedIndexedFallback)
+        {
+            warnedIndexedFallback = true;
+            ENGINE_CORE_WARN("[Vulkan] DrawIndexed fell back to non-indexed debug path");
         }
     }
 
     void VulkanRendererAPI::DrawArrays(uint32_t count, uint32_t first)
     {
         auto* vkContext = VulkanContext::Get();
-        if (vkContext)
+        if (!vkContext)
         {
-            vkContext->QueueDrawArrays(count, first);
+            static bool warnedNoContext = false;
+            if (!warnedNoContext)
+            {
+                warnedNoContext = true;
+                ENGINE_CORE_WARN("[Vulkan] DrawArrays skipped because VulkanContext is unavailable");
+            }
             return;
         }
 
-        static bool warnedNoContext = false;
-        if (!warnedNoContext)
+        // Phase 8.2：场景 renderpass 激活时走真实 non-indexed 绘制（天空盒等；
+        // 抽象层无 VAO 参数，取状态机最近一次 Bind 的快照）
+        const VkCommandBuffer cmd      = vkContext->GetCurrentFrameCommandBuffer();
+        const VertexArray*    boundVAO = vkContext->GetSceneState().GetCurrentVertexArray();
+        if (cmd != VK_NULL_HANDLE && vkContext->GetActiveSceneRenderPass() != VK_NULL_HANDLE && boundVAO)
         {
-            warnedNoContext = true;
-            ENGINE_CORE_WARN("[Vulkan] DrawArrays skipped because VulkanContext is unavailable");
+            VulkanSceneDrawDispatcher::DrawParams params{};
+            params.Cmd                  = cmd;
+            params.RenderPass           = vkContext->GetActiveSceneRenderPass();
+            params.ColorAttachmentCount = vkContext->GetActiveSceneColorAttachmentCount();
+            params.Indexed              = false;
+            params.VertexCount          = count;
+            params.FirstVertex          = first;
+            params.DepthTest            = m_DepthTestEnabled && m_DepthMaskEnabled;
+            params.DepthWrite           = m_DepthMaskEnabled;
+            params.DepthLEqual          = (m_DepthFunc == DepthFunc::LEqual);
+            // 天空盒画在深度 ≤ 上（xyww trick），关闭背面剔除由 SkyboxSystem 的 cull 状态决定
+            params.CullBack = m_CullFaceEnabled && m_CullFaceMode == CullFaceMode::Back;
+
+            auto* shader = dynamic_cast<VulkanShader*>(vkContext->GetSceneState().GetCurrentShader());
+            if (shader && vkContext->GetSceneDrawDispatcher().DispatchDraw(boundVAO, shader, params,
+                                                                           vkContext->GetCurrentFrameIndex()))
+                return;
         }
+
+        vkContext->QueueDrawArrays(count, first);
     }
 
     void VulkanRendererAPI::DrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t first)

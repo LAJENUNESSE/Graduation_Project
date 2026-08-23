@@ -152,6 +152,30 @@ namespace Engine
         return *this;
     }
 
+    VulkanDescriptorWriter& VulkanDescriptorWriter::WriteImageElement(uint32_t         binding,
+                                                                      uint32_t         elementIndex,
+                                                                      VkImageView      view,
+                                                                      VkImageLayout    layout,
+                                                                      VkDescriptorType type,
+                                                                      VkSampler        sampler)
+    {
+        VkDescriptorImageInfo info{};
+        info.imageView   = view;
+        info.imageLayout = layout;
+        info.sampler     = sampler;
+        m_ImageInfos.push_back(info);
+
+        VkWriteDescriptorSet w{};
+        w.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        w.dstBinding      = binding;
+        w.dstArrayElement = elementIndex;
+        w.descriptorCount = 1;
+        w.descriptorType  = type;
+        m_Writes.push_back(w);
+        m_Pending.push_back({false, static_cast<uint32_t>(m_ImageInfos.size() - 1)});
+        return *this;
+    }
+
     void VulkanDescriptorWriter::UpdateSet(VkDevice device, VkDescriptorSet set)
     {
         ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE,

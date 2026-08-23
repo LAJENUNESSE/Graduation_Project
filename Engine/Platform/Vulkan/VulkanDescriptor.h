@@ -76,6 +76,14 @@ namespace Engine
                                            VkDescriptorType type,
                                            VkSampler        sampler = VK_NULL_HANDLE);
 
+        // 数组 binding 的单元素写入（dstArrayElement）；CSM sampler 数组等使用
+        VulkanDescriptorWriter& WriteImageElement(uint32_t         binding,
+                                                  uint32_t         elementIndex,
+                                                  VkImageView      view,
+                                                  VkImageLayout    layout,
+                                                  VkDescriptorType type,
+                                                  VkSampler        sampler = VK_NULL_HANDLE);
+
         // 把累积的 write 提交到指定 set；调用后 writer 内部状态被清空
         void UpdateSet(VkDevice device, VkDescriptorSet set);
 

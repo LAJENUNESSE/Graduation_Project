@@ -106,6 +106,7 @@ if(ENGINE_ENABLE_VULKAN)
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanPipelineCache.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRenderPass.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanRendererAPI.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSceneDrawDispatcher.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanSceneState.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanShader.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/Platform/Vulkan/VulkanTexture.cpp

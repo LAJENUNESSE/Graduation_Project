@@ -1,6 +1,8 @@
 #include "engpch.h"
 #include "Platform/Vulkan/VulkanVertexArray.h"
 
+#include "Platform/Vulkan/VulkanContext.h"
+
 #include "Core/Assert.h"
 #include "Core/Log.h"
 
@@ -42,7 +44,12 @@ namespace Engine
         }
     } // namespace
 
-    void VulkanVertexArray::Bind() const {}
+    // Phase 8.2：注册到场景状态机（DrawArrays 录制时消费）
+    void VulkanVertexArray::Bind() const
+    {
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().SetCurrentVertexArray(this);
+    }
 
     void VulkanVertexArray::Unbind() const {}
 

@@ -8,6 +8,7 @@ namespace Engine
 {
 
     class VulkanShader;
+    class VertexArray;
 
     // Phase 8.2 场景渲染状态机：模拟 OpenGL 即时模式的"当前 shader + 纹理槽"全局状态。
     // 上层调用序列（RenderQueue::Flush：Material 重放 → SetXxx → VAO Bind → DrawIndexed）
@@ -33,6 +34,10 @@ namespace Engine
         void          SetCurrentShader(VulkanShader* shader) { m_CurrentShader = shader; }
         VulkanShader* GetCurrentShader() const { return m_CurrentShader; }
 
+        // 当前 VAO：DrawArrays 抽象层无 VAO 参数（天空盒等 Bind 后直接画），录制时刻取此快照
+        void               SetCurrentVertexArray(const VertexArray* vao) { m_CurrentVertexArray = vao; }
+        const VertexArray* GetCurrentVertexArray() const { return m_CurrentVertexArray; }
+
         void BindTextureSlot(uint32_t slot, VkImageView view, VkSampler sampler);
         void UnbindTextureSlot(uint32_t slot);
 
@@ -45,7 +50,8 @@ namespace Engine
         static const TextureBinding kInvalidBinding;
 
     private:
-        VulkanShader*                                m_CurrentShader = nullptr;
+        VulkanShader*                                m_CurrentShader      = nullptr;
+        const VertexArray*                           m_CurrentVertexArray = nullptr;
         std::array<TextureBinding, kMaxTextureSlots> m_TextureSlots{};
     };
 

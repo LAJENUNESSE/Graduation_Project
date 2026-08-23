@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Platform/Vulkan/VulkanGraphicsPipelineBuilder.h"
+#include "Platform/Vulkan/VulkanSceneDrawDispatcher.h"
 #include "Platform/Vulkan/VulkanSceneState.h"
 #include "Renderer/GraphicsContext.h"
 
@@ -111,6 +112,19 @@ namespace Engine
         // Phase 8.2 scene graphics pipeline 组装与缓存
         VulkanGraphicsPipelineBuilder& GetPipelineBuilder() { return m_PipelineBuilder; }
 
+        // Phase 8.2 场景绘制分发器（UBO 打包 / descriptor / 录制）
+        VulkanSceneDrawDispatcher& GetSceneDrawDispatcher() { return m_SceneDrawDispatcher; }
+
+        // 当前激活的场景 renderpass（Framebuffer::Bind 录制 BeginRenderPass 时写入；
+        // Unbind 清空）。VK_NULL_HANDLE 表示不在场景 pass 内，绘制走 debug fallback。
+        void        SetActiveSceneRenderPass(VkRenderPass pass, uint32_t colorAttachmentCount)
+        {
+            m_ActiveSceneRenderPass             = pass;
+            m_ActiveSceneColorAttachmentCount   = colorAttachmentCount;
+        }
+        VkRenderPass GetActiveSceneRenderPass() const { return m_ActiveSceneRenderPass; }
+        uint32_t     GetActiveSceneColorAttachmentCount() const { return m_ActiveSceneColorAttachmentCount; }
+
     private:
         // Setup helpers (called from Init)
         void CreateInstance();
@@ -214,6 +228,10 @@ namespace Engine
 
         VulkanSceneState              m_SceneState;
         VulkanGraphicsPipelineBuilder m_PipelineBuilder;
+        VulkanSceneDrawDispatcher     m_SceneDrawDispatcher;
+
+        VkRenderPass m_ActiveSceneRenderPass           = VK_NULL_HANDLE;
+        uint32_t     m_ActiveSceneColorAttachmentCount = 0;
 
         static VulkanContext* s_Instance;
 

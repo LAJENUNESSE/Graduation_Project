@@ -121,6 +121,8 @@ namespace Engine
         CreateImGuiFramebuffers();
         CreateDebugDrawResources();
 
+        m_SceneDrawDispatcher.Init(m_Device);
+
         s_Instance = this;
 
         ENGINE_CORE_INFO("Vulkan context initialized successfully");
@@ -188,6 +190,7 @@ namespace Engine
 
         // 帧首清空场景纹理槽（上一帧槽位对新一帧无意义，防悬垂引用被复用）
         m_SceneState.ResetTextureSlots();
+        m_SceneDrawDispatcher.OnBeginFrame(m_CurrentFrame);
 
         VulkanCommandBuffer commandBuffer(m_CommandBuffers[m_CurrentFrame]);
         commandBuffer.Reset();
@@ -1186,6 +1189,7 @@ namespace Engine
     void VulkanContext::Cleanup()
     {
         m_PipelineBuilder.Clear(m_Device);
+        m_SceneDrawDispatcher.Shutdown(m_Device);
 
         if (m_Device == VK_NULL_HANDLE)
             return;
