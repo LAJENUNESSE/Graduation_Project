@@ -186,6 +186,9 @@ namespace Engine
 
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
+        // 帧首清空场景纹理槽（上一帧槽位对新一帧无意义，防悬垂引用被复用）
+        m_SceneState.ResetTextureSlots();
+
         VulkanCommandBuffer commandBuffer(m_CommandBuffers[m_CurrentFrame]);
         commandBuffer.Reset();
         commandBuffer.Begin();

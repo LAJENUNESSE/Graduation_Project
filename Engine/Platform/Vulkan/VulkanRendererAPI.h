@@ -24,6 +24,9 @@ namespace Engine
         void SetLineWidth(float width) override;
         void BindTextureUnit(uint32_t slot, uint32_t textureID) override;
         void BindCubemapUnit(uint32_t slot, uint32_t textureID) override;
+        // Phase 8.2：view/sampler 直通写场景状态机纹理槽（PBR IBL / 阴影图绑定路径）
+        void BindTextureView(uint32_t slot, void* view, void* sampler) override;
+        void BindCubemapView(uint32_t slot, void* view, void* sampler) override;
         void ClearColorOnly() override;
         int  GetBoundFramebufferID() override;
         void BindFramebufferByID(int id) override;

@@ -6,6 +6,7 @@
 #include "Asset/PathUtils.h"
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Platform/Vulkan/VulkanContext.h"
 
 #if defined(ENGINE_VULKAN_HAS_SHADERC)
 #include <shaderc/shaderc.hpp>
@@ -344,9 +345,19 @@ namespace Engine
 #endif
     }
 
-    void VulkanShader::Bind() const {}
+    // Phase 8.2：注册到场景状态机（Vulkan 无全局 uniform 状态机，
+    // DrawIndexed 录制时刻按"当前 shader"消费 CPU 侧 uniform 缓存）
+    void VulkanShader::Bind() const
+    {
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().SetCurrentShader(const_cast<VulkanShader*>(this));
+    }
 
-    void VulkanShader::Unbind() const {}
+    void VulkanShader::Unbind() const
+    {
+        if (auto* context = VulkanContext::Get(); context && context->GetSceneState().GetCurrentShader() == this)
+            context->GetSceneState().SetCurrentShader(nullptr);
+    }
 
     void VulkanShader::SetInt(const std::string& name, int value)
     {

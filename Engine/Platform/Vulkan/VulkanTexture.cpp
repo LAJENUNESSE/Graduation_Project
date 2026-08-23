@@ -143,7 +143,12 @@ namespace Engine
         UploadPixels(data, size);
     }
 
-    void VulkanTexture2D::Bind(uint32_t /*slot*/) const {}
+    // Phase 8.2：注册到场景状态机纹理槽（slot 即 OpenGL unit 号语义）
+    void VulkanTexture2D::Bind(uint32_t slot) const
+    {
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().BindTextureSlot(slot, m_ImageView, m_Sampler);
+    }
 
     bool VulkanTexture2D::operator==(const Texture& other) const
     {
@@ -443,7 +448,12 @@ namespace Engine
         ENGINE_CORE_WARN("[Vulkan] TextureCubemap::SetData not implemented");
     }
 
-    void VulkanTextureCubemap::Bind(uint32_t /*slot*/) const {}
+    // Phase 8.2：注册到场景状态机纹理槽（slot 即 OpenGL unit 号语义）
+    void VulkanTextureCubemap::Bind(uint32_t slot) const
+    {
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().BindTextureSlot(slot, m_ImageView, m_Sampler);
+    }
 
     bool VulkanTextureCubemap::operator==(const Texture& other) const
     {

@@ -230,6 +230,22 @@ namespace Engine
         (void)textureID;
     }
 
+    // Phase 8.2：view/sampler 为 VkImageView/VkSampler 直通（RendererAPI.h 抽象约定），
+    // 写入场景状态机纹理槽，DrawIndexed 录制时消费
+    void VulkanRendererAPI::BindTextureView(uint32_t slot, void* view, void* sampler)
+    {
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().BindTextureSlot(slot, static_cast<VkImageView>(view),
+                                                     static_cast<VkSampler>(sampler));
+    }
+
+    void VulkanRendererAPI::BindCubemapView(uint32_t slot, void* view, void* sampler)
+    {
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().BindTextureSlot(slot, static_cast<VkImageView>(view),
+                                                     static_cast<VkSampler>(sampler));
+    }
+
     void VulkanRendererAPI::ClearColorOnly()
     {
         auto* vkContext = VulkanContext::Get();

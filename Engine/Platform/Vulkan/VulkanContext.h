@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Platform/Vulkan/VulkanSceneState.h"
 #include "Renderer/GraphicsContext.h"
 
 #include <glm/glm.hpp>
@@ -102,6 +103,10 @@ namespace Engine
         // 仍依赖 RenderImGui(drawData) 缓存的 drawData。
         void RecordImGuiPass(VkCommandBuffer cmd, uint32_t imageIndex);
 
+        // Phase 8.2 场景渲染状态机（当前 shader + 纹理槽），由
+        // VulkanShader/Texture::Bind 写入、DrawIndexed/DrawArrays 录制时消费。
+        VulkanSceneState& GetSceneState() { return m_SceneState; }
+
     private:
         // Setup helpers (called from Init)
         void CreateInstance();
@@ -202,6 +207,8 @@ namespace Engine
         std::vector<VkFramebuffer> m_ImGuiFramebuffers;
         ImDrawData*                m_PendingImGuiDrawData = nullptr;
         SwapchainInfo              m_SwapchainInfo;
+
+        VulkanSceneState m_SceneState;
 
         static VulkanContext* s_Instance;
 
