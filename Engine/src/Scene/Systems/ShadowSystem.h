@@ -52,17 +52,21 @@ namespace Engine
     class ShadowSystem
     {
     public:
-        void             Init(const ShadowSettings& settings = {});
-        ShadowData       Execute(entt::registry&         reg,
-                                 const LightEnvironment& lights,
-                                 const SceneEntityIndex& index,
-                                 WorldTransformCache*    cache = nullptr);
-        ShadowData       ExecuteCSM(entt::registry&         reg,
-                                    const LightEnvironment& lights,
-                                    const EditorCamera&     camera,
-                                    const SceneEntityIndex& index,
-                                    WorldTransformCache*    cache = nullptr);
-        void             ResizeShadowMap(int resolution);
+        void       Init(const ShadowSettings& settings = {});
+        ShadowData Execute(entt::registry&         reg,
+                           const LightEnvironment& lights,
+                           const SceneEntityIndex& index,
+                           WorldTransformCache*    cache = nullptr);
+        ShadowData ExecuteCSM(entt::registry&         reg,
+                              const LightEnvironment& lights,
+                              const EditorCamera&     camera,
+                              const SceneEntityIndex& index,
+                              WorldTransformCache*    cache = nullptr);
+        void       ResizeShadowMap(int resolution);
+        // Phase 8.2：Vulkan path 返回 shadow map / 级联 depth attachment 的
+        // VkImageView（void* 透传，无 vulkan.h 泄漏）；OpenGL path 返回 nullptr。
+        // cascadeIndex >= CSM_MAX_CASCADES 时返回主 shadow map 视图。
+        void*            GetShadowDepthView(uint32_t cascadeIndex) const;
         ShadowSettings&  GetSettings() { return m_Settings; }
         Ref<Shader>      GetDepthShader() { return m_DepthShader; }
         Ref<Framebuffer> GetShadowMapFBO() { return m_ShadowMapFBO; }

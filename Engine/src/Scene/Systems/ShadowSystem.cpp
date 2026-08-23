@@ -367,6 +367,14 @@ namespace Engine
         return data;
     }
 
+    void* ShadowSystem::GetShadowDepthView(uint32_t cascadeIndex) const
+    {
+        const Ref<Framebuffer>& fbo = (cascadeIndex < CSM_MAX_CASCADES && m_CascadeFBOs[cascadeIndex])
+                                          ? m_CascadeFBOs[cascadeIndex]
+                                          : m_ShadowMapFBO;
+        return fbo ? fbo->GetDepthAttachmentViewHandle() : nullptr;
+    }
+
     void ShadowSystem::ResizeShadowMap(int resolution)
     {
         m_Settings.MapResolution = resolution;

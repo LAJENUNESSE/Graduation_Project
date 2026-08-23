@@ -39,6 +39,9 @@ namespace Engine
         // Phase 8.2：供 ImGui 采样与 descriptor 绑定取 attachment 视图
         VkImageView GetColorAttachmentView(uint32_t index = 0) const;
         VkImageView GetDepthAttachmentView() const { return m_DepthAttachment.ImageView; }
+        // Framebuffer 抽象层句柄透传（void*，无 vulkan.h 泄漏）
+        void* GetColorAttachmentViewHandle(uint32_t index = 0) const override;
+        void* GetDepthAttachmentViewHandle() const override;
 
     private:
         void Invalidate();

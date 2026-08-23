@@ -4,6 +4,7 @@
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Platform/Vulkan/VulkanAllocator.h"
+#include "Platform/Vulkan/VulkanCommandBuffer.h"
 #include "Platform/Vulkan/VulkanContext.h"
 
 #include <vma/vk_mem_alloc.h>
@@ -307,9 +308,56 @@ namespace Engine
         m_DepthAttachment = {};
     }
 
-    void VulkanFramebuffer::Bind() {}
+    // Phase 8.2：录制场景 render pass 进主帧 cmd。上层 SceneRenderer::RenderPipeline
+    // 的 Bind/Unbind 配对调用点已存在；loadOp=CLEAR 已在内部 renderpass 配置，
+    // 清屏值在此提供（颜色取 Context 清屏色，深度固定 1.0）。
+    void VulkanFramebuffer::Bind()
+    {
+        auto* context = VulkanContext::Get();
+        if (!context)
+            return;
 
-    void VulkanFramebuffer::Unbind() {}
+        const VkCommandBuffer cmd = context->GetCurrentFrameCommandBuffer();
+        if (cmd == VK_NULL_HANDLE || m_Framebuffer == VK_NULL_HANDLE || m_RenderPass == VK_NULL_HANDLE)
+            return;
+
+        std::vector<VkClearValue> clearValues;
+        const glm::vec4           clearColor = context->GetClearColor();
+        for (size_t i = 0; i < m_ColorAttachments.size(); ++i)
+        {
+            VkClearValue v{};
+            v.color = {{clearColor.r, clearColor.g, clearColor.b, clearColor.a}};
+            clearValues.push_back(v);
+        }
+        if (m_DepthAttachmentSpec.TextureFormat != FramebufferTextureFormat::None)
+        {
+            VkClearValue d{};
+            d.depthStencil = {1.0f, 0};
+            clearValues.push_back(d);
+        }
+
+        VulkanCommandBuffer commandBuffer(cmd);
+        commandBuffer.BeginRenderPass(m_RenderPass, m_Framebuffer, {{0, 0}, {m_Spec.Width, m_Spec.Height}},
+                                      clearValues);
+        commandBuffer.SetViewport(0, 0, static_cast<float>(m_Spec.Width), static_cast<float>(m_Spec.Height));
+        commandBuffer.SetScissor(0, 0, m_Spec.Width, m_Spec.Height);
+
+        context->SetActiveSceneRenderPass(m_RenderPass, static_cast<uint32_t>(m_ColorAttachments.size()));
+    }
+
+    void VulkanFramebuffer::Unbind()
+    {
+        auto* context = VulkanContext::Get();
+        if (!context || context->GetActiveSceneRenderPass() != m_RenderPass || m_RenderPass == VK_NULL_HANDLE)
+            return;
+
+        const VkCommandBuffer cmd = context->GetCurrentFrameCommandBuffer();
+        if (cmd == VK_NULL_HANDLE)
+            return;
+
+        VulkanCommandBuffer(cmd).EndRenderPass();
+        context->SetActiveSceneRenderPass(VK_NULL_HANDLE, 0);
+    }
 
     void VulkanFramebuffer::Resize(uint32_t width, uint32_t height)
     {
@@ -345,6 +393,16 @@ namespace Engine
     void VulkanFramebuffer::BindMSAA() {}
 
     void VulkanFramebuffer::BlitMSAA() {}
+
+    void* VulkanFramebuffer::GetColorAttachmentViewHandle(uint32_t index) const
+    {
+        return reinterpret_cast<void*>(GetColorAttachmentView(index));
+    }
+
+    void* VulkanFramebuffer::GetDepthAttachmentViewHandle() const
+    {
+        return reinterpret_cast<void*>(m_DepthAttachment.ImageView);
+    }
 
     VkImageView VulkanFramebuffer::GetColorAttachmentView(uint32_t index) const
     {

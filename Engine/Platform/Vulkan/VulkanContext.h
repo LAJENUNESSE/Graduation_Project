@@ -117,13 +117,15 @@ namespace Engine
 
         // 当前激活的场景 renderpass（Framebuffer::Bind 录制 BeginRenderPass 时写入；
         // Unbind 清空）。VK_NULL_HANDLE 表示不在场景 pass 内，绘制走 debug fallback。
-        void        SetActiveSceneRenderPass(VkRenderPass pass, uint32_t colorAttachmentCount)
+        void SetActiveSceneRenderPass(VkRenderPass pass, uint32_t colorAttachmentCount)
         {
-            m_ActiveSceneRenderPass             = pass;
-            m_ActiveSceneColorAttachmentCount   = colorAttachmentCount;
+            m_ActiveSceneRenderPass           = pass;
+            m_ActiveSceneColorAttachmentCount = colorAttachmentCount;
         }
-        VkRenderPass GetActiveSceneRenderPass() const { return m_ActiveSceneRenderPass; }
-        uint32_t     GetActiveSceneColorAttachmentCount() const { return m_ActiveSceneColorAttachmentCount; }
+        VkRenderPass     GetActiveSceneRenderPass() const { return m_ActiveSceneRenderPass; }
+        const glm::vec4& GetClearColor() const { return m_ClearColor; }
+        VkSampler        GetDefaultSampler() const { return m_DefaultSampler; }
+        uint32_t         GetActiveSceneColorAttachmentCount() const { return m_ActiveSceneColorAttachmentCount; }
 
     private:
         // Setup helpers (called from Init)
@@ -139,6 +141,7 @@ namespace Engine
         void CreateImGuiFramebuffers();
         void DestroyImGuiFramebuffers();
         void CreateDebugDrawResources();
+        void CreateDefaultSampler();
         void DestroyDebugDrawResources();
 
         // SwapBuffers 内"BeginFrame 之后到 EndFrame 之前"那段（清屏 / debug draw / ImGui pass）
@@ -228,6 +231,7 @@ namespace Engine
 
         VulkanSceneState              m_SceneState;
         VulkanGraphicsPipelineBuilder m_PipelineBuilder;
+        VkSampler                     m_DefaultSampler = VK_NULL_HANDLE;
         VulkanSceneDrawDispatcher     m_SceneDrawDispatcher;
 
         VkRenderPass m_ActiveSceneRenderPass           = VK_NULL_HANDLE;

@@ -279,7 +279,10 @@ namespace Engine
                  bool shadowActive = m_ShadowSystem.GetSettings().Enabled && m_ShadowData.HasValidShadowCaster;
                  m_PBRShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
                  m_PBRShader->SetFloat("u_ShadowBias", m_ShadowSystem.GetSettings().Bias);
-                 RenderCommand::BindTextureUnit(1, m_ShadowData.ShadowMapTextureID);
+                 if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                     RenderCommand::BindTextureView(1, m_ShadowSystem.GetShadowDepthView(CSM_MAX_CASCADES), nullptr);
+                 else
+                     RenderCommand::BindTextureUnit(1, m_ShadowData.ShadowMapTextureID);
                  m_PBRShader->SetInt("u_ShadowMap", 1);
 
                  // CSM 数据上传
@@ -295,7 +298,10 @@ namespace Engine
                          m_PBRShader->SetFloat("u_CascadeSplitDepths[" + std::to_string(i) + "]",
                                                m_ShadowData.CascadeSplitDepths[i]);
                          // 级联阴影纹理绑定到 unit 10~13
-                         RenderCommand::BindTextureUnit(10 + i, m_ShadowData.CascadeShadowMapTexIDs[i]);
+                         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                             RenderCommand::BindTextureView(10 + i, m_ShadowSystem.GetShadowDepthView(i), nullptr);
+                         else
+                             RenderCommand::BindTextureUnit(10 + i, m_ShadowData.CascadeShadowMapTexIDs[i]);
                          m_PBRShader->SetInt("u_CascadeShadowMaps[" + std::to_string(i) + "]", 10 + i);
                          m_PBRShader->SetFloat("u_CascadeTexelWorldSize[" + std::to_string(i) + "]",
                                                m_ShadowData.CascadeTexelWorldSizes[i]);
@@ -687,13 +693,31 @@ namespace Engine
         RenderCommand::Clear();
         targetFBO->ClearAttachment(1, -1);
 
-        m_PostProcessing->Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0), *m_PostProcessingSettings);
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            // Vulkan path：HDR 输入经 view 直通绑槽（slot0=HDR，slot15=bloom 占位），
+            // bloom 链依赖 GL ID 传递暂不接通 → 强制关闭
+            PostProcessingSettings vkSettings = *m_PostProcessingSettings;
+            vkSettings.BloomEnabled           = false;
+            RenderCommand::BindTextureView(0, m_HDRFramebuffer->GetColorAttachmentViewHandle(0), nullptr);
+            RenderCommand::BindTextureView(15, m_HDRFramebuffer->GetColorAttachmentViewHandle(0), nullptr);
+            m_PostProcessing->Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0), vkSettings);
+        }
+        else
+        {
+            m_PostProcessing->Process(m_HDRFramebuffer->GetColorAttachmentRendererID(0), *m_PostProcessingSettings);
+        }
 
         targetFBO->Unbind();
     }
     void SceneRenderer::RenderEditorPicking(const Ref<Framebuffer>& pickingFBO)
     {
         if (!pickingFBO || !m_Context.Camera || !m_Context.Registry)
+            return;
+
+        // Phase 8.2：Vulkan path 的拾取回读未接通（RED_INTEGER 单 attachment pass
+        // 与 PBR 双输出 pipeline 不兼容），跳过整段绘制。
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
             return;
 
         pickingFBO->Bind();

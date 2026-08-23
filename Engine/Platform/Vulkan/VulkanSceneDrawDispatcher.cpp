@@ -493,14 +493,17 @@ namespace Engine
                     if (!slot.Valid)
                         continue;
 
+                    // view 直通绑定（阴影图/FBO attachment）无自带 sampler → 用默认 sampler
+                    const VkSampler sampler = slot.Sampler ? slot.Sampler : context->GetDefaultSampler();
+
                     if (b.Count > 1)
                         (b.Set == 0 ? w0 : w1)
                             .WriteImageElement(b.Binding, elem, slot.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                               b.Type, slot.Sampler);
+                                               b.Type, sampler);
                     else
                         (b.Set == 0 ? w0 : w1)
                             .WriteImage(b.Binding, slot.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type,
-                                        slot.Sampler);
+                                        sampler);
                 }
             }
         }

@@ -68,9 +68,14 @@ namespace Engine
         virtual int  ReadPixel(uint32_t attachmentIndex, int x, int y) = 0;
         virtual void ClearAttachment(uint32_t index, int value)        = 0;
 
-        virtual uint32_t                        GetColorAttachmentRendererID(uint32_t index = 0) const = 0;
-        virtual uint32_t                        GetDepthAttachmentRendererID() const                   = 0;
-        virtual const FramebufferSpecification& GetSpecification() const                               = 0;
+        virtual uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const = 0;
+        virtual uint32_t GetDepthAttachmentRendererID() const                   = 0;
+
+        // Phase 8.2：Vulkan path 返回 attachment 的 VkImageView（void* 透传，
+        // 避免 vulkan.h 泄漏 Engine/src/）；OpenGL path 返回 nullptr。
+        virtual void* GetColorAttachmentViewHandle(uint32_t index = 0) const { return nullptr; }
+        virtual void* GetDepthAttachmentViewHandle() const { return nullptr; }
+        virtual const FramebufferSpecification& GetSpecification() const = 0;
 
         // MSAA support
         virtual void BindMSAA()            = 0;

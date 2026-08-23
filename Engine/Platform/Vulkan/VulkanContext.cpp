@@ -120,6 +120,7 @@ namespace Engine
         CreateImGuiRenderPass();
         CreateImGuiFramebuffers();
         CreateDebugDrawResources();
+        CreateDefaultSampler();
 
         m_SceneDrawDispatcher.Init(m_Device);
 
@@ -862,6 +863,24 @@ namespace Engine
         m_ImGuiRenderPass = VulkanRenderPass::CreateColorOnly(m_Device, desc);
     }
 
+    // Phase 8.2：场景 descriptor 共用默认采样器（linear + clampToEdge）。
+    // 深度图/IBL/材质纹理在 BindTextureView 未显式携带 sampler 时回退到它。
+    void VulkanContext::CreateDefaultSampler()
+    {
+        VkSamplerCreateInfo samplerInfo{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        samplerInfo.magFilter        = VK_FILTER_LINEAR;
+        samplerInfo.minFilter        = VK_FILTER_LINEAR;
+        samplerInfo.mipmapMode       = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerInfo.addressModeU     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeV     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeW     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.anisotropyEnable = VK_FALSE;
+        samplerInfo.maxLod           = VK_LOD_CLAMP_NONE;
+
+        const VkResult result = vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_DefaultSampler);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create default sampler");
+    }
+
     void VulkanContext::CreateDebugDrawResources()
     {
         DestroyDebugDrawResources();
@@ -1190,6 +1209,11 @@ namespace Engine
     {
         m_PipelineBuilder.Clear(m_Device);
         m_SceneDrawDispatcher.Shutdown(m_Device);
+        if (m_DefaultSampler != VK_NULL_HANDLE)
+        {
+            vkDestroySampler(m_Device, m_DefaultSampler, nullptr);
+            m_DefaultSampler = VK_NULL_HANDLE;
+        }
 
         if (m_Device == VK_NULL_HANDLE)
             return;
