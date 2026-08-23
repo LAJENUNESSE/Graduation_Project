@@ -99,16 +99,22 @@ namespace Engine
         uint32_t PackMaterial(VulkanShader* shader, uint32_t frameIndex); // 返回 ring 偏移；满时返回 UINT32_MAX
 
         // 1x1 白色占位纹理：未绑定槽位的 descriptor 兜底（避免空 descriptor 触发
-        // device lost；采样结果为白，配合 u_HasXxxMap 开关语义无害）
+        // device lost；采样结果为白，配合 u_HasXxxMap 开关语义无害）。
+        // 2D 与 CUBE 各一份——combined image sampler 的 view 类型必须匹配 shader
+        // 声明（samplerCube 绑 2D view 在部分驱动直接 device lost）。
         struct PlaceholderTexture
         {
-            VkImage       Image      = VK_NULL_HANDLE;
-            VmaAllocation Allocation = nullptr;
-            VkImageView   View       = VK_NULL_HANDLE;
+            VkImage       Image2D        = VK_NULL_HANDLE;
+            VmaAllocation Allocation2D   = nullptr;
+            VkImageView   View2D         = VK_NULL_HANDLE;
+            VkImage       ImageCube      = VK_NULL_HANDLE; // 6 层 CUBE_COMPATIBLE
+            VmaAllocation AllocationCube = nullptr;
+            VkImageView   ViewCube       = VK_NULL_HANDLE;
         };
 
         void CreatePlaceholder();
         void DestroyPlaceholder();
+
 
         std::array<FrameResources, kMaxFramesInFlight> m_Frames{};
         PlaceholderTexture                             m_Placeholder{};

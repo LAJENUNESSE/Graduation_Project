@@ -212,18 +212,32 @@ namespace Engine
     void VulkanRendererAPI::DrawArraysInstanced(uint32_t count, uint32_t instanceCount, uint32_t first)
     {
         auto* vkContext = VulkanContext::Get();
-        if (vkContext)
+        if (!vkContext)
         {
-            vkContext->QueueDrawArraysInstanced(count, instanceCount, first);
+            static bool warnedNoContext = false;
+            if (!warnedNoContext)
+            {
+                warnedNoContext = true;
+                ENGINE_CORE_WARN("[Vulkan] DrawArraysInstanced skipped because VulkanContext is unavailable");
+            }
             return;
         }
 
-        static bool warnedNoContext = false;
-        if (!warnedNoContext)
+        // Phase 8.2：instanced 真实绘制未接通（粒子 billboard 需要 SSBO 注册表，
+        // 属后续阶段）。场景 pass 激活时直接丢弃——若进 pending 队列会被 debug
+        // pass 用 DebugTriangle 管线画满 swapchain（粒子场景上万 instance 铺屏）。
+        if (vkContext->GetActiveSceneRenderPass() != VK_NULL_HANDLE)
         {
-            warnedNoContext = true;
-            ENGINE_CORE_WARN("[Vulkan] DrawArraysInstanced skipped because VulkanContext is unavailable");
+            static bool warnedDropped = false;
+            if (!warnedDropped)
+            {
+                warnedDropped = true;
+                ENGINE_CORE_WARN("[Vulkan] DrawArraysInstanced not wired to scene path yet; draw dropped");
+            }
+            return;
         }
+
+        vkContext->QueueDrawArraysInstanced(count, instanceCount, first);
     }
 
     void VulkanRendererAPI::DrawLines(uint32_t count, uint32_t first)

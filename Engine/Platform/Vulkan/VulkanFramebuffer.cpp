@@ -216,7 +216,10 @@ namespace Engine
             desc.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             desc.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-            desc.finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            // 与 descriptor 写入 layout（SHADER_READ_ONLY_OPTIMAL）保持一致：
+            // 深度图采样规范允许 SHADER_READ_ONLY，混用两种 layout 会触发
+            // VUID-09600 layout mismatch
+            desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             attachmentDescs.push_back(desc);
 
             depthRef.attachment = static_cast<uint32_t>(attachmentDescs.size() - 1);

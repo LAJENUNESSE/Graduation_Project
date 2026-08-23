@@ -65,6 +65,10 @@ namespace Engine
         const std::vector<ReflectedBinding>&      GetReflectedBindings() const { return m_ReflectedBindings; }
         const std::vector<ReflectedPushConstant>& GetReflectedPushConstants() const { return m_ReflectedPushConstants; }
 
+        // 顶点 stage 实际消费的 input location 集合（反射 stage_inputs）；
+        // pipeline 组装时过滤 VAO 中未被消费的 attribute
+        const std::vector<uint32_t>& GetVertexInputLocations() const { return m_VertexInputLocations; }
+
         // ---- uniform 值记录（Phase 8.2 地基）----
         // Vulkan 无全局 uniform 状态机，SetXxx 仅把值缓存到 CPU 侧 map，
         // 供后续 UBO 打包 + descriptor set 写入使用（本阶段不真正上传）。
@@ -95,6 +99,7 @@ namespace Engine
         VkDevice                                               m_ModuleDevice = VK_NULL_HANDLE;
         std::vector<ReflectedBinding>                          m_ReflectedBindings;
         std::vector<ReflectedPushConstant>                     m_ReflectedPushConstants;
+        std::vector<uint32_t>                                  m_VertexInputLocations;
 
         // uniform 值缓存（Phase 8.2 地基；Vulkan 无全局 uniform 状态机）
         std::unordered_map<std::string, int>              m_IntUniforms;

@@ -1,6 +1,8 @@
 #include "engpch.h"
 #include "Platform/Vulkan/VulkanGraphicsPipelineBuilder.h"
 
+#include <algorithm>
+
 #include "Core/Assert.h"
 #include "Core/Log.h"
 #include "Platform/Vulkan/VulkanDescriptor.h"
@@ -45,13 +47,31 @@ namespace Engine
                                       VK_SHADER_STAGE_FRAGMENT_BIT, fragmentModule, "main", nullptr});
                 }
 
-                // ---- vertex input ----
+                // ---- vertex input：过滤 shader 未消费的 attribute（如 Depth.glsl
+                // 只读 location 0，而 mesh VAO 带 4 个 attribute）----
+                std::vector<VkVertexInputAttributeDescription> consumedAttributes;
+                const auto&                                    inputLocations = desc.Shader->GetVertexInputLocations();
+                if (inputLocations.empty())
+                {
+                    consumedAttributes = desc.Attributes; // 无反射信息时不过滤（防御）
+                }
+                else
+                {
+                    for (const auto& attr : desc.Attributes)
+                    {
+                        if (std::find(inputLocations.begin(), inputLocations.end(), attr.location) !=
+                            inputLocations.end())
+                            consumedAttributes.push_back(attr);
+                    }
+                }
+
                 VkPipelineVertexInputStateCreateInfo vertexInput{
                     VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
                 vertexInput.vertexBindingDescriptionCount   = static_cast<uint32_t>(desc.Bindings.size());
                 vertexInput.pVertexBindingDescriptions      = desc.Bindings.empty() ? nullptr : desc.Bindings.data();
-                vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(desc.Attributes.size());
-                vertexInput.pVertexAttributeDescriptions = desc.Attributes.empty() ? nullptr : desc.Attributes.data();
+                vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(consumedAttributes.size());
+                vertexInput.pVertexAttributeDescriptions =
+                    consumedAttributes.empty() ? nullptr : consumedAttributes.data();
 
                 // ---- input assembly ----
                 VkPipelineInputAssemblyStateCreateInfo inputAssembly{

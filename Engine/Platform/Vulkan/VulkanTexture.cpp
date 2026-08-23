@@ -120,7 +120,19 @@ namespace Engine
                       TextureWrapToVk(spec.WrapS));
 
         if (data)
-            UploadPixels(data, width * height * 4);
+        {
+            // staging/copy 尺寸按图像格式字宽计算：RGBA16F 为 8B/texel，
+            // 按 RGBA8 的 4B 分配会让 copy 越界（validation VUID-00171）。
+            // 注意 UploadLayout::RGB_Float 的 RGB→RGBA 转换尚未实现（当前仅
+            // SSAO 噪声纹理使用，Vulkan path SSAO 已跳过，数据内容暂不正确）。
+            uint32_t bytesPerTexel = 4;
+            if (m_Format == VK_FORMAT_R16G16B16A16_SFLOAT)
+                bytesPerTexel = 8; // 4 x fp16
+            else if (m_Format == VK_FORMAT_R32G32B32A32_SFLOAT || m_Format == VK_FORMAT_R32G32B32A32_UINT ||
+                     m_Format == VK_FORMAT_R32G32B32A32_SINT)
+                bytesPerTexel = 16;
+            UploadPixels(data, width * height * bytesPerTexel);
+        }
         else
             TransitionLayout(m_Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }

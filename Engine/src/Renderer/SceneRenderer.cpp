@@ -280,7 +280,13 @@ namespace Engine
                  m_PBRShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
                  m_PBRShader->SetFloat("u_ShadowBias", m_ShadowSystem.GetSettings().Bias);
                  if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
-                     RenderCommand::BindTextureView(1, m_ShadowSystem.GetShadowDepthView(CSM_MAX_CASCADES), nullptr);
+                 {
+                     // 绑本帧实际被渲染的 shadow 资源：CSM 模式下主 shadow map FBO
+                     // 从未执行 renderpass（layout 停留 UNDEFINED），须绑级联 0——
+                     // 与 ShadowData.ShadowMapTextureID 的 fallback 语义一致
+                     const uint32_t shadowIndex = m_ShadowData.CSMActive ? 0 : CSM_MAX_CASCADES;
+                     RenderCommand::BindTextureView(1, m_ShadowSystem.GetShadowDepthView(shadowIndex), nullptr);
+                 }
                  else
                      RenderCommand::BindTextureUnit(1, m_ShadowData.ShadowMapTextureID);
                  m_PBRShader->SetInt("u_ShadowMap", 1);

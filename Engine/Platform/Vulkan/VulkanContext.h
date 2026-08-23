@@ -247,8 +247,10 @@ namespace Engine
 
         static VulkanContext* s_Instance;
 
+// TODO(phase-8.2): 临时强制开启 validation 排查 device lost，确认修复后还原为
+// 按 NDEBUG 门控（RelWithDebInfo 下关闭）。
 #ifdef NDEBUG
-        static constexpr bool s_EnableValidation = false;
+        static constexpr bool s_EnableValidation = true;
 #else
         static constexpr bool s_EnableValidation = true;
 #endif

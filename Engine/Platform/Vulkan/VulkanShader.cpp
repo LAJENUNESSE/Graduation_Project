@@ -254,6 +254,7 @@ namespace Engine
     {
         m_ReflectedBindings.clear();
         m_ReflectedPushConstants.clear();
+        m_VertexInputLocations.clear();
 
 #if defined(ENGINE_VULKAN_HAS_SPIRV_CROSS)
         auto stageToVk = [](const std::string& stage) -> VkShaderStageFlags
@@ -320,6 +321,17 @@ namespace Engine
                     addBinding(r, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
                 for (const auto& r : res.separate_samplers)
                     addBinding(r, VK_DESCRIPTOR_TYPE_SAMPLER);
+
+                // 顶点输入 location 集合：供 pipeline 组装过滤 VAO 里 shader 未消费
+                // 的 attribute（validation: attribute not consumed）
+                if (stage == "vertex")
+                {
+                    for (const auto& r : res.stage_inputs)
+                    {
+                        const uint32_t location = compiler.get_decoration(r.id, spv::DecorationLocation);
+                        m_VertexInputLocations.push_back(location);
+                    }
+                }
 
                 // Push constants：取所有 stage 中最大 size 作为 range 总长，stage flags 合并
                 for (const auto& pc : res.push_constant_buffers)

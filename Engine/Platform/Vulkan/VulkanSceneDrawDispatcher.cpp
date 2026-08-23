@@ -125,13 +125,37 @@ namespace Engine
                 name.resize(bracket);
 
             static const std::unordered_map<std::string, uint32_t> table = {
-                {"u_DiffuseTexture", 0}, {"u_ShadowMap", 1},     {"u_NormalMap", 2},     {"u_MetallicMap", 3},
-                {"u_RoughnessMap", 4},   {"u_AOMap", 5},         {"u_IrradianceMap", 6}, {"u_PrefilterMap", 7},
-                {"u_BRDF_LUT", 8},       {"u_SSAOTexture", 9},   {"u_Skybox", 0},        {"u_HDRBuffer", 14},
-                {"u_BloomBlur", 15},     {"u_GrassTexture", 12}, {"u_Splatmap", 6},
+                {"u_DiffuseTexture", 0},
+                {"u_ShadowMap", 1},
+                {"u_NormalMap", 2},
+                {"u_MetallicMap", 3},
+                {"u_RoughnessMap", 4},
+                {"u_AOMap", 5},
+                {"u_IrradianceMap", 6},
+                {"u_PrefilterMap", 7},
+                {"u_BRDF_LUT", 8},
+                {"u_SSAOTexture", 9},
+                {"u_Skybox", 0},
+                {"u_HDRBuffer", 0},
+                {"u_BloomBlur", 15},
+                {"u_GrassTexture", 12},
+                {"u_Splatmap", 6},
+                // CSM 数组基址：SceneRenderer 把级联深度 view 绑在 slots 10~13
+                {"u_CascadeShadowMaps", 10},
             };
             auto it = table.find(name);
             return it != table.end() ? it->second : UINT32_MAX;
+        }
+
+        // samplerCube 类型的 GLSL uniform 名：占位 view 必须用 CUBE 型，
+        // 2D view 写进 samplerCube binding 在部分驱动直接 device lost
+        bool IsCubeSamplerName(const std::string& name)
+        {
+            static const std::array<const char*, 3> kCubeNames = {"u_IrradianceMap", "u_PrefilterMap", "u_Skybox"};
+            for (const char* cube : kCubeNames)
+                if (name == cube)
+                    return true;
+            return false;
         }
 
     } // namespace
@@ -249,9 +273,16 @@ namespace Engine
 
     void VulkanSceneDrawDispatcher::CreatePlaceholder()
     {
-        constexpr uint32_t kSize  = 1;
-        const VkFormat     format = VK_FORMAT_R8G8B8A8_UNORM;
+        constexpr uint32_t kSize   = 1;
+        constexpr uint32_t kLayers = 6; // cube 占位需要 6 层
+        const VkFormat     format  = VK_FORMAT_R8G8B8A8_UNORM;
 
+        auto* context = VulkanContext::Get();
+        ENGINE_CORE_RELEASE_ASSERT(context != nullptr, "VulkanContext required for placeholder texture");
+
+        // 两张独立 1x1 图：纯 2D（单层）与 CUBE_COMPATIBLE（6 层）。
+        // combined image sampler 的 view 类型必须匹配 shader 声明——samplerCube
+        // 绑 2D view 在部分驱动直接 device lost。
         VkImageCreateInfo imageInfo{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
         imageInfo.imageType     = VK_IMAGE_TYPE_2D;
         imageInfo.format        = format;
@@ -263,20 +294,26 @@ namespace Engine
         imageInfo.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
         imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
+        VkImageCreateInfo cubeInfo = imageInfo;
+        cubeInfo.arrayLayers       = kLayers;
+        cubeInfo.flags             = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
         VmaAllocationCreateInfo allocInfo{};
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-        auto* context = VulkanContext::Get();
-        ENGINE_CORE_RELEASE_ASSERT(context != nullptr, "VulkanContext required for placeholder texture");
+        VkResult result = vmaCreateImage(VulkanAllocator::GetAllocator(), &imageInfo, &allocInfo,
+                                         &m_Placeholder.Image2D, &m_Placeholder.Allocation2D, nullptr);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder 2D image");
 
-        VkResult result = vmaCreateImage(VulkanAllocator::GetAllocator(), &imageInfo, &allocInfo, &m_Placeholder.Image,
-                                         &m_Placeholder.Allocation, nullptr);
-        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder image");
+        result = vmaCreateImage(VulkanAllocator::GetAllocator(), &cubeInfo, &allocInfo, &m_Placeholder.ImageCube,
+                                &m_Placeholder.AllocationCube, nullptr);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder cube image");
 
-        // 上传白色像素并转 SHADER_READ_ONLY（single-time commands）
-        const uint32_t     whitePixel = 0xFFFFFFFFu;
+        // ---- 上传白色像素（2D 一层 / cube 六层，共用 staging）----
+        const VkDeviceSize stagingSize = sizeof(uint32_t) * kLayers;
+
         VkBufferCreateInfo stagingInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        stagingInfo.size  = sizeof(whitePixel);
+        stagingInfo.size  = stagingSize;
         stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
         VmaAllocationCreateInfo stagingAlloc{};
@@ -291,53 +328,85 @@ namespace Engine
 
         void* mapped = nullptr;
         vmaMapMemory(VulkanAllocator::GetAllocator(), stagingAllocHandle, &mapped);
-        memcpy(mapped, &whitePixel, sizeof(whitePixel));
+        for (uint32_t i = 0; i < kLayers; ++i)
+            static_cast<uint32_t*>(mapped)[i] = 0xFFFFFFFFu;
         vmaUnmapMemory(VulkanAllocator::GetAllocator(), stagingAllocHandle);
 
         VkCommandBuffer     cmd = context->BeginSingleTimeCommands();
         VulkanCommandBuffer wrapper(cmd);
 
-        wrapper.ImageBarrier(m_Placeholder.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                             VK_ACCESS_TRANSFER_WRITE_BIT);
         VkBufferImageCopy region{};
         region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.layerCount = 1;
         region.imageExtent                 = {kSize, kSize, 1};
-        vkCmdCopyBufferToImage(cmd, stagingBuffer, m_Placeholder.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                               &region);
-        wrapper.ImageBarrier(m_Placeholder.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                             VK_ACCESS_SHADER_READ_BIT);
+
+        struct UploadTarget
+        {
+            VkImage       Image;
+            VmaAllocation Allocation;
+            uint32_t      Layers;
+        };
+        const UploadTarget targets[2] = {{m_Placeholder.Image2D, m_Placeholder.Allocation2D, 1},
+                                         {m_Placeholder.ImageCube, m_Placeholder.AllocationCube, kLayers}};
+
+        for (const auto& target : targets)
+        {
+            region.imageSubresource.layerCount = target.Layers;
+
+            wrapper.ImageBarrier(target.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, target.Layers);
+            vkCmdCopyBufferToImage(cmd, stagingBuffer, target.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+            wrapper.ImageBarrier(target.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                 VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, target.Layers);
+        }
         context->EndSingleTimeCommands(cmd);
 
         vmaDestroyBuffer(VulkanAllocator::GetAllocator(), stagingBuffer, stagingAllocHandle);
 
+        // ---- views：2D（单层）+ CUBE（6 层）----
         VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        viewInfo.image                       = m_Placeholder.Image;
-        viewInfo.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
         viewInfo.format                      = format;
         viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         viewInfo.subresourceRange.levelCount = 1;
-        viewInfo.subresourceRange.layerCount = 1;
 
-        result = vkCreateImageView(m_Device, &viewInfo, nullptr, &m_Placeholder.View);
-        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder view");
+        viewInfo.image                       = m_Placeholder.Image2D;
+        viewInfo.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.subresourceRange.layerCount = 1;
+        result                               = vkCreateImageView(m_Device, &viewInfo, nullptr, &m_Placeholder.View2D);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder 2D view");
+
+        viewInfo.image                       = m_Placeholder.ImageCube;
+        viewInfo.viewType                    = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewInfo.subresourceRange.layerCount = kLayers;
+        result                               = vkCreateImageView(m_Device, &viewInfo, nullptr, &m_Placeholder.ViewCube);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create placeholder cube view");
     }
 
     void VulkanSceneDrawDispatcher::DestroyPlaceholder()
     {
-        if (m_Placeholder.View != VK_NULL_HANDLE)
+        if (m_Placeholder.View2D != VK_NULL_HANDLE)
         {
-            vkDestroyImageView(m_Device, m_Placeholder.View, nullptr);
-            m_Placeholder.View = VK_NULL_HANDLE;
+            vkDestroyImageView(m_Device, m_Placeholder.View2D, nullptr);
+            m_Placeholder.View2D = VK_NULL_HANDLE;
         }
-        if (m_Placeholder.Image != VK_NULL_HANDLE)
+        if (m_Placeholder.ViewCube != VK_NULL_HANDLE)
         {
-            vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Placeholder.Image, m_Placeholder.Allocation);
-            m_Placeholder.Image      = VK_NULL_HANDLE;
-            m_Placeholder.Allocation = nullptr;
+            vkDestroyImageView(m_Device, m_Placeholder.ViewCube, nullptr);
+            m_Placeholder.ViewCube = VK_NULL_HANDLE;
+        }
+        if (m_Placeholder.Image2D != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Placeholder.Image2D, m_Placeholder.Allocation2D);
+            m_Placeholder.Image2D      = VK_NULL_HANDLE;
+            m_Placeholder.Allocation2D = nullptr;
+        }
+        if (m_Placeholder.ImageCube != VK_NULL_HANDLE)
+        {
+            vmaDestroyImage(VulkanAllocator::GetAllocator(), m_Placeholder.ImageCube, m_Placeholder.AllocationCube);
+            m_Placeholder.ImageCube      = VK_NULL_HANDLE;
+            m_Placeholder.AllocationCube = nullptr;
         }
     }
 
@@ -587,20 +656,25 @@ namespace Engine
                 for (uint32_t elem = 0; elem < b.Count; ++elem)
                 {
                     const auto& slot = scene.GetTextureSlot(slotBase + elem);
-                    if (!slot.Valid && !m_Placeholder.View)
+                    // 未绑定槽位按 shader 声明类型选占位 view（samplerCube 必须 CUBE 型）
+                    const VkImageView placeholderView =
+                        IsCubeSamplerName(baseName) ? m_Placeholder.ViewCube : m_Placeholder.View2D;
+                    if (!slot.Valid && placeholderView == VK_NULL_HANDLE)
                         continue;
 
                     // view 直通绑定（阴影图/FBO attachment）无自带 sampler → 用默认 sampler
                     const VkSampler sampler = slot.Sampler ? slot.Sampler : context->GetDefaultSampler();
 
+                    const VkImageView writeView = slot.Valid ? slot.View : placeholderView;
+
                     if (b.Count > 1)
                         (b.Set == 0 ? w0 : w1)
-                            .WriteImageElement(b.Binding, elem, slot.Valid ? slot.View : m_Placeholder.View,
-                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type, sampler);
+                            .WriteImageElement(b.Binding, elem, writeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                               b.Type, sampler);
                     else
                         (b.Set == 0 ? w0 : w1)
-                            .WriteImage(b.Binding, slot.Valid ? slot.View : m_Placeholder.View,
-                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type, sampler);
+                            .WriteImage(b.Binding, writeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type,
+                                        sampler);
                 }
             }
         }
