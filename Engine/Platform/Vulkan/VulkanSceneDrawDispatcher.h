@@ -27,12 +27,19 @@ namespace Engine
     class VulkanSceneDrawDispatcher
     {
     public:
-        static constexpr uint32_t kMaxFramesInFlight         = 2;   // 与 VulkanContext::MAX_FRAMES_IN_FLIGHT 一致
-        static constexpr uint32_t kGlobalUboSize             = 640; // PBRGlobalUBO std140
-        static constexpr uint32_t kLightsUboOffset           = 640; // 同 buffer 第二段
-        static constexpr uint32_t kLightsUboSize             = 800; // PBRLightsUBO std140
-        static constexpr uint32_t kMaterialUboSize           = 64;  // PBRMaterialUBO std140
-        static constexpr uint32_t kMaxMaterialAllocsPerFrame = 4096;
+        static constexpr uint32_t kMaxFramesInFlight = 2;   // 与 VulkanContext::MAX_FRAMES_IN_FLIGHT 一致
+        static constexpr uint32_t kGlobalUboSize     = 640; // PBRGlobalUBO std140 实际数据
+        static constexpr uint32_t kLightsUboSize     = 800; // PBRLightsUBO std140
+        static constexpr uint32_t kMaterialUboSize   = 64;  // PBRMaterialUBO std140 实际数据
+
+        // VkDescriptorBufferInfo.offset 对 UNIFORM_BUFFER 必须对齐
+        // minUniformBufferOffsetAlignment（spec 最小保证 256）——违规在部分驱动上
+        // 直接 device lost。所有 UBO 段偏移 / ring 步进一律按 256 对齐。
+        static constexpr uint32_t kUboOffsetAlignment        = 256;
+        static constexpr uint32_t kGlobalUboAligned          = 768; // 640 向上取整到 256 倍数
+        static constexpr uint32_t kLightsUboOffset           = kGlobalUboAligned;
+        static constexpr uint32_t kMaterialRingStride        = 256; // 数据 64B，步进对齐到 256
+        static constexpr uint32_t kMaxMaterialAllocsPerFrame = 2048;
 
         void Init(VkDevice device);
         void Shutdown(VkDevice device);

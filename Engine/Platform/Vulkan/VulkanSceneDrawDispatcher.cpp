@@ -442,7 +442,7 @@ namespace Engine
     uint32_t VulkanSceneDrawDispatcher::PackMaterial(VulkanShader* shader, uint32_t frameIndex)
     {
         FrameResources& fr = m_Frames[frameIndex];
-        if (fr.MaterialOffset + kMaterialUboSize > kMaterialUboSize * kMaxMaterialAllocsPerFrame)
+        if (fr.MaterialOffset + kMaterialRingStride > kMaterialRingStride * kMaxMaterialAllocsPerFrame)
         {
             static bool warnedFull = false;
             if (!warnedFull)
@@ -482,7 +482,7 @@ namespace Engine
             m->EntityID = it->second;
 
         const uint32_t offset = fr.MaterialOffset;
-        fr.MaterialOffset += kMaterialUboSize;
+        fr.MaterialOffset += kMaterialRingStride; // 256 对齐（descriptor offset 规范要求）
         return offset;
     }
 
