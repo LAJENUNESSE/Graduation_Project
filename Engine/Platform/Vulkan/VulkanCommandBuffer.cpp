@@ -49,6 +49,110 @@ namespace Engine
         vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
     }
 
+    // ===== Phase 8.2 graphics 命令封装 =====
+
+    void VulkanCommandBuffer::BeginRenderPass(VkRenderPass                     renderPass,
+                                              VkFramebuffer                    framebuffer,
+                                              VkRect2D                         renderArea,
+                                              const std::vector<VkClearValue>& clearValues) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+
+        VkRenderPassBeginInfo beginInfo{};
+        beginInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        beginInfo.renderPass      = renderPass;
+        beginInfo.framebuffer     = framebuffer;
+        beginInfo.renderArea      = renderArea;
+        beginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+        beginInfo.pClearValues    = clearValues.empty() ? nullptr : clearValues.data();
+
+        vkCmdBeginRenderPass(m_CommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    }
+
+    void VulkanCommandBuffer::EndRenderPass() const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        vkCmdEndRenderPass(m_CommandBuffer);
+    }
+
+    void VulkanCommandBuffer::BindGraphicsPipeline(VkPipeline pipeline) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    }
+
+    void VulkanCommandBuffer::SetViewport(float x, float y, float width, float height) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+
+        VkViewport viewport{};
+        viewport.x        = x;
+        viewport.y        = y;
+        viewport.width    = width;
+        viewport.height   = height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        vkCmdSetViewport(m_CommandBuffer, 0, 1, &viewport);
+    }
+
+    void VulkanCommandBuffer::SetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+
+        VkRect2D scissor{};
+        scissor.offset = {x, y};
+        scissor.extent = {width, height};
+
+        vkCmdSetScissor(m_CommandBuffer, 0, 1, &scissor);
+    }
+
+    void VulkanCommandBuffer::BindVertexBuffers(uint32_t                         firstBinding,
+                                                const std::vector<VkBuffer>&     buffers,
+                                                const std::vector<VkDeviceSize>& offsets) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        if (buffers.empty())
+            return;
+
+        std::vector<VkDeviceSize> defaultOffsets;
+        if (offsets.empty())
+            defaultOffsets.resize(buffers.size(), 0);
+        const VkDeviceSize* offsetsPtr = offsets.empty() ? defaultOffsets.data() : offsets.data();
+
+        vkCmdBindVertexBuffers(m_CommandBuffer, firstBinding, static_cast<uint32_t>(buffers.size()), buffers.data(),
+                               offsetsPtr);
+    }
+
+    void VulkanCommandBuffer::BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        vkCmdBindIndexBuffer(m_CommandBuffer, buffer, offset, VK_INDEX_TYPE_UINT32);
+    }
+
+    void VulkanCommandBuffer::Draw(uint32_t vertexCount,
+                                   uint32_t instanceCount,
+                                   uint32_t firstVertex,
+                                   uint32_t firstInstance) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        if (vertexCount == 0 || instanceCount == 0)
+            return;
+        vkCmdDraw(m_CommandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+    }
+
+    void VulkanCommandBuffer::DrawIndexed(uint32_t indexCount,
+                                          uint32_t instanceCount,
+                                          uint32_t firstIndex,
+                                          int32_t  vertexOffset,
+                                          uint32_t firstInstance) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        if (indexCount == 0 || instanceCount == 0)
+            return;
+        vkCmdDrawIndexed(m_CommandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    }
+
     void VulkanCommandBuffer::BindDescriptorSets(VkPipelineBindPoint                 bindPoint,
                                                  VkPipelineLayout                    layout,
                                                  uint32_t                            firstSet,

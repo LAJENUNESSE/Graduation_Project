@@ -24,6 +24,36 @@ namespace Engine
 
         void BindComputePipeline(VkPipeline pipeline) const;
 
+        // ---- Phase 8.2 graphics 命令封装 ----
+
+        void BeginRenderPass(VkRenderPass                     renderPass,
+                             VkFramebuffer                    framebuffer,
+                             VkRect2D                         renderArea,
+                             const std::vector<VkClearValue>& clearValues) const;
+
+        void EndRenderPass() const;
+
+        void BindGraphicsPipeline(VkPipeline pipeline) const;
+
+        void SetViewport(float x, float y, float width, float height) const;
+
+        void SetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) const;
+
+        void BindVertexBuffers(uint32_t                         firstBinding,
+                               const std::vector<VkBuffer>&     buffers,
+                               const std::vector<VkDeviceSize>& offsets = {}) const;
+
+        // 项目 IndexBuffer 统一为 uint32 索引（Engine/src/Renderer/Buffer.cpp:143）
+        void BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset = 0) const;
+
+        void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance = 0) const;
+
+        void DrawIndexed(uint32_t indexCount,
+                         uint32_t instanceCount = 1,
+                         uint32_t firstIndex    = 0,
+                         int32_t  vertexOffset  = 0,
+                         uint32_t firstInstance = 0) const;
+
         void BindDescriptorSets(VkPipelineBindPoint                 bindPoint,
                                 VkPipelineLayout                    layout,
                                 uint32_t                            firstSet,
