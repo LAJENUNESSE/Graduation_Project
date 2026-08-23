@@ -20,6 +20,7 @@ build-benchmark/
 *.swp
 *.swo
 *~
+.zcode/
 
 # OS
 .DS_Store
