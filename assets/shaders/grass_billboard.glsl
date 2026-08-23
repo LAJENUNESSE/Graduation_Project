@@ -12,18 +12,34 @@ struct GrassBlade
 
 layout(std430, binding = 0) readonly buffer GrassPool { GrassBlade blades[]; };
 
+#ifdef VULKAN
+// Vulkan 语义下实例索引为 gl_InstanceIndex（OpenGL 为 gl_InstanceID）
+#define gl_InstanceID gl_InstanceIndex
+#define gl_VertexID gl_VertexIndex
+// SSBO binding=0 已显式；矩阵/时间走 UBO（196B 超 PC 保证）
+layout(std140, set = 0, binding = 1) uniform GrassVSUBO
+{
+    mat4  u_ViewProjection;
+    mat4  u_Transform;
+    mat4  u_LightSpaceMatrix;
+    float u_Time;
+};
+#else
 uniform mat4  u_ViewProjection;
 uniform mat4  u_Transform;
 uniform float u_Time;
+#endif
 
-out vec3  v_WorldPos;
-out vec2  v_TexCoord;
-out vec3  v_Color;
-out vec3  v_Normal;
-out float v_HeightFactor;
-out vec4  v_FragPosLightSpace;
+layout(location = 0) out vec3  v_WorldPos;
+layout(location = 1) out vec2  v_TexCoord;
+layout(location = 2) out vec3  v_Color;
+layout(location = 3) out vec3  v_Normal;
+layout(location = 4) out float v_HeightFactor;
+layout(location = 5) out vec4  v_FragPosLightSpace;
 
+#ifndef VULKAN
 uniform mat4 u_LightSpaceMatrix;
+#endif
 
 // 6 顶点展开 quad (两个三角形)
 const vec2 quadOffsets[6] = vec2[](
@@ -76,16 +92,38 @@ void main()
 #type fragment
 #version 430 core
 
-in vec3  v_WorldPos;
-in vec2  v_TexCoord;
-in vec3  v_Color;
-in vec3  v_Normal;
-in float v_HeightFactor;
-in vec4  v_FragPosLightSpace;
+layout(location = 0) in vec3  v_WorldPos;
+layout(location = 1) in vec2  v_TexCoord;
+layout(location = 2) in vec3  v_Color;
+layout(location = 3) in vec3  v_Normal;
+layout(location = 4) in float v_HeightFactor;
+layout(location = 5) in vec4  v_FragPosLightSpace;
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out int  o_EntityID;
 
+#ifdef VULKAN
+struct DirLight
+{
+    vec3 direction;
+    vec3 color;
+    float intensity;
+};
+
+layout(set = 0, binding = 2) uniform sampler2D u_GrassTexture;
+layout(set = 0, binding = 3) uniform sampler2D u_ShadowMap;
+
+// std140：阴影开关 + 单方向光 + 环境光
+layout(std140, set = 0, binding = 4) uniform GrassFSUBO
+{
+    DirLight u_DirLights[2];
+    int   u_NumDirLights;
+    int   u_ShadowEnabled;
+    int   u_EntityID;
+    float u_ShadowBias;
+    float u_AmbientStrength;
+};
+#else
 uniform sampler2D u_GrassTexture;   // unit 2
 uniform sampler2D u_ShadowMap;      // unit 1
 uniform int   u_ShadowEnabled;
@@ -102,6 +140,7 @@ struct DirLight
 uniform DirLight u_DirLights[2];
 uniform int   u_NumDirLights;
 uniform float u_AmbientStrength;
+#endif
 
 // PCF 3x3 阴影
 float CalcShadow(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)

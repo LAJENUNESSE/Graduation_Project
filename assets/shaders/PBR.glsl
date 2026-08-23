@@ -1,22 +1,68 @@
 #type vertex
 #version 330 core
+// GLSL 330 下插值变量显式 location 需要本扩展（GLSL 410 起内建；
+// Vulkan 分支不需要——由运行时编译统一提升到 450）
+#ifndef VULKAN
+#extension GL_ARB_separate_shader_objects : enable
+#endif
+
+// GLSL 330 下 VS 插值输出的显式 location 需要本扩展（GLSL 410 起内建；
+// Vulkan 分支不需要——由运行时编译统一提升到 450）
+#ifndef VULKAN
+#extension GL_ARB_separate_shader_objects : enable
+#endif
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_TexCoords;
 layout(location = 3) in vec3 a_Tangent;
 
+#ifdef VULKAN
+// Vulkan path：per-draw 变换走 push constant（112B ≤ 最小保证 128B，SPEC D-13 模板）
+layout(push_constant) uniform PBRPushConstants
+{
+    mat4 u_Transform;
+    mat3 u_NormalMatrix;
+};
+
+// pass 级相机/阴影矩阵走全局 UBO（std140，set0 binding0）。
+// 声明与 fragment stage 逐字段一致（pipeline layout 兼容性要求）；
+// vertex 只消费前 3 个矩阵，其余成员由 fragment 激活。
+layout(std140, set = 0, binding = 0) uniform PBRGlobalUBO
+{
+    mat4  u_ViewProjection;
+    mat4  u_LightSpaceMatrix;
+    mat4  u_ViewMatrix;
+    vec3  u_ViewPos;
+    mat4  u_CascadeLightSpaceMatrices[4];   // std140 stride 64
+    float u_CascadeSplitDepths[4];          // std140 stride 16
+    float u_CascadeTexelWorldSize[4];       // std140 stride 16
+    int   u_NumDirLights;
+    int   u_NumPointLights;
+    int   u_NumSpotLights;
+    int   u_CascadeCount;
+    int   u_ShadowEnabled;
+    int   u_CSMEnabled;
+    int   u_IBLEnabled;
+    int   u_IBLDebugMode;
+    int   u_SSAOEnabled;
+    float u_AmbientStrength;
+    float u_IBLIntensity;
+    float u_ShadowBias;
+};
+#else
 uniform mat4 u_ViewProjection;
 uniform mat4 u_Transform;
 uniform mat3 u_NormalMatrix;
 uniform mat4 u_LightSpaceMatrix;
 uniform mat4 u_ViewMatrix;  // CSM: 用于计算 view-space Z
+#endif
 
-out vec3 v_Normal;
-out vec3 v_FragPos;
-out vec2 v_TexCoord;
-out vec4 v_FragPosLightSpace;
-out mat3 v_TBN;
-out float v_ViewZ;  // CSM: view-space Z
+layout(location = 0) out vec3 v_Normal;
+layout(location = 1) out vec3 v_FragPos;
+layout(location = 2) out vec2 v_TexCoord;
+layout(location = 3) out vec4 v_FragPosLightSpace;
+layout(location = 4) out mat3 v_TBN;
+layout(location = 7) out float v_ViewZ;  // CSM: view-space Z（v_TBN@4 连占 3 槽）
 
 void main() {
     mat3 normalMatrix = u_NormalMatrix;
@@ -41,6 +87,11 @@ void main() {
 
 #type fragment
 #version 330 core
+// GLSL 330 下插值变量显式 location 需要本扩展（GLSL 410 起内建；
+// Vulkan 分支不需要——由运行时编译统一提升到 450）
+#ifndef VULKAN
+#extension GL_ARB_separate_shader_objects : enable
+#endif
 layout(location = 0) out vec4 o_Color;
 layout(location = 1) out int o_EntityID;
 
@@ -49,6 +100,7 @@ const float PI = 3.14159265359;
 #define MAX_DIR_LIGHTS   2
 #define MAX_POINT_LIGHTS 8
 #define MAX_SPOT_LIGHTS  4
+#define CSM_MAX_CASCADES 4
 
 struct DirLight {
     vec3 direction;
@@ -77,6 +129,73 @@ struct SpotLight {
     float outerCutoff;
 };
 
+#ifdef VULKAN
+// ==================== Vulkan path：显式 layout ====================
+// 全局 UBO（set0 binding0，与 vertex stage 共享布局；std140 偏移见 CPU 端打包代码）
+layout(std140, set = 0, binding = 0) uniform PBRGlobalUBO
+{
+    mat4  u_ViewProjection;
+    mat4  u_LightSpaceMatrix;
+    mat4  u_ViewMatrix;
+    vec3  u_ViewPos;
+    mat4  u_CascadeLightSpaceMatrices[CSM_MAX_CASCADES];   // std140 stride 64
+    float u_CascadeSplitDepths[CSM_MAX_CASCADES];          // std140 stride 16
+    float u_CascadeTexelWorldSize[CSM_MAX_CASCADES];       // std140 stride 16
+    int   u_NumDirLights;
+    int   u_NumPointLights;
+    int   u_NumSpotLights;
+    int   u_CascadeCount;
+    int   u_ShadowEnabled;
+    int   u_CSMEnabled;
+    int   u_IBLEnabled;
+    int   u_IBLDebugMode;
+    int   u_SSAOEnabled;
+    float u_AmbientStrength;
+    float u_IBLIntensity;
+    float u_ShadowBias;
+};
+
+// 光照结构 UBO（std140：DirLight 48B / PointLight 48B / SpotLight 80B）
+layout(std140, set = 0, binding = 14) uniform PBRLightsUBO
+{
+    DirLight   u_DirLights[MAX_DIR_LIGHTS];
+    PointLight u_PointLights[MAX_POINT_LIGHTS];
+    SpotLight  u_SpotLights[MAX_SPOT_LIGHTS];
+};
+
+// 材质参数 UBO（set1 binding0，每 draw 一份）
+layout(std140, set = 1, binding = 0) uniform PBRMaterialUBO
+{
+    vec4  u_Color;
+    vec2  u_Tiling;
+    float u_Metallic;
+    float u_Roughness;
+    int   u_HasTexture;
+    int   u_HasNormalMap;
+    int   u_HasMetallicMap;
+    int   u_HasRoughnessMap;
+    int   u_HasAOMap;
+    int   u_EntityID;
+};
+
+// 材质纹理（set1，combined image sampler）
+layout(set = 1, binding = 1) uniform sampler2D u_DiffuseTexture;
+layout(set = 1, binding = 2) uniform sampler2D u_NormalMap;
+layout(set = 1, binding = 3) uniform sampler2D u_MetallicMap;
+layout(set = 1, binding = 4) uniform sampler2D u_RoughnessMap;
+layout(set = 1, binding = 5) uniform sampler2D u_AOMap;
+
+// 全局纹理（set0）
+layout(set = 0, binding = 1)  uniform sampler2D u_ShadowMap;
+layout(set = 0, binding = 9)  uniform sampler2D u_SSAOTexture;
+layout(set = 0, binding = 13) uniform sampler2D u_CascadeShadowMaps[CSM_MAX_CASCADES];
+
+// IBL 三件套（沿用既有 set0 binding 6/7/8 约定）
+layout(set = 0, binding = 6) uniform samplerCube u_IrradianceMap;
+layout(set = 0, binding = 7) uniform samplerCube u_PrefilterMap;
+layout(set = 0, binding = 8) uniform sampler2D u_BRDF_LUT;
+#else
+// ==================== OpenGL path：texture unit 即时绑定 ====================
 uniform vec4 u_Color;
 uniform int u_EntityID;
 uniform vec3 u_ViewPos;
@@ -111,7 +230,6 @@ uniform int u_ShadowEnabled;
 uniform float u_ShadowBias;
 
 // CSM (Cascaded Shadow Maps)
-#define CSM_MAX_CASCADES 4
 uniform int u_CSMEnabled;
 uniform int u_CascadeCount;
 uniform mat4 u_CascadeLightSpaceMatrices[CSM_MAX_CASCADES];
@@ -124,17 +242,10 @@ uniform sampler2D u_NormalMap;        // unit 2
 uniform int u_HasNormalMap;
 
 // IBL (Image-Based Lighting)
-#ifdef VULKAN
-// Vulkan path 必须显式 layout(set=N, binding=M)，由 VulkanShader 反射建 descriptor set layout
-layout(set = 0, binding = 6) uniform samplerCube u_IrradianceMap;
-layout(set = 0, binding = 7) uniform samplerCube u_PrefilterMap;
-layout(set = 0, binding = 8) uniform sampler2D u_BRDF_LUT;
-#else
 // OpenGL path：texture unit 6/7/8 由 cpp 端 SetInt 指定
 uniform samplerCube u_IrradianceMap;  // unit 6
 uniform samplerCube u_PrefilterMap;   // unit 7
 uniform sampler2D u_BRDF_LUT;         // unit 8
-#endif
 uniform int u_IBLEnabled;
 uniform float u_IBLIntensity;
 uniform int u_IBLDebugMode;   // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT, 4=法线
@@ -142,13 +253,14 @@ uniform int u_IBLDebugMode;   // 0=正常, 1=Irradiance, 2=Prefilter, 3=BRDF LUT
 // SSAO
 uniform sampler2D u_SSAOTexture;      // unit 9
 uniform int u_SSAOEnabled;
+#endif
 
-in vec3 v_Normal;
-in vec3 v_FragPos;
-in vec2 v_TexCoord;
-in vec4 v_FragPosLightSpace;
-in mat3 v_TBN;
-in float v_ViewZ;
+layout(location = 0) in vec3 v_Normal;
+layout(location = 1) in vec3 v_FragPos;
+layout(location = 2) in vec2 v_TexCoord;
+layout(location = 3) in vec4 v_FragPosLightSpace;
+layout(location = 4) in mat3 v_TBN;
+layout(location = 7) in float v_ViewZ;
 
 // ---- PBR Functions ----
 

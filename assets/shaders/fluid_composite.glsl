@@ -4,7 +4,7 @@
 layout(location = 0) in vec2 a_Position;
 layout(location = 1) in vec2 a_TexCoord;
 
-out vec2 v_TexCoord;
+layout(location = 0) out vec2 v_TexCoord;
 
 void main()
 {
@@ -18,8 +18,29 @@ void main()
 // Screen-Space Fluid: 最终合成
 // 法线重建 + Fresnel + 折射 + 厚度吸收 + 高光
 
-in vec2 v_TexCoord;
+layout(location = 0) in vec2 v_TexCoord;
 
+#ifdef VULKAN
+layout(set = 0, binding = 0) uniform sampler2D u_FluidDepth;      // 平滑后流体深度 (R32F, view-space Z)
+layout(set = 0, binding = 1) uniform sampler2D u_FluidThickness;  // 流体厚度 (R16F)
+layout(set = 0, binding = 2) uniform sampler2D u_SceneColor;      // 场景颜色拷贝
+layout(set = 0, binding = 3) uniform sampler2D u_SceneDepth;      // 场景深度
+
+// std140：逆矩阵 + 屏幕与流体外观参数
+layout(std140, set = 0, binding = 4) uniform FluidCompositeUBO
+{
+    mat4  u_InvProjection;
+    mat4  u_InvView;
+    vec3  u_FluidColor;
+    vec3  u_AbsorptionColor;
+    vec2  u_ScreenSize;
+    float u_AbsorptionScale;
+    float u_FresnelPower;
+    float u_RefractionStrength;
+    float u_Reflectivity;
+    float u_RefractiveIndex;
+};
+#else
 uniform sampler2D u_FluidDepth;      // slot 0: 平滑后流体深度 (R32F, view-space Z)
 uniform sampler2D u_FluidThickness;  // slot 1: 流体厚度 (R16F)
 uniform sampler2D u_SceneColor;      // slot 2: 场景颜色拷贝
@@ -36,6 +57,7 @@ uniform float u_FresnelPower;
 uniform float u_RefractionStrength;
 uniform float u_Reflectivity;
 uniform float u_RefractiveIndex;
+#endif
 
 layout(location = 0) out vec4 FragColor;
 

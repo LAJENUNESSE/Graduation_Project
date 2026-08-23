@@ -15,12 +15,24 @@ struct GPUParticle
 
 layout(std430, binding = 0) readonly buffer ParticlePool { GPUParticle particles[]; };
 
+#ifdef VULKAN
+// Vulkan 语义下实例索引为 gl_InstanceIndex（OpenGL 为 gl_InstanceID）
+#define gl_InstanceID gl_InstanceIndex
+#define gl_VertexID gl_VertexIndex
+layout(std140, set = 0, binding = 1) uniform FluidParticleVSUBO
+{
+    mat4  u_View;
+    mat4  u_Projection;
+    float u_ParticleRadius;
+};
+#else
 uniform mat4  u_View;
 uniform mat4  u_Projection;
 uniform float u_ParticleRadius;
+#endif
 
-out vec3 v_ViewPos;
-out vec2 v_TexCoord;
+layout(location = 0) out vec3 v_ViewPos;
+layout(location = 1) out vec2 v_TexCoord;
 
 const vec2 quadOffsets[6] = vec2[](
     vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0),
@@ -62,11 +74,21 @@ void main()
 #type fragment
 #version 430 core
 
-in vec3 v_ViewPos;
-in vec2 v_TexCoord;
+layout(location = 0) in vec3 v_ViewPos;
+layout(location = 1) in vec2 v_TexCoord;
 
+#ifdef VULKAN
+// 声明与 vertex stage 一致（pipeline layout 兼容性要求），fragment 只消费 Projection/Radius
+layout(std140, set = 0, binding = 1) uniform FluidParticleVSUBO
+{
+    mat4  u_View;
+    mat4  u_Projection;
+    float u_ParticleRadius;
+};
+#else
 uniform mat4  u_Projection;
 uniform float u_ParticleRadius;
+#endif
 
 layout(location = 0) out float FragDepth;
 

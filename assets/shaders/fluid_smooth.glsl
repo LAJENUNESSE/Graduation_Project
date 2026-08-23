@@ -4,7 +4,7 @@
 layout(location = 0) in vec2 a_Position;
 layout(location = 1) in vec2 a_TexCoord;
 
-out vec2 v_TexCoord;
+layout(location = 0) out vec2 v_TexCoord;
 
 void main()
 {
@@ -18,13 +18,24 @@ void main()
 // Screen-Space Fluid: 双边高斯模糊平滑深度
 // 保留流体边缘的深度不连续性
 
-in vec2 v_TexCoord;
+layout(location = 0) in vec2 v_TexCoord;
 
+#ifdef VULKAN
+layout(set = 0, binding = 0) uniform sampler2D u_DepthTexture;
+layout(push_constant) uniform FluidSmoothPC
+{
+    vec2  u_ScreenSize;
+    float u_FilterRadius;
+    float u_DepthFalloff;
+    int   u_Horizontal;
+};
+#else
 uniform sampler2D u_DepthTexture;
 uniform vec2  u_ScreenSize;
 uniform float u_FilterRadius;
 uniform float u_DepthFalloff;
 uniform int   u_Horizontal;
+#endif
 
 layout(location = 0) out float FragSmoothedDepth;
 

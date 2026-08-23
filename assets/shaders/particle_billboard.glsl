@@ -15,11 +15,22 @@ struct GPUParticle
 layout(std430, binding = 0) readonly buffer ParticlePool { GPUParticle particles[]; };
 layout(std430, binding = 2) readonly buffer AliveList    { uint aliveIndices[]; };
 
+#ifdef VULKAN
+// Vulkan 语义下实例索引为 gl_InstanceIndex（OpenGL 为 gl_InstanceID）
+#define gl_InstanceID gl_InstanceIndex
+#define gl_VertexID gl_VertexIndex
+layout(push_constant) uniform ParticleVSPC
+{
+    mat4 u_View;
+    mat4 u_Projection;
+};
+#else
 uniform mat4 u_View;
 uniform mat4 u_Projection;
+#endif
 
-out vec4 v_Color;
-out vec2 v_TexCoord;
+layout(location = 0) out vec4 v_Color;
+layout(location = 1) out vec2 v_TexCoord;
 
 const vec2 quadOffsets[6] = vec2[](
     vec2(-0.5, -0.5), vec2( 0.5, -0.5), vec2( 0.5,  0.5),
@@ -61,8 +72,8 @@ void main()
 #type fragment
 #version 430 core
 
-in vec4 v_Color;
-in vec2 v_TexCoord;
+layout(location = 0) in vec4 v_Color;
+layout(location = 1) in vec2 v_TexCoord;
 
 layout(location = 0) out vec4 FragColor;
 

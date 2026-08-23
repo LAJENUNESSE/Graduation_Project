@@ -1,20 +1,46 @@
 #type vertex
 #version 330 core
+// GLSL 330 下插值变量显式 location 需要本扩展（GLSL 410 起内建；
+// Vulkan 分支不需要——由运行时编译统一提升到 450）
+#ifndef VULKAN
+#extension GL_ARB_separate_shader_objects : enable
+#endif
+
+// GLSL 330 下 VS 插值输出的显式 location 需要本扩展（GLSL 410 起内建；
+// Vulkan 分支不需要——由运行时编译统一提升到 450）
+#ifndef VULKAN
+#extension GL_ARB_separate_shader_objects : enable
+#endif
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_TexCoords;
 layout(location = 3) in vec3 a_Tangent;
 
+#ifdef VULKAN
+// 矩阵合计 240B 超 PC 保证 → 全局 UBO（std140）
+layout(std140, set = 0, binding = 0) uniform TerrainVSUBO
+{
+    mat4 u_ViewProjection;
+    mat4 u_Transform;
+    mat4 u_LightSpaceMatrix;
+};
+// NormalMatrix 单独走 PC（48B）
+layout(push_constant) uniform TerrainPC
+{
+    mat3 u_NormalMatrix;
+};
+#else
 uniform mat4 u_ViewProjection;
 uniform mat4 u_Transform;
 uniform mat3 u_NormalMatrix;
 uniform mat4 u_LightSpaceMatrix;
+#endif
 
-out vec3 v_Normal;
-out vec3 v_FragPos;
-out vec2 v_TexCoord;
-out vec4 v_FragPosLightSpace;
-out mat3 v_TBN;
+layout(location = 0) out vec3 v_Normal;
+layout(location = 1) out vec3 v_FragPos;
+layout(location = 2) out vec2 v_TexCoord;
+layout(location = 3) out vec4 v_FragPosLightSpace;
+layout(location = 4) out mat3 v_TBN;
 
 void main() {
     mat3 normalMatrix = u_NormalMatrix;
@@ -35,6 +61,11 @@ void main() {
 
 #type fragment
 #version 330 core
+// GLSL 330 下插值变量显式 location 需要本扩展（GLSL 410 起内建；
+// Vulkan 分支不需要——由运行时编译统一提升到 450）
+#ifndef VULKAN
+#extension GL_ARB_separate_shader_objects : enable
+#endif
 layout(location = 0) out vec4 o_Color;
 layout(location = 1) out int o_EntityID;
 
@@ -71,6 +102,51 @@ struct SpotLight {
     float outerCutoff;
 };
 
+#ifdef VULKAN
+// ---- samplers：set0 显式 binding ----
+layout(set = 0, binding = 1) uniform sampler2D u_ShadowMap;
+layout(set = 0, binding = 6) uniform sampler2D u_Splatmap;
+layout(set = 0, binding = 7) uniform sampler2D u_Layer0Albedo;
+layout(set = 0, binding = 8) uniform sampler2D u_Layer1Albedo;
+layout(set = 0, binding = 9) uniform sampler2D u_Layer2Albedo;
+layout(set = 0, binding = 10) uniform sampler2D u_Layer3Albedo;
+layout(set = 0, binding = 11) uniform sampler2D u_Layer0Normal;
+layout(set = 0, binding = 12) uniform sampler2D u_Layer1Normal;
+layout(set = 0, binding = 13) uniform sampler2D u_Layer2Normal;
+layout(set = 0, binding = 14) uniform sampler2D u_Layer3Normal;
+
+// std140：材质/层参数 + 光照（本阶段地形不接线，仅保证编译与后续接入布局稳定）
+struct TDirLight   { vec3 direction; vec3 color; float intensity; };
+struct TPointLight { vec3 position; vec3 color; float intensity; float constant; float linear; float quadratic; };
+struct TSpotLight  { vec3 position; vec3 direction; vec3 color; float intensity; float constant; float linear; float quadratic; float innerCutoff; float outerCutoff; };
+
+layout(std140, set = 0, binding = 15) uniform TerrainFSUBO
+{
+    mat4  u_LightSpaceMatrix;
+    vec3  u_ViewPos;
+    float u_AmbientStrength;
+    float u_LayerTiling[4];      // std140 stride 16
+    float u_LayerMetallic[4];
+    float u_LayerRoughness[4];
+    int   u_HasLayer0Normal;
+    int   u_HasLayer1Normal;
+    int   u_HasLayer2Normal;
+    int   u_HasLayer3Normal;
+    int   u_ShadowEnabled;
+    int   u_EntityID;
+    float u_ShadowBias;
+    int   u_NumDirLights;
+    int   u_NumPointLights;
+    int   u_NumSpotLights;
+};
+
+layout(std140, set = 0, binding = 16) uniform TerrainLightsUBO
+{
+    TDirLight   u_DirLights[MAX_DIR_LIGHTS];
+    TPointLight u_PointLights[MAX_POINT_LIGHTS];
+    TSpotLight  u_SpotLights[MAX_SPOT_LIGHTS];
+};
+#else
 uniform int u_EntityID;
 uniform vec3 u_ViewPos;
 uniform float u_AmbientStrength;
@@ -112,12 +188,13 @@ uniform int u_NumSpotLights;
 uniform DirLight   u_DirLights[MAX_DIR_LIGHTS];
 uniform PointLight u_PointLights[MAX_POINT_LIGHTS];
 uniform SpotLight  u_SpotLights[MAX_SPOT_LIGHTS];
+#endif
 
-in vec3 v_Normal;
-in vec3 v_FragPos;
-in vec2 v_TexCoord;
-in vec4 v_FragPosLightSpace;
-in mat3 v_TBN;
+layout(location = 0) in vec3 v_Normal;
+layout(location = 1) in vec3 v_FragPos;
+layout(location = 2) in vec2 v_TexCoord;
+layout(location = 3) in vec4 v_FragPosLightSpace;
+layout(location = 4) in mat3 v_TBN;
 
 // ---- PBR Functions ----
 

@@ -205,8 +205,16 @@ namespace Engine
 
         for (const auto& [stage, source] : stageSources)
         {
-            const shaderc_shader_kind     kind   = ShaderKindFromStage(stage);
-            shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(source, kind, debugName.c_str(), options);
+            // 场景 shader 为兼容 OpenGL 4.3 context 统一写 #version 330/400；
+            // Vulkan 语义下 layout(binding) 需要 ≥420（ARB_shading_language_420pack），
+            // 编译前统一提升到 450，仅影响本路径的内存源码，不改磁盘文件与 OpenGL 路径。
+            std::string stageSource = source;
+            if (stageSource.rfind("#version 330", 0) == 0 || stageSource.rfind("#version 400", 0) == 0)
+                stageSource = "#version 450" + stageSource.substr(stageSource.find('\n'));
+
+            const shaderc_shader_kind     kind = ShaderKindFromStage(stage);
+            shaderc::SpvCompilationResult result =
+                compiler.CompileGlslToSpv(stageSource, kind, debugName.c_str(), options);
 
             if (result.GetCompilationStatus() != shaderc_compilation_status_success)
             {
