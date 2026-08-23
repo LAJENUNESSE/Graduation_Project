@@ -186,10 +186,11 @@ namespace Engine
         // fence 已确认该槽位上一轮 GPU 工作完成：此刻销毁挂起的资源绝对安全
         m_DeletionQueue.FlushSlot(m_CurrentFrame, m_Device);
 
-        // Acquire next swapchain image
-        VkResult result =
-            vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame],
-                                  VK_NULL_HANDLE, &m_PendingImageIndex);
+        // Acquire next swapchain image；image 可用后 signal m_AcquireFence，
+        // host 等待替代原 acquire 信号量的 GPU 侧等待，规避 swapchain
+        // semaphore 复用规则
+        VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, VK_NULL_HANDLE, m_AcquireFence,
+                                                &m_PendingImageIndex);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -198,6 +199,10 @@ namespace Engine
         }
         ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
                                    "Failed to acquire swapchain image!");
+
+        // 确认 image 可用后立即复位 fence，保证后续帧可复用
+        vkWaitForFences(m_Device, 1, &m_AcquireFence, VK_TRUE, UINT64_MAX);
+        vkResetFences(m_Device, 1, &m_AcquireFence);
 
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
@@ -222,20 +227,16 @@ namespace Engine
         VulkanCommandBuffer commandBuffer(cmd);
         commandBuffer.End();
 
-        // Submit
-        VkSemaphore          waitSemaphores[]   = {m_ImageAvailableSemaphores[m_CurrentFrame]};
-        VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        VkSemaphore          signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
+        // Submit：image 可用性已由 m_AcquireFence 在 host 侧确认，无需再等
+        // 信号量；renderFinished 按 present 目标 image 一比一取用
+        VkSemaphore signalSemaphore = m_RenderFinishedSemaphores[m_PendingImageIndex];
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.waitSemaphoreCount   = 1;
-        submitInfo.pWaitSemaphores      = waitSemaphores;
-        submitInfo.pWaitDstStageMask    = waitStages;
         submitInfo.commandBufferCount   = 1;
         submitInfo.pCommandBuffers      = &cmd;
         submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores    = signalSemaphores;
+        submitInfo.pSignalSemaphores    = &signalSemaphore;
 
         VkResult submitResult = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]);
         ENGINE_CORE_RELEASE_ASSERT(submitResult == VK_SUCCESS, "Failed to submit draw command buffer!");
@@ -250,11 +251,11 @@ namespace Engine
         }
         m_PendingReadbackFences.clear();
 
-        // Present
+        // Present：等待的信号量与 submit signal 的是同一个 per-image renderFinished
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores    = signalSemaphores;
+        presentInfo.pWaitSemaphores    = &signalSemaphore;
         presentInfo.swapchainCount     = 1;
         presentInfo.pSwapchains        = &m_Swapchain;
         presentInfo.pImageIndices      = &m_PendingImageIndex;
@@ -846,17 +847,29 @@ namespace Engine
 
     void VulkanContext::CreateSyncObjects()
     {
-        m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+        // acquire 用 host 等待的 fence；首次使用前必须处于 unsignaled
+        m_AcquireFence = VulkanSynchronization::CreateFence(m_Device, false);
 
+        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-        {
-            const VulkanFrameSyncObjects sync = VulkanSynchronization::CreateFrameSyncObjects(m_Device, true);
-            m_ImageAvailableSemaphores[i]     = sync.ImageAvailable;
-            m_RenderFinishedSemaphores[i]     = sync.RenderFinished;
-            m_InFlightFences[i]               = sync.InFlight;
-        }
+            m_InFlightFences[i] = VulkanSynchronization::CreateFence(m_Device, true);
+
+        CreateImageSemaphores();
+    }
+
+    void VulkanContext::CreateImageSemaphores()
+    {
+        const uint32_t imageCount = static_cast<uint32_t>(m_SwapchainImages.size());
+        m_RenderFinishedSemaphores.resize(imageCount);
+        for (uint32_t i = 0; i < imageCount; i++)
+            m_RenderFinishedSemaphores[i] = VulkanSynchronization::CreateSemaphore(m_Device);
+    }
+
+    void VulkanContext::DestroyImageSemaphores()
+    {
+        for (VkSemaphore& semaphore : m_RenderFinishedSemaphores)
+            VulkanSynchronization::DestroySemaphore(m_Device, semaphore);
+        m_RenderFinishedSemaphores.clear();
     }
 
     // =========================================================================
@@ -1127,8 +1140,10 @@ namespace Engine
         vkDeviceWaitIdle(m_Device);
         DestroyDebugDrawResources();
         DestroyImGuiFramebuffers();
+        DestroyImageSemaphores(); // image count 可能随重建变化
         CleanupSwapchain();
         CreateSwapchain();
+        CreateImageSemaphores();
 
         if (m_ImGuiRenderPass != VK_NULL_HANDLE)
         {
@@ -1266,18 +1281,11 @@ namespace Engine
         // 所有在途工作已完成：清空两个帧槽位上挂起的延迟销毁
         m_DeletionQueue.FlushAll(m_Device);
 
-        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-        {
-            VulkanFrameSyncObjects sync{};
-            sync.ImageAvailable = m_ImageAvailableSemaphores[i];
-            sync.RenderFinished = m_RenderFinishedSemaphores[i];
-            sync.InFlight       = m_InFlightFences[i];
-            VulkanSynchronization::DestroyFrameSyncObjects(m_Device, sync);
-
-            m_ImageAvailableSemaphores[i] = VK_NULL_HANDLE;
-            m_RenderFinishedSemaphores[i] = VK_NULL_HANDLE;
-            m_InFlightFences[i]           = VK_NULL_HANDLE;
-        }
+        VulkanSynchronization::DestroyFence(m_Device, m_AcquireFence);
+        for (VkFence& fence : m_InFlightFences)
+            VulkanSynchronization::DestroyFence(m_Device, fence);
+        m_InFlightFences.clear();
+        DestroyImageSemaphores();
 
         if (m_CommandPool != VK_NULL_HANDLE)
             vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);

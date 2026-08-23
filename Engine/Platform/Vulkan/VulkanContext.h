@@ -152,6 +152,8 @@ namespace Engine
         void CreateSwapchain();
         void CreateCommandPool();
         void CreateSyncObjects();
+        void CreateImageSemaphores();
+        void DestroyImageSemaphores();
         void CreateImGuiRenderPass();
         void CreateImGuiFramebuffers();
         void DestroyImGuiFramebuffers();
@@ -224,10 +226,10 @@ namespace Engine
         VkCommandPool                m_CommandPool = VK_NULL_HANDLE;
         std::vector<VkCommandBuffer> m_CommandBuffers;
 
-        // Synchronization (one set per MAX_FRAMES_IN_FLIGHT)
+        // Synchronization（结构说明见 VulkanSynchronization.h 注释）
         static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-        std::vector<VkSemaphore>  m_ImageAvailableSemaphores;
-        std::vector<VkSemaphore>  m_RenderFinishedSemaphores;
+        VkFence                   m_AcquireFence       = VK_NULL_HANDLE;
+        std::vector<VkSemaphore>  m_RenderFinishedSemaphores; // 大小 = swapchain image count
         std::vector<VkFence>      m_InFlightFences;
         uint32_t                  m_CurrentFrame = 0;
 
