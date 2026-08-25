@@ -8,7 +8,7 @@ namespace Engine
 
     const VulkanSceneState::TextureBinding VulkanSceneState::kInvalidBinding{};
 
-    void VulkanSceneState::BindTextureSlot(uint32_t slot, VkImageView view, VkSampler sampler)
+    void VulkanSceneState::BindTextureSlot(uint32_t slot, VkImageView view, VkSampler sampler, VkImageLayout layout)
     {
         if (slot >= kMaxTextureSlots)
         {
@@ -24,6 +24,7 @@ namespace Engine
         auto& binding   = m_TextureSlots[slot];
         binding.View    = view;
         binding.Sampler = sampler;
+        binding.Layout  = layout;
         binding.Valid   = (view != VK_NULL_HANDLE);
     }
 

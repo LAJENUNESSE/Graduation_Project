@@ -214,7 +214,9 @@ namespace Engine
             auto* vkContext = VulkanContext::Get();
             if (vkContext)
             {
-                vkDeviceWaitIdle(vkContext->GetDevice());
+                // 视口/场景 FBO 可能在上一帧录制期间排队 descriptor 释放；
+                // 必须在 ImGui_ImplVulkan_Shutdown 前执行延迟队列。
+                vkContext->FlushDeferredDestructions();
             }
             ImGui_ImplVulkan_Shutdown();
         }

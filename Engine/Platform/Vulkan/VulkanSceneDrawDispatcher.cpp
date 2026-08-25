@@ -95,9 +95,8 @@ namespace Engine
 
         struct MaterialUboStd140
         {
-            glm::vec4 Color;  //  0
-            glm::vec2 Tiling; // 16
-            float     _Pad0[2];
+            glm::vec4 Color;      //  0
+            glm::vec2 Tiling;     // 16
             float     Metallic;   // 24
             float     Roughness;  // 28
             int32_t   HasTexture; // 32
@@ -106,6 +105,7 @@ namespace Engine
             int32_t   HasRoughnessMap;
             int32_t   HasAOMap;
             int32_t   EntityID; // 52
+            int32_t   _Pad[2];  // 56, 60 (std140 block size = 64)
         };
         static_assert(sizeof(MaterialUboStd140) == 64, "MaterialUBO std140 size");
 
@@ -416,6 +416,10 @@ namespace Engine
         auto*           g  = static_cast<GlobalUboStd140*>(fr.GlobalMapped);
         auto* lts = reinterpret_cast<LightsUboStd140*>(static_cast<uint8_t*>(fr.GlobalMapped) + kLightsUboOffset);
 
+        // 每个 shader 只声明全局 UBO 的一个子集；先清零可避免上一 shader/上一帧
+        // 的残留值被 Vulkan shader 当成光照参数。
+        *g = {};
+
         const auto& mat4s = shader->GetMat4Uniforms();
         const auto& vec3s = shader->GetFloat3Uniforms();
         const auto& ints  = shader->GetIntUniforms();
@@ -451,10 +455,22 @@ namespace Engine
         readMat4("u_LightSpaceMatrix", g->LightSpaceMatrix);
         readMat4("u_ViewMatrix", g->ViewMatrix);
         readVec3("u_ViewPos", g->ViewPos);
+
+        // GL 惯例投影的 clip z∈[-1,1]，Vulkan 裁剪体积 z∈[0,1]——对 z 行做
+        // z' = 0.5*z + 0.5*w 重映射（列主序：每列的 row2 与 row3 线性组合）。
+        // 只影响 Vulkan 路径；GL 后端读的是同一份 CPU uniform 不经过这里。
+        const auto remapDepthToVulkan = [](glm::mat4& m)
+        {
+            for (int c = 0; c < 4; ++c)
+                m[c][2] = 0.5f * m[c][2] + 0.5f * m[c][3];
+        };
+        remapDepthToVulkan(g->ViewProjection);
+        remapDepthToVulkan(g->LightSpaceMatrix);
         for (int i = 0; i < 4; ++i)
         {
             readMat4(("u_CascadeLightSpaceMatrices[" + std::to_string(i) + "]").c_str(),
                      g->CascadeLightSpaceMatrices[i]);
+            remapDepthToVulkan(g->CascadeLightSpaceMatrices[i]);
             readFloat(("u_CascadeSplitDepths[" + std::to_string(i) + "]").c_str(), g->CascadeSplitDepths[i]);
             readFloat(("u_CascadeTexelWorldSize[" + std::to_string(i) + "]").c_str(), g->CascadeTexelWorldSize[i]);
         }
@@ -506,6 +522,11 @@ namespace Engine
             readFloat(("u_SpotLights" + idx + ".innerCutoff").c_str(), sl.InnerCutoff);
             readFloat(("u_SpotLights" + idx + ".outerCutoff").c_str(), sl.OuterCutoff);
         }
+
+        // HOST_VISIBLE 非 coherent 内存写后必须 flush，GPU 才能看到。VMA 的 AUTO
+        // 策略不保证选中 HOST_COHERENT 类型；漏 flush 时 GPU 读到未刷新数据
+        // （全 0 的 ViewProjection 会把所有几何变换出裁剪空间 → 场景整体不可见）
+        vmaFlushAllocation(VulkanAllocator::GetAllocator(), fr.GlobalAllocation, 0, kLightsUboOffset + kLightsUboSize);
     }
 
     uint32_t VulkanSceneDrawDispatcher::PackMaterial(VulkanShader* shader, uint32_t frameIndex)
@@ -523,6 +544,7 @@ namespace Engine
         }
 
         auto* m = reinterpret_cast<MaterialUboStd140*>(static_cast<uint8_t*>(fr.MaterialMapped) + fr.MaterialOffset);
+        *m      = {};
 
         const auto& vec4s = shader->GetFloat4Uniforms();
         const auto& vec2s = shader->GetFloat2Uniforms();
@@ -552,6 +574,9 @@ namespace Engine
 
         const uint32_t offset = fr.MaterialOffset;
         fr.MaterialOffset += kMaterialRingStride; // 256 对齐（descriptor offset 规范要求）
+
+        // 同 PackAndUploadGlobals：非 coherent host 内存写后必须 flush
+        vmaFlushAllocation(VulkanAllocator::GetAllocator(), fr.MaterialAllocation, offset, kMaterialUboSize);
         return offset;
     }
 
@@ -589,6 +614,38 @@ namespace Engine
         VulkanPipelineCache::PipelineHandle handle = context->GetPipelineBuilder().GetOrCreate(m_Device, desc);
         if (handle.Pipeline == VK_NULL_HANDLE)
             return false;
+
+        // ---- 临时调试：每 shader 首次 dispatch 打印关键数据（定位黑屏用，验证后移除）----
+        {
+            static std::unordered_set<const VulkanShader*> s_DbgLogged;
+            if (s_DbgLogged.insert(shader).second)
+            {
+                const auto& mat4s = shader->GetMat4Uniforms();
+                const auto  vpIt  = mat4s.find("u_ViewProjection");
+                const auto  trIt  = mat4s.find("u_Transform");
+                ENGINE_CORE_WARN("[DbgDispatch shader={0}] mat4s={1} vp={2} transform={3} pipeline={4} idxCount={5}",
+                                 static_cast<const void*>(shader), mat4s.size(), vpIt != mat4s.end(),
+                                 trIt != mat4s.end(), static_cast<const void*>(handle.Pipeline), params.IndexCount);
+                if (vpIt != mat4s.end())
+                {
+                    const auto& m = vpIt->second;
+                    ENGINE_CORE_WARN("[DbgDispatch VP] col0=({0:.2f},{1:.2f},{2:.2f},{3:.2f}) "
+                                     "col3=({4:.2f},{5:.2f},{6:.2f},{7:.2f})",
+                                     m[0][0], m[1][0], m[2][0], m[3][0], m[0][3], m[1][3], m[2][3], m[3][3]);
+                }
+                std::string attrDump;
+                for (const auto& a : desc.Attributes)
+                {
+                    attrDump += fmt::format("[loc{} b{} off{} fmt{}]", a.location, a.binding, a.offset,
+                                            static_cast<int>(a.format));
+                }
+                std::string reflLocs;
+                for (uint32_t loc : shader->GetVertexInputLocations())
+                    reflLocs += std::to_string(loc) + ",";
+                ENGINE_CORE_WARN("[DbgDispatch bindings] vbos={0} attrs={1} reflLocs={2} attrDump={3}",
+                                 va->GetVertexBuffers().size(), desc.Attributes.size(), reflLocs, attrDump);
+            }
+        }
 
         // ---- uniforms ----
         PackAndUploadGlobals(shader, frameIndex);
@@ -667,14 +724,39 @@ namespace Engine
 
                     const VkImageView writeView = slot.Valid ? slot.View : placeholderView;
 
+                    // depth image 写入 descriptor 必须用 DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                    // （与 framebuffer finalLayout 匹配），普通 texture/cubemap 用 SHADER_READ_ONLY_OPTIMAL。
+                    // layout 由 slot.Layout 携带（BindTextureView 写入时声明）。
+                    VkImageLayout writeLayout = slot.Layout;
+                    if (writeLayout == VK_IMAGE_LAYOUT_UNDEFINED)
+                        writeLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
                     if (b.Count > 1)
                         (b.Set == 0 ? w0 : w1)
-                            .WriteImageElement(b.Binding, elem, writeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                               b.Type, sampler);
+                            .WriteImageElement(b.Binding, elem, writeView, writeLayout, b.Type, sampler);
                     else
-                        (b.Set == 0 ? w0 : w1)
-                            .WriteImage(b.Binding, writeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, b.Type,
-                                        sampler);
+                        (b.Set == 0 ? w0 : w1).WriteImage(b.Binding, writeView, writeLayout, b.Type, sampler);
+
+                    // 诊断日志：每帧首 draw 输出 sampler binding 与实际写入 layout
+                    static std::unordered_set<std::string> s_DbgLayoutLogged;
+                    const std::string                      key = baseName + ":" + std::to_string(elem);
+                    if (s_DbgLayoutLogged.insert(key).second)
+                    {
+                        const char* layoutName = "?";
+                        switch (writeLayout)
+                        {
+                        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+                            layoutName = "SHADER_READ_ONLY_OPTIMAL";
+                            break;
+                        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+                            layoutName = "DEPTH_STENCIL_READ_ONLY_OPTIMAL";
+                            break;
+                        default:
+                            break;
+                        }
+                        ENGINE_CORE_WARN("[DbgBindLayout] base={0} elem={1} slot={2} layout={3} viewValid={4}",
+                                         baseName, elem, slotBase + elem, layoutName, slot.Valid);
+                    }
                 }
             }
         }
@@ -684,9 +766,12 @@ namespace Engine
         if (sets[1])
             w1.UpdateSet(m_Device, sets[1]);
 
-        // ---- push constant（per-draw 变换；无反射 PC 的 shader 跳过）----
-        const auto& pcs = shader->GetReflectedPushConstants();
-        if (!pcs.empty())
+        // ---- push constant（per-draw 变换）----
+        // 仅当反射 PC 确实容纳 mat4 级别的 u_Transform（≥64B）时才写 ScenePCStd140；
+        // 后处理等 shader 的 PC 布局不同（如 4 个标量共 16B），按 112B 写会越界污染
+        const auto& pcs            = shader->GetReflectedPushConstants();
+        const bool  hasTransformPC = std::any_of(pcs.begin(), pcs.end(), [](const auto& r) { return r.Size >= 64; });
+        if (hasTransformPC)
         {
             ScenePCStd140 pcData{};
             if (auto it = shader->GetMat4Uniforms().find("u_Transform"); it != shader->GetMat4Uniforms().end())
@@ -707,6 +792,15 @@ namespace Engine
         // ---- 录制 ----
         VulkanCommandBuffer cmd(params.Cmd);
         cmd.BindGraphicsPipeline(handle.Pipeline);
+
+        // 防御性重录全尺寸动态 viewport/scissor：pipeline 使用 dynamic 状态，cmd 中
+        // 残留的任何小 scissor/viewport（如半分辨率中间 pass 设置过）都会裁掉几何
+        if (context->GetActiveSceneWidth() > 0 && context->GetActiveSceneHeight() > 0)
+        {
+            cmd.SetViewport(0, 0, static_cast<float>(context->GetActiveSceneWidth()),
+                            static_cast<float>(context->GetActiveSceneHeight()));
+            cmd.SetScissor(0, 0, context->GetActiveSceneWidth(), context->GetActiveSceneHeight());
+        }
 
         std::vector<VkDescriptorSet> bindSets;
         for (uint32_t set = 0; set <= maxSet && set < 2; ++set)

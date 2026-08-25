@@ -111,6 +111,15 @@ namespace Engine
         context->m_DeletionQueue.Submit(context->m_CurrentFrame, std::move(fn));
     }
 
+    void VulkanContext::FlushDeferredDestructions()
+    {
+        if (m_Device == VK_NULL_HANDLE)
+            return;
+
+        vkDeviceWaitIdle(m_Device);
+        m_DeletionQueue.FlushAll(m_Device);
+    }
+
     // =========================================================================
     // Init
     // =========================================================================
@@ -910,8 +919,22 @@ namespace Engine
         if (it == m_ImGuiTextures.end())
             return;
 
-        ImGui_ImplVulkan_RemoveTexture(it->second);
+        const VkDescriptorSet descriptorSet = it->second;
         m_ImGuiTextures.erase(it);
+
+        if (m_FrameInProgress)
+        {
+            // 旧视口 descriptor 可能已经被当前帧或前一帧的 command buffer 引用。
+            // 等当前帧槽位 fence 完成后再交给 ImGui backend 释放，避免
+            // VUID-vkFreeDescriptorSets-pDescriptorSets-00309。
+            DeferDestroy([descriptorSet](VkDevice) { ImGui_ImplVulkan_RemoveTexture(descriptorSet); });
+        }
+        else
+        {
+            // 非录制阶段也可能有已提交的 GPU 工作，先等待再立即释放。
+            vkDeviceWaitIdle(m_Device);
+            ImGui_ImplVulkan_RemoveTexture(descriptorSet);
+        }
     }
 
     // Phase 8.2：场景 descriptor 共用默认采样器（linear + clampToEdge）。

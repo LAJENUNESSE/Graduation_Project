@@ -1,5 +1,6 @@
 #include "engpch.h"
 #include "Renderer/RenderQueue.h"
+#include "Core/Log.h"
 #include "Renderer/RenderCommand.h"
 
 namespace Engine
@@ -23,6 +24,14 @@ namespace Engine
 
     void RenderQueue::Flush(const glm::mat4& viewProjection)
     {
+        // ---- 临时调试（验证后移除）----
+        static bool s_dbgFlush = false;
+        if (!s_dbgFlush)
+        {
+            s_dbgFlush = true;
+            ENGINE_CORE_WARN("[DbgFlush] packets={0}", m_Packets.size());
+        }
+
         // 按 SortKey 排序，使相同 shader/材质的绘制调用相邻，减少 GPU 状态切换
         std::sort(m_Packets.begin(), m_Packets.end(),
                   [](const RenderPacket& a, const RenderPacket& b) { return a.SortKey < b.SortKey; });

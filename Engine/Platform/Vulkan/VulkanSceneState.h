@@ -28,7 +28,11 @@ namespace Engine
         {
             VkImageView View    = VK_NULL_HANDLE;
             VkSampler   Sampler = VK_NULL_HANDLE;
-            bool        Valid   = false;
+            // image 期望 layout：scene dispatcher 写 descriptor 时按此 layout 设置
+            // （shadow map / FBO depth 用 DEPTH_STENCIL_READ_ONLY_OPTIMAL，普通 texture
+            // 用 SHADER_READ_ONLY_OPTIMAL）。BindTextureSlot 时由调用方声明。
+            VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            bool          Valid  = false;
         };
 
         void          SetCurrentShader(VulkanShader* shader) { m_CurrentShader = shader; }
@@ -38,7 +42,10 @@ namespace Engine
         void               SetCurrentVertexArray(const VertexArray* vao) { m_CurrentVertexArray = vao; }
         const VertexArray* GetCurrentVertexArray() const { return m_CurrentVertexArray; }
 
-        void BindTextureSlot(uint32_t slot, VkImageView view, VkSampler sampler);
+        void BindTextureSlot(uint32_t      slot,
+                             VkImageView   view,
+                             VkSampler     sampler,
+                             VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
         void UnbindTextureSlot(uint32_t slot);
 
         // 帧首清空全部纹理槽（上一帧槽位对新一帧无意义，防止悬垂引用被复用）

@@ -46,6 +46,8 @@ namespace Engine
     private:
         void Invalidate();
         void Destroy();
+        // 临时调试：FBO 像素 readback 探针（定位视口黑屏用，验证后移除）
+        void DebugRecordPixelReadback(VkCommandBuffer cmd);
 
     private:
         FramebufferSpecification m_Spec;
@@ -65,6 +67,20 @@ namespace Engine
 
         VkRenderPass  m_RenderPass  = VK_NULL_HANDLE;
         VkFramebuffer m_Framebuffer = VK_NULL_HANDLE;
+
+        // image 创建后 VkImageCreateInfo 的 initialLayout 必须是 UNDEFINED。
+        // 首次使用前转到 shader-read-only，确保 render pass 的 initialLayout
+        // 与 image 实际布局一致；resize 在当前帧内发生时也能让 ImGui 立即采样新图像。
+        bool m_ColorInitialTransitionDone = false;
+        bool m_DepthInitialTransitionDone = false;
+
+        // 临时调试探针状态（同上，验证后移除）
+        VkBuffer      m_DbgStagingBuffer     = VK_NULL_HANDLE;
+        VmaAllocation m_DbgStagingAllocation = nullptr;
+        void*         m_DbgStagingMapped     = nullptr;
+        VkFence       m_DbgFence             = VK_NULL_HANDLE;
+        bool          m_DbgPending           = false;
+        uint64_t      m_DbgFrameCounter      = 0;
     };
 
 } // namespace Engine

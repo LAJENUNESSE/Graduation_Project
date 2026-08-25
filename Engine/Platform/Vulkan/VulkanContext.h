@@ -58,6 +58,11 @@ namespace Engine
         // context 不存在（已析构）时丢弃回调，与资源类 Destroy 的现状语义一致。
         static void DeferDestroy(std::function<void(VkDevice)>&& fn);
 
+        // 在 ImGui 后端关闭前冲刷已完成 GPU 工作对应的延迟销毁回调。
+        // 视口/场景销毁可能在录制帧内排队 ImGui descriptor 的释放，必须在
+        // ImGui_ImplVulkan_Shutdown 之前执行这些回调。
+        void FlushDeferredDestructions();
+
         // Accessors for ImGui Vulkan integration
         VkInstance       GetInstance() const { return m_Instance; }
         VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
@@ -126,10 +131,16 @@ namespace Engine
 
         // 当前激活的场景 renderpass（Framebuffer::Bind 录制 BeginRenderPass 时写入；
         // Unbind 清空）。VK_NULL_HANDLE 表示不在场景 pass 内，绘制走 debug fallback。
-        void SetActiveSceneRenderPass(VkRenderPass pass, uint32_t colorAttachmentCount)
+        // 尺寸/hasDepth 供 Clear() 的 vkCmdClearAttachments 与 draw 前防御性
+        // viewport/scissor 重录使用。
+        void SetActiveSceneRenderPass(
+            VkRenderPass pass, uint32_t colorAttachmentCount, bool hasDepth, uint32_t width, uint32_t height)
         {
             m_ActiveSceneRenderPass           = pass;
             m_ActiveSceneColorAttachmentCount = colorAttachmentCount;
+            m_ActiveSceneHasDepth             = hasDepth;
+            m_ActiveSceneWidth                = width;
+            m_ActiveSceneHeight               = height;
         }
         VkRenderPass     GetActiveSceneRenderPass() const { return m_ActiveSceneRenderPass; }
         const glm::vec4& GetClearColor() const { return m_ClearColor; }
@@ -141,6 +152,9 @@ namespace Engine
         void*    GetImGuiTextureForView(void* imageView);
         void     RemoveImGuiTexture(void* imageView);
         uint32_t GetActiveSceneColorAttachmentCount() const { return m_ActiveSceneColorAttachmentCount; }
+        bool     GetActiveSceneHasDepth() const { return m_ActiveSceneHasDepth; }
+        uint32_t GetActiveSceneWidth() const { return m_ActiveSceneWidth; }
+        uint32_t GetActiveSceneHeight() const { return m_ActiveSceneHeight; }
 
     private:
         // Setup helpers (called from Init)
@@ -259,6 +273,9 @@ namespace Engine
 
         VkRenderPass m_ActiveSceneRenderPass           = VK_NULL_HANDLE;
         uint32_t     m_ActiveSceneColorAttachmentCount = 0;
+        bool         m_ActiveSceneHasDepth             = false;
+        uint32_t     m_ActiveSceneWidth                = 0;
+        uint32_t     m_ActiveSceneHeight               = 0;
 
         static VulkanContext* s_Instance;
 

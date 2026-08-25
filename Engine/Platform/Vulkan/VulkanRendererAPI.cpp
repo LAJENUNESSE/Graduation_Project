@@ -83,10 +83,50 @@ namespace Engine
         auto* vkContext = VulkanContext::Get();
         if (vkContext)
             vkContext->SetClearColor(m_ClearColor);
+
+        // GL 语义对齐：renderpass loadOp=LOAD 后由显式 vkCmdClearAttachments 清屏
+        // （GL 的 BindFramebuffer 不清屏，Clear() 对应 glClear）
+        const VkCommandBuffer cmd = vkContext ? vkContext->GetCurrentFrameCommandBuffer() : VK_NULL_HANDLE;
+        if (cmd == VK_NULL_HANDLE || !vkContext || vkContext->GetActiveSceneRenderPass() == VK_NULL_HANDLE)
+            return;
+
+        const uint32_t                 colorCount = vkContext->GetActiveSceneColorAttachmentCount();
+        std::vector<VkClearAttachment> clears;
+        clears.reserve(colorCount + 1);
+        for (uint32_t i = 0; i < colorCount; ++i)
+        {
+            VkClearAttachment c{};
+            c.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT;
+            c.colorAttachment  = i;
+            c.clearValue.color = {{m_ClearColor.r, m_ClearColor.g, m_ClearColor.b, m_ClearColor.a}};
+            clears.push_back(c);
+        }
+        if (vkContext->GetActiveSceneHasDepth())
+        {
+            VkClearAttachment d{};
+            d.aspectMask              = VK_IMAGE_ASPECT_DEPTH_BIT;
+            d.clearValue.depthStencil = {1.0f, 0};
+            clears.push_back(d);
+        }
+
+        VkClearRect rect{};
+        rect.rect.offset = {0, 0};
+        rect.rect.extent = {vkContext->GetActiveSceneWidth(), vkContext->GetActiveSceneHeight()};
+        rect.layerCount  = 1;
+        vkCmdClearAttachments(cmd, static_cast<uint32_t>(clears.size()), clears.data(), 1, &rect);
     }
 
     void VulkanRendererAPI::DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount)
     {
+        // ---- 临时调试（验证后移除）----
+        static bool s_dbgDI = false;
+        if (!s_dbgDI)
+        {
+            s_dbgDI = true;
+            ENGINE_CORE_WARN("[DbgDrawIndexed] called, va={0} indexCount={1}",
+                             static_cast<const void*>(vertexArray.get()), indexCount);
+        }
+
         uint32_t resolvedIndexCount = indexCount;
         uint32_t firstIndex         = 0;
         int32_t  vertexOffset       = 0;
@@ -299,15 +339,25 @@ namespace Engine
     void VulkanRendererAPI::BindTextureView(uint32_t slot, void* view, void* sampler)
     {
         if (auto* context = VulkanContext::Get())
+        {
+            // depth slot 约定：slot 1 = u_ShadowMap，slot 10~13 = u_CascadeShadowMaps
+            // （与 SceneRenderer.cpp BindTextureView 调用点对应）。这些 slot 的 image
+            // layout 是 DEPTH_STENCIL_READ_ONLY_OPTIMAL（framebuffer finalLayout），
+            // descriptor 写入时必须匹配，否则 vkCmdDrawIndexed VUID-vkCmdDraw-imageLayout-00344 触发。
+            VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            if (slot == 1 || (slot >= 10 && slot <= 13))
+                layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
             context->GetSceneState().BindTextureSlot(slot, static_cast<VkImageView>(view),
-                                                     static_cast<VkSampler>(sampler));
+                                                     static_cast<VkSampler>(sampler), layout);
+        }
     }
 
     void VulkanRendererAPI::BindCubemapView(uint32_t slot, void* view, void* sampler)
     {
         if (auto* context = VulkanContext::Get())
             context->GetSceneState().BindTextureSlot(slot, static_cast<VkImageView>(view),
-                                                     static_cast<VkSampler>(sampler));
+                                                     static_cast<VkSampler>(sampler),
+                                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
     void VulkanRendererAPI::ClearColorOnly()

@@ -99,7 +99,10 @@ namespace Engine
                     rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
                 else if (desc.CullBack && desc.CullFront)
                     rasterizer.cullMode = VK_CULL_MODE_FRONT_AND_BACK;
-                rasterizer.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+                // Vulkan 的 NDC Y 轴与 OpenGL 相反，GL 惯例的 CCW 正面顶点序在
+                // Vulkan 里投影后变为 CW——统一以 CW 为正面才能保持与 GL 后端
+                // 相同的剔除语义（否则开背面剔除的 pipeline 会剔光所有三角形）
+                rasterizer.frontFace               = VK_FRONT_FACE_CLOCKWISE;
                 rasterizer.lineWidth               = 1.0f;
                 rasterizer.depthClampEnable        = VK_FALSE;
                 rasterizer.rasterizerDiscardEnable = VK_FALSE;

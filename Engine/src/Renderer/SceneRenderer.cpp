@@ -266,6 +266,14 @@ namespace Engine
         m_PassQueue.push_back(
             {"GeometryPass", [this](RenderContext& ctx)
              {
+                 // ---- 临时调试（验证后移除）----
+                 static bool s_dbgGeo = false;
+                 if (!s_dbgGeo)
+                 {
+                     s_dbgGeo = true;
+                     ENGINE_CORE_WARN("[DbgGeo] enter, registry={0}", static_cast<const void*>(ctx.Registry));
+                 }
+
                  PerformanceMonitor::Get().GetSceneRenderGPUTimer().Begin();
 
                  Renderer::BeginScene(ctx.Camera->GetViewProjection());
@@ -603,6 +611,17 @@ namespace Engine
 
     void SceneRenderer::RenderPipeline(const Ref<Framebuffer>& targetFBO)
     {
+        // ---- 临时调试：定位视口黑屏（验证后移除）----
+        {
+            static bool s_dbgLogged = false;
+            if (!s_dbgLogged)
+            {
+                s_dbgLogged = true;
+                for (const auto& p : m_PassQueue)
+                    ENGINE_CORE_WARN("[DbgPipeline] pass={0} enabled={1}", p.Name, p.Enabled);
+            }
+        }
+
         // 设置视口信息
         m_Context.ViewportWidth  = m_HDRFramebuffer->GetSpecification().Width;
         m_Context.ViewportHeight = m_HDRFramebuffer->GetSpecification().Height;
@@ -620,6 +639,14 @@ namespace Engine
         PerformanceMonitor::Get().SetShadowPassCPU(shadowCpuMs);
 
         // 主场景渲染到 HDR FBO
+        static bool s_DbgPipelineOnce = false;
+        if (!s_DbgPipelineOnce)
+        {
+            s_DbgPipelineOnce = true;
+            const auto& spec  = m_HDRFramebuffer ? m_HDRFramebuffer->GetSpecification() : FramebufferSpecification{};
+            ENGINE_CORE_WARN("[DbgRenderPipeline] hdrFbo={0} size=({1},{2})",
+                             static_cast<const void*>(m_HDRFramebuffer.get()), spec.Width, spec.Height);
+        }
         m_HDRFramebuffer->Bind();
         RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
         RenderCommand::Clear();
@@ -702,7 +729,7 @@ namespace Engine
 
         // Post-processing: HDR -> LDR，输出到 targetFBO
         targetFBO->Bind();
-        RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 1.0f});
+        RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
         RenderCommand::Clear();
         targetFBO->ClearAttachment(1, -1);
 

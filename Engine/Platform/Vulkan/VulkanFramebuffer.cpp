@@ -98,8 +98,20 @@ namespace Engine
 
         VkDevice device = context->GetDevice();
 
+        m_ColorInitialTransitionDone = false;
+        m_DepthInitialTransitionDone = false;
+
         if (m_Spec.Width == 0 || m_Spec.Height == 0)
+        {
+            static bool s_WarnedZeroSize = false;
+            if (!s_WarnedZeroSize)
+            {
+                s_WarnedZeroSize = true;
+                ENGINE_CORE_WARN("[VulkanFramebuffer] Invalidate skipped: size=({0},{1})", m_Spec.Width, m_Spec.Height);
+            }
             return;
+        }
+        ENGINE_CORE_WARN("[VulkanFramebuffer] Invalidate size=({0},{1})", m_Spec.Width, m_Spec.Height);
 
         // --- Create color attachment images ---
         m_ColorAttachments.resize(m_ColorAttachmentSpecs.size());
@@ -195,7 +207,7 @@ namespace Engine
             desc.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
             desc.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            desc.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+            desc.initialLayout  = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             desc.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             attachmentDescs.push_back(desc);
 
@@ -215,11 +227,13 @@ namespace Engine
             desc.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
             desc.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            desc.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-            // 与 descriptor 写入 layout（SHADER_READ_ONLY_OPTIMAL）保持一致：
-            // 深度图采样规范允许 SHADER_READ_ONLY，混用两种 layout 会触发
-            // VUID-09600 layout mismatch
-            desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            desc.initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            // depth attachment 退出 render pass 自动 transition 到 finalLayout。
+            // Vulkan 规范禁止 depth finalLayout 用 SHADER_READ_ONLY_OPTIMAL（不在
+            // 允许的 depth 转换目标列表里），必须用 DEPTH_STENCIL_READ_ONLY_OPTIMAL。
+            // 配套的 descriptor 写入也用 DEPTH_STENCIL_READ_ONLY_OPTIMAL（在 SceneDrawDispatcher
+            // 通过 Format 检测 depth view 后选用此 layout）。
+            desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
             attachmentDescs.push_back(desc);
 
             depthRef.attachment = static_cast<uint32_t>(attachmentDescs.size() - 1);
@@ -232,15 +246,29 @@ namespace Engine
         subpass.pColorAttachments       = colorRefs.empty() ? nullptr : colorRefs.data();
         subpass.pDepthStencilAttachment = hasDepth ? &depthRef : nullptr;
 
-        VkSubpassDependency dependency{};
-        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependency.dstSubpass = 0;
-        dependency.srcStageMask =
+        // 场景 FBO 在同一条主命令缓冲中会连续经历：
+        //   上一个 pass 写入 -> 下一个 pass 采样 -> 本 pass 再写入。
+        // 仅依赖布局转换不足以建立 shader-read 的可见性，尤其是 HDR -> tone map
+        // 和 targetFBO -> ImGui 这两条链。显式声明双向 external 依赖，避免采样到
+        // 未完成的颜色/深度写入。
+        std::array<VkSubpassDependency, 2> dependencies{};
+        dependencies[0].srcSubpass   = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass   = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dependencies[0].dstStageMask =
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependency.dstStageMask =
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependency.srcAccessMask = 0;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        dependencies[0].dstAccessMask =
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+        dependencies[1].srcSubpass = 0;
+        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[1].srcStageMask =
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dependencies[1].srcAccessMask =
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
         VkRenderPassCreateInfo renderPassInfo{};
         renderPassInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -248,8 +276,8 @@ namespace Engine
         renderPassInfo.pAttachments    = attachmentDescs.empty() ? nullptr : attachmentDescs.data();
         renderPassInfo.subpassCount    = 1;
         renderPassInfo.pSubpasses      = &subpass;
-        renderPassInfo.dependencyCount = 1;
-        renderPassInfo.pDependencies   = &dependency;
+        renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+        renderPassInfo.pDependencies   = dependencies.data();
 
         VkResult result = vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_RenderPass);
         ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create Vulkan framebuffer render pass");
@@ -272,6 +300,34 @@ namespace Engine
 
         result = vkCreateFramebuffer(device, &fbInfo, nullptr, &m_Framebuffer);
         ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create Vulkan framebuffer");
+
+        // ---- 一次性 transition 新 attachment：UNDEFINED → shader-read-only ----
+        // resize 可能发生在当前帧 render pass 之后、ImGui 采样之前；用独立的一次性
+        // command buffer 立即提交，避免新 view 在同一帧被采样时仍停留在 UNDEFINED。
+        {
+            const VkCommandBuffer transitionCmd = context->BeginSingleTimeCommands();
+            VulkanCommandBuffer   transitionBuffer(transitionCmd);
+            for (const auto& attachment : m_ColorAttachments)
+            {
+                transitionBuffer.ImageBarrier(attachment.Image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                              VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                              0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+            }
+            m_ColorInitialTransitionDone = true;
+
+            if (m_DepthAttachment.Image != VK_NULL_HANDLE &&
+                m_DepthAttachmentSpec.TextureFormat != FramebufferTextureFormat::None)
+            {
+                transitionBuffer.ImageBarrier(
+                    m_DepthAttachment.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                    VK_ACCESS_SHADER_READ_BIT, Utils::AspectForFormat(m_DepthAttachment.Format));
+                m_DepthInitialTransitionDone = true;
+            }
+
+            context->EndSingleTimeCommands(transitionCmd);
+        }
     }
 
     void VulkanFramebuffer::Destroy()
@@ -335,6 +391,29 @@ namespace Engine
         if (cmd == VK_NULL_HANDLE || m_Framebuffer == VK_NULL_HANDLE || m_RenderPass == VK_NULL_HANDLE)
             return;
 
+        VulkanCommandBuffer commandBuffer(cmd);
+        if (!m_ColorInitialTransitionDone)
+        {
+            for (const auto& attachment : m_ColorAttachments)
+            {
+                commandBuffer.ImageBarrier(attachment.Image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, VK_ACCESS_SHADER_READ_BIT,
+                                           VK_IMAGE_ASPECT_COLOR_BIT);
+            }
+            m_ColorInitialTransitionDone = true;
+        }
+
+        if (!m_DepthInitialTransitionDone && m_DepthAttachment.Image != VK_NULL_HANDLE &&
+            m_DepthAttachmentSpec.TextureFormat != FramebufferTextureFormat::None)
+        {
+            commandBuffer.ImageBarrier(m_DepthAttachment.Image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                                       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                                       VK_ACCESS_SHADER_READ_BIT, Utils::AspectForFormat(m_DepthAttachment.Format));
+            m_DepthInitialTransitionDone = true;
+        }
+
         std::vector<VkClearValue> clearValues;
         const glm::vec4           clearColor = context->GetClearColor();
         for (size_t i = 0; i < m_ColorAttachments.size(); ++i)
@@ -350,13 +429,14 @@ namespace Engine
             clearValues.push_back(d);
         }
 
-        VulkanCommandBuffer commandBuffer(cmd);
         commandBuffer.BeginRenderPass(m_RenderPass, m_Framebuffer, {{0, 0}, {m_Spec.Width, m_Spec.Height}},
                                       clearValues);
         commandBuffer.SetViewport(0, 0, static_cast<float>(m_Spec.Width), static_cast<float>(m_Spec.Height));
         commandBuffer.SetScissor(0, 0, m_Spec.Width, m_Spec.Height);
 
-        context->SetActiveSceneRenderPass(m_RenderPass, static_cast<uint32_t>(m_ColorAttachments.size()));
+        const bool hasDepth = m_DepthAttachmentSpec.TextureFormat != FramebufferTextureFormat::None;
+        context->SetActiveSceneRenderPass(m_RenderPass, static_cast<uint32_t>(m_ColorAttachments.size()), hasDepth,
+                                          m_Spec.Width, m_Spec.Height);
     }
 
     void VulkanFramebuffer::Unbind()
@@ -370,7 +450,7 @@ namespace Engine
             return;
 
         VulkanCommandBuffer(cmd).EndRenderPass();
-        context->SetActiveSceneRenderPass(VK_NULL_HANDLE, 0);
+        context->SetActiveSceneRenderPass(VK_NULL_HANDLE, 0, false, 0, 0);
     }
 
     void VulkanFramebuffer::Resize(uint32_t width, uint32_t height)
@@ -381,6 +461,8 @@ namespace Engine
             return;
         }
 
+        ENGINE_CORE_WARN("[VulkanFramebuffer::Resize] this={0} size=({1},{2})", static_cast<const void*>(this), width,
+                         height);
         m_Spec.Width  = width;
         m_Spec.Height = height;
 

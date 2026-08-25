@@ -1,6 +1,7 @@
 #include "EditorViewportController.h"
 
 #include "Core/Application.h"
+#include "Core/Log.h"
 #include "Renderer/RendererAPI.h"
 #include "Platform/Vulkan/VulkanContext.h"
 #include "Debug/PerformanceMonitor.h"
@@ -37,6 +38,8 @@ namespace Engine
         hdrSpec.Width       = width;
         hdrSpec.Height      = height;
         m_HDRFramebuffer    = Framebuffer::Create(hdrSpec);
+        ENGINE_CORE_WARN("[DbgHDRFBO] Initialize({0}, {1}) HDR_FBO={2} size=({3},{4})", width, height,
+                         static_cast<const void*>(m_HDRFramebuffer.get()), hdrSpec.Width, hdrSpec.Height);
 
         FramebufferSpecification pickingSpec;
         pickingSpec.Attachments = {FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER,
