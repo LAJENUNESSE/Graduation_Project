@@ -29,7 +29,7 @@ namespace Engine
     public:
         static constexpr uint32_t kMaxFramesInFlight = 2;   // 与 VulkanContext::MAX_FRAMES_IN_FLIGHT 一致
         static constexpr uint32_t kGlobalUboSize     = 640; // PBRGlobalUBO std140 实际数据
-        static constexpr uint32_t kLightsUboSize     = 800; // PBRLightsUBO std140
+        static constexpr uint32_t kLightsUboSize     = 768; // PBRLightsUBO std140
         static constexpr uint32_t kMaterialUboSize   = 64;  // PBRMaterialUBO std140 实际数据
 
         // VkDescriptorBufferInfo.offset 对 UNIFORM_BUFFER 必须对齐
@@ -38,13 +38,15 @@ namespace Engine
         static constexpr uint32_t kUboOffsetAlignment        = 256;
         static constexpr uint32_t kGlobalUboAligned          = 768; // 640 向上取整到 256 倍数
         static constexpr uint32_t kLightsUboOffset           = kGlobalUboAligned;
-        static constexpr uint32_t kMaterialRingStride        = 256; // 数据 64B，步进对齐到 256
+        static constexpr uint32_t kGlobalRingStride          = 1536; // 768 + 768，按 256 对齐
+        static constexpr uint32_t kMaterialRingStride        = 256;  // 数据 64B，步进对齐到 256
+        static constexpr uint32_t kMaxGlobalAllocsPerFrame   = 2048;
         static constexpr uint32_t kMaxMaterialAllocsPerFrame = 2048;
 
         void Init(VkDevice device);
         void Shutdown(VkDevice device);
 
-        // 帧首调用：重置材质 ring 写指针 + descriptor pool
+        // 帧首调用：重置全局/材质 ring 写指针 + descriptor pool
         void OnBeginFrame(uint32_t frameIndex);
 
         struct DrawParams
@@ -79,10 +81,11 @@ namespace Engine
     private:
         struct FrameResources
         {
-            // GlobalUBO + LightsUBO 共用一个 host-visible persistent-mapped buffer 两段
+            // GlobalUBO + LightsUBO 按 draw 分段，避免同一帧后续 draw 覆盖已录制命令读取的数据
             VkBuffer      GlobalBuffer     = VK_NULL_HANDLE;
             VmaAllocation GlobalAllocation = nullptr;
             void*         GlobalMapped     = nullptr;
+            uint32_t      GlobalOffset     = 0;
 
             // 材质参数 ring（每 draw 一段，帧首重置）
             VkBuffer      MaterialBuffer     = VK_NULL_HANDLE;
@@ -95,7 +98,7 @@ namespace Engine
         };
 
         void     CreateFrameResources(uint32_t frameIndex);
-        void     PackAndUploadGlobals(VulkanShader* shader, uint32_t frameIndex);
+        uint32_t PackAndUploadGlobals(VulkanShader* shader, uint32_t frameIndex);
         uint32_t PackMaterial(VulkanShader* shader, uint32_t frameIndex); // 返回 ring 偏移；满时返回 UINT32_MAX
 
         // 1x1 白色占位纹理：未绑定槽位的 descriptor 兜底（避免空 descriptor 触发
@@ -114,7 +117,6 @@ namespace Engine
 
         void CreatePlaceholder();
         void DestroyPlaceholder();
-
 
         std::array<FrameResources, kMaxFramesInFlight> m_Frames{};
         PlaceholderTexture                             m_Placeholder{};

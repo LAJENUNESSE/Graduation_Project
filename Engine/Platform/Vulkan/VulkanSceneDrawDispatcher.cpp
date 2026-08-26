@@ -14,6 +14,9 @@
 #include "Platform/Vulkan/VulkanSceneState.h"
 #include "Platform/Vulkan/VulkanVertexArray.h"
 
+#include <cmath>
+#include <cstddef>
+#include <cstring>
 #include <glm/glm.hpp>
 
 namespace Engine
@@ -56,21 +59,26 @@ namespace Engine
             glm::vec3 Direction;
             float     _Pad0;
             glm::vec3 Color;
-            float     _Pad1;
             float     Intensity;
-            float     _Pad2[3];
         };
-        static_assert(sizeof(DirLightStd140) == 48, "DirLight std140 size");
+        static_assert(sizeof(DirLightStd140) == 32, "DirLight std140 size");
+        static_assert(offsetof(DirLightStd140, Direction) == 0 && offsetof(DirLightStd140, Color) == 16 &&
+                          offsetof(DirLightStd140, Intensity) == 28,
+                      "DirLight std140 offsets");
 
         struct PointLightStd140
         {
             glm::vec3 Position;
             float     _Pad0;
             glm::vec3 Color;
-            float     _Pad1;
             float     Intensity, Constant, Linear, Quadratic;
+            float     _Pad1;
         };
         static_assert(sizeof(PointLightStd140) == 48, "PointLight std140 size");
+        static_assert(offsetof(PointLightStd140, Position) == 0 && offsetof(PointLightStd140, Color) == 16 &&
+                          offsetof(PointLightStd140, Intensity) == 28 && offsetof(PointLightStd140, Constant) == 32 &&
+                          offsetof(PointLightStd140, Linear) == 36 && offsetof(PointLightStd140, Quadratic) == 40,
+                      "PointLight std140 offsets");
 
         struct SpotLightStd140
         {
@@ -79,19 +87,47 @@ namespace Engine
             glm::vec3 Direction;
             float     _Pad1;
             glm::vec3 Color;
-            float     _Pad2;
             float     Intensity, Constant, Linear, Quadratic, InnerCutoff, OuterCutoff; // @48..72
-            float     _Pad3[2]; // struct 向上取整到 16B 倍数 → 80
+            float     _Pad2[3]; // struct 向上取整到 16B 倍数 → 80
         };
         static_assert(sizeof(SpotLightStd140) == 80, "SpotLight std140 size");
+        static_assert(offsetof(SpotLightStd140, Position) == 0 && offsetof(SpotLightStd140, Direction) == 16 &&
+                          offsetof(SpotLightStd140, Color) == 32 && offsetof(SpotLightStd140, Intensity) == 44 &&
+                          offsetof(SpotLightStd140, Constant) == 48 && offsetof(SpotLightStd140, Linear) == 52 &&
+                          offsetof(SpotLightStd140, Quadratic) == 56 && offsetof(SpotLightStd140, InnerCutoff) == 60 &&
+                          offsetof(SpotLightStd140, OuterCutoff) == 64,
+                      "SpotLight std140 offsets");
 
         struct LightsUboStd140
         {
             DirLightStd140   DirLights[2];   //   0
-            PointLightStd140 PointLights[8]; //  96
-            SpotLightStd140  SpotLights[4];  // 480
+            PointLightStd140 PointLights[8]; //  64
+            SpotLightStd140  SpotLights[4];  // 448
         };
-        static_assert(sizeof(LightsUboStd140) == 800, "LightsUBO std140 size");
+        static_assert(sizeof(LightsUboStd140) == 768, "LightsUBO std140 size");
+
+        static_assert(sizeof(GlobalUboStd140) == VulkanSceneDrawDispatcher::kGlobalUboSize,
+                      "GlobalUBO constant does not match its CPU layout");
+        static_assert(sizeof(LightsUboStd140) == VulkanSceneDrawDispatcher::kLightsUboSize,
+                      "LightsUBO constant does not match its CPU layout");
+
+        bool IsFiniteMat4(const glm::mat4& matrix)
+        {
+            for (int column = 0; column < 4; ++column)
+                for (int row = 0; row < 4; ++row)
+                    if (!std::isfinite(matrix[column][row]))
+                        return false;
+            return true;
+        }
+
+        float MaxAbsMat4(const glm::mat4& matrix)
+        {
+            float maxAbs = 0.0f;
+            for (int column = 0; column < 4; ++column)
+                for (int row = 0; row < 4; ++row)
+                    maxAbs = std::max(maxAbs, std::abs(matrix[column][row]));
+            return maxAbs;
+        }
 
         struct MaterialUboStd140
         {
@@ -180,7 +216,7 @@ namespace Engine
 
         // ---- global buffer（Global + Lights 两段，host-visible persistent mapped）----
         {
-            const VkDeviceSize totalSize = kLightsUboOffset + kLightsUboSize;
+            const VkDeviceSize totalSize = static_cast<VkDeviceSize>(kGlobalRingStride) * kMaxGlobalAllocsPerFrame;
 
             VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
             bufferInfo.size  = totalSize;
@@ -194,6 +230,7 @@ namespace Engine
             const VkResult    result = vmaCreateBuffer(VulkanAllocator::GetAllocator(), &bufferInfo, &allocInfo,
                                                        &fr.GlobalBuffer, &fr.GlobalAllocation, &outInfo);
             ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create scene global UBO buffer");
+            ENGINE_CORE_RELEASE_ASSERT(outInfo.pMappedData != nullptr, "Scene global UBO mapping returned null");
             fr.GlobalMapped = outInfo.pMappedData;
         }
 
@@ -213,6 +250,7 @@ namespace Engine
             const VkResult    result = vmaCreateBuffer(VulkanAllocator::GetAllocator(), &bufferInfo, &allocInfo,
                                                        &fr.MaterialBuffer, &fr.MaterialAllocation, &outInfo);
             ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create scene material ring buffer");
+            ENGINE_CORE_RELEASE_ASSERT(outInfo.pMappedData != nullptr, "Scene material UBO mapping returned null");
             fr.MaterialMapped = outInfo.pMappedData;
         }
 
@@ -266,6 +304,7 @@ namespace Engine
     void VulkanSceneDrawDispatcher::OnBeginFrame(uint32_t frameIndex)
     {
         FrameResources& fr = m_Frames[frameIndex];
+        fr.GlobalOffset    = 0;
         fr.MaterialOffset  = 0;
         if (fr.Pool)
             vkResetDescriptorPool(m_Device, fr.Pool, 0);
@@ -410,15 +449,27 @@ namespace Engine
         }
     }
 
-    void VulkanSceneDrawDispatcher::PackAndUploadGlobals(VulkanShader* shader, uint32_t frameIndex)
+    uint32_t VulkanSceneDrawDispatcher::PackAndUploadGlobals(VulkanShader* shader, uint32_t frameIndex)
     {
         FrameResources& fr = m_Frames[frameIndex];
-        auto*           g  = static_cast<GlobalUboStd140*>(fr.GlobalMapped);
-        auto* lts = reinterpret_cast<LightsUboStd140*>(static_cast<uint8_t*>(fr.GlobalMapped) + kLightsUboOffset);
+        if (fr.GlobalOffset + kGlobalRingStride > kGlobalRingStride * kMaxGlobalAllocsPerFrame)
+        {
+            static bool warnedFull = false;
+            if (!warnedFull)
+            {
+                warnedFull = true;
+                ENGINE_CORE_WARN("[Vulkan] Global UBO ring exhausted this frame; draws dropped");
+            }
+            return UINT32_MAX;
+        }
 
-        // 每个 shader 只声明全局 UBO 的一个子集；先清零可避免上一 shader/上一帧
-        // 的残留值被 Vulkan shader 当成光照参数。
-        *g = {};
+        const uint32_t globalOffset = fr.GlobalOffset;
+        fr.GlobalOffset += kGlobalRingStride;
+
+        // 每个 draw 使用独立的 CPU 临时结构，避免后续 shader/帧覆盖已录制命令
+        // 所引用的全局 UBO 段。
+        GlobalUboStd140 globalData{};
+        LightsUboStd140 lightsData{};
 
         const auto& mat4s = shader->GetMat4Uniforms();
         const auto& vec3s = shader->GetFloat3Uniforms();
@@ -451,10 +502,30 @@ namespace Engine
         };
 
         // ---- globals ----
-        readMat4("u_ViewProjection", g->ViewProjection);
-        readMat4("u_LightSpaceMatrix", g->LightSpaceMatrix);
-        readMat4("u_ViewMatrix", g->ViewMatrix);
-        readVec3("u_ViewPos", g->ViewPos);
+        readMat4("u_ViewProjection", globalData.ViewProjection);
+        readMat4("u_LightSpaceMatrix", globalData.LightSpaceMatrix);
+        readMat4("u_ViewMatrix", globalData.ViewMatrix);
+        readVec3("u_ViewPos", globalData.ViewPos);
+
+        bool hasGlobalUbo = false;
+        for (const auto& binding : shader->GetReflectedBindings())
+        {
+            if (binding.Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER && binding.Name.find("Global") != std::string::npos)
+            {
+                hasGlobalUbo = true;
+                break;
+            }
+        }
+
+        const auto vpIt = mat4s.find("u_ViewProjection");
+        if (hasGlobalUbo && (vpIt == mat4s.end() || !IsFiniteMat4(globalData.ViewProjection) ||
+                             MaxAbsMat4(globalData.ViewProjection) < 1.0e-6f))
+        {
+            static std::unordered_set<const VulkanShader*> reported;
+            if (reported.insert(shader).second)
+                ENGINE_CORE_ERROR("[Vulkan UBO] shader '{}' has an invalid/zero u_ViewProjection before upload",
+                                  shader->GetName());
+        }
 
         // GL 惯例投影的 clip z∈[-1,1]，Vulkan 裁剪体积 z∈[0,1]——对 z 行做
         // z' = 0.5*z + 0.5*w 重映射（列主序：每列的 row2 与 row3 线性组合）。
@@ -464,35 +535,56 @@ namespace Engine
             for (int c = 0; c < 4; ++c)
                 m[c][2] = 0.5f * m[c][2] + 0.5f * m[c][3];
         };
-        remapDepthToVulkan(g->ViewProjection);
-        remapDepthToVulkan(g->LightSpaceMatrix);
+        remapDepthToVulkan(globalData.ViewProjection);
+        remapDepthToVulkan(globalData.LightSpaceMatrix);
         for (int i = 0; i < 4; ++i)
         {
             readMat4(("u_CascadeLightSpaceMatrices[" + std::to_string(i) + "]").c_str(),
-                     g->CascadeLightSpaceMatrices[i]);
-            remapDepthToVulkan(g->CascadeLightSpaceMatrices[i]);
-            readFloat(("u_CascadeSplitDepths[" + std::to_string(i) + "]").c_str(), g->CascadeSplitDepths[i]);
-            readFloat(("u_CascadeTexelWorldSize[" + std::to_string(i) + "]").c_str(), g->CascadeTexelWorldSize[i]);
+                     globalData.CascadeLightSpaceMatrices[i]);
+            remapDepthToVulkan(globalData.CascadeLightSpaceMatrices[i]);
+            readFloat(("u_CascadeSplitDepths[" + std::to_string(i) + "]").c_str(), globalData.CascadeSplitDepths[i]);
+            readFloat(("u_CascadeTexelWorldSize[" + std::to_string(i) + "]").c_str(),
+                      globalData.CascadeTexelWorldSize[i]);
         }
-        readInt("u_NumDirLights", g->NumDirLights);
-        readInt("u_NumPointLights", g->NumPointLights);
-        readInt("u_NumSpotLights", g->NumSpotLights);
-        readInt("u_CascadeCount", g->CascadeCount);
-        readInt("u_ShadowEnabled", g->ShadowEnabled);
-        readInt("u_CSMEnabled", g->CSMEnabled);
-        readInt("u_IBLEnabled", g->IBLEnabled);
-        readInt("u_IBLDebugMode", g->IBLDebugMode);
-        readInt("u_SSAOEnabled", g->SSAOEnabled);
-        readFloat("u_AmbientStrength", g->AmbientStrength);
-        readFloat("u_IBLIntensity", g->IBLIntensity);
-        readFloat("u_ShadowBias", g->ShadowBias);
+        readInt("u_NumDirLights", globalData.NumDirLights);
+        readInt("u_NumPointLights", globalData.NumPointLights);
+        readInt("u_NumSpotLights", globalData.NumSpotLights);
+        readInt("u_CascadeCount", globalData.CascadeCount);
+        readInt("u_ShadowEnabled", globalData.ShadowEnabled);
+        readInt("u_CSMEnabled", globalData.CSMEnabled);
+        readInt("u_IBLEnabled", globalData.IBLEnabled);
+        readInt("u_IBLDebugMode", globalData.IBLDebugMode);
+        readInt("u_SSAOEnabled", globalData.SSAOEnabled);
+        readFloat("u_AmbientStrength", globalData.AmbientStrength);
+        readFloat("u_IBLIntensity", globalData.IBLIntensity);
+        readFloat("u_ShadowBias", globalData.ShadowBias);
+
+        if (hasGlobalUbo)
+        {
+            const int32_t originalDirCount   = globalData.NumDirLights;
+            const int32_t originalPointCount = globalData.NumPointLights;
+            const int32_t originalSpotCount  = globalData.NumSpotLights;
+            globalData.NumDirLights          = std::clamp(globalData.NumDirLights, 0, 2);
+            globalData.NumPointLights        = std::clamp(globalData.NumPointLights, 0, 8);
+            globalData.NumSpotLights         = std::clamp(globalData.NumSpotLights, 0, 4);
+            if (originalDirCount != globalData.NumDirLights || originalPointCount != globalData.NumPointLights ||
+                originalSpotCount != globalData.NumSpotLights)
+            {
+                static bool reportedCount = false;
+                if (!reportedCount)
+                {
+                    reportedCount = true;
+                    ENGINE_CORE_WARN("[Vulkan UBO] clamped light counts to shader capacities: dir={} point={} spot={}",
+                                     globalData.NumDirLights, globalData.NumPointLights, globalData.NumSpotLights);
+                }
+            }
+        }
 
         // ---- lights（std140 结构体数组逐字段提取）----
-        *lts = {};
         for (int i = 0; i < 2; ++i)
         {
             const std::string idx = "[" + std::to_string(i) + "]";
-            auto&             dl  = lts->DirLights[i];
+            auto&             dl  = lightsData.DirLights[i];
             readVec3(("u_DirLights" + idx + ".direction").c_str(), dl.Direction);
             readVec3(("u_DirLights" + idx + ".color").c_str(), dl.Color);
             readFloat(("u_DirLights" + idx + ".intensity").c_str(), dl.Intensity);
@@ -500,7 +592,7 @@ namespace Engine
         for (int i = 0; i < 8; ++i)
         {
             const std::string idx = "[" + std::to_string(i) + "]";
-            auto&             pl  = lts->PointLights[i];
+            auto&             pl  = lightsData.PointLights[i];
             readVec3(("u_PointLights" + idx + ".position").c_str(), pl.Position);
             readVec3(("u_PointLights" + idx + ".color").c_str(), pl.Color);
             readFloat(("u_PointLights" + idx + ".intensity").c_str(), pl.Intensity);
@@ -511,7 +603,7 @@ namespace Engine
         for (int i = 0; i < 4; ++i)
         {
             const std::string idx = "[" + std::to_string(i) + "]";
-            auto&             sl  = lts->SpotLights[i];
+            auto&             sl  = lightsData.SpotLights[i];
             readVec3(("u_SpotLights" + idx + ".position").c_str(), sl.Position);
             readVec3(("u_SpotLights" + idx + ".direction").c_str(), sl.Direction);
             readVec3(("u_SpotLights" + idx + ".color").c_str(), sl.Color);
@@ -523,10 +615,36 @@ namespace Engine
             readFloat(("u_SpotLights" + idx + ".outerCutoff").c_str(), sl.OuterCutoff);
         }
 
-        // HOST_VISIBLE 非 coherent 内存写后必须 flush，GPU 才能看到。VMA 的 AUTO
-        // 策略不保证选中 HOST_COHERENT 类型；漏 flush 时 GPU 读到未刷新数据
-        // （全 0 的 ViewProjection 会把所有几何变换出裁剪空间 → 场景整体不可见）
-        vmaFlushAllocation(VulkanAllocator::GetAllocator(), fr.GlobalAllocation, 0, kLightsUboOffset + kLightsUboSize);
+        auto* mapped = static_cast<uint8_t*>(fr.GlobalMapped);
+        ENGINE_CORE_RELEASE_ASSERT(mapped != nullptr, "Scene global UBO mapped pointer is null");
+        std::memcpy(mapped + globalOffset, &globalData, kGlobalUboSize);
+        std::memcpy(mapped + globalOffset + kLightsUboOffset, &lightsData, kLightsUboSize);
+
+        // HOST_VISIBLE 非 coherent 内存写后必须 flush，GPU 才能看到。两个 payload
+        // 分别 flush，避免把 ring 中未使用的 padding 当成有效范围。
+        const VkResult globalFlush =
+            vmaFlushAllocation(VulkanAllocator::GetAllocator(), fr.GlobalAllocation, globalOffset, kGlobalUboSize);
+        const VkResult lightsFlush = vmaFlushAllocation(VulkanAllocator::GetAllocator(), fr.GlobalAllocation,
+                                                        globalOffset + kLightsUboOffset, kLightsUboSize);
+        ENGINE_CORE_RELEASE_ASSERT(globalFlush == VK_SUCCESS && lightsFlush == VK_SUCCESS,
+                                   "Failed to flush scene global UBO allocation");
+
+        if (hasGlobalUbo)
+        {
+            static std::unordered_set<const VulkanShader*> logged;
+            if (logged.insert(shader).second)
+            {
+                const auto& vp = globalData.ViewProjection;
+                ENGINE_CORE_INFO("[Vulkan UBO] shader='{}' allocation={} globalOffset={} globalSize={} lightsOffset={} "
+                                 "lightsSize={} "
+                                 "vpCol0=({}, {}, {}, {})",
+                                 shader->GetName(), static_cast<const void*>(fr.GlobalAllocation), globalOffset,
+                                 kGlobalUboSize, globalOffset + kLightsUboOffset, kLightsUboSize, vp[0][0], vp[0][1],
+                                 vp[0][2], vp[0][3]);
+            }
+        }
+
+        return globalOffset;
     }
 
     uint32_t VulkanSceneDrawDispatcher::PackMaterial(VulkanShader* shader, uint32_t frameIndex)
@@ -648,7 +766,9 @@ namespace Engine
         }
 
         // ---- uniforms ----
-        PackAndUploadGlobals(shader, frameIndex);
+        const uint32_t globalOffset = PackAndUploadGlobals(shader, frameIndex);
+        if (globalOffset == UINT32_MAX)
+            return false;
         const uint32_t materialOffset = PackMaterial(shader, frameIndex);
         if (materialOffset == UINT32_MAX)
             return false;
@@ -697,10 +817,12 @@ namespace Engine
             if (b.Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
             {
                 if (baseName.find("Global") != std::string::npos)
-                    (b.Set == 0 ? w0 : w1).WriteBuffer(b.Binding, fr.GlobalBuffer, 0, kGlobalUboSize, b.Type);
+                    (b.Set == 0 ? w0 : w1)
+                        .WriteBuffer(b.Binding, fr.GlobalBuffer, globalOffset, kGlobalUboSize, b.Type);
                 else if (baseName.find("Lights") != std::string::npos)
                     (b.Set == 0 ? w0 : w1)
-                        .WriteBuffer(b.Binding, fr.GlobalBuffer, kLightsUboOffset, kLightsUboSize, b.Type);
+                        .WriteBuffer(b.Binding, fr.GlobalBuffer, globalOffset + kLightsUboOffset, kLightsUboSize,
+                                     b.Type);
                 else if (hasSet1 && b.Set == 1)
                     w1.WriteBuffer(b.Binding, fr.MaterialBuffer, materialOffset, kMaterialUboSize, b.Type);
             }

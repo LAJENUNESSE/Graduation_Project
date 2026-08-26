@@ -155,7 +155,7 @@ layout(std140, set = 0, binding = 0) uniform PBRGlobalUBO
     float u_ShadowBias;
 };
 
-// 光照结构 UBO（std140：DirLight 48B / PointLight 48B / SpotLight 80B）
+// 光照结构 UBO（std140：DirLight 32B / PointLight 48B / SpotLight 80B）
 layout(std140, set = 0, binding = 14) uniform PBRLightsUBO
 {
     DirLight   u_DirLights[MAX_DIR_LIGHTS];
