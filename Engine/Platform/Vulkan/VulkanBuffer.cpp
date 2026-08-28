@@ -14,6 +14,35 @@ namespace Engine
 {
     namespace
     {
+        void DestroyBufferDeferred(VkBuffer& buffer, VmaAllocation& allocation)
+        {
+            if (buffer == VK_NULL_HANDLE)
+                return;
+
+            const VkBuffer      bufferToDestroy     = buffer;
+            const VmaAllocation allocationToDestroy = allocation;
+
+            buffer     = VK_NULL_HANDLE;
+            allocation = nullptr;
+
+            if (!VulkanAllocator::IsInitialized())
+                return;
+
+            if (VulkanContext::Get() != nullptr)
+            {
+                VulkanContext::DeferDestroy(
+                    [bufferToDestroy, allocationToDestroy](VkDevice)
+                    {
+                        if (VulkanAllocator::IsInitialized())
+                            vmaDestroyBuffer(VulkanAllocator::GetAllocator(), bufferToDestroy, allocationToDestroy);
+                    });
+                return;
+            }
+
+            // Context 已退出录制窗口或尚未注册时没有在途主帧命令缓冲，可直接释放。
+            vmaDestroyBuffer(VulkanAllocator::GetAllocator(), bufferToDestroy, allocationToDestroy);
+        }
+
         // host-visible 直写（host-visible 模式专用）
         void UploadToAllocation(VmaAllocation allocation, const void* data, uint32_t size, uint32_t offset = 0)
         {
@@ -203,8 +232,7 @@ namespace Engine
 
     VulkanVertexBuffer::~VulkanVertexBuffer()
     {
-        if (m_Buffer != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-            vmaDestroyBuffer(VulkanAllocator::GetAllocator(), m_Buffer, m_Allocation);
+        DestroyBufferDeferred(m_Buffer, m_Allocation);
     }
 
     void VulkanVertexBuffer::Bind() const {}
@@ -236,8 +264,7 @@ namespace Engine
 
     VulkanIndexBuffer::~VulkanIndexBuffer()
     {
-        if (m_Buffer != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-            vmaDestroyBuffer(VulkanAllocator::GetAllocator(), m_Buffer, m_Allocation);
+        DestroyBufferDeferred(m_Buffer, m_Allocation);
     }
 
     void VulkanIndexBuffer::Bind() const {}
@@ -281,8 +308,7 @@ namespace Engine
 
     VulkanStorageBuffer::~VulkanStorageBuffer()
     {
-        if (m_Buffer != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-            vmaDestroyBuffer(VulkanAllocator::GetAllocator(), m_Buffer, m_Allocation);
+        DestroyBufferDeferred(m_Buffer, m_Allocation);
     }
 
     void VulkanStorageBuffer::Bind(uint32_t binding) const
@@ -398,8 +424,7 @@ namespace Engine
 
     VulkanUniformBuffer::~VulkanUniformBuffer()
     {
-        if (m_Buffer != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-            vmaDestroyBuffer(VulkanAllocator::GetAllocator(), m_Buffer, m_Allocation);
+        DestroyBufferDeferred(m_Buffer, m_Allocation);
     }
 
     void VulkanUniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset)

@@ -228,18 +228,26 @@ namespace Engine
 
     void VulkanIBLGenerator::DestroyImage(ImageHandle& img)
     {
-        auto device = GetDevice();
-        if (img.View != VK_NULL_HANDLE)
-        {
-            vkDestroyImageView(device, img.View, nullptr);
-            img.View = VK_NULL_HANDLE;
-        }
-        if (img.Image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
-        {
-            vmaDestroyImage(VulkanAllocator::GetAllocator(), img.Image, img.Allocation);
-            img.Image      = VK_NULL_HANDLE;
-            img.Allocation = nullptr;
-        }
+        const VkImageView   viewToDestroy       = img.View;
+        const VkImage       imageToDestroy      = img.Image;
+        const VmaAllocation allocationToDestroy = img.Allocation;
+
+        img = {};
+
+        if (viewToDestroy == VK_NULL_HANDLE && imageToDestroy == VK_NULL_HANDLE)
+            return;
+
+        // 切换天空盒时旧 IBL 仍可能被当前主帧命令缓冲引用。即使
+        // vkDeviceWaitIdle 已等待所有已提交工作，也保护不了正在录制的命令缓冲，
+        // 因此与 Framebuffer/Texture/Buffer 一致延迟到对应帧 fence 完成后释放。
+        VulkanContext::DeferDestroy(
+            [viewToDestroy, imageToDestroy, allocationToDestroy](VkDevice device)
+            {
+                if (viewToDestroy != VK_NULL_HANDLE)
+                    vkDestroyImageView(device, viewToDestroy, nullptr);
+                if (imageToDestroy != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
+                    vmaDestroyImage(VulkanAllocator::GetAllocator(), imageToDestroy, allocationToDestroy);
+            });
     }
 
     // ---- BRDF LUT 生成（不依赖 skybox） ----
