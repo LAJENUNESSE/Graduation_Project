@@ -54,9 +54,6 @@
       "name": "vs2022-vulkan",
       "displayName": "Windows (VS 2022 + vcpkg + Vulkan)",
       "inherits": "windows-vs2022",
-      "environment": {
-        "VULKAN_SDK": "C:/Dev/Environments/VulkanSDK/1.4.341.1"
-      },
       "cacheVariables": {
         "ENGINE_ENABLE_VULKAN": "ON"
       }

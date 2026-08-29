@@ -59,6 +59,50 @@ jobs:
       - name: Build Editor
         run: cmake --build build --config RelWithDebInfo --target Editor
 
+  build-windows-vulkan:
+    name: Windows Vulkan (MSVC)
+    runs-on: windows-2022
+
+    env:
+      VCPKG_ROOT: C:/vcpkg
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Initialize submodules (shallow)
+        run: git submodule update --init --recursive --depth 1
+
+      - name: Install Vulkan SDK
+        run: |
+          $sdkVersion = "1.4.341.1"
+          $url = "https://sdk.lunarg.com/sdk/download/$sdkVersion/windows/VulkanSDK-$sdkVersion-Installer.exe"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP/vulkan-sdk.exe"
+          Start-Process -FilePath "$env:RUNNER_TEMP/vulkan-sdk.exe" -ArgumentList "/S" -Wait
+          echo "VULKAN_SDK=C:/VulkanSDK/$sdkVersion" >> $env:GITHUB_ENV
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: windows-msvc-vulkan
+          variant: sccache
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake
+        run: cmake --preset vs2022-vulkan -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Build Engine
+        run: cmake --build build --config RelWithDebInfo --target Engine
+
+      - name: Build Editor
+        run: cmake --build build --config RelWithDebInfo --target Editor
+
   build-linux:
     name: Linux (${{ matrix.name }})
     runs-on: ubuntu-latest
