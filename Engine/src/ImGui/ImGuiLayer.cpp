@@ -217,6 +217,9 @@ namespace Engine
                 // 视口/场景 FBO 可能在上一帧录制期间排队 descriptor 释放；
                 // 必须在 ImGui_ImplVulkan_Shutdown 前执行延迟队列。
                 vkContext->FlushDeferredDestructions();
+                // 在后端 Shutdown 前释放全部 ImGui descriptor set：此后 EditorLayer
+                // 析构视口 FBO 时 RemoveImGuiTexture 只清缓存，不再触碰已死后端。
+                vkContext->ClearImGuiTextures();
             }
             ImGui_ImplVulkan_Shutdown();
         }

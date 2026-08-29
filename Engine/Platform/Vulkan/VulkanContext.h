@@ -149,8 +149,11 @@ namespace Engine
         // Phase 8.2：把 FBO color attachment 的 VkImageView 包装成 ImGui 可用的
         // ImTextureID（VkDescriptorSet，void* 透传）。带 view→set 缓存；
         // view 销毁前必须调 RemoveImGuiTexture 防止悬垂。
-        void*    GetImGuiTextureForView(void* imageView);
-        void     RemoveImGuiTexture(void* imageView);
+        void* GetImGuiTextureForView(void* imageView);
+        void  RemoveImGuiTexture(void* imageView);
+        // 退出路径专用：在 ImGui_ImplVulkan_Shutdown 前释放全部 ImGui descriptor
+        // set 并清空缓存，此后析构 FBO 触发的 RemoveImGuiTexture 只清缓存不再 free。
+        void     ClearImGuiTextures();
         uint32_t GetActiveSceneColorAttachmentCount() const { return m_ActiveSceneColorAttachmentCount; }
         bool     GetActiveSceneHasDepth() const { return m_ActiveSceneHasDepth; }
         uint32_t GetActiveSceneWidth() const { return m_ActiveSceneWidth; }

@@ -922,6 +922,12 @@ namespace Engine
         const VkDescriptorSet descriptorSet = it->second;
         m_ImGuiTextures.erase(it);
 
+        // ImGui 后端/context 已销毁（退出时视口 FBO 的析构晚于 ImGuiLayer::OnDetach）：
+        // descriptor set 已随 Shutdown 内部的 descriptor pool 销毁一并释放，
+        // 这里只清缓存，绝不能再解引用已死的 backend 数据。
+        if (ImGui::GetCurrentContext() == nullptr)
+            return;
+
         if (m_FrameInProgress)
         {
             // 旧视口 descriptor 可能已经被当前帧或前一帧的 command buffer 引用。
@@ -935,6 +941,19 @@ namespace Engine
             vkDeviceWaitIdle(m_Device);
             ImGui_ImplVulkan_RemoveTexture(descriptorSet);
         }
+    }
+
+    void VulkanContext::ClearImGuiTextures()
+    {
+        if (m_ImGuiTextures.empty())
+            return;
+
+        // 必须在 ImGui_ImplVulkan_Shutdown 之前调用（后端仍存活）。
+        // 先排空延迟队列，让录制期间入队的 descriptor 释放先落地。
+        FlushDeferredDestructions();
+        for (auto& [view, set] : m_ImGuiTextures)
+            ImGui_ImplVulkan_RemoveTexture(set);
+        m_ImGuiTextures.clear();
     }
 
     // Phase 8.2：场景 descriptor 共用默认采样器（linear + clampToEdge）。
@@ -1285,8 +1304,8 @@ namespace Engine
     {
         m_PipelineBuilder.Clear(m_Device);
         m_SceneDrawDispatcher.Shutdown(m_Device);
-        for (auto& [view, set] : m_ImGuiTextures)
-            ImGui_ImplVulkan_RemoveTexture(set);
+        // ImGui 后端早已在 ImGuiLayer::OnDetach 中 Shutdown（正常路径 map 已被
+        // ClearImGuiTextures 清空）；残留项也不能再 free，直接丢弃防死指针。
         m_ImGuiTextures.clear();
         if (m_DefaultSampler != VK_NULL_HANDLE)
         {
