@@ -129,8 +129,6 @@ namespace Engine
         Clear();
 
         auto device = GetDevice();
-        vkDeviceWaitIdle(device);
-
         DestroyImage(m_BRDFLut);
         m_BRDFLutView = VK_NULL_HANDLE;
 
@@ -155,10 +153,19 @@ namespace Engine
         m_PrefilterSetLayout.reset();
         m_DescriptorPool.reset();
 
-        if (m_LinearSampler != VK_NULL_HANDLE)
+        const VkSampler sampler = m_LinearSampler;
+        m_LinearSampler         = VK_NULL_HANDLE;
+        if (sampler != VK_NULL_HANDLE)
         {
-            vkDestroySampler(device, m_LinearSampler, nullptr);
-            m_LinearSampler = VK_NULL_HANDLE;
+            if (VulkanContext::Get())
+            {
+                VulkanContext::DeferDestroy([sampler](VkDevice deferredDevice)
+                                            { vkDestroySampler(deferredDevice, sampler, nullptr); });
+            }
+            else
+            {
+                vkDestroySampler(device, sampler, nullptr);
+            }
         }
 
         m_BRDFLutShader.reset();
@@ -169,9 +176,6 @@ namespace Engine
     void VulkanIBLGenerator::Clear()
     {
         // Irradiance/Prefilter 在不同 skybox 间被重建，BRDF LUT 不动
-        auto device = GetDevice();
-        vkDeviceWaitIdle(device);
-
         DestroyImage(m_Irradiance);
         DestroyImage(m_Prefilter);
         m_IrradianceView = VK_NULL_HANDLE;
@@ -410,8 +414,12 @@ namespace Engine
 
         ctx->EndSingleTimeCommands(raw);
 
-        m_IBLReady = true;
-        ENGINE_CORE_INFO("[VulkanIBL] Irradiance + Prefilter generated (env cubemap {}x{})", envFaceSize, envFaceSize);
+        // 当前 compute 输出是 2D 横向 atlas，不能绑定到 PBR 的 samplerCube。
+        // 在输出改为 6-layer cube-compatible image 且补齐 mip 链前保持未就绪，
+        // SceneRenderer 会关闭 IBL 并由场景 dispatcher 绑定类型正确的占位 cubemap。
+        m_IBLReady = false;
+        ENGINE_CORE_WARN("[VulkanIBL] Irradiance/Prefilter 2D atlases generated for diagnostics, but PBR IBL is "
+                         "disabled until cube image views and prefilter mip levels are implemented");
     }
 
 } // namespace Engine

@@ -469,9 +469,6 @@ namespace Engine
             return;
 
         VkDevice device = m_VulkanResources->Device;
-        if (device != VK_NULL_HANDLE)
-            vkDeviceWaitIdle(device);
-
         VulkanPipeline::DestroyCompute(device, m_VulkanResources->PlacementPipeline);
         VulkanPipeline::DestroyCompute(device, m_VulkanResources->RenderArgsPipeline);
         m_VulkanResources->DescriptorPool.reset();

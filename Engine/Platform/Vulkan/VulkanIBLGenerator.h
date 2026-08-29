@@ -18,10 +18,10 @@ namespace Engine
     // IBL 预计算管线的 Vulkan 实现。
     // - 3 个 compute shader：BRDF_LUT / Irradiance / Prefilter（与 OpenGL 共享 .glsl，通过 #ifdef VULKAN 切换语法）
     // - uniform 通过 push constant 传递
-    // - 输出 image 在 compute dispatch 期间布局为 GENERAL，之后转为 SHADER_READ_ONLY_OPTIMAL 供 PBR pass 采样
+    // - 输出 image 在 compute dispatch 期间布局为 GENERAL，之后转为 SHADER_READ_ONLY_OPTIMAL
     //
-    // 注：当前 VulkanTextureCubemap 尚未完成（Phase 7.x 后续步骤），所以 Generate() 在 skybox 数据无效时
-    // 只完成 BRDF LUT，跳过 Irradiance/Prefilter（保留接口契约不崩）。
+    // 注：Irradiance/Prefilter 当前仍是 2D 横向 atlas，不可绑定到 PBR 的 samplerCube。
+    // Generate() 可生成诊断资源，但 IsReady() 保持 false，直到 cube-compatible 输出与 mip 链接通。
     class VulkanIBLGenerator : public IBLGenerator
     {
     public:

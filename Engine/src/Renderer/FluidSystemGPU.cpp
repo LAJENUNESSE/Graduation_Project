@@ -1204,27 +1204,35 @@ namespace Engine
         if (!m_VulkanResources || !m_VulkanResources->Initialized)
             return;
 
-        if (m_VulkanResources->Device != VK_NULL_HANDLE)
-            vkDeviceWaitIdle(m_VulkanResources->Device);
+        const VkDevice    device         = m_VulkanResources->Device;
+        const VkQueryPool timestampPool  = m_VulkanResources->TimestampPool;
+        m_VulkanResources->TimestampPool = VK_NULL_HANDLE;
 
-        if (m_VulkanResources->TimestampPool != VK_NULL_HANDLE)
+        if (timestampPool != VK_NULL_HANDLE && device != VK_NULL_HANDLE)
         {
-            vkDestroyQueryPool(m_VulkanResources->Device, m_VulkanResources->TimestampPool, nullptr);
-            m_VulkanResources->TimestampPool = VK_NULL_HANDLE;
+            if (VulkanContext::Get())
+            {
+                VulkanContext::DeferDestroy([timestampPool](VkDevice deferredDevice)
+                                            { vkDestroyQueryPool(deferredDevice, timestampPool, nullptr); });
+            }
+            else
+            {
+                vkDestroyQueryPool(device, timestampPool, nullptr);
+            }
         }
 
-        VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->EmitPipeline);
-        VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->SimulatePipeline);
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->EmitPipeline);
+        VulkanPipeline::DestroyCompute(device, m_VulkanResources->SimulatePipeline);
 
         if (m_VulkanResources->SPHInitialized)
         {
-            VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->SPHDensityPipeline);
-            VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->SPHForcePipeline);
-            VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->PCISPHInitPipeline);
-            VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->PCISPHPredictPipeline);
-            VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->PCISPHDensityPipeline);
-            VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->PCISPHForcePipeline);
-            VulkanPipeline::DestroyCompute(m_VulkanResources->Device, m_VulkanResources->PCISPHApplyPipeline);
+            VulkanPipeline::DestroyCompute(device, m_VulkanResources->SPHDensityPipeline);
+            VulkanPipeline::DestroyCompute(device, m_VulkanResources->SPHForcePipeline);
+            VulkanPipeline::DestroyCompute(device, m_VulkanResources->PCISPHInitPipeline);
+            VulkanPipeline::DestroyCompute(device, m_VulkanResources->PCISPHPredictPipeline);
+            VulkanPipeline::DestroyCompute(device, m_VulkanResources->PCISPHDensityPipeline);
+            VulkanPipeline::DestroyCompute(device, m_VulkanResources->PCISPHForcePipeline);
+            VulkanPipeline::DestroyCompute(device, m_VulkanResources->PCISPHApplyPipeline);
 
             m_VulkanResources->SPHDensityLayout.reset();
             m_VulkanResources->SPHForceLayout.reset();
