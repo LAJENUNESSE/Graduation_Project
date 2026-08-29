@@ -733,38 +733,6 @@ namespace Engine
         if (handle.Pipeline == VK_NULL_HANDLE)
             return false;
 
-        // ---- 临时调试：每 shader 首次 dispatch 打印关键数据（定位黑屏用，验证后移除）----
-        {
-            static std::unordered_set<const VulkanShader*> s_DbgLogged;
-            if (s_DbgLogged.insert(shader).second)
-            {
-                const auto& mat4s = shader->GetMat4Uniforms();
-                const auto  vpIt  = mat4s.find("u_ViewProjection");
-                const auto  trIt  = mat4s.find("u_Transform");
-                ENGINE_CORE_WARN("[DbgDispatch shader={0}] mat4s={1} vp={2} transform={3} pipeline={4} idxCount={5}",
-                                 static_cast<const void*>(shader), mat4s.size(), vpIt != mat4s.end(),
-                                 trIt != mat4s.end(), static_cast<const void*>(handle.Pipeline), params.IndexCount);
-                if (vpIt != mat4s.end())
-                {
-                    const auto& m = vpIt->second;
-                    ENGINE_CORE_WARN("[DbgDispatch VP] col0=({0:.2f},{1:.2f},{2:.2f},{3:.2f}) "
-                                     "col3=({4:.2f},{5:.2f},{6:.2f},{7:.2f})",
-                                     m[0][0], m[1][0], m[2][0], m[3][0], m[0][3], m[1][3], m[2][3], m[3][3]);
-                }
-                std::string attrDump;
-                for (const auto& a : desc.Attributes)
-                {
-                    attrDump += fmt::format("[loc{} b{} off{} fmt{}]", a.location, a.binding, a.offset,
-                                            static_cast<int>(a.format));
-                }
-                std::string reflLocs;
-                for (uint32_t loc : shader->GetVertexInputLocations())
-                    reflLocs += std::to_string(loc) + ",";
-                ENGINE_CORE_WARN("[DbgDispatch bindings] vbos={0} attrs={1} reflLocs={2} attrDump={3}",
-                                 va->GetVertexBuffers().size(), desc.Attributes.size(), reflLocs, attrDump);
-            }
-        }
-
         // ---- uniforms ----
         const uint32_t globalOffset = PackAndUploadGlobals(shader, frameIndex);
         if (globalOffset == UINT32_MAX)

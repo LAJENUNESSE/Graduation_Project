@@ -454,6 +454,26 @@ namespace Engine
     // Instance creation
     // =========================================================================
 
+    bool VulkanContext::ResolveValidationEnabled()
+    {
+        // phase-8.2 排查 device lost 期间曾临时无条件强制开启，现还原为按构建
+        // 类型门控；排查时可设 ENGINE_VULKAN_VALIDATION=1 重新打开。
+        if (const char* env = std::getenv("ENGINE_VULKAN_VALIDATION"))
+        {
+            if (env[0] == '0')
+                return false;
+            if (env[0] == '1')
+                return true;
+        }
+#ifndef NDEBUG
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    bool VulkanContext::s_EnableValidation = VulkanContext::ResolveValidationEnabled();
+
     void VulkanContext::CreateInstance()
     {
         // Check validation layer support
@@ -1346,7 +1366,7 @@ namespace Engine
         vkDestroyDevice(m_Device, nullptr);
         m_Device = VK_NULL_HANDLE;
 
-        if constexpr (s_EnableValidation)
+        if (s_EnableValidation)
             if (m_DebugMessenger != VK_NULL_HANDLE)
                 DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
 
