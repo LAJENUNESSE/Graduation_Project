@@ -61,13 +61,13 @@ namespace Engine
     public:
         struct MeshSDFFrameStats
         {
-            uint32_t ActiveEmitters    = 0;
-            uint32_t BodyCount         = 0;
-            uint32_t VoxelCount        = 0;
-            uint32_t EstimatedSamples  = 0;
-            uint32_t Resolution        = 0;
-            float    Band              = 0.0f;
-            float    BuildCpuMs        = 0.0f;
+            uint32_t ActiveEmitters   = 0;
+            uint32_t BodyCount        = 0;
+            uint32_t VoxelCount       = 0;
+            uint32_t EstimatedSamples = 0;
+            uint32_t Resolution       = 0;
+            float    Band             = 0.0f;
+            float    BuildCpuMs       = 0.0f;
         };
 
         void Init(uint32_t viewportWidth = 1280, uint32_t viewportHeight = 720);
@@ -91,8 +91,8 @@ namespace Engine
         FluidRenderer&       GetFluidRenderer() { return m_FluidRenderer; }
 
         // 逐实体释放粒子/流体 GPU 缓存
-        void ReleaseParticleSystem(uint32_t entityID);
-        void ReleaseFluidSystem(uint32_t entityID);
+        void                                                     ReleaseParticleSystem(uint32_t entityID);
+        void                                                     ReleaseFluidSystem(uint32_t entityID);
         const std::unordered_map<uint32_t, Ref<FluidSystemGPU>>& GetFluidSystems() const { return m_FluidSystems; }
         const MeshSDFFrameStats& GetMeshSDFFrameStats() const { return m_MeshSDFFrameStats; }
 
@@ -129,6 +129,8 @@ namespace Engine
         void ResizeHDR(uint32_t width, uint32_t height);
 
     private:
+        void UpdateParticleSystems();
+
         std::vector<RenderPassConfig> m_PassQueue;
 
         RenderContext    m_Context;
@@ -172,7 +174,7 @@ namespace Engine
         std::unordered_map<uint32_t, Ref<FluidSystemGPU>> m_FluidSystems;
         std::unordered_set<uint32_t>                      m_FluidEmitted; // 替代 FluidEmitterComponent::Emitted
         FluidRenderer                                     m_FluidRenderer;
-        float                                             m_TotalTime = 0.0f;
+        float                                             m_TotalTime         = 0.0f;
         bool                                              m_ShowMeshSDFBounds = false;
         bool                                              m_ShowMeshSDFStats  = true;
         MeshSDFFrameStats                                 m_MeshSDFFrameStats;

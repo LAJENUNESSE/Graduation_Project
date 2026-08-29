@@ -123,55 +123,79 @@ namespace Engine
             {"LightCollect", [this](RenderContext& ctx)
              { m_LightEnv = LightSystem::CollectLights(*ctx.Registry, *ctx.EntityIndex, ctx.TransformCache); }});
 
-        m_PassQueue.push_back({"ShadowPass", [this](RenderContext& ctx)
-                               {
-                                   // 使用 CSM 版本
-                                   m_ShadowData = m_ShadowSystem.ExecuteCSM(*ctx.Registry, m_LightEnv, *ctx.Camera,
-                                                                            *ctx.EntityIndex, ctx.TransformCache);
+        m_PassQueue.push_back(
+            {"ShadowPass", [this](RenderContext& ctx)
+             {
+                 // 使用 CSM 版本
+                 m_ShadowData = m_ShadowSystem.ExecuteCSM(*ctx.Registry, m_LightEnv, *ctx.Camera, *ctx.EntityIndex,
+                                                          ctx.TransformCache);
 
-                                   // 地形阴影深度渲染
-                                   if (m_ShadowData.HasValidShadowCaster)
-                                   {
-                                       if (m_ShadowData.CSMActive)
-                                       {
-                                           // CSM: 对每个级联渲染地形深度
-                                           for (int i = 0; i < m_ShadowData.CascadeCount; i++)
-                                           {
-                                               m_ShadowSystem.GetSettings(); // 确保 FBO 存在
-                                               // 绑定对应级联 FBO（重用 Execute 中已绑定的深度）
-                                               // 这里我们需要单独访问各级联 FBO，通过 ShadowMapFBO fallback
-                                           }
-                                       }
-                                       else
-                                       {
-                                           m_ShadowSystem.GetShadowMapFBO()->Bind();
-                                           RenderCommand::SetCullFaceMode(CullFaceMode::Front);
-                                           auto depthShader = m_ShadowSystem.GetDepthShader();
-                                           depthShader->Bind();
-                                           depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
-                                           m_TerrainSystem.RenderDepth(*ctx.Registry, depthShader, *ctx.EntityIndex,
-                                                                       ctx.TransformCache);
-                                           RenderCommand::SetCullFaceMode(CullFaceMode::Back);
-                                           m_ShadowSystem.GetShadowMapFBO()->Unbind();
-                                       }
-                                   }
-                               }});
+                 // 地形阴影深度渲染
+                 if (m_ShadowData.HasValidShadowCaster && RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
+                 {
+                     if (m_ShadowData.CSMActive)
+                     {
+                         // CSM: 对每个级联渲染地形深度
+                         for (int i = 0; i < m_ShadowData.CascadeCount; i++)
+                         {
+                             m_ShadowSystem.GetSettings(); // 确保 FBO 存在
+                             // 绑定对应级联 FBO（重用 Execute 中已绑定的深度）
+                             // 这里我们需要单独访问各级联 FBO，通过 ShadowMapFBO fallback
+                         }
+                     }
+                     else
+                     {
+                         m_ShadowSystem.GetShadowMapFBO()->Bind();
+                         RenderCommand::SetCullFaceMode(CullFaceMode::Front);
+                         auto depthShader = m_ShadowSystem.GetDepthShader();
+                         depthShader->Bind();
+                         depthShader->SetMat4("u_LightSpaceMatrix", m_ShadowData.LightSpaceMatrix);
+                         m_TerrainSystem.RenderDepth(*ctx.Registry, depthShader, *ctx.EntityIndex, ctx.TransformCache);
+                         RenderCommand::SetCullFaceMode(CullFaceMode::Back);
+                         m_ShadowSystem.GetShadowMapFBO()->Unbind();
+                     }
+                 }
+             }});
 
         m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx)
                                {
+                                   if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                                   {
+                                       static bool s_LoggedUnsupported = false;
+                                       if (!s_LoggedUnsupported)
+                                       {
+                                           s_LoggedUnsupported = true;
+                                           ENGINE_CORE_WARN("[Vulkan] Terrain pass disabled until its UBO/descriptor "
+                                                            "layout is wired to the scene dispatcher");
+                                       }
+                                       return;
+                                   }
+
                                    m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
                                    m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
                                                           m_ShadowSystem.GetSettings(), *ctx.EntityIndex,
                                                           ctx.TransformCache);
                                }});
 
-        m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx)
-                               {
-                                   m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
-                                   m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
-                                                        m_ShadowSystem.GetSettings(), m_TotalTime, *ctx.EntityIndex,
-                                                        ctx.TransformCache);
-                               }});
+        m_PassQueue.push_back(
+            {"GrassPass", [this](RenderContext& ctx)
+             {
+                 if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                 {
+                     static bool s_LoggedUnsupported = false;
+                     if (!s_LoggedUnsupported)
+                     {
+                         s_LoggedUnsupported = true;
+                         ENGINE_CORE_WARN("[Vulkan] Grass pass disabled until instanced scene drawing "
+                                          "is implemented");
+                     }
+                     return;
+                 }
+
+                 m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
+                 m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
+                                      m_ShadowSystem.GetSettings(), m_TotalTime, *ctx.EntityIndex, ctx.TransformCache);
+             }});
 
         m_PassQueue.push_back({"SSAOPass", [this](RenderContext& ctx)
                                {
@@ -386,36 +410,20 @@ namespace Engine
 
                  for (auto entity : view)
                  {
-                     auto& emitter = view.get<ParticleEmitterComponent>(entity);
-
-                     // 计算世界坐标（子实体的 Translation 是局部坐标，需变换到世界空间）
-                     glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
-                         *ctx.Registry, entity, *ctx.EntityIndex, ctx.TransformCache);
-                     glm::vec3 worldPos = glm::vec3(worldMat[3]);
-
-                     uint32_t eid    = static_cast<uint32_t>(entity);
-                     auto&    system = m_ParticleSystems[eid];
-
-                     if (!system || system->GetMaxParticles() != emitter.MaxParticles)
-                     {
-                         system = CreateRef<ParticleSystemGPU>(emitter.MaxParticles);
-                         system->Init();
-                     }
-
-                     system->Update(ctx.DeltaTime, worldPos, emitter, ctx.Registry);
+                     auto&          emitter = view.get<ParticleEmitterComponent>(entity);
+                     const uint32_t eid     = static_cast<uint32_t>(entity);
+                     const auto     it      = m_ParticleSystems.find(eid);
+                     if (it == m_ParticleSystems.end() || !it->second)
+                         continue;
 
                      if (emitter.Blend == ParticleEmitterComponent::BlendMode::Additive)
                          RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::One);
                      else
                          RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
-                     system->Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
+                     it->second->Render(ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection());
 
                      RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
-
-                     // 重置本帧触发的爆发（用户配置的 BurstCount 保持不变）
-                     emitter.PendingBurst        = 0;
-                     emitter.CollisionBurstCount = 0;
                  }
              }});
 
@@ -530,6 +538,8 @@ namespace Engine
 
     void SceneRenderer::Render()
     {
+        UpdateParticleSystems();
+
         for (auto& pass : m_PassQueue)
         {
             if (pass.Enabled)
@@ -565,6 +575,36 @@ namespace Engine
         {
             if (pass.Enabled && pass.Name == "ParticlePass")
                 pass.ExecuteFn(m_Context);
+        }
+    }
+
+    void SceneRenderer::UpdateParticleSystems()
+    {
+        if (!RendererCapabilities::Get().SupportsComputeShaders || !m_Context.Registry || !m_Context.EntityIndex)
+            return;
+
+        auto view = m_Context.Registry->view<TransformComponent, ParticleEmitterComponent>();
+        for (auto entity : view)
+        {
+            auto& emitter = view.get<ParticleEmitterComponent>(entity);
+
+            const glm::mat4 worldTransform = WorldTransformService::ComputeWorldTransform(
+                *m_Context.Registry, entity, *m_Context.EntityIndex, m_Context.TransformCache);
+            const glm::vec3 worldPosition = glm::vec3(worldTransform[3]);
+
+            const uint32_t entityID = static_cast<uint32_t>(entity);
+            auto&          system   = m_ParticleSystems[entityID];
+            if (!system || system->GetMaxParticles() != emitter.MaxParticles)
+            {
+                system = CreateRef<ParticleSystemGPU>(emitter.MaxParticles);
+                system->Init();
+            }
+
+            system->Update(m_Context.DeltaTime, worldPosition, emitter, m_Context.Registry);
+
+            // 用户配置的 BurstCount 保持不变，只消费本帧触发量。
+            emitter.PendingBurst        = 0;
+            emitter.CollisionBurstCount = 0;
         }
     }
 
@@ -637,6 +677,9 @@ namespace Engine
             }
         }
         PerformanceMonitor::Get().SetShadowPassCPU(shadowCpuMs);
+
+        // compute dispatch、barrier 与异步回读 copy 必须在任何 graphics render pass 之外录制。
+        UpdateParticleSystems();
 
         // 主场景渲染到 HDR FBO
         static bool s_DbgPipelineOnce = false;

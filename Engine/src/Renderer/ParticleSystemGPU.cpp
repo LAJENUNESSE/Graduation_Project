@@ -10,6 +10,7 @@
 #include "Scene/Components.h"
 
 #include <chrono>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -452,17 +453,17 @@ namespace Engine
     // ============================================================
     struct ParticleSystemGPU::VulkanResources
     {
-        bool                           Initialized = false;
-        VkDevice                       Device      = VK_NULL_HANDLE;
-        Ref<VulkanDescriptorSetLayout> EmitLayout;
-        Ref<VulkanDescriptorSetLayout> CompactLayout;
-        Ref<VulkanDescriptorSetLayout> SimulateLayout;
-        Ref<VulkanDescriptorSetLayout> RenderArgsLayout;
-        VulkanComputePipelineHandle    EmitPipeline{};
-        VulkanComputePipelineHandle    CompactPipeline{};
-        VulkanComputePipelineHandle    SimulatePipeline{};
-        VulkanComputePipelineHandle    RenderArgsPipeline{};
-        Ref<VulkanDescriptorPool>      Pool;
+        bool                                     Initialized = false;
+        VkDevice                                 Device      = VK_NULL_HANDLE;
+        Ref<VulkanDescriptorSetLayout>           EmitLayout;
+        Ref<VulkanDescriptorSetLayout>           CompactLayout;
+        Ref<VulkanDescriptorSetLayout>           SimulateLayout;
+        Ref<VulkanDescriptorSetLayout>           RenderArgsLayout;
+        VulkanComputePipelineHandle              EmitPipeline{};
+        VulkanComputePipelineHandle              CompactPipeline{};
+        VulkanComputePipelineHandle              SimulatePipeline{};
+        VulkanComputePipelineHandle              RenderArgsPipeline{};
+        std::array<Ref<VulkanDescriptorPool>, 2> Pools;
 
         // ---- SPH 2 pipeline（WCSPH path：density + force）----
         bool                           SPHInitialized = false;
@@ -1489,7 +1490,8 @@ namespace Engine
 
         // 每帧需要：emit(1) + compact(1) + simulate(1) + render_args(1) = 4 set；
         // SPH 路径再加 density(1) + force(1) + Grid 内部 N set，整体扩容到 256 给充分余量。
-        m_VulkanResources->Pool = VulkanDescriptorPool::CreateDefaultComputePool(device, 256);
+        for (auto& pool : m_VulkanResources->Pools)
+            pool = VulkanDescriptorPool::CreateDefaultComputePool(device, 256);
 
         m_VulkanResources->Initialized = true;
         return true;
@@ -1544,8 +1546,6 @@ namespace Engine
             return;
 
         VkDevice device = m_VulkanResources->Device;
-        if (device != VK_NULL_HANDLE)
-            vkDeviceWaitIdle(device);
 
         VulkanPipeline::DestroyCompute(device, m_VulkanResources->EmitPipeline);
         VulkanPipeline::DestroyCompute(device, m_VulkanResources->CompactPipeline);
@@ -1565,7 +1565,8 @@ namespace Engine
         m_VulkanResources->CompactLayout.reset();
         m_VulkanResources->SimulateLayout.reset();
         m_VulkanResources->RenderArgsLayout.reset();
-        m_VulkanResources->Pool.reset();
+        for (auto& pool : m_VulkanResources->Pools)
+            pool.reset();
         m_VulkanResources->Device      = VK_NULL_HANDLE;
         m_VulkanResources->Initialized = false;
     }
@@ -1644,8 +1645,11 @@ namespace Engine
         VulkanCommandBuffer cmdBuf(cmd);
         VkDevice            device = m_VulkanResources->Device;
 
-        // P-15：每帧首次必须 Reset() 子系统自己的 pool（与 Grid 的 ResetFrameResources 各管各的）
-        m_VulkanResources->Pool->Reset();
+        // 当前 frame slot 的 fence 已在 BeginFrame 等待完成，因此只重置该槽的 pool。
+        // 另一槽的 descriptor set 仍可能被 GPU 消费，不能共用同一个 pool。
+        auto& descriptorPool = m_VulkanResources->Pools[ctx->GetCurrentFrameIndex()];
+        ENGINE_CORE_RELEASE_ASSERT(descriptorPool, "[Particle][Vulkan] current-frame descriptor pool is null");
+        descriptorPool->Reset();
 
         // 向下转型 SSBO → VulkanStorageBuffer 拿原生 VkBuffer 句柄
         auto bufferOf = [](const Ref<ShaderStorageBuffer>& ssbo) -> VkBuffer
@@ -1692,7 +1696,7 @@ namespace Engine
             ubo.EndColor                      = emitter.ColorEnd;
             m_EmitParamsUBO->SetData(&ubo, sizeof(ubo));
 
-            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->EmitLayout->GetHandle());
+            VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->EmitLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] emit descriptor alloc failed");
 
             VulkanDescriptorWriter w;
@@ -1727,7 +1731,7 @@ namespace Engine
             m_CounterBuffer->SetData(&cz, sizeof(CounterData), 0);
             ssboBarrierFn();
 
-            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->CompactLayout->GetHandle());
+            VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->CompactLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] compact descriptor alloc failed");
 
             VulkanDescriptorWriter w;
@@ -1800,7 +1804,7 @@ namespace Engine
             auto dispatchSPH = [&](const VulkanComputePipelineHandle&    pipe,
                                    const Ref<VulkanDescriptorSetLayout>& layout, bool bindRigid, bool bindSN)
             {
-                VkDescriptorSet set = m_VulkanResources->Pool->Allocate(layout->GetHandle());
+                VkDescriptorSet set = descriptorPool->Allocate(layout->GetHandle());
                 ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] SPH pool 耗尽");
 
                 VulkanDescriptorWriter w;
@@ -1858,7 +1862,7 @@ namespace Engine
             simUbo.GravityAndDamping = glm::vec4(simGravity, emitter.Damping);
             m_SimParamsUBO->SetData(&simUbo, sizeof(simUbo));
 
-            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
+            VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] simulate descriptor alloc failed");
 
             VulkanDescriptorWriter w;
@@ -1890,7 +1894,7 @@ namespace Engine
         // Pass 4: Render Args
         // ============================================================
         {
-            VkDescriptorSet set = m_VulkanResources->Pool->Allocate(m_VulkanResources->RenderArgsLayout->GetHandle());
+            VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->RenderArgsLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] render_args descriptor alloc failed");
 
             VulkanDescriptorWriter w;
