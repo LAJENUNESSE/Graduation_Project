@@ -651,17 +651,6 @@ namespace Engine
 
     void SceneRenderer::RenderPipeline(const Ref<Framebuffer>& targetFBO)
     {
-        // ---- 临时调试：定位视口黑屏（验证后移除）----
-        {
-            static bool s_dbgLogged = false;
-            if (!s_dbgLogged)
-            {
-                s_dbgLogged = true;
-                for (const auto& p : m_PassQueue)
-                    ENGINE_CORE_WARN("[DbgPipeline] pass={0} enabled={1}", p.Name, p.Enabled);
-            }
-        }
-
         // 设置视口信息
         m_Context.ViewportWidth  = m_HDRFramebuffer->GetSpecification().Width;
         m_Context.ViewportHeight = m_HDRFramebuffer->GetSpecification().Height;
@@ -682,14 +671,6 @@ namespace Engine
         UpdateParticleSystems();
 
         // 主场景渲染到 HDR FBO
-        static bool s_DbgPipelineOnce = false;
-        if (!s_DbgPipelineOnce)
-        {
-            s_DbgPipelineOnce = true;
-            const auto& spec  = m_HDRFramebuffer ? m_HDRFramebuffer->GetSpecification() : FramebufferSpecification{};
-            ENGINE_CORE_WARN("[DbgRenderPipeline] hdrFbo={0} size=({1},{2})",
-                             static_cast<const void*>(m_HDRFramebuffer.get()), spec.Width, spec.Height);
-        }
         m_HDRFramebuffer->Bind();
         RenderCommand::SetClearColor({0.1f, 0.1f, 0.1f, 1.0f});
         RenderCommand::Clear();
@@ -750,7 +731,10 @@ namespace Engine
             m_HDRFramebuffer->Unbind();
         }
 
-        // FluidPass: 在粒子绘制完成后、后处理之前执行
+        // FluidPass: 在粒子绘制完成后、后处理之前执行。
+        // Vulkan path 的 RenderFluidPass 直接早退（深度/厚度链路未接通），
+        // 整块跳过，避免录一个只有 Begin/End 的空 render pass。
+        if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
         {
             m_HDRFramebuffer->Bind();
 

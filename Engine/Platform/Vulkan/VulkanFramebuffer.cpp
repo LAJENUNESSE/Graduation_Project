@@ -201,9 +201,12 @@ namespace Engine
         for (size_t i = 0; i < m_ColorAttachments.size(); i++)
         {
             VkAttachmentDescription desc{};
-            desc.format         = m_ColorAttachments[i].Format;
-            desc.samples        = VK_SAMPLE_COUNT_1_BIT;
-            desc.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            desc.format  = m_ColorAttachments[i].Format;
+            desc.samples = VK_SAMPLE_COUNT_1_BIT;
+            // GL 语义对齐：FBO 一帧内会被多个 pass 反复 Bind（几何/粒子/调试叠加），
+            // 清屏由上层 RenderCommand::Clear()（vkCmdClearAttachments）显式完成；
+            // 这里用 LOAD 保证后续 Bind 不抹掉此前 pass 的绘制结果。
+            desc.loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD;
             desc.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
             desc.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -221,9 +224,10 @@ namespace Engine
         if (hasDepth)
         {
             VkAttachmentDescription desc{};
-            desc.format         = m_DepthAttachment.Format;
-            desc.samples        = VK_SAMPLE_COUNT_1_BIT;
-            desc.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            desc.format  = m_DepthAttachment.Format;
+            desc.samples = VK_SAMPLE_COUNT_1_BIT;
+            // 同颜色附件：深度清理由上层 Clear() 显式完成，各 pass 间保留深度做遮挡测试。
+            desc.loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD;
             desc.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
             desc.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;

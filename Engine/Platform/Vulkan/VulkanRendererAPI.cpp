@@ -118,15 +118,6 @@ namespace Engine
 
     void VulkanRendererAPI::DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount)
     {
-        // ---- 临时调试（验证后移除）----
-        static bool s_dbgDI = false;
-        if (!s_dbgDI)
-        {
-            s_dbgDI = true;
-            ENGINE_CORE_WARN("[DbgDrawIndexed] called, va={0} indexCount={1}",
-                             static_cast<const void*>(vertexArray.get()), indexCount);
-        }
-
         uint32_t resolvedIndexCount = indexCount;
         uint32_t firstIndex         = 0;
         int32_t  vertexOffset       = 0;
