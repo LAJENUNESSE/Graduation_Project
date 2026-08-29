@@ -1,7 +1,7 @@
 # Vulkan 后端迁移 · SPEC
 
 > **作用**：本文件是 Vulkan 迁移分支的**事实源**。新 session 进入此分支时，第一动作是 `read SPEC.md`，无需翻 git log 拼凑进度。
-> **分支**：`feature/vulkan-backend`（自 `main` 分叉 34 个 commit）
+> **分支**：`feature/vulkan-drawindexed`（= main + Phase 8.2 全量实现 + 运行期稳定性修复，2026-08-29）
 > **配套路线图**：[../vulkan-migration-roadmap.md](../vulkan-migration-roadmap.md)（阶段定义与验收标准，长期不变）
 > **更新规则**：完成一个 phase 子项立即把 `- [ ]` 改成 `- [x]`；做出非显而易见的选择立即记到 "关键决策"。
 
@@ -9,17 +9,17 @@
 
 ## 1. 当前位置
 
-- **进行中阶段**：Phase 8 — Vulkan PBR pass 接通中（cubemap + Editor 主路径 + IBL view 分派完成；DrawIndexed 真实实装待 Phase 8.2）
-- **最近一次 commit**：`8f16fa0 feat(vulkan): switch Editor main path + IBL view API dispatch + frame ordering`
-- **下一步**：见 [§6 Next Steps](#6-next-steps)（VulkanVertexArray + Pipeline Cache + DrawIndexed 实装 → Phase 8.2）
+- **Phase 1 ~ 8.2 全部完成**：DrawIndexed 真实录制、PBR 几何 pass / 天空盒 / IBL 三 compute / 粒子与 SPH 与流体 compute 模拟 / ImGui 视口全部在 Vulkan path 可用；validation 层报错已从首轮 51 条归零。
+- **运行期稳定性**：device lost 六根因、场景切换崩溃（deletion queue）、退出崩溃（ImGui 描述符时序）均已修复，近期多轮 `--vulkan` 运行零 validation 报错。
+- **当前阶段**：功能完善（对齐 OpenGL 视觉与交互基本面），按批次推进：IBL cube 化 → DrawArraysInstanced + SSBO（粒子/草地可见）→ 编辑器拾取。
+- **下一步**：见 [§6 Next Steps](#6-next-steps)。
 
 ---
 
 ## 2. 已完成 Phase（按时间倒序）
 
-### Phase 8 — Vulkan PBR pass 接通 ⬅️ 进行中
+### Phase 8 — Vulkan PBR pass 接通 ✅
 
-**已完成**
 - [x] `VulkanTextureCubemap` 实装 — VMA Image (arrayLayers=6 + CUBE_COMPATIBLE) + cube ImageView + Sampler + 6 region staging（`0c6eb28`）
 - [x] `VulkanIBLGenerator::Generate` 接入真实 cubemap — 删占位 envAtlas，descriptor binding=1 改 COMBINED_IMAGE_SAMPLER + cube view；IBL GLSL 双路径 `#ifdef VULKAN samplerCube` / OpenGL atlas + imageLoad（`28fcfc9`）
 - [x] `EditorApp.cpp` 删 Vulkan→SmokeLayer 硬切，统一走 EditorLayer（`8f16fa0`）
@@ -27,9 +27,28 @@
 - [x] `IBLGenerator::Get{Irradiance,Prefilter,BRDFLut}View / GetIBLSampler` 4 个 `void*` 虚函数 + `VulkanIBLGenerator` override + `SkyboxSystem` 透传 + `RenderCommand::Bind{Cubemap,Texture}View`（`8f16fa0`）
 - [x] `SceneRenderer::GeometryPass` IBL 按 API 分派 ID vs View；PBR.glsl IBL 采样器 `#ifdef VULKAN` 显式 `layout(set=0, binding=6/7/8)`（`8f16fa0`）
 
-**待 Phase 8.2**
-- [ ] `VulkanRendererAPI::DrawIndexed` 真实实装 — 需新建 `VulkanVertexArray`（BufferLayout → VkVertexInputBindingDescription/AttributeDescription）+ Pipeline Cache（shader hash + render pass + vertex layout）+ DescriptorSet flush + 主帧 cmd 录制
-- [ ] Vulkan path PBR mesh 真实可见（当前 DrawIndexed 走 warn-once-fallback，PBR mesh 在 Vulkan path 不渲染但不崩）
+### Phase 8.2 — DrawIndexed 真实实装 ✅（2026-08-23，8 步）
+
+- [x] `VulkanCommandBuffer` 补 graphics 命令封装（`1c6058d`）
+- [x] `VulkanFramebuffer` 暴露 attachment `VkImageView` 访问器（`6d97263`）
+- [x] 全部 graphics shader 补齐 Vulkan 显式布局分支（`0e223d8`）
+- [x] `VulkanSceneState` 场景渲染状态机（模拟 GL 即时模式"当前 shader + 16 纹理槽"）并接线 Bind 注册点（`5dc6559`）
+- [x] `VulkanGraphicsPipelineBuilder` + `VulkanPipelineCache`（key = shader + renderpass + 顶点布局 hash + 光栅状态位，`b5bcda9`；骨架 `2d83029`）
+- [x] `VulkanSceneDrawDispatcher`：DrawIndexed/DrawArrays 真实录制（std140 UBO 打包 + per-draw push constant + per-frame descriptor pool + pipeline cache 查询，`2722c7c`）
+- [x] `VulkanFramebuffer` 录制场景 renderpass 并接线阴影/后处理绑定（`62feb08`）
+- [x] ImGui 视口接入 Vulkan 离屏纹理；空 descriptor 槽用 1×1 白色 2D/CUBE 占位纹理兜底防 device lost（`d0c783e`）
+
+**运行期稳定性修复（2026-08-23 ~ 08-29，validation 51 → 0）**
+- `e1b645d` 按 validation 报告修复五类非法状态（CSM 槽映射、samplerCube 绑 2D 占位、depth layout VUID-09600、shadow map layout UNDEFINED、未消费 vertex attribute + SSAO staging 越界）
+- `c0c1472` UBO descriptor offset 按 minUniformBufferOffsetAlignment(256) 对齐（真实 mesh device lost 根因）
+- `e7c9e54` swapchain 信号量改按图像绑定（VUID-00067 复用校验）
+- `83e867b` `VulkanDeletionQueue` 按帧槽位延迟删除（场景切换帧内析构资源崩溃）
+- `02bc735` 场景 FBO 布局与材质 UBO 修复
+- `e6f0ed3` 全局 UBO 覆盖导致场景空白
+- `f2904a6` / `d96a823` / `71d4110` / `d12a707` 延迟销毁场景缓冲、IBL、管线、描述符；粒子计算时序与描述符复用；隔离未完成特效资源与查询池销毁
+- `f0e0822` 空 Pass 清屏（loadOp=CLEAR）清掉 GeometryPass 输出导致视口黑屏 → 改 LOAD
+- `43ecb11` 退出时先释放 ImGui 描述符再关闭后端（退出 c0000005，WinDbg minidump 定位）
+- `38884dd` validation 还原按构建门控（`ENGINE_VULKAN_VALIDATION` 环境变量可强制开启）+ 清理黑屏调试打印
 
 ### Phase 7 — Compute 迁移 ✅
 
@@ -192,6 +211,24 @@
 > **Why**：Phase 7 已将 `ParticleSystemGPU::UpdateVulkan` / `FluidSystemGPU` 改为录入主帧 cmd（D-3 / ADR-0002），它们在 `OnUpdate` 期间调 `ctx->GetCurrentFrameCommandBuffer()`。Phase 8 接通 EditorLayer 后此调用真实发生，但原 `BeginFrame` 在 `Window::OnUpdate → SwapBuffers` 内部、晚于 `OnUpdate` → `m_FrameInProgress==false` cmd 为空。把帧边界提前到主循环显式驱动，让 dispatch 拿到的 cmd 始终有效。
 > **How to apply**：所有需要每帧录主帧 cmd 的系统在 `Layer::OnUpdate` 阶段直接调 `VulkanContext::Get()->GetCurrentFrameCommandBuffer()`；SmokeLayer 也走主循环统一流程，不需要单独调 SwapBuffers。新增 GraphicsContext 实现必须 override 这两个虚函数（OpenGL 留空即可）。同时消化 P-11 接口正向修（IBL 按 API 分派 view vs ID）— SkyboxSystem 加 GetXxxView() 透传 + SceneRenderer GeometryPass 按 RendererAPI::GetAPI() 分派。
 
+### D-17：上层零改动 — GL 即时模式"快照→打包→录制"模拟层（Phase 8.2 架构核心）
+
+> **Decision**：不重写 SceneRenderer 为 Vulkan 命令式，而是让 `VulkanSceneState`（模拟 GL 全局状态机：当前 shader + 16 纹理槽 + 状态开关）在 `Bind` 注册点累积状态，`VulkanSceneDrawDispatcher` 在 DrawIndexed/DrawArrays 时刻"快照 → std140 UBO 打包 → push constant → 反射式 descriptor 写入 → 录制 vkCmdDrawIndexed"。录制失败的 draw 退化为内嵌 SPIR-V 的 DebugTriangle 管线画到 swapchain（不再触发即静默丢弃）。
+> **Why**：OpenGL 调用序列是全引擎的公共语义（SceneRenderer / 各 System 全部按它编写），为 Vulkan 单独改写上层会双倍维护且破坏"main 零回归"约束；模拟层让 37 个 shader 与上层代码单源复用。
+> **How to apply**：新增场景功能时**按 OpenGL 语义写上层代码**（Bind shader/纹理 → SetUniform → Draw），由 dispatcher 自动打包；不要在 Vulkan path 直接录 cmd。遇到 dispatcher 不支持的模式（如 instanced、SSBO）在 dispatcher 内扩展，而不是绕过它。
+
+### D-18：运行期资源释放走 `VulkanDeletionQueue` 按帧槽位延迟删除
+
+> **Decision**：`VulkanDeletionQueue` 2 slot 与 MAX_FRAMES_IN_FLIGHT 对齐；运行期需要销毁的资源（FBO、纹理、管线、描述符、场景缓冲、IBL）压入队列，BeginFrame flush 当前槽（该槽资源在 2 帧前的 submit 已完成）。退出路径仍走显式 Destroy。
+> **Why**：场景切换/资源重载发生在录制窗口内（上一帧可能仍在 GPU 执行），同步析构 = cmd 引用已销毁资源 → invalid state + device lost（83e867b）。
+> **How to apply**：任何运行期 Vulkan 资源析构一律经 `VulkanContext::DeferDestroy`（或等价队列），禁止在录制窗口内直接 `vkDestroy*`；新资源类型接入时提供对应的销毁闭包。
+
+### D-19：validation 按构建门控 + 环境变量强制开关
+
+> **Decision**：`VulkanContext::s_EnableValidation` 为运行时静态变量，`ResolveValidationEnabled()` 规则：`ENGINE_VULKAN_VALIDATION` 环境变量（=1 开 / =0 关）优先，否则 Debug 开、Release 关。
+> **Why**：phase-8.2 排查 device lost 期间曾临时无条件强制开启（TODO 挂在头文件）；device lost 六根因修复且 validation 归零后应还原，但完全移除会丧失排查能力，环境变量是折中。
+> **How to apply**：日常运行不设变量；排查时 `ENGINE_VULKAN_VALIDATION=1 Editor.exe --vulkan`。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -215,6 +252,12 @@
 | P-15 | 粒子/流体 Vulkan path 独立 `DescriptorPool` 每帧首次未 `Reset()` → set 累积溢出 pool 容量后 alloc 失败 | 每子系统在 cpp 内持有自己的 pool（独立于 `SpatialHashGrid::ResetFrameResources`） | 每帧首次 dispatch 前显式 `pool->Reset()`；本子系统的 pool reset 与 Grid 的 `ResetFrameResources()` 是两件事，不要互相覆盖职责 |
 | P-16 | 粒子 SPH 路径下 `sph_density.glsl` 的 binding=8 SurfaceNormals SSBO 在 ParticleSystemGPU 没有专属 buffer | 粒子 SPH WCSPH 与 FluidSystemGPU 共用 shader 但 ParticleSystemGPU 无 `m_SurfaceNormalBuffer` | 当前 Vulkan path 用 alive list 占位以满足 descriptor layout 非空，shader 内 `u_SurfaceTension>0` 控制是否写入（OpenGL 路径同款隐式约束）；启用粒子表面张力前必须为 ParticleSystemGPU 单独分配 `m_SurfaceNormalBuffer` |
 | P-17 | Debug build 链 spirv-cross-core.lib 报 `LNK2038 _ITERATOR_DEBUG_LEVEL 0 vs 2` / `RuntimeLibrary MD vs MDd` | Vulkan SDK 同时提供 Release (`spirv-cross-core.lib` MD) 和 Debug (`spirv-cross-cored.lib` MDd) 两套；CMake 若只 find Release 名，Debug build 链 Release lib → MSVC CRT 不匹配拒链 | `find_library` 分别 Release/Debug 双 find，`target_link_libraries` 用 `$<$<CONFIG:Debug>:...>` 生成器表达式按 config 切。新增 Vulkan SDK 依赖时（glslang/SPIRV-Tools 等）同样要查双版本（D-8 衍生约束）|
+| P-18 | UBO dynamic offset 未按 `minUniformBufferOffsetAlignment`(256) 对齐 → 真实 mesh 触发 VK_ERROR_DEVICE_LOST | dispatcher 每段 UBO 起始 offset 由 std140 大小累加而来（如 768B 段后 768+768=1536 非对齐） | 打包大小一律 round up 到 256 对齐（`c0c1472`）；新增 UBO 段类型时复用 dispatcher 现有对齐常量 |
+| P-19 | descriptor 槽留空（如 SSAO/流体 pass 未绑纹理）→ 执行 device lost | pass 被跳过 / shader 声明了绑定但上层未 Bind | 1×1 白色 2D + CUBE 占位纹理兜底所有未绑定槽（`d0c783e`）；新增纹理槽消费时确认 shader 声明与上层 Bind 对齐 |
+| P-20 | swapchain 信号量跨帧复用 → VUID-00067；acquire 用 semaphore 同样有复用歧义 | renderFinished 与 swapchain image 数不一致时 | renderFinished 按 image 一比一创建；acquire 改用独立 fence host 等待（`e7c9e54`） |
+| P-21 | HDR FBO 的空 pass（无 draw）`loadOp=CLEAR` 会清掉先前 GeometryPass 写入的颜色 → 视口黑屏 | PostProcessing 前的占位 renderpass 录制 | 场景 renderpass 按帧内容决定 loadOp：已有几何输出的 pass 用 LOAD（`f0e0822`） |
+| P-22 | 录制窗口内同步析构资源（场景切换/重载）→ cmd 引用已销毁资源 | 上层在 OnUpdate 中释放 Ref<FBO>/Texture/Buffer | 运行期析构一律走 D-18 deletion queue |
+| P-23 | 退出崩溃 c0000005：ImGuiLayer OnDetach 先 Shutdown 后端，Layer 析构再 `RemoveImGuiTexture` 解引用已释放描述符 | 编辑器退出时视口纹理仍注册在 ImGuiLayer | 退出时先 `FlushDeferredDestructions` + `ClearImGuiTextures` 再关后端（`43ecb11`）；新增 ImGui 相关释放路径时注意此顺序 |
 
 ---
 
@@ -230,25 +273,23 @@
 
 ## 6. Next Steps
 
-Phase 8 已完成 cubemap + Editor 主路径切换 + IBL view 分派；Editor.exe --vulkan 现可进入 EditorLayer。下阶段按优先级：
+Phase 8.2 已完成，PBR 主路径可用。当前按批次推进"功能完善"（对齐 OpenGL 视觉与交互基本面），每批次独立构建 + 运行验证 + 提交：
 
-1. **Phase 8.2: `VulkanRendererAPI::DrawIndexed` 真实实装**（最大阻塞 — PBR mesh 在 Vulkan path 仍走 warn-once-fallback 不渲染）
-   - 新建 `VulkanVertexArray.h/cpp`：BufferLayout → `VkVertexInputBindingDescription` / `VkVertexInputAttributeDescription`
-   - 新增 `VulkanPipelineCache`：按 (shader hash + render pass + vertex layout) 缓存 `VulkanPipeline::CreateGraphics`，懒创建
-   - `VulkanRendererAPI::DrawIndexed` 内：取主帧 cmd → 查/建 pipeline → flush descriptor set（含 PBR cache）→ `vkCmdBindPipeline` + `vkCmdBindDescriptorSets` + `vkCmdBindVertexBuffers` + `vkCmdBindIndexBuffer` + `vkCmdDrawIndexed`
-   - 实装 `VulkanRendererAPI::BindCubemapView` / `BindTextureView` 写入 `VulkanContext` 当前帧 PBR descriptor cache
-   - 验证：`Editor.exe --vulkan` 加载 `assets/scenes/流体测试.scene` → 天空盒 + PBR mesh + IBL 反射可见
+1. **IBL cube 化**（当前最大视觉缺口 — PBR 环境光照在 Vulkan path 关闭）
+   - `VulkanIBLGenerator` 的 Irradiance/Prefilter compute 输出从 2D 横向 atlas 改为 6-layer cube-compatible image（`VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT`，参考 `VulkanTextureCubemap`）+ Prefilter mip 链（每 roughness 级写对应 mip）
+   - compute shader 改 per-face layer 写入；生成 `VK_IMAGE_VIEW_TYPE_CUBE` view + sampler
+   - 恢复 `m_IBLReady = true` → `SceneRenderer.cpp:356-370` 现有 view 绑定路径自动生效
 
-2. **运行时验证（依赖 Phase 8.2 完成）**
-   - waterfall demo（`assets/scenes/流体测试.scene`）在 `--vulkan` 下视觉与 OpenGL 等价
-   - validation layer 0 error
-   - 粒子/流体 Update 不触发 VulkanAsyncReadback assert（bug 3 应被 D-16 主循环时序消化）
+2. **DrawArraysInstanced + SSBO 绑定**（粒子/草地 billboard 可见）
+   - `VulkanSceneState` + dispatcher 增加 SSBO 绑定槽（spirv-cross 反射 storage buffer → descriptor）— 原 Next Steps"SSBO 注册表"项
+   - dispatcher 增加 instanced 录制路径（vkCmdDrawInstanced）+ pipeline key"无顶点输入"变体（billboard 顶点由 gl_VertexID 生成、数据从 SSBO 读）
+   - 解禁 `SceneRenderer.cpp` GrassPass；打通 `ParticleSystemGPU` direct instanced 路径（`ParticleSystemGPU.cpp:1433`）
 
-3. **可选后续：Grass indirect 路径**（P-12 完整修复）
-   - `VulkanStorageBuffer::GetRendererID()` 从 `return 0` 改为 atomic counter 分配唯一 ID
-   - `VulkanContext` 新增 `unordered_map<uint32_t, VkBuffer>` SSBO 注册表
-   - `VulkanRendererAPI::DrawArraysIndirect` 实装 `vkCmdDrawIndirect` + indirect buffer barrier
-   - 完成后可移除 `GrassRenderSystem::Init` 的 Vulkan force fallback (`e7fa266`)
+3. **编辑器拾取**
+   - pipeline key 纳入 color attachment 格式 → picking 的 RED_INTEGER 单输出与 PBR 双输出 pipeline 并存
+   - 解禁 `SceneRenderer::RenderEditorPicking`；`VulkanFramebuffer::ReadPixel` 实装（点击时同步回读小 FBO），现有调试探针（`VulkanFramebuffer.h:49,77`）转正后移除
+
+4. **Backlog（不挂批次，按需启动）**：Bloom（`SceneRenderer.cpp:765` 附近，依赖 GL ID 传递改 view 直通）、SSAO（`VulkanTexture.cpp:126` RGB_Float 上传 + callerFBO 语义）、VulkanGPUTimerQuery（query pool TIMESTAMP，性能面板/论文数据）、screen-space 流体链（`SceneRenderer.cpp:614` 附近）、地形 pass、草地 indirect（P-12 完整修复）、物理调试线框画进视口、CUDA-Vulkan 互操作（`docs/cuda-reintroduction-report.md` 明确当前阶段不恢复）、MSAA、`VulkanSwapchain` 从 `VulkanContext` 拆出（现为 stub）、Blend/Scissor/ColorMask 状态消费、CI 增加 vs2022-vulkan 编译 job。
 
 ---
 

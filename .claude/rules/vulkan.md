@@ -36,7 +36,12 @@ paths:
 | — | VulkanDescriptor（SetLayout / Pool / Writer 三层） |
 | — | VulkanAllocator（VMA allocator 生命周期） |
 | — | VulkanBarrierUtil（`BarrierBit::*` → stage/access 映射） |
-| — | VulkanPipelineCache（graphics pipeline 懒创建缓存，Phase 8.2 骨架，**尚未接入主帧渲染**） |
+| — | VulkanGraphicsPipelineBuilder（场景 PSO 组装，已接入主帧渲染） |
+| — | VulkanPipelineCache（key = shader + renderpass + 顶点布局 hash + 光栅状态位，已接入） |
+| — | VulkanSceneState（GL 即时模式状态机模拟：当前 shader + 16 纹理槽） |
+| — | VulkanSceneDrawDispatcher（DrawIndexed/DrawArrays 真实录制：std140 UBO 打包 + push constant + descriptor 写入） |
+| — | VulkanDeletionQueue（按帧槽位延迟销毁，运行期资源释放必须走它） |
+| — | VulkanAsyncReadback（3 槽 ring 异步回读） |
 
 ## 关键决策（摘自 SPEC.md §3）
 
@@ -45,8 +50,11 @@ paths:
 - **D-3 SingleTime 限于低频路径**: IBL Init / 视角触发 rebuild 可用 `BeginSingleTimeCommands`；每帧 dispatch 必须录入主帧 command buffer
 - **D-4 AsyncReadback ring**: 粒子/流体回读不要复制 `vmaMapMemory` 同步阻塞模式（grassCount 因低频特批）
 - **D-5 SpatialHashGrid 外部 buffer**: 调用方必须先 `SetExternalBuffers(...)` 注入 particlePool / aliveList，再迁移自身 compute
-- **D-6 ExternalMemoryHint 占位**: `VulkanStorageBuffer::ExternalMemoryHint::CudaInterop` 当前断言未实现，Phase 7.5 实装
+- **D-6 ExternalMemoryHint 占位**: `VulkanStorageBuffer::ExternalMemoryHint::CudaInterop` 当前断言未实现，实装时机由 CUDA sidecar 迁移驱动
 - **D-7 IBL view 接口**: `GetIrradianceView() / GetPrefilterView() / GetBRDFLutView()` 是目标接口；不要 cast `VkImageView` 到 `uint32_t`
+- **D-17 上层零改动**: 新增场景功能按 OpenGL 语义写上层代码（Bind → SetUniform → Draw），由 `VulkanSceneState` + `VulkanSceneDrawDispatcher` 自动快照打包录制；不要在 Vulkan path 直接录 cmd，dispatcher 不支持的模式（instanced/SSBO）在 dispatcher 内扩展
+- **D-18 延迟销毁**: 运行期 Vulkan 资源析构一律经 `VulkanContext::DeferDestroy`（deletion queue 按帧槽位），禁止录制窗口内直接 `vkDestroy*`
+- **D-19 validation 门控**: Debug 默认开 / Release 关，`ENGINE_VULKAN_VALIDATION=1` 环境变量可强制开启排查
 
 ## 已知陷阱（摘自 SPEC.md §4）
 
@@ -60,7 +68,7 @@ paths:
 - Descriptor set 三层抽象：`VulkanDescriptorSetLayout`（layout） / `VulkanDescriptorPool`（per-frame reset 复用） / `VulkanDescriptorWriter`（Builder 风格累积 writes）
 - `VulkanShader` 暴露 SPIR-V 字节码 + 懒创建 `VkShaderModule` 缓存 + 反射 binding / push constant
 - `VulkanShader` 的 `SetXxx` 不再是 no-op：值记录到 CPU 侧 `unordered_map`（8 组 `GetXxxUniforms()` getter，见 `VulkanShader.h:68-81`），供后续 UBO 打包 + descriptor 写入；本阶段不真正上传
-- `VulkanPipelineCache`：key = `{Shader*, VkRenderPass, VertexLayoutHash}`，`GetOrCreate/Contains/Clear` 接口，entry 持有 pipeline+layout 所有权；接入主帧渲染是后续 Phase 8.2 工作
+- `VulkanPipelineCache`：key = `{Shader*, VkRenderPass, ColorAttachmentCount, VertexLayoutHash, Depth/Cull 状态位}`，`GetOrCreate` 懒创建，entry 持有 pipeline+layout 所有权；已接入主帧渲染（Phase 8.2）
 - Memory barrier 通过 `VulkanBarrierUtil::ResolveBarrierBits(bits)` 将 `BarrierBit::{ShaderStorage|Command|BufferUpdate|All}` 解析为 `VkPipelineStageFlags` + `VkAccessFlags` 四元组（多 bit 取并集）
 - ImGui 通过 `imgui_impl_vulkan` 初始化，独立 RenderPass + 自动 descriptor pool
 - IBL 输出经 `GetIrradianceView()/GetPrefilterView()/GetBRDFLutView()`（`VulkanIBLGenerator.h:45-47`）以 `void*` 透传 VkImageView，`SceneRenderer` 按 API 分派 ID vs View（`RenderCommand::BindCubemapView`）
