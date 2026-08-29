@@ -74,12 +74,7 @@ namespace Engine
             std::unordered_map<VulkanGraphicsPipelineKey, PipelineHandle, VulkanGraphicsPipelineKeyHash>::iterator;
         CacheIterator Begin() { return m_Pipelines.begin(); }
         CacheIterator End() { return m_Pipelines.end(); }
-        CacheIterator Erase(CacheIterator it, VkDevice device)
-        {
-            if (it->second.Pipeline != VK_NULL_HANDLE && device != VK_NULL_HANDLE)
-                vkDestroyPipeline(device, it->second.Pipeline, nullptr);
-            return m_Pipelines.erase(it);
-        }
+        CacheIterator Erase(CacheIterator it, VkDevice device);
 
     private:
         std::unordered_map<VulkanGraphicsPipelineKey, PipelineHandle, VulkanGraphicsPipelineKeyHash> m_Pipelines;

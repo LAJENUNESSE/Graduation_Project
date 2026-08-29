@@ -5,6 +5,7 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Platform/Vulkan/VulkanContext.h"
 #include "Platform/Vulkan/VulkanDescriptor.h"
 
 namespace Engine
@@ -271,14 +272,6 @@ namespace Engine
         if (it == m_ShaderResources.end())
             return;
 
-        if (device != VK_NULL_HANDLE)
-        {
-            it->second.SetLayouts.clear();
-            if (it->second.Layout != VK_NULL_HANDLE)
-                vkDestroyPipelineLayout(device, it->second.Layout, nullptr);
-        }
-        m_ShaderResources.erase(it);
-
         // 清除缓存中属于该 shader 的 pipeline 条目（key.Shader 指针比较）
         for (auto iter = m_Cache.Begin(); iter != m_Cache.End();)
         {
@@ -287,24 +280,51 @@ namespace Engine
             else
                 ++iter;
         }
+
+        const VkPipelineLayout layout = it->second.Layout;
+        it->second.Layout             = VK_NULL_HANDLE;
+        if (layout != VK_NULL_HANDLE && device != VK_NULL_HANDLE)
+        {
+            if (VulkanContext::Get())
+            {
+                VulkanContext::DeferDestroy([layout](VkDevice deferredDevice)
+                                            { vkDestroyPipelineLayout(deferredDevice, layout, nullptr); });
+            }
+            else
+            {
+                vkDestroyPipelineLayout(device, layout, nullptr);
+            }
+        }
+
+        it->second.SetLayouts.clear();
+        m_ShaderResources.erase(it);
     }
 
     void VulkanGraphicsPipelineBuilder::Clear(VkDevice device)
     {
-        if (device != VK_NULL_HANDLE)
+        // pipeline 必须先于其 pipeline layout 释放。descriptor set layout
+        // 则在 pipeline layout 之后入队，保持所有权依赖顺序清晰。
+        m_Cache.Clear(device);
+
+        for (auto& [_, resources] : m_ShaderResources)
         {
-            for (auto& [_, resources] : m_ShaderResources)
+            const VkPipelineLayout layout = resources.Layout;
+            resources.Layout              = VK_NULL_HANDLE;
+            if (layout != VK_NULL_HANDLE && device != VK_NULL_HANDLE)
             {
-                resources.SetLayouts.clear();
-                if (resources.Layout != VK_NULL_HANDLE)
+                if (VulkanContext::Get())
                 {
-                    vkDestroyPipelineLayout(device, resources.Layout, nullptr);
-                    resources.Layout = VK_NULL_HANDLE;
+                    VulkanContext::DeferDestroy([layout](VkDevice deferredDevice)
+                                                { vkDestroyPipelineLayout(deferredDevice, layout, nullptr); });
+                }
+                else
+                {
+                    vkDestroyPipelineLayout(device, layout, nullptr);
                 }
             }
+            resources.SetLayouts.clear();
         }
         m_ShaderResources.clear();
-        m_Cache.Clear(device);
     }
 
 } // namespace Engine

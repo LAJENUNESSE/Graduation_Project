@@ -3,9 +3,30 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Platform/Vulkan/VulkanContext.h"
 
 namespace Engine
 {
+
+    namespace
+    {
+
+        void DestroyPipelineDeferred(VkDevice device, VkPipeline pipeline)
+        {
+            if (pipeline == VK_NULL_HANDLE || device == VK_NULL_HANDLE)
+                return;
+
+            if (VulkanContext::Get())
+            {
+                VulkanContext::DeferDestroy([pipeline](VkDevice deferredDevice)
+                                            { vkDestroyPipeline(deferredDevice, pipeline, nullptr); });
+                return;
+            }
+
+            vkDestroyPipeline(device, pipeline, nullptr);
+        }
+
+    } // namespace
 
     VulkanPipelineCache::~VulkanPipelineCache()
     {
@@ -35,18 +56,18 @@ namespace Engine
         return m_Pipelines.find(key) != m_Pipelines.end();
     }
 
+    VulkanPipelineCache::CacheIterator VulkanPipelineCache::Erase(CacheIterator it, VkDevice device)
+    {
+        DestroyPipelineDeferred(device, it->second.Pipeline);
+        return m_Pipelines.erase(it);
+    }
+
     // 只销毁 Pipeline。handle.Layout 由持有方（VulkanGraphicsPipelineBuilder 的
     // per-shader 资源）负责销毁，此处不触碰以避免双重释放。
     void VulkanPipelineCache::Clear(VkDevice device)
     {
-        if (device != VK_NULL_HANDLE)
-        {
-            for (auto& [_, handle] : m_Pipelines)
-            {
-                if (handle.Pipeline != VK_NULL_HANDLE)
-                    vkDestroyPipeline(device, handle.Pipeline, nullptr);
-            }
-        }
+        for (auto& [_, handle] : m_Pipelines)
+            DestroyPipelineDeferred(device, handle.Pipeline);
         m_Pipelines.clear();
     }
 

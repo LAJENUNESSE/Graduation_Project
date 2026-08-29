@@ -3,6 +3,7 @@
 
 #include "Core/Assert.h"
 #include "Core/Log.h"
+#include "Platform/Vulkan/VulkanContext.h"
 
 namespace Engine
 {
@@ -24,8 +25,22 @@ namespace Engine
 
     VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout()
     {
-        if (m_Layout != VK_NULL_HANDLE && m_Device != VK_NULL_HANDLE)
-            vkDestroyDescriptorSetLayout(m_Device, m_Layout, nullptr);
+        const VkDescriptorSetLayout layout = m_Layout;
+        const VkDevice              device = m_Device;
+        m_Layout                           = VK_NULL_HANDLE;
+        m_Device                           = VK_NULL_HANDLE;
+
+        if (layout == VK_NULL_HANDLE || device == VK_NULL_HANDLE)
+            return;
+
+        if (VulkanContext::Get())
+        {
+            VulkanContext::DeferDestroy([layout](VkDevice deferredDevice)
+                                        { vkDestroyDescriptorSetLayout(deferredDevice, layout, nullptr); });
+            return;
+        }
+
+        vkDestroyDescriptorSetLayout(device, layout, nullptr);
     }
 
     Ref<VulkanDescriptorSetLayout> VulkanDescriptorSetLayout::CreateFromReflection(
@@ -70,8 +85,22 @@ namespace Engine
 
     VulkanDescriptorPool::~VulkanDescriptorPool()
     {
-        if (m_Pool != VK_NULL_HANDLE && m_Device != VK_NULL_HANDLE)
-            vkDestroyDescriptorPool(m_Device, m_Pool, nullptr);
+        const VkDescriptorPool pool   = m_Pool;
+        const VkDevice         device = m_Device;
+        m_Pool                        = VK_NULL_HANDLE;
+        m_Device                      = VK_NULL_HANDLE;
+
+        if (pool == VK_NULL_HANDLE || device == VK_NULL_HANDLE)
+            return;
+
+        if (VulkanContext::Get())
+        {
+            VulkanContext::DeferDestroy([pool](VkDevice deferredDevice)
+                                        { vkDestroyDescriptorPool(deferredDevice, pool, nullptr); });
+            return;
+        }
+
+        vkDestroyDescriptorPool(device, pool, nullptr);
     }
 
     VkDescriptorSet VulkanDescriptorPool::Allocate(VkDescriptorSetLayout layout)

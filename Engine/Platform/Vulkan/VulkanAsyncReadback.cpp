@@ -56,20 +56,28 @@ namespace Engine
         if (!ctx || !VulkanAllocator::IsInitialized())
             return;
 
-        VkDevice device = ctx->GetDevice();
+        const VkQueue queue = ctx->GetGraphicsQueue();
+        const auto    slots = m_Slots;
+        m_Slots             = {};
 
-        // Wait for any pending readback before destroying resources
-        for (Slot& slot : m_Slots)
-        {
-            if (slot.Pending)
-                vkWaitForFences(device, 1, &slot.Fence, VK_TRUE, UINT64_MAX);
+        // 析构可能发生在当前帧命令仍在录制、readback fence 尚未提交时。
+        // 等到该帧槽位再次可用后，再等待同一 graphics queue 完全空闲，
+        // 确保 EndFrame 追加的 fence submit 也已执行完毕。
+        VulkanContext::DeferDestroy(
+            [queue, slots](VkDevice device)
+            {
+                if (queue != VK_NULL_HANDLE)
+                    vkQueueWaitIdle(queue);
 
-            if (slot.Fence != VK_NULL_HANDLE)
-                vkDestroyFence(device, slot.Fence, nullptr);
+                for (const Slot& slot : slots)
+                {
+                    if (slot.Fence != VK_NULL_HANDLE)
+                        vkDestroyFence(device, slot.Fence, nullptr);
 
-            if (slot.Staging != VK_NULL_HANDLE)
-                vmaDestroyBuffer(VulkanAllocator::GetAllocator(), slot.Staging, slot.Alloc);
-        }
+                    if (slot.Staging != VK_NULL_HANDLE)
+                        vmaDestroyBuffer(VulkanAllocator::GetAllocator(), slot.Staging, slot.Alloc);
+                }
+            });
     }
 
     void VulkanAsyncReadback::CopyFrom(const Ref<ShaderStorageBuffer>& src, uint32_t size, uint32_t srcOffset)

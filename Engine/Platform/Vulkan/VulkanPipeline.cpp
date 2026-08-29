@@ -2,6 +2,7 @@
 #include "Platform/Vulkan/VulkanPipeline.h"
 
 #include "Core/Assert.h"
+#include "Platform/Vulkan/VulkanContext.h"
 
 namespace Engine
 {
@@ -65,16 +66,29 @@ namespace Engine
         if (device == VK_NULL_HANDLE)
             return;
 
-        if (handle.Pipeline != VK_NULL_HANDLE)
+        const VkPipeline       pipeline = handle.Pipeline;
+        const VkPipelineLayout layout   = handle.Layout;
+        handle.Pipeline                 = VK_NULL_HANDLE;
+        handle.Layout                   = VK_NULL_HANDLE;
+
+        if (pipeline == VK_NULL_HANDLE && layout == VK_NULL_HANDLE)
+            return;
+
+        auto destroy = [pipeline, layout](VkDevice destroyDevice)
         {
-            vkDestroyPipeline(device, handle.Pipeline, nullptr);
-            handle.Pipeline = VK_NULL_HANDLE;
-        }
-        if (handle.Layout != VK_NULL_HANDLE)
+            if (pipeline != VK_NULL_HANDLE)
+                vkDestroyPipeline(destroyDevice, pipeline, nullptr);
+            if (layout != VK_NULL_HANDLE)
+                vkDestroyPipelineLayout(destroyDevice, layout, nullptr);
+        };
+
+        if (VulkanContext::Get())
         {
-            vkDestroyPipelineLayout(device, handle.Layout, nullptr);
-            handle.Layout = VK_NULL_HANDLE;
+            VulkanContext::DeferDestroy(std::move(destroy));
+            return;
         }
+
+        destroy(device);
     }
 
 } // namespace Engine
