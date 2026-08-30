@@ -157,45 +157,48 @@ namespace Engine
                  }
              }});
 
-        m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx)
-                               {
-                                   if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
-                                   {
-                                       static bool s_LoggedUnsupported = false;
-                                       if (!s_LoggedUnsupported)
-                                       {
-                                           s_LoggedUnsupported = true;
-                                           ENGINE_CORE_WARN("[Vulkan] Terrain pass disabled until its UBO/descriptor "
-                                                            "layout is wired to the scene dispatcher");
-                                       }
-                                       return;
-                                   }
-
-                                   m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
-                                   m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
-                                                          m_ShadowSystem.GetSettings(), *ctx.EntityIndex,
-                                                          ctx.TransformCache);
-                               }});
-
         m_PassQueue.push_back(
-            {"GrassPass", [this](RenderContext& ctx)
+            {"TerrainPass", [this](RenderContext& ctx)
              {
+                 // 地形 mesh 数据更新是纯 CPU 侧（高度图→TerrainMeshData），
+                 // 草地 placement 管线依赖它；Vulkan 下地形网格绘制仍禁用
+                 // （SPEC backlog），仅跳过 Render
+                 m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
                  if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
                  {
-                     static bool s_LoggedUnsupported = false;
-                     if (!s_LoggedUnsupported)
+                     static bool s_LoggedTerrainDrawUnsupported = false;
+                     if (!s_LoggedTerrainDrawUnsupported)
                      {
-                         s_LoggedUnsupported = true;
-                         ENGINE_CORE_WARN("[Vulkan] Grass pass disabled until instanced scene drawing "
-                                          "is implemented");
+                         s_LoggedTerrainDrawUnsupported = true;
+                         ENGINE_CORE_WARN("[Vulkan] Terrain mesh drawing disabled until its "
+                                          "UBO/descriptor layout is wired to the scene dispatcher; "
+                                          "mesh data update still runs (grass pipeline depends on it)");
                      }
                      return;
                  }
 
-                 m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
-                 m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
-                                      m_ShadowSystem.GetSettings(), m_TotalTime, *ctx.EntityIndex, ctx.TransformCache);
+                 m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
+                                        m_ShadowSystem.GetSettings(), *ctx.EntityIndex, ctx.TransformCache);
              }});
+
+        m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx)
+                               {
+                                   // Vulkan 已解禁（通用 UBO 槽 + per-frame 双份 GrassVSUBO/GrassFSUBO）；
+                                   // 地形本体 TerrainPass 仍禁用，Vulkan 下草画在无地形背景前（SPEC backlog）
+
+                                   // 绑本帧实际被渲染的 shadow 资源（Vulkan 下 BindTextureUnit 是 no-op；
+                                   // CSM 模式下主 shadow map FBO 从未执行 renderpass，须绑级联 0，
+                                   // 与 GeometryPass 一致）。GL 下传 nullptr 走 BindTextureUnit 原路径。
+                                   void* shadowDepthView = nullptr;
+                                   if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                                       shadowDepthView = m_ShadowSystem.GetShadowDepthView(
+                                           m_ShadowData.CSMActive ? 0 : CSM_MAX_CASCADES);
+
+                                   m_GrassSystem.UpdateGrassData(*ctx.Registry, m_TotalTime);
+                                   m_GrassSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
+                                                        m_ShadowSystem.GetSettings(), m_TotalTime, *ctx.EntityIndex,
+                                                        ctx.TransformCache, shadowDepthView);
+                               }});
 
         m_PassQueue.push_back({"SSAOPass", [this](RenderContext& ctx)
                                {

@@ -24,6 +24,7 @@ namespace Engine
     public:
         static constexpr uint32_t kMaxTextureSlots = 16; // 对齐 PBR.glsl 用到的 unit 0~13 上限
         static constexpr uint32_t kMaxStorageSlots = 8;  // 粒子/草地 billboard 的 SSBO binding 0~7
+        static constexpr uint32_t kMaxUniformSlots = 8;  // 通用 UBO 槽：UniformBuffer::Bind(binding) 写入
 
         struct TextureBinding
         {
@@ -44,6 +45,10 @@ namespace Engine
             bool         Valid  = false;
         };
 
+        // 通用 UBO 槽：与 StorageBinding 同构， GrassVSUBO 等非 Global/Lights/Material 的
+        // shader UBO 由 UniformBuffer::Bind(binding) 录入，dispatcher 按反射 binding 消费
+        using UniformBinding = StorageBinding;
+
         void          SetCurrentShader(VulkanShader* shader) { m_CurrentShader = shader; }
         VulkanShader* GetCurrentShader() const { return m_CurrentShader; }
 
@@ -60,12 +65,16 @@ namespace Engine
         // SSBO 槽：StorageBuffer::Bind(binding) 的 Vulkan 对应（OpenGL glBindBufferBase 语义）
         void BindStorageSlot(uint32_t binding, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range);
 
+        // 通用 UBO 槽：UniformBuffer::Bind(binding) 的 Vulkan 对应（语义同上）
+        void BindUniformSlot(uint32_t binding, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range);
+
         // 帧首清空全部纹理槽（上一帧槽位对新一帧无意义，防止悬垂引用被复用）
         void ResetTextureSlots();
 
         // 未绑定/越界时返回 kInvalidBinding
         const TextureBinding& GetTextureSlot(uint32_t slot) const;
         const StorageBinding& GetStorageSlot(uint32_t binding) const;
+        const UniformBinding& GetUniformSlot(uint32_t binding) const;
 
         static const TextureBinding kInvalidBinding;
 
@@ -74,6 +83,7 @@ namespace Engine
         const VertexArray*                           m_CurrentVertexArray = nullptr;
         std::array<TextureBinding, kMaxTextureSlots> m_TextureSlots{};
         std::array<StorageBinding, kMaxStorageSlots> m_StorageSlots{};
+        std::array<UniformBinding, kMaxUniformSlots> m_UniformSlots{};
     };
 
 } // namespace Engine

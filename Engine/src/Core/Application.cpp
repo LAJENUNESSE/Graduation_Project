@@ -29,6 +29,8 @@ namespace Engine
 
     Application* Application::s_Instance = nullptr;
 
+    std::string Application::s_LaunchScenePath;
+
     Application::Application()
     {
         ENGINE_CORE_ASSERT(!s_Instance, "Application already exists!");

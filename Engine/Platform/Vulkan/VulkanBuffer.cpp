@@ -438,4 +438,12 @@ namespace Engine
         UploadToAllocation(m_Allocation, data, size, offset);
     }
 
+    void VulkanUniformBuffer::Bind(uint32_t binding) const
+    {
+        // 记录到场景状态机通用 UBO 槽（OpenGL glBindBufferBase 语义），场景 draw 录制时
+        // 由 dispatcher 按反射 binding 写 descriptor；binding 号即槽号
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().BindUniformSlot(binding, m_Buffer, 0, VK_WHOLE_SIZE);
+    }
+
 } // namespace Engine

@@ -44,6 +44,10 @@ namespace Engine
 
         static Application& Get() { return *s_Instance; }
 
+        // 启动参数 --scene <path>：main() 解析命令行后写入，编辑器 OnAttach 消费
+        // （等价 Ctrl+O 打开场景；供自动化验证/演示脚本使用，无参数时为空）
+        static std::string s_LaunchScenePath;
+
     private:
         bool OnWindowClose(class WindowCloseEvent& e);
         bool OnWindowResize(class WindowResizeEvent& e);

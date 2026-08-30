@@ -170,7 +170,7 @@ namespace Engine
                 {"u_Skybox", 0},
                 {"u_HDRBuffer", 0},
                 {"u_BloomBlur", 15},
-                {"u_GrassTexture", 12},
+                {"u_GrassTexture", 2}, // grass_billboard.glsl GL 分支 unit 2（GrassRenderSystem 绑槽 2）
                 {"u_Splatmap", 6},
                 // CSM 数组基址：SceneRenderer 把级联深度 view 绑在 slots 10~13
                 {"u_CascadeShadowMaps", 10},
@@ -253,7 +253,9 @@ namespace Engine
         // ---- per-frame descriptor pool（P-15 惯例：帧首 Reset）----
         {
             std::vector<VkDescriptorPoolSize> sizes = {
-                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kMaxMaterialAllocsPerFrame * 3},
+                // PBR draw 每次消耗 3 个 UBO descriptor（Global/Lights/Material），
+                // 草地等通用槽 draw 消耗 2 个（GrassVSUBO/GrassFSUBO），按最坏混帧 5/draw 预留
+                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kMaxMaterialAllocsPerFrame * 5},
                 {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxMaterialAllocsPerFrame * 8},
                 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kMaxMaterialAllocsPerFrame * 4}, // 粒子/草地 billboard SSBO
             };
@@ -794,6 +796,22 @@ namespace Engine
                                      b.Type);
                 else if (hasSet1 && b.Set == 1)
                     w1.WriteBuffer(b.Binding, fr.MaterialBuffer, materialOffset, kMaterialUboSize, b.Type);
+                else if (b.Set == 0)
+                {
+                    // 通用 UBO 槽：UniformBuffer::Bind(binding) 写入（草地 GrassVSUBO/GrassFSUBO
+                    // 等非 Global/Lights/Material 命名的 set0 UBO）
+                    const auto& slot = scene.GetUniformSlot(b.Binding);
+                    if (!slot.Valid)
+                        continue; // 未绑定且 shader 实际消费时由 validation 层报告
+                    static bool s_LoggedGenericUbo = false;
+                    if (!s_LoggedGenericUbo)
+                    {
+                        s_LoggedGenericUbo = true;
+                        ENGINE_CORE_WARN("[DbgGenericUBO] write: base={0} set={1} binding={2} range={3} buf={4}",
+                                         baseName, b.Set, b.Binding, (uint64_t)slot.Range, (void*)slot.Buffer);
+                    }
+                    w0.WriteBuffer(b.Binding, slot.Buffer, slot.Offset, slot.Range, b.Type);
+                }
             }
             else if (b.Type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
             {

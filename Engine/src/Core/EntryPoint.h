@@ -83,13 +83,18 @@ int main(int argc, char** argv)
             Engine::RendererAPI::SetAPI(Engine::RendererAPI::API::Vulkan);
     }
 
-    // Parse command-line: --vulkan selects Vulkan backend
+    // Parse command-line: --vulkan selects Vulkan backend, --scene <path> opens a scene on startup
     for (int i = 1; !benchmarkConfig.Enabled && i < argc; ++i)
     {
         if (std::strcmp(argv[i], "--vulkan") == 0)
         {
             Engine::RendererAPI::SetAPI(Engine::RendererAPI::API::Vulkan);
             ENGINE_CORE_INFO("Renderer API set to Vulkan via command-line");
+        }
+        else if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
+        {
+            Engine::Application::s_LaunchScenePath = argv[++i];
+            ENGINE_CORE_INFO("Launch scene set via command-line: {}", Engine::Application::s_LaunchScenePath);
         }
     }
 
