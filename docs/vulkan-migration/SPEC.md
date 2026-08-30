@@ -14,6 +14,7 @@
   - **IBL cube 化**（`5c476e4`）— Irradiance/Prefilter 输出改 6-layer cube-compatible + Prefilter 5 级 mip 链，PBR 环境光照恢复；顺带修复 skybox push constant 不含 u_ViewProjection 导致天空盒不可见（`a22e9dc`）
   - **粒子 billboard 可见**（`f6a26a9`）— dispatcher 支持 SSBO 绑定 + DrawArraysInstanced 真实录制 + 空顶点输入 pipeline；顺带修复 IBL 资源退出泄漏（`eea850b`）
   - **编辑器拾取接通**（`cf2154c`）— ReadPixel 同步回读 + ClearAttachment + RenderEditorPicking 解禁
+  - **草地 billboard 解禁**（feature/vulkan-grass 分支，2026-08-30）— dispatcher 通用 UBO 槽 + GrassVSUBO/GrassFSUBO std140 打包上传 + 阴影槽 view 直通 + TerrainPass 保留 mesh 数据更新 + `--scene` 启动参数（`ece1114`）；草可见、风摆与分布正确、validation 0 报错；**FS 呈黑色剪影的视觉问题已二分定位至 FS 侧输入（详见 §6 遗留 1）**
   - 收尾：validation 门控还原（`ENGINE_VULKAN_VALIDATION` 环境变量）、调试打印清理、SPEC 回写（`38884dd`/`46b399e`）、CI 新增 Windows Vulkan 编译 job（`6804ee7`）
 - **运行期状态**：粒子场景/默认场景运行 validation 0 报错，多场景切换与长时运行退出零资源泄漏。
 - **下一步**：见 [§6 Next Steps](#6-next-steps)。
@@ -243,6 +244,12 @@
 > **Why**：phase-8.2 排查 device lost 期间曾临时无条件强制开启（TODO 挂在头文件）；device lost 六根因修复且 validation 归零后应还原，但完全移除会丧失排查能力，环境变量是折中。
 > **How to apply**：日常运行不设变量；排查时 `ENGINE_VULKAN_VALIDATION=1 Editor.exe --vulkan`。
 
+### D-20：草地 billboard 接通 — 通用 UBO 槽 + per-frame 双份 UBO
+
+> **Decision**：场景 shader 的非 Global/Lights/Material 命名 set0 UBO 走"通用 UBO 槽"三段式——`VulkanSceneState::BindUniformSlot`（槽 0~7）+ `VulkanUniformBuffer::Bind(binding)` 录入（抽象层 `UniformBuffer::Bind` 纯虚，GL 实现为幂等 `glBindBufferBase`）+ dispatcher UBO 分支 set0 回退（Invalid 跳过，同 SSBO 分支语义）；descriptor pool UNIFORM_BUFFER 按 P-27 扩为 5/draw。草地侧 GrassVSUBO(196B std140)/GrassFSUBO(128B，DirLight std140 步长 48B) 由 GrassRenderSystem 打包，**per-frame-in-flight 双份**（`GrassInstance::VSUbo[2]/FSUbo[2]`，按 `GetCurrentFrameIndex()` 索引），与 dispatcher FrameResources 同惯例；阴影槽走 `BindTextureView(1, GetShadowDepthView(CSMActive?0:CSM_MAX_CASCADES))`（`shadowDepthView` 参数经 SceneRenderer 传入，void* 透传）。
+> **Why**：grass_billboard.glsl VULKAN 分支的 GrassVSUBO/GrassFSUBO 无 cpp 侧创建/上传代码（GL 用散装 uniform），descriptor 静默留空（P-19）；草 UBO 含 per-frame（Time/相机/灯光）与 per-entity（Transform/EntityID）两类数据，单份 UBO 跨帧复用存在"帧 N+1 CPU 写覆盖帧 N 未执行 draw 读取"的竞争，per-frame 双份借 BeginFrame fence 等待严格消除。
+> **How to apply**：新增场景 shader 自定义 set0 UBO 时按此模板——cpp 端 `UniformBuffer::Create(256 对齐, binding)`（GL 路径不 alloc）→ 每帧 `SetData` 打包 std140 → `Bind(binding)` 录槽 → dispatcher 自动消费；per-frame 变更数据用双份按帧索引。顺带注意：**TerrainPass 的 `UpdateTerrainMeshes` 是纯 CPU 侧**（高度图→TerrainMeshData），草地 placement 依赖它，地形绘制解禁前 Vulkan 分支必须保留数据更新（`55537a5`）；`u_GrassTexture` 的 sampler 名→槽映射为 unit 2（`4cf0853`）。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -276,6 +283,7 @@
 | P-25 | `VulkanIBLGenerator` 析构 default + SkyboxSystem 无析构 → IBL 全部 GPU 资源从不销毁（vkDestroyDevice 时 validation 报泄漏） | 任何"靠 Ref 释放即清理"的资源类 | 资源类析构必须显式调 Shutdown/Clear（`eea850b`）；新增资源类时析构函数调清理，并确认清理对 context 存活有防御 |
 | P-26 | ReadPixel 回读要求 image usage 含 `TRANSFER_SRC_BIT`，否则 copy 非法 | FBO attachment 创建时未预埋回读用途 | `ColorUsageFlags()` 已加 TRANSFER_SRC（`cf2154c`）；新增回读类功能先查 usage 位 |
 | P-27 | descriptor pool 缺新 descriptor 类型时 alloc **静默失败** → draw 被丢弃（仅 validation 报 pool 类型缺失） | dispatcher 支持 SSBO 等新绑定类型但 pool size 未同步 | per-frame pool sizes 与 dispatcher 支持的类型同步维护（`f6a26a9`）；新增 descriptor 类型时先补 pool |
+| P-28 | RenderDoc 注入运行时**主场景 HDR pass 整体不录 command**（shadow/后处理/ImGui 自建管线 pass 正常），dispatcher 路径的 PBR/草地 draws 全部缺失 | `renderdoc-cli capture` 注入 `Editor.exe --vulkan` 抓帧排查场景视觉问题 | 注入抓帧只能看自建管线 pass；场景 draws 的排查改用引擎侧一次性诊断日志（打包快照/反射 dump/descriptor 写入记录，`686363c`）+ 非注入运行的窗口目测 |
 
 ---
 
@@ -294,12 +302,13 @@
 三大核心缺口（IBL、粒子 billboard、拾取）已全部闭合，Vulkan path 达到"能看能用"基本面。后续按需启动：
 
 **等价性遗留（已有已知差异，行为不崩溃）**
+0. **草地 billboard FS 黑色剪影**（feature/vulkan-grass，2026-08-30）：草几何/分布/风摆/alpha 形状正确、draw 真实发生（blades=4800 与地形参数精确吻合）、validation 0 报错，但 FS 输出黑色。已排除：CPU 打包（`[Grass][Vulkan] UBO pack` 日志确认 numDir=1/amb=0.3/intensity=1.2 正确）、SPIR-V 反射（VSUBO/FSUBO/SSBO/双采样器 set0 绑定齐全）、通用槽 descriptor 写入、`UploadToAllocation` flush、纹理上传路径（stbi 强制 RGBA 与粒子同路径）。已二分定位：**FS 侧输入问题**（FSUBO GPU 端内容或纹理采样），下一步用临时 shader 强制 `lighting`/跳过纹理采样的 VULKAN 分支实验在**窗口前台**状态下目测二分（RenderDoc 注入运行时主场景 pass 整体不录 command，抓帧路线不可用，见 P-28）
 1. **粒子计数语义差异**：Vulkan 下 alive 计数会触发 counter overflow clamp 警告（dead+alive 超 max），GL 下无；粒子发射节奏两后端不一致（同场景 GL 稳定 12 粒子 vs Vulkan 数百）。模拟层 counter 语义需对齐（批次 0 之前已存在）
 2. **SPH/流体 compute 占位 buffer validation**：无 MeshSDF 场景下 dispatch 报 MeshSDFBuffer/RigidBodyBuffer/MeshSDFVoxelBuffer 未更新（P-16 同类占位策略不彻底），功能不受影响
 3. **阴影健壮性**：CSM 模式下主 shadow map FBO 从未执行 renderpass（`SceneRenderer.cpp:337-343` 注释），地形也不写入 shadow map
 
 **功能 backlog（按价值排序）**
-4. **草地 billboard 接通**：GrassPass 仍禁用——grass_billboard.glsl 的 GrassVSUBO（set0 binding1，196B）在 cpp 侧无创建/上传代码（GL 用散装 uniform），需按 D-13"cpp 端 UBO + dispatcher UBO 槽"方案接线；顺带可解 P-12 indirect
+4. ~~**草地 billboard 接通**~~ — **已完成**（feature/vulkan-grass，见 D-20 与 §1）；P-12 indirect 仍未解
 5. **Bloom**（`SceneRenderer.cpp` 后处理段，依赖 GL ID 传递改 view 直通，参照 tone mapping 先例）
 6. **SSAO**（`VulkanTexture.cpp` RGB_Float 上传 + callerFBO 语义）
 7. **VulkanGPUTimerQuery**（VkQueryPool TIMESTAMP，性能面板/论文数据）
