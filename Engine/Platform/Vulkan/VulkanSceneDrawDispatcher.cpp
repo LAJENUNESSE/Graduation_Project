@@ -170,7 +170,7 @@ namespace Engine
                 {"u_Skybox", 0},
                 {"u_HDRBuffer", 0},
                 {"u_BloomBlur", 15},
-                {"u_GrassTexture", 12},
+                {"u_GrassTexture", 2}, // grass_billboard.glsl GL 分支 unit 2（GrassRenderSystem 绑槽 2）
                 {"u_Splatmap", 6},
                 // CSM 数组基址：SceneRenderer 把级联深度 view 绑在 slots 10~13
                 {"u_CascadeShadowMaps", 10},
