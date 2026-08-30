@@ -30,9 +30,13 @@ namespace Engine
 
         s_CoreLogger = spdlog::stdout_color_mt("ENGINE");
         s_CoreLogger->set_level(spdlog::level::trace);
+        // stdout 重定向到文件时为全缓冲：abort/terminate 类退出不走 SEH filter，
+        // 缓冲区日志随进程丢失（静默退出时抓不到最后几行），故逐条强制落盘
+        s_CoreLogger->flush_on(spdlog::level::trace);
 
         s_ClientLogger = spdlog::stdout_color_mt("APP");
         s_ClientLogger->set_level(spdlog::level::trace);
+        s_ClientLogger->flush_on(spdlog::level::trace);
     }
 
 } // namespace Engine

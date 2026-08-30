@@ -157,25 +157,29 @@ namespace Engine
                  }
              }});
 
-        m_PassQueue.push_back({"TerrainPass", [this](RenderContext& ctx)
-                               {
-                                   if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
-                                   {
-                                       static bool s_LoggedUnsupported = false;
-                                       if (!s_LoggedUnsupported)
-                                       {
-                                           s_LoggedUnsupported = true;
-                                           ENGINE_CORE_WARN("[Vulkan] Terrain pass disabled until its UBO/descriptor "
-                                                            "layout is wired to the scene dispatcher");
-                                       }
-                                       return;
-                                   }
+        m_PassQueue.push_back(
+            {"TerrainPass", [this](RenderContext& ctx)
+             {
+                 // 地形 mesh 数据更新是纯 CPU 侧（高度图→TerrainMeshData），
+                 // 草地 placement 管线依赖它；Vulkan 下地形网格绘制仍禁用
+                 // （SPEC backlog），仅跳过 Render
+                 m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
+                 if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+                 {
+                     static bool s_LoggedTerrainDrawUnsupported = false;
+                     if (!s_LoggedTerrainDrawUnsupported)
+                     {
+                         s_LoggedTerrainDrawUnsupported = true;
+                         ENGINE_CORE_WARN("[Vulkan] Terrain mesh drawing disabled until its "
+                                          "UBO/descriptor layout is wired to the scene dispatcher; "
+                                          "mesh data update still runs (grass pipeline depends on it)");
+                     }
+                     return;
+                 }
 
-                                   m_TerrainSystem.UpdateTerrainMeshes(*ctx.Registry);
-                                   m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
-                                                          m_ShadowSystem.GetSettings(), *ctx.EntityIndex,
-                                                          ctx.TransformCache);
-                               }});
+                 m_TerrainSystem.Render(*ctx.Registry, *ctx.Camera, m_LightEnv, m_ShadowData,
+                                        m_ShadowSystem.GetSettings(), *ctx.EntityIndex, ctx.TransformCache);
+             }});
 
         m_PassQueue.push_back({"GrassPass", [this](RenderContext& ctx)
                                {
