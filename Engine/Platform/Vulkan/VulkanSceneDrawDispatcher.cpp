@@ -866,6 +866,9 @@ namespace Engine
             ScenePCStd140 pcData{};
             if (auto it = shader->GetMat4Uniforms().find("u_Transform"); it != shader->GetMat4Uniforms().end())
                 pcData.Transform = it->second;
+            else if (auto vpIt = shader->GetMat4Uniforms().find("u_ViewProjection");
+                     vpIt != shader->GetMat4Uniforms().end())
+                pcData.Transform = vpIt->second; // Skybox 等 PC 首槽即视图投影的 shader（单 mat4 布局与首槽重合）
             if (auto it = shader->GetMat3Uniforms().find("u_NormalMatrix"); it != shader->GetMat3Uniforms().end())
             {
                 // glm 列主序 mat3 → 3×vec16B 槽位
