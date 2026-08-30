@@ -73,6 +73,14 @@ namespace Engine
         // 崩溃紧急保存
         CrashHandler::SetEmergencySaveCallback([this]() { PerformAutosave(); });
 
+        // 启动参数 --scene <path>：等价 Ctrl+O 打开场景（自动化验证/演示用）
+        if (!Application::s_LaunchScenePath.empty())
+        {
+            std::string launchScene = std::move(Application::s_LaunchScenePath);
+            ENGINE_INFO("Opening launch scene: {}", launchScene);
+            OpenScene(launchScene);
+        }
+
         // 启动时检查崩溃恢复
         CheckAndPromptRestore();
         UpdateWindowTitle();
