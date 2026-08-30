@@ -6,6 +6,10 @@
 
 #include "Platform/OpenGL/OpenGLGPUTimerQuery.h"
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanGPUTimerQuery.h"
+#endif
+
 namespace Engine
 {
 
@@ -19,9 +23,12 @@ namespace Engine
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLGPUTimerQuery>();
         case RendererAPI::API::Vulkan:
-            // Vulkan 时间戳实现由 feat(vulkan) commit 接入；此前 Vulkan path 保持
-            // 计时禁用（与改造前 m_Disabled 行为一致）
-            return CreateRef<OpenGLGPUTimerQuery>();
+#ifdef ENGINE_ENABLE_VULKAN
+            return CreateRef<VulkanGPUTimerQuery>();
+#else
+            ENGINE_CORE_RELEASE_ASSERT(false, "RendererAPI::Vulkan is not compiled in!");
+            return nullptr;
+#endif
         }
 
         ENGINE_CORE_RELEASE_ASSERT(false, "Unknown RendererAPI!");
