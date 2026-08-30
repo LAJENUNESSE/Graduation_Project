@@ -1677,10 +1677,11 @@ namespace Engine
             m_SPHDisableLogged = true;
         }
 
-        // 与 OpenGL 路径一致的 CPU 端预处理：reset aliveCount / 计算 emitCount / clamp
-        uint32_t zero = 0;
-        m_CounterBuffer->SetData(&zero, sizeof(uint32_t), 4); // aliveCount = 0
-
+        // 与 OpenGL 路径一致的 CPU 端预处理：计算 emitCount / clamp。
+        // aliveCount 清零与 emitCount 写入不在此处做 host 立即写——host 写与 2 帧在飞
+        // 的 GPU dispatch 无顺序保障，落点会漂进上一帧 dispatch 序列（compact 重建/
+        // simulate 原子累加）之间，产生 counter 双倍累积（Vulkan dead≈2×max 根因），
+        // 改为录制进本帧 cmd 的 GPU 命令，见下文"帧首 counter GPU 序变更"。
         float clampedDt = std::min(dt, 0.05f);
         m_EmitAccumulator += emitter.EmitRate * clampedDt;
         uint32_t emitCount = static_cast<uint32_t>(m_EmitAccumulator);
@@ -1691,8 +1692,6 @@ namespace Engine
             emitCount += static_cast<uint32_t>(totalBurst);
 
         emitCount = std::min(emitCount, m_MaxParticles);
-
-        m_CounterBuffer->SetData(&emitCount, sizeof(uint32_t), 8); // emitCount
 
         m_TotalTime += dt;
 
@@ -1742,6 +1741,14 @@ namespace Engine
 
         const VulkanBarrierMasks ssboBarrier    = ResolveBarrierBits(BarrierBit::ShaderStorage);
         const VulkanBarrierMasks ssboCmdBarrier = ResolveBarrierBits(BarrierBit::ShaderStorage | BarrierBit::Command);
+        // TRANSFER 写（Fill/UpdateBuffer）→ compute 读（emit/compact/simulate 消费 counter）
+        const VulkanBarrierMasks bufferUpdateBarrier = ResolveBarrierBits(BarrierBit::BufferUpdate);
+        // compute（simulate/render_args 原子写）与 TRANSFER 写（sanitize 回写）→ TRANSFER 读
+        // （回读 vkCmdCopyBuffer）。render_args 后的 ssboCmdBarrier 目标 stage 不含 TRANSFER，
+        // 回读 copy 与 compute 原子写之间原本缺同步，GPU 滞后时回读可能拿到中间态。
+        const VulkanBarrierMasks counterToReadbackBarrier{
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT};
 
         auto ssboBarrierFn = [&]()
         {
@@ -1749,7 +1756,22 @@ namespace Engine
                                  ssboBarrier.DstAccess);
         };
 
+        auto bufferUpdateBarrierFn = [&]()
+        {
+            cmdBuf.MemoryBarrier(bufferUpdateBarrier.SrcStage, bufferUpdateBarrier.DstStage,
+                                 bufferUpdateBarrier.SrcAccess, bufferUpdateBarrier.DstAccess);
+        };
+
         PerformanceMonitor::Get().GetParticleComputeGPUTimer().Begin();
+
+        // ============================================================
+        // 帧首 counter GPU 序变更 —— GL"流内 CPU 写"语义的 Vulkan 等价物。
+        // 录制进本帧 cmd：位于上一帧全部 dispatch 之后（队列按序）、本帧
+        // emit/compact/simulate 之前，与 GL 的清零→emit→simulate 次序完全一致。
+        // ============================================================
+        cmdBuf.FillBuffer(counterBuf, offsetof(CounterData, aliveCount), sizeof(uint32_t), 0u);
+        cmdBuf.UpdateBuffer(counterBuf, offsetof(CounterData, emitCount), sizeof(uint32_t), &emitCount);
+        bufferUpdateBarrierFn();
 
         // ============================================================
         // Pass 1: Emit
@@ -1797,10 +1819,10 @@ namespace Engine
         // ============================================================
         if (sphReady)
         {
-            // 重置 counter 让 compact 重新 build alive/dead
-            CounterData cz{};
-            m_CounterBuffer->SetData(&cz, sizeof(CounterData), 0);
-            ssboBarrierFn();
+            // 重置 counter 让 compact 重新 build alive/dead（GPU 序：TRANSFER 写 +
+            // bufferUpdate barrier，位于上一帧与本帧 compact 之间，与 GL 一致）
+            cmdBuf.FillBuffer(counterBuf, 0, sizeof(CounterData), 0u);
+            bufferUpdateBarrierFn();
 
             VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->CompactLayout->GetHandle());
             ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] compact descriptor alloc failed");
@@ -2024,7 +2046,9 @@ namespace Engine
                     ENGINE_WARN("[Particle] Counter overflow detected (dead={0}, alive={1}, max={2}); "
                                 "clamping to safe range.",
                                 counters.deadCount, counters.aliveCount, m_MaxParticles);
-                    m_CounterBuffer->SetData(&sanitized, sizeof(CounterData), 0);
+                    // GPU 序回写（GL 语义：回写先于回读 copy）；host 立即写会漂进
+                    // 上一帧 dispatch 序列，回写值又被本帧 compact 累加（根因之一）
+                    cmdBuf.UpdateBuffer(counterBuf, 0, sizeof(CounterData), &sanitized);
                 }
 
                 m_LastAliveCount = sanitized.aliveCount;
@@ -2047,6 +2071,11 @@ namespace Engine
                 LogCounterDebug("VK", ctx->GetCurrentFrameIndex(), emitCount, m_LastAliveCount, sphReady, probe, false,
                                 CounterData{}, false);
             }
+
+            // 回读 copy 前补同步：compute 原子写（simulate/render_args）与上方
+            // sanitize 回写（TRANSFER 写）→ TRANSFER 读，保证 copy 读到帧内最终值
+            cmdBuf.MemoryBarrier(counterToReadbackBarrier.SrcStage, counterToReadbackBarrier.DstStage,
+                                 counterToReadbackBarrier.SrcAccess, counterToReadbackBarrier.DstAccess);
 
             // 录入主帧 cmd 的 vkCmdCopyBuffer（VulkanAsyncReadback 内部）
             m_Readback->CopyFrom(m_CounterBuffer, sizeof(CounterData));

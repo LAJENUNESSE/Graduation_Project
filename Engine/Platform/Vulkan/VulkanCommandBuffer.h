@@ -67,6 +67,16 @@ namespace Engine
 
         void Dispatch(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1) const;
 
+        // ---- GPU 序 buffer 变更（GL"流内 CPU 写"语义的 Vulkan 等价物）----
+        // 粒子 counter 等跨帧累计的 buffer 需要"写入严格处于两次 dispatch 之间"的
+        // 顺序；host 立即写与 2 帧在飞的 GPU 工作无顺序保障，必须录制进帧 cmd。
+
+        // vkCmdFillBuffer：以 4 字节对齐的 value 填充区域（offset/size 均为 4 的倍数）
+        void FillBuffer(VkBuffer dst, VkDeviceSize offset, VkDeviceSize size, uint32_t value) const;
+
+        // vkCmdUpdateBuffer：≤65536B 内嵌数据更新（数据在调用时即拷入 cmd buffer）
+        void UpdateBuffer(VkBuffer dst, VkDeviceSize offset, VkDeviceSize size, const void* data) const;
+
         // 单 buffer barrier
         void BufferBarrier(VkBuffer             buffer,
                            VkDeviceSize         offset,

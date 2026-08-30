@@ -180,6 +180,22 @@ namespace Engine
         vkCmdDispatch(m_CommandBuffer, groupCountX, groupCountY, groupCountZ);
     }
 
+    void VulkanCommandBuffer::FillBuffer(VkBuffer dst, VkDeviceSize offset, VkDeviceSize size, uint32_t value) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        ENGINE_CORE_RELEASE_ASSERT(size > 0 && size % 4 == 0, "vkCmdFillBuffer size must be a non-zero multiple of 4");
+        ENGINE_CORE_RELEASE_ASSERT(offset % 4 == 0, "vkCmdFillBuffer offset must be 4-byte aligned");
+        vkCmdFillBuffer(m_CommandBuffer, dst, offset, size, value);
+    }
+
+    void VulkanCommandBuffer::UpdateBuffer(VkBuffer dst, VkDeviceSize offset, VkDeviceSize size, const void* data) const
+    {
+        ENGINE_CORE_RELEASE_ASSERT(m_CommandBuffer != VK_NULL_HANDLE, "VulkanCommandBuffer handle is null");
+        ENGINE_CORE_RELEASE_ASSERT(data != nullptr, "UpdateBuffer data must not be null");
+        ENGINE_CORE_RELEASE_ASSERT(size > 0 && size <= 65536u, "vkCmdUpdateBuffer size must be in (0, 65536]");
+        vkCmdUpdateBuffer(m_CommandBuffer, dst, offset, size, data);
+    }
+
     void VulkanCommandBuffer::BufferBarrier(VkBuffer             buffer,
                                             VkDeviceSize         offset,
                                             VkDeviceSize         size,
