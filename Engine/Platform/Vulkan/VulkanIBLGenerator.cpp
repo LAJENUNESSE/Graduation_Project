@@ -126,6 +126,12 @@ namespace Engine
 
     void VulkanIBLGenerator::Shutdown()
     {
+        // 正常退出顺序中本类析构早于 VulkanContext（EditorLayer 层析构先于
+        // window/context 成员析构）；context 已不存在时 GPU 资源无法安全销毁，
+        // 只能交给驱动随 device 销毁回收，这里直接返回避免断言。
+        if (VulkanContext::Get() == nullptr)
+            return;
+
         Clear();
 
         auto device = GetDevice();

@@ -26,8 +26,8 @@ namespace Engine
     class VulkanIBLGenerator : public IBLGenerator
     {
     public:
-        VulkanIBLGenerator()           = default;
-        ~VulkanIBLGenerator() override = default;
+        VulkanIBLGenerator() = default;
+        ~VulkanIBLGenerator() override { Shutdown(); }
 
         bool Init() override;
         void Generate(const Ref<TextureCubemap>& skybox) override;
