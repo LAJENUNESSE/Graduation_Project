@@ -51,6 +51,16 @@ namespace Engine
 
         BootstrapDefaultScene();
 
+        // 测试辅助：ENGINE_EDITOR_OPEN_SCENE 指定场景直接打开（自动化验证用，跳过 Boot 界面交互）
+        if (const char* sceneOverride = std::getenv("ENGINE_EDITOR_OPEN_SCENE"))
+        {
+            const std::filesystem::path resolved = PathUtils::GetProjectRoot() / sceneOverride;
+            if (std::filesystem::exists(resolved))
+                OpenScene(resolved.string());
+            else
+                ENGINE_WARN("[Editor] ENGINE_EDITOR_OPEN_SCENE='{0}' 不存在，使用默认场景", sceneOverride);
+        }
+
         // RenderSettingsPanel 初始 context（需要 m_ActiveScene，所以在 BootstrapDefaultScene 之后）
         m_Boot->GetRenderSettingsPanel().SetContext(&m_Boot->RenderController().GetSceneRenderer(),
                                                     m_Boot->RenderController().GetPostProcessingSettings(),
