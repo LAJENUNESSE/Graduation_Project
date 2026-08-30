@@ -147,6 +147,17 @@ namespace Engine
         m_RenderArgsShader = Shader::Create("assets/shaders/grass_render_args.glsl");
         m_BillboardShader  = Shader::Create("assets/shaders/grass_billboard.glsl");
 
+#ifdef ENGINE_ENABLE_VULKAN
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            auto vkShader = std::dynamic_pointer_cast<VulkanShader>(m_BillboardShader);
+            if (vkShader)
+                for (const auto& b : vkShader->GetReflectedBindings())
+                    ENGINE_CORE_WARN("[Grass][Reflect] set={0} binding={1} type={2} count={3} name={4}", b.Set,
+                                     b.Binding, (uint32_t)b.Type, b.Count, b.Name);
+        }
+#endif
+
         auto whiteHandle = AssetManager::Load<Texture2D>("builtin:white");
         m_WhiteTexture   = AssetManager::GetRef<Texture2D>(whiteHandle);
 
@@ -583,6 +594,18 @@ namespace Engine
             fsUbo.ShadowBias      = shadowSettings.Bias;
             fsUbo.AmbientStrength = lights.AmbientStrength;
 
+            static bool s_LoggedUboPack = false;
+            if (!s_LoggedUboPack)
+            {
+                s_LoggedUboPack = true;
+                const auto& d0  = lights.DirLights.empty() ? LightEnvironment::DirLight{} : lights.DirLights[0];
+                ENGINE_CORE_WARN("[Grass][Vulkan] UBO pack: numDir={0} amb={1:.3f} shadow={2} bias={3:.4f} "
+                                 "dir0=({4:.2f},{5:.2f},{6:.2f}) col0=({7:.2f},{8:.2f},{9:.2f}) int0={10:.2f}",
+                                 numDirLights, lights.AmbientStrength, shadowActive ? 1 : 0, shadowSettings.Bias,
+                                 d0.Direction.x, d0.Direction.y, d0.Direction.z, d0.Color.x, d0.Color.y, d0.Color.z,
+                                 d0.Intensity);
+            }
+
             frameIndex = VulkanContext::Get()->GetCurrentFrameIndex();
         }
 
@@ -644,6 +667,17 @@ namespace Engine
                 RenderCommand::DrawArraysIndirect(inst.IndirectArgs->GetRendererID());
             else
                 RenderCommand::DrawArraysInstanced(6, inst.GrassCount);
+
+            if (vulkanBackend)
+            {
+                static bool s_LoggedFirstDraw = false;
+                if (!s_LoggedFirstDraw)
+                {
+                    s_LoggedFirstDraw = true;
+                    ENGINE_CORE_WARN("[Grass][Vulkan] First instanced draw recorded: eid={0} blades={1}", eid,
+                                     inst.GrassCount);
+                }
+            }
         }
 
         // 恢复面剔除

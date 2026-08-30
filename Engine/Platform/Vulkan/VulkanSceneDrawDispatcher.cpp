@@ -803,6 +803,13 @@ namespace Engine
                     const auto& slot = scene.GetUniformSlot(b.Binding);
                     if (!slot.Valid)
                         continue; // 未绑定且 shader 实际消费时由 validation 层报告
+                    static bool s_LoggedGenericUbo = false;
+                    if (!s_LoggedGenericUbo)
+                    {
+                        s_LoggedGenericUbo = true;
+                        ENGINE_CORE_WARN("[DbgGenericUBO] write: base={0} set={1} binding={2} range={3} buf={4}",
+                                         baseName, b.Set, b.Binding, (uint64_t)slot.Range, (void*)slot.Buffer);
+                    }
                     w0.WriteBuffer(b.Binding, slot.Buffer, slot.Offset, slot.Range, b.Type);
                 }
             }
