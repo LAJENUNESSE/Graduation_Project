@@ -14,6 +14,7 @@
   - **IBL cube 化**（`5c476e4`）— Irradiance/Prefilter 输出改 6-layer cube-compatible + Prefilter 5 级 mip 链，PBR 环境光照恢复；顺带修复 skybox push constant 不含 u_ViewProjection 导致天空盒不可见（`a22e9dc`）
   - **粒子 billboard 可见**（`f6a26a9`）— dispatcher 支持 SSBO 绑定 + DrawArraysInstanced 真实录制 + 空顶点输入 pipeline；顺带修复 IBL 资源退出泄漏（`eea850b`）
   - **编辑器拾取接通**（`cf2154c`）— ReadPixel 同步回读 + ClearAttachment + RenderEditorPicking 解禁
+  - **粒子 counter 语义对齐**（`dc61fd8`/`c4c6065`/`9addf68`，2026-08-30）— counter 变更 GPU 序化（D-20）+ compact 越界 guard + `ENGINE_PARTICLE_COUNTER_DEBUG` 追踪设施，消除 Vulkan overflow 警告循环，等价性遗留第 1 项结案（§6 有实测数据）
   - 收尾：validation 门控还原（`ENGINE_VULKAN_VALIDATION` 环境变量）、调试打印清理、SPEC 回写（`38884dd`/`46b399e`）、CI 新增 Windows Vulkan 编译 job（`6804ee7`）
 - **运行期状态**：粒子场景/默认场景运行 validation 0 报错，多场景切换与长时运行退出零资源泄漏。
 - **下一步**：见 [§6 Next Steps](#6-next-steps)。
@@ -243,6 +244,12 @@
 > **Why**：phase-8.2 排查 device lost 期间曾临时无条件强制开启（TODO 挂在头文件）；device lost 六根因修复且 validation 归零后应还原，但完全移除会丧失排查能力，环境变量是折中。
 > **How to apply**：日常运行不设变量；排查时 `ENGINE_VULKAN_VALIDATION=1 Editor.exe --vulkan`。
 
+### D-20：粒子 counter 等跨帧累计 buffer 的变更一律 GPU 序（`c4c6065`）
+
+> **Decision**：粒子 counter buffer 的每帧变更（aliveCount=0 清零、emitCount 写入、compact 前 16B 清零、overflow sanitize 回写）全部录制进帧 cmd：`VulkanCommandBuffer::FillBuffer`（vkCmdFillBuffer）/ `UpdateBuffer`（vkCmdUpdateBuffer，≤64KB）+ BufferUpdate barrier（TRANSFER 写 → COMPUTE 读）；回读 copy 前补 COMPUTE/TRANSFER 写 → TRANSFER 读 barrier。禁对跨帧累计 buffer 做 host 立即写（`SetData` 的 host-visible 直写路径）。
+> **Why**：host 立即写与 2 帧在飞的 GPU dispatch 无顺序保障，落点漂进上一帧 dispatch 序列——实测 `ENGINE_PARTICLE_COUNTER_DEBUG` 显示 sanitize 回写(dead=10000)落地后下一帧 compact 又累加 → 回读恒 20000/30000 → 每帧 overflow 警告 + clamp 循环（等价性遗留第 1 项）。GL 免疫是因单命令流内 CPU 写天然有序；GPU 序化后 Vulkan 与 GL 语义对齐。
+> **How to apply**：新增"CPU 每帧更新 + GPU 跨帧累计"的 buffer（各系统 counter/累计器）一律走 FillBuffer/UpdateBuffer + barrier 模板；仅本帧 CPU 写、GPU 读的一次性参数（UBO）可保留 host 写（参数逐帧不变时实际无害，见 P-28 备注）。跨帧 copy 与下一帧 FillBuffer 的 WAR 依赖同队列按序假设（与 D-11 空 submit fence 同级）。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -276,6 +283,7 @@
 | P-25 | `VulkanIBLGenerator` 析构 default + SkyboxSystem 无析构 → IBL 全部 GPU 资源从不销毁（vkDestroyDevice 时 validation 报泄漏） | 任何"靠 Ref 释放即清理"的资源类 | 资源类析构必须显式调 Shutdown/Clear（`eea850b`）；新增资源类时析构函数调清理，并确认清理对 context 存活有防御 |
 | P-26 | ReadPixel 回读要求 image usage 含 `TRANSFER_SRC_BIT`，否则 copy 非法 | FBO attachment 创建时未预埋回读用途 | `ColorUsageFlags()` 已加 TRANSFER_SRC（`cf2154c`）；新增回读类功能先查 usage 位 |
 | P-27 | descriptor pool 缺新 descriptor 类型时 alloc **静默失败** → draw 被丢弃（仅 validation 报 pool 类型缺失） | dispatcher 支持 SSBO 等新绑定类型但 pool size 未同步 | per-frame pool sizes 与 dispatcher 支持的类型同步维护（`f6a26a9`）；新增 descriptor 类型时先补 pool |
+| P-28 | host 立即写跨帧累计 buffer 与 2 帧在飞 GPU dispatch 无顺序保障 → 清零落点漂进上一帧 dispatch 序列，compact/simulate 在"回写值"上二次累加（counter 双倍累积，实测 readback dead=20000/30000 vs probe=10000） | SPH 场景每帧 compact 全量重建 counter + GPU 滞后 ≥1 帧（该场景 Vulkan ~28fps vs GL ~77fps，滞后常态） | 跨帧累计 buffer 变更一律 GPU 序（D-20：FillBuffer/UpdateBuffer + BufferUpdate barrier）；诊断用 `ENGINE_PARTICLE_COUNTER_DEBUG=1` 逐帧对比 probe（GPU 内存直读）与 readback（异步回读），两者系统性差值即乱序证据 |
 
 ---
 
@@ -293,8 +301,8 @@
 
 三大核心缺口（IBL、粒子 billboard、拾取）已全部闭合，Vulkan path 达到"能看能用"基本面。后续按需启动：
 
-**等价性遗留（已有已知差异，行为不崩溃）**
-1. **粒子计数语义差异**：Vulkan 下 alive 计数会触发 counter overflow clamp 警告（dead+alive 超 max），GL 下无；粒子发射节奏两后端不一致（同场景 GL 稳定 12 粒子 vs Vulkan 数百）。模拟层 counter 语义需对齐（批次 0 之前已存在）
+**等价性遗留**
+1. ~~**粒子计数语义差异**~~ — **已解决**（`dc61fd8`/`c4c6065`/`9addf68`，2026-08-30）：根因是 counter host 立即写与 2 帧在飞 dispatch 无序（P-28），4 处变更 GPU 序化后对齐 GL（D-20）。修复前后实测（`ENGINE_PARTICLE_COUNTER_DEBUG=1`，粒子测试.scene，EmitRate=300）：修复前 Vulkan 回读 dead=20000/30000（probe=10000）、每帧 overflow 警告 + corrected=1；修复后 2610 帧 0 警告 0 corrected，probe==readback，dead+alive≈10146 与 GL 基线（9858/288，77fps）同特征同量级（Vulkan 74fps）。注：GL/Vulkan 的 alive 计数本身含 compact+simulate 同帧双计（≈2×真实存活，低于 max 不报错），两后端一致，属既存语义非缺陷。等价性验证设施说明：`ENGINE_PARTICLE_EQUIV_SMOKE` 为 GL↔CUDA 单进程对比，无法覆盖 Vulkan（单进程单 RHI，GL compute 封装在 Vulkan 上是 stub；且 counter 语义分歧不体现在粒子数据快照里）——Vulkan 侧以 counter 追踪 + 双后端实测协议替代（见 D-20/P-28），真跨 RHI 对比需离线进程编排，暂不做
 2. **SPH/流体 compute 占位 buffer validation**：无 MeshSDF 场景下 dispatch 报 MeshSDFBuffer/RigidBodyBuffer/MeshSDFVoxelBuffer 未更新（P-16 同类占位策略不彻底），功能不受影响
 3. **阴影健壮性**：CSM 模式下主 shadow map FBO 从未执行 renderpass（`SceneRenderer.cpp:337-343` 注释），地形也不写入 shadow map
 
