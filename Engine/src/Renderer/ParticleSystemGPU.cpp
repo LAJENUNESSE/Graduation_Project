@@ -521,6 +521,12 @@ namespace Engine
         Ref<VulkanDescriptorSetLayout> SPHForceLayout;
         VulkanComputePipelineHandle    SPHDensityPipeline{};
         VulkanComputePipelineHandle    SPHForcePipeline{};
+
+        // ---- SPH 占位 SSBO（P-19 兜底）----
+        // sph_force.glsl 声明 binding 10/11（MeshSDF），粒子 SPH 从不采样，但 layout
+        // 由反射生成必含它们——耦合关闭时从未写入会报 validation "never been updated"
+        Ref<ShaderStorageBuffer> MeshSDFMetaPlaceholder;  // binding 10
+        Ref<ShaderStorageBuffer> MeshSDFVoxelPlaceholder; // binding 11
     };
 #else
     struct ParticleSystemGPU::VulkanResources
@@ -1866,6 +1872,15 @@ namespace Engine
                                                            RigidBodyUploadFilter::RequireRigidBodyComponent);
             }
 
+            // 占位 SSBO 兜底（P-19 思路）：sph_force.glsl 声明 binding 3/10/11，耦合关闭时
+            // 这些 binding 从未写入 → validation "never been updated"。无条件懒创建，
+            // shader 侧 rigidBodyCount=0 / SDFCounts.yzw=0 不会采样
+            InitRigidBodyBuffer();
+            if (!m_VulkanResources->MeshSDFMetaPlaceholder)
+                m_VulkanResources->MeshSDFMetaPlaceholder = ShaderStorageBuffer::CreateGPUOnly(16, 10);
+            if (!m_VulkanResources->MeshSDFVoxelPlaceholder)
+                m_VulkanResources->MeshSDFVoxelPlaceholder = ShaderStorageBuffer::CreateGPUOnly(16, 11);
+
             // 上传 SPH 共享 UBO
             ParticleSPHParamsUBO sphUbo{};
             sphUbo.GravityAndSmoothingRadius = glm::vec4(emitter.Gravity, emitter.SPH.SmoothingRadius);
@@ -1895,7 +1910,8 @@ namespace Engine
             ssboBarrierFn();
 
             auto dispatchSPH = [&](const VulkanComputePipelineHandle&    pipe,
-                                   const Ref<VulkanDescriptorSetLayout>& layout, bool bindRigid, bool bindSN)
+                                   const Ref<VulkanDescriptorSetLayout>& layout, bool bindRigid, bool bindMeshSDF,
+                                   bool bindSN)
             {
                 VkDescriptorSet set = descriptorPool->Allocate(layout->GetHandle());
                 ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Particle][Vulkan] SPH pool 耗尽");
@@ -1903,8 +1919,12 @@ namespace Engine
                 VulkanDescriptorWriter w;
                 w.WriteBuffer(0, particleBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
                 w.WriteBuffer(2, aliveListBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                if (bindRigid && m_RigidBodyBuffer)
+                if (bindRigid)
+                {
+                    // 已由上方 InitRigidBodyBuffer 无条件懒创建；耦合关闭时为占位
+                    // （shader 侧 rigidBodyCount=0 不采样）
                     w.WriteBuffer(3, bufferOf(m_RigidBodyBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                }
                 w.WriteBuffer(5, bufferOf(m_Grid.GetCellStart()), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
                 w.WriteBuffer(6, bufferOf(m_Grid.GetCellCount()), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
                 w.WriteBuffer(7, bufferOf(m_Grid.GetSortedIndices()), 0, VK_WHOLE_SIZE,
@@ -1916,7 +1936,15 @@ namespace Engine
                 // TODO: 若启用粒子 surface tension，需补 m_SurfaceNormalBuffer。
                 if (bindSN)
                     w.WriteBuffer(8, aliveListBuf, 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                // MeshSDF binding（粒子 SPH 不用，按未绑定语义跳过）
+                // MeshSDF binding 10/11：占位 SSBO（粒子 SPH 不采样，仅满足 layout
+                // 完整性使 validation 归零）
+                if (bindMeshSDF)
+                {
+                    w.WriteBuffer(10, bufferOf(m_VulkanResources->MeshSDFMetaPlaceholder), 0, VK_WHOLE_SIZE,
+                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    w.WriteBuffer(11, bufferOf(m_VulkanResources->MeshSDFVoxelPlaceholder), 0, VK_WHOLE_SIZE,
+                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                }
 
                 w.WriteBuffer(PARTICLE_SPH_UBO_BINDING, vkSPHUBO->GetBuffer(), 0, sizeof(ParticleSPHParamsUBO),
                               VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
@@ -1936,10 +1964,10 @@ namespace Engine
 
             // SPH Density
             dispatchSPH(m_VulkanResources->SPHDensityPipeline, m_VulkanResources->SPHDensityLayout,
-                        /*Rigid=*/false, /*SN=*/true);
+                        /*Rigid=*/false, /*MeshSDF=*/false, /*SN=*/true);
             // SPH Force（WCSPH）
             dispatchSPH(m_VulkanResources->SPHForcePipeline, m_VulkanResources->SPHForceLayout,
-                        /*Rigid=*/true, /*SN=*/true);
+                        /*Rigid=*/true, /*MeshSDF=*/true, /*SN=*/true);
         }
 
         // ============================================================

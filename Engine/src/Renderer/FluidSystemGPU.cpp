@@ -1364,6 +1364,12 @@ namespace Engine
         {
             ENGINE_CORE_RELEASE_ASSERT(vkSPHUBO, "[Fluid][Vulkan] SPH UBO 未创建");
 
+            // 占位 SSBO 兜底（P-19 思路）：sph_force.glsl 声明 binding 3/10/11，耦合关闭时
+            // 这些 binding 从未写入 → validation "never been updated"。无条件懒创建真实
+            // 尺寸 buffer（与耦合开启时同款），shader 侧 rigidBodyCount=0/SDFCount=0 不采样
+            InitRigidBodyBuffer();
+            InitMeshSDFBuffer();
+
             // ---- 上传 rigid/mesh SDF（与 OpenGL UpdateSPH 段对齐）----
             if (emitter.RigidBodyCoupling && registry)
             {
@@ -1431,8 +1437,11 @@ namespace Engine
                 if (bindPCISPH && m_PCISPHBuffer)
                     w.WriteBuffer(1, bufferOf(m_PCISPHBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
                 w.WriteBuffer(2, bufferOf(m_AliveList), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                if (bindRigid && m_RigidBodyBuffer)
+                if (bindRigid)
+                {
+                    // 已由上方 InitRigidBodyBuffer 无条件懒创建；耦合关闭时为占位
                     w.WriteBuffer(3, bufferOf(m_RigidBodyBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                }
                 if (bindGrid)
                 {
                     w.WriteBuffer(5, bufferOf(m_Grid.GetCellStart()), 0, VK_WHOLE_SIZE,
@@ -1445,12 +1454,14 @@ namespace Engine
                 if (bindSurfaceNormal && m_SurfaceNormalBuffer)
                     w.WriteBuffer(8, bufferOf(m_SurfaceNormalBuffer), 0, VK_WHOLE_SIZE,
                                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                if (bindMeshSDF && m_MeshSDFMetaBuffer)
+                if (bindMeshSDF)
+                {
+                    // 已由上方 InitMeshSDFBuffer 无条件懒创建；耦合关闭时为占位
                     w.WriteBuffer(10, bufferOf(m_MeshSDFMetaBuffer), 0, VK_WHOLE_SIZE,
                                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                if (bindMeshSDF && m_MeshSDFVoxelBuffer)
                     w.WriteBuffer(11, bufferOf(m_MeshSDFVoxelBuffer), 0, VK_WHOLE_SIZE,
                                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                }
                 w.WriteBuffer(FLUID_SPH_UBO_BINDING, vkSPHUBO->GetBuffer(), 0, sizeof(SPHParamsUBO),
                               VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
                 w.UpdateSet(device, set);
