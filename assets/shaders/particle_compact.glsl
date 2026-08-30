@@ -51,14 +51,19 @@ void main()
     if (gid >= MAX_PARTICLES)
         return;
 
+    // 列表写入必须做槽位上限保护（与 particle_simulate.glsl 一致）：
+    // counter 一旦异常累积超过 MAX_PARTICLES，无保护的写入会越界踩坏
+    // 相邻 buffer，把计数异常放大成数据损坏
     if (particles[gid].posAndLife.w > 0.0)
     {
         uint idx = atomicAdd(aliveCount, 1u);
-        aliveIndices[idx] = gid;
+        if (idx < MAX_PARTICLES)
+            aliveIndices[idx] = gid;
     }
     else
     {
         uint idx = atomicAdd(deadCount, 1u);
-        deadIndices[idx] = gid;
+        if (idx < MAX_PARTICLES)
+            deadIndices[idx] = gid;
     }
 }
