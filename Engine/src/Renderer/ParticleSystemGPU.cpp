@@ -367,6 +367,56 @@ namespace Engine
                   "GPURigidBodyData size mismatch between C++ and CUDA");
 #endif
 
+    namespace
+    {
+        // 诊断：ENGINE_PARTICLE_COUNTER_DEBUG=1 时逐帧打印 counter 语义链路——
+        // CPU 写入值（emitCount）、GPU 同步探针（直接读 buffer 当前内存）、异步回读值。
+        // 用于跨后端计数行为对比与 counter overflow 排查，生产路径零开销（env 门控）。
+        bool CounterDebugEnabled()
+        {
+            static const bool enabled = []()
+            {
+                const char* raw = std::getenv("ENGINE_PARTICLE_COUNTER_DEBUG");
+                return raw != nullptr && raw[0] == '1';
+            }();
+            return enabled;
+        }
+
+        uint64_t NextCounterDebugFrame()
+        {
+            static uint64_t frame = 0;
+            return frame++;
+        }
+
+        void LogCounterDebug(const char*        backend,
+                             uint32_t           frameSlot,
+                             uint32_t           emitCount,
+                             uint32_t           lastAliveCount,
+                             bool               compactPath,
+                             const CounterData& probe,
+                             bool               readbackCollected,
+                             const CounterData& readback,
+                             bool               corrected)
+        {
+            const uint64_t frame = NextCounterDebugFrame();
+            if (readbackCollected)
+            {
+                ENGINE_CORE_INFO("[Particle][CounterDebug] {} frame={} slot={} emit={} lastAlive={} compact={} "
+                                 "probe(dead={},alive={},emit={}) readback(dead={},alive={},emit={}) corrected={}",
+                                 backend, frame, frameSlot, emitCount, lastAliveCount, compactPath ? 1 : 0,
+                                 probe.deadCount, probe.aliveCount, probe.emitCount, readback.deadCount,
+                                 readback.aliveCount, readback.emitCount, corrected ? 1 : 0);
+            }
+            else
+            {
+                ENGINE_CORE_INFO("[Particle][CounterDebug] {} frame={} slot={} emit={} lastAlive={} compact={} "
+                                 "probe(dead={},alive={},emit={}) readback=- corrected=0",
+                                 backend, frame, frameSlot, emitCount, lastAliveCount, compactPath ? 1 : 0,
+                                 probe.deadCount, probe.aliveCount, probe.emitCount);
+            }
+        }
+    } // namespace
+
 #ifdef ENGINE_ENABLE_VULKAN
     namespace
     {
@@ -1284,6 +1334,21 @@ namespace Engine
 
                     if (!m_UseIndirectDraw)
                         m_AliveCountForDirectDraw = sanitized.aliveCount;
+
+                    if (CounterDebugEnabled())
+                    {
+                        CounterData probe{};
+                        m_CounterBuffer->GetData(&probe, sizeof(CounterData));
+                        LogCounterDebug("GL", 0, emitCount, m_LastAliveCount, sphEnabled, probe, true, counters,
+                                        corrected);
+                    }
+                }
+                else if (CounterDebugEnabled())
+                {
+                    CounterData probe{};
+                    m_CounterBuffer->GetData(&probe, sizeof(CounterData));
+                    LogCounterDebug("GL", 0, emitCount, m_LastAliveCount, sphEnabled, probe, false, CounterData{},
+                                    false);
                 }
 
                 // Initiate this frame's async copy
@@ -1966,6 +2031,21 @@ namespace Engine
 
                 if (!m_UseIndirectDraw)
                     m_AliveCountForDirectDraw = sanitized.aliveCount;
+
+                if (CounterDebugEnabled())
+                {
+                    CounterData probe{};
+                    m_CounterBuffer->GetData(&probe, sizeof(CounterData));
+                    LogCounterDebug("VK", ctx->GetCurrentFrameIndex(), emitCount, m_LastAliveCount, sphReady, probe,
+                                    true, counters, corrected);
+                }
+            }
+            else if (CounterDebugEnabled())
+            {
+                CounterData probe{};
+                m_CounterBuffer->GetData(&probe, sizeof(CounterData));
+                LogCounterDebug("VK", ctx->GetCurrentFrameIndex(), emitCount, m_LastAliveCount, sphReady, probe, false,
+                                CounterData{}, false);
             }
 
             // 录入主帧 cmd 的 vkCmdCopyBuffer（VulkanAsyncReadback 内部）
