@@ -3,15 +3,15 @@
 layout(local_size_x = 16, local_size_y = 16) in;
 
 #ifdef VULKAN
-// 输出 irradiance map（6 个面横向排列）
-layout(set = 0, binding = 0, rgba16f) writeonly uniform image2D u_OutputIrradiance;
+// 输出 irradiance cube（6-layer cube-compatible 2D array，compute 经 2D_ARRAY view 写入）
+layout(set = 0, binding = 0, rgba16f) writeonly uniform image2DArray u_OutputIrradiance;
 // Vulkan 路径直接采样 cubemap（VulkanTextureCubemap 已实装）
 layout(set = 0, binding = 1) uniform samplerCube u_EnvCube;
 
 // uniform 通过 push constant 传递（Vulkan 不允许 free uniform）
 layout(push_constant) uniform PushConstants
 {
-    int u_FaceSize;     // 输出面分辨率
+    int u_FaceSize;     // 当前 dispatch 的面分辨率（prefilter 按 mip 递减）
     int u_EnvFaceSize;  // 环境贴图单面分辨率（Vulkan 路径未使用，cubemap 采样器自动 LOD）
 } pc;
 #define u_FaceSize    pc.u_FaceSize
@@ -88,18 +88,9 @@ vec3 CubeMapDirection(int face, vec2 uv)
     return vec3(0.0);
 }
 
-void main()
+// 半球卷积主体：face + uv → irradiance（GL/Vulkan 共享）
+vec3 ComputeIrradiance(int face, vec2 uv)
 {
-    ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
-
-    int totalWidth = u_FaceSize * 6;
-    if (texCoord.x >= totalWidth || texCoord.y >= u_FaceSize)
-        return;
-
-    int face = texCoord.x / u_FaceSize;
-    int localX = texCoord.x - face * u_FaceSize;
-    vec2 uv = (vec2(localX, texCoord.y) + 0.5) / float(u_FaceSize);
-
     vec3 N = CubeMapDirection(face, uv);
 
     // 半球卷积
@@ -123,7 +114,34 @@ void main()
         }
     }
 
-    irradiance = PI * irradiance / nrSamples;
-
-    imageStore(u_OutputIrradiance, texCoord, vec4(irradiance, 1.0));
+    return PI * irradiance / nrSamples;
 }
+
+#ifdef VULKAN
+void main()
+{
+    // face 来自 dispatch 第三维（gz=6），与 CUBE view 的 layer 顺序（+X,-X,+Y,-Y,+Z,-Z）一致
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    int   face  = int(gl_GlobalInvocationID.z);
+    if (texel.x >= u_FaceSize || texel.y >= u_FaceSize || face >= 6)
+        return;
+
+    vec2 uv = (vec2(texel) + 0.5) / float(u_FaceSize);
+    imageStore(u_OutputIrradiance, ivec3(texel, face), vec4(ComputeIrradiance(face, uv), 1.0));
+}
+#else
+void main()
+{
+    ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    int totalWidth = u_FaceSize * 6;
+    if (texCoord.x >= totalWidth || texCoord.y >= u_FaceSize)
+        return;
+
+    int face = texCoord.x / u_FaceSize;
+    int localX = texCoord.x - face * u_FaceSize;
+    vec2 uv = (vec2(localX, texCoord.y) + 0.5) / float(u_FaceSize);
+
+    imageStore(u_OutputIrradiance, texCoord, vec4(ComputeIrradiance(face, uv), 1.0));
+}
+#endif

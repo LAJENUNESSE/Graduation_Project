@@ -20,8 +20,9 @@ namespace Engine
     // - uniform 通过 push constant 传递
     // - 输出 image 在 compute dispatch 期间布局为 GENERAL，之后转为 SHADER_READ_ONLY_OPTIMAL
     //
-    // 注：Irradiance/Prefilter 当前仍是 2D 横向 atlas，不可绑定到 PBR 的 samplerCube。
-    // Generate() 可生成诊断资源，但 IsReady() 保持 false，直到 cube-compatible 输出与 mip 链接通。
+    // Irradiance/Prefilter 输出为 6-layer cube-compatible image（VULKAN shader 分支经
+    // 2D_ARRAY view 写入各 layer，PBR 经 CUBE view 采样）；Prefilter 生成完整 mip 链，
+    // 每 mip 一次 dispatch（roughness = mip / (mipLevels-1)）。
     class VulkanIBLGenerator : public IBLGenerator
     {
     public:
@@ -67,6 +68,18 @@ namespace Engine
         ImageHandle CreateStorageImage2D(uint32_t width, uint32_t height, VkFormat format);
         void        DestroyImage(ImageHandle& img);
 
+        // 6-layer cube-compatible image：CUBE view 供 PBR samplerCube 采样（全 mip），
+        // 每 mip 一个 2D_ARRAY view 供 compute storage 写入对应 mip。
+        struct CubeImageHandle
+        {
+            VkImage                  Image      = VK_NULL_HANDLE;
+            VmaAllocation            Allocation = nullptr;
+            VkImageView              CubeView   = VK_NULL_HANDLE;
+            std::vector<VkImageView> MipStorageViews;
+        };
+        CubeImageHandle CreateCubeStorageImage(uint32_t faceSize, VkFormat format, uint32_t mipLevels);
+        void            DestroyCubeImage(CubeImageHandle& img);
+
         // shader + layout + pipeline 缓存（避免每次 dispatch 重建）
         Ref<VulkanShader>              m_BRDFLutShader;
         Ref<VulkanShader>              m_IrradianceShader;
@@ -86,9 +99,9 @@ namespace Engine
         PipelineHandles m_PrefilterPipeline;
 
         // 输出资源
-        ImageHandle m_BRDFLut;
-        ImageHandle m_Irradiance; // 6 面 atlas 形式（与 OpenGL 路径一致：横排 6 面）
-        ImageHandle m_Prefilter;  // 仅 mip0（mip 链由后续 Vulkan PBR 接入时再补）
+        ImageHandle     m_BRDFLut;
+        CubeImageHandle m_Irradiance; // mipLevels = 1
+        CubeImageHandle m_Prefilter;  // 完整 mip 链（PREFILTER_MIP_LEVELS）
 
         VkImageView m_BRDFLutView    = VK_NULL_HANDLE; // 便利访问（= m_BRDFLut.View）
         VkImageView m_IrradianceView = VK_NULL_HANDLE;

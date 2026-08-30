@@ -176,11 +176,103 @@ namespace Engine
     void VulkanIBLGenerator::Clear()
     {
         // Irradiance/Prefilter 在不同 skybox 间被重建，BRDF LUT 不动
-        DestroyImage(m_Irradiance);
-        DestroyImage(m_Prefilter);
+        DestroyCubeImage(m_Irradiance);
+        DestroyCubeImage(m_Prefilter);
         m_IrradianceView = VK_NULL_HANDLE;
         m_PrefilterView  = VK_NULL_HANDLE;
         m_IBLReady       = false;
+    }
+
+    // ---- 工具：创建 6-layer cube-compatible image（compute 经 2D_ARRAY view 写，PBR 经 CUBE view 读）----
+    VulkanIBLGenerator::CubeImageHandle
+    VulkanIBLGenerator::CreateCubeStorageImage(uint32_t faceSize, VkFormat format, uint32_t mipLevels)
+    {
+        CubeImageHandle out{};
+        auto            device = GetDevice();
+
+        VkImageCreateInfo imgInfo{};
+        imgInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imgInfo.imageType     = VK_IMAGE_TYPE_2D;
+        imgInfo.extent.width  = faceSize;
+        imgInfo.extent.height = faceSize;
+        imgInfo.extent.depth  = 1;
+        imgInfo.mipLevels     = mipLevels;
+        imgInfo.arrayLayers   = 6;
+        imgInfo.format        = format;
+        imgInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
+        imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        // STORAGE 供 compute 写，SAMPLED 供 PBR 采样；CUBE_COMPATIBLE 让同一 image 可建 CUBE view
+        imgInfo.flags       = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        imgInfo.usage       = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        imgInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        imgInfo.samples     = VK_SAMPLE_COUNT_1_BIT;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+        VkResult r =
+            vmaCreateImage(VulkanAllocator::GetAllocator(), &imgInfo, &allocInfo, &out.Image, &out.Allocation, nullptr);
+        ENGINE_CORE_RELEASE_ASSERT(r == VK_SUCCESS, "[VulkanIBL] vmaCreateImage(cubemap) failed");
+
+        // CUBE view：PBR samplerCube 采样全 mip 链
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image                           = out.Image;
+        viewInfo.viewType                        = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewInfo.format                          = format;
+        viewInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.baseMipLevel   = 0;
+        viewInfo.subresourceRange.levelCount     = mipLevels;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.layerCount     = 6;
+        r                                        = vkCreateImageView(device, &viewInfo, nullptr, &out.CubeView);
+        ENGINE_CORE_RELEASE_ASSERT(r == VK_SUCCESS, "[VulkanIBL] vkCreateImageView(CUBE) failed");
+
+        // 每 mip 一个 2D_ARRAY storage view（compute 写入单 mip）
+        out.MipStorageViews.resize(mipLevels);
+        for (uint32_t mip = 0; mip < mipLevels; ++mip)
+        {
+            VkImageViewCreateInfo mipInfo{};
+            mipInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            mipInfo.image                           = out.Image;
+            mipInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+            mipInfo.format                          = format;
+            mipInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+            mipInfo.subresourceRange.baseMipLevel   = mip;
+            mipInfo.subresourceRange.levelCount     = 1;
+            mipInfo.subresourceRange.baseArrayLayer = 0;
+            mipInfo.subresourceRange.layerCount     = 6;
+            r = vkCreateImageView(device, &mipInfo, nullptr, &out.MipStorageViews[mip]);
+            ENGINE_CORE_RELEASE_ASSERT(r == VK_SUCCESS, "[VulkanIBL] vkCreateImageView(2D_ARRAY mip) failed");
+        }
+
+        return out;
+    }
+
+    void VulkanIBLGenerator::DestroyCubeImage(CubeImageHandle& img)
+    {
+        const VkImageView              cubeView = img.CubeView;
+        const VkImage                  image    = img.Image;
+        const VmaAllocation            alloc    = img.Allocation;
+        const std::vector<VkImageView> mipViews = img.MipStorageViews;
+
+        img = {};
+
+        if (cubeView == VK_NULL_HANDLE && image == VK_NULL_HANDLE && mipViews.empty())
+            return;
+
+        // 与 DestroyImage 同理：旧资源可能仍被在录命令缓冲引用，延迟到帧 fence 完成后释放
+        VulkanContext::DeferDestroy(
+            [cubeView, image, alloc, mipViews](VkDevice device)
+            {
+                for (VkImageView view : mipViews)
+                    if (view != VK_NULL_HANDLE)
+                        vkDestroyImageView(device, view, nullptr);
+                if (cubeView != VK_NULL_HANDLE)
+                    vkDestroyImageView(device, cubeView, nullptr);
+                if (image != VK_NULL_HANDLE && VulkanAllocator::IsInitialized())
+                    vmaDestroyImage(VulkanAllocator::GetAllocator(), image, alloc);
+            });
     }
 
     // ---- 工具：创建可被 storage_image 写入的 2D 纹理 ----
@@ -327,48 +419,56 @@ namespace Engine
         VkImageView envCubeView    = vkCube->GetImageView();
         VkSampler   envCubeSampler = vkCube->GetSampler();
 
-        // ---- 1) Irradiance ----
-        DestroyImage(m_Irradiance);
-        m_Irradiance     = CreateStorageImage2D(IRRADIANCE_SIZE * 6, IRRADIANCE_SIZE, VK_FORMAT_R16G16B16A16_SFLOAT);
-        m_IrradianceView = m_Irradiance.View;
+        // 每次重建前回收上一次分配的 descriptor set：Generate 走阻塞 SingleTime 提交，
+        // 上一批 dispatch 已完成，set 不再被引用（否则切换天空盒数次后 pool 耗尽）
+        m_DescriptorPool->Reset();
+
+        // ---- 1) Irradiance cube（单 mip，一次 dispatch 覆盖 6 layer）----
+        DestroyCubeImage(m_Irradiance);
+        m_Irradiance     = CreateCubeStorageImage(IRRADIANCE_SIZE, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+        m_IrradianceView = m_Irradiance.CubeView;
 
         VkDescriptorSet irrSet = m_DescriptorPool->Allocate(m_IrradianceSetLayout->GetHandle());
         ENGINE_CORE_RELEASE_ASSERT(irrSet != VK_NULL_HANDLE, "[VulkanIBL] Irradiance descriptor allocate failed");
         {
             VulkanDescriptorWriter w;
-            w.WriteImage(0, m_Irradiance.View, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            w.WriteImage(0, m_Irradiance.MipStorageViews[0], VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
             w.WriteImage(1, envCubeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, envCubeSampler);
             w.UpdateSet(device, irrSet);
         }
 
-        // ---- 2) Prefilter（仅 mip0；mip 链留给后续 Vulkan PBR 接入时再补） ----
-        DestroyImage(m_Prefilter);
-        m_Prefilter     = CreateStorageImage2D(PREFILTER_SIZE * 6, PREFILTER_SIZE, VK_FORMAT_R16G16B16A16_SFLOAT);
-        m_PrefilterView = m_Prefilter.View;
+        // ---- 2) Prefilter cube（每 mip 一次 dispatch，roughness 与 mip 级对应，与 OpenGL 路径一致）----
+        DestroyCubeImage(m_Prefilter);
+        m_Prefilter     = CreateCubeStorageImage(PREFILTER_SIZE, VK_FORMAT_R16G16B16A16_SFLOAT, PREFILTER_MIP_LEVELS);
+        m_PrefilterView = m_Prefilter.CubeView;
 
-        VkDescriptorSet preSet = m_DescriptorPool->Allocate(m_PrefilterSetLayout->GetHandle());
-        ENGINE_CORE_RELEASE_ASSERT(preSet != VK_NULL_HANDLE, "[VulkanIBL] Prefilter descriptor allocate failed");
+        std::vector<VkDescriptorSet> preSets(PREFILTER_MIP_LEVELS);
+        for (uint32_t mip = 0; mip < PREFILTER_MIP_LEVELS; ++mip)
         {
+            preSets[mip] = m_DescriptorPool->Allocate(m_PrefilterSetLayout->GetHandle());
+            ENGINE_CORE_RELEASE_ASSERT(preSets[mip] != VK_NULL_HANDLE,
+                                       "[VulkanIBL] Prefilter descriptor allocate failed");
             VulkanDescriptorWriter w;
-            w.WriteImage(0, m_Prefilter.View, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            w.WriteImage(0, m_Prefilter.MipStorageViews[mip], VK_IMAGE_LAYOUT_GENERAL,
+                         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
             w.WriteImage(1, envCubeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, envCubeSampler);
-            w.UpdateSet(device, preSet);
+            w.UpdateSet(device, preSets[mip]);
         }
 
         VkCommandBuffer     raw = ctx->BeginSingleTimeCommands();
         VulkanCommandBuffer cmd(raw);
 
-        // 输出 image 转到 GENERAL；envCube 已在 VulkanTextureCubemap 构造时转为 SHADER_READ_ONLY_OPTIMAL
+        // 输出 image 转到 GENERAL（全 mip + 6 layer）；envCube 已在构造时转为 SHADER_READ_ONLY_OPTIMAL
         cmd.ImageBarrier(m_Irradiance.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
-                         VK_ACCESS_SHADER_WRITE_BIT);
+                         VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, 6);
         cmd.ImageBarrier(m_Prefilter.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
-                         VK_ACCESS_SHADER_WRITE_BIT);
+                         VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, PREFILTER_MIP_LEVELS, 6);
 
-        // ---- Irradiance dispatch ----
+        // ---- Irradiance dispatch（gz = 6 faces）----
         cmd.BindComputePipeline(m_IrradiancePipeline.Pipeline);
         cmd.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_IrradiancePipeline.Layout, 0, {irrSet});
 
@@ -380,46 +480,54 @@ namespace Engine
         cmd.PushConstants(m_IrradiancePipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(irrPC), &irrPC);
 
         {
-            const uint32_t gx = (IRRADIANCE_SIZE * 6 + 15) / 16;
+            const uint32_t gx = (IRRADIANCE_SIZE + 15) / 16;
             const uint32_t gy = (IRRADIANCE_SIZE + 15) / 16;
-            cmd.Dispatch(gx, gy, 1);
+            cmd.Dispatch(gx, gy, 6);
         }
 
-        // Irradiance 输出 -> SHADER_READ_ONLY_OPTIMAL
+        // ---- Prefilter dispatch：每 mip 一次，roughness = max(mip / (mips-1), 0.05) ----
+        cmd.BindComputePipeline(m_PrefilterPipeline.Pipeline);
+        for (uint32_t mip = 0; mip < PREFILTER_MIP_LEVELS; ++mip)
+        {
+            const uint32_t mipSize = std::max<uint32_t>(static_cast<uint32_t>(PREFILTER_SIZE >> mip), 1u);
+            const float    roughness =
+                std::max(static_cast<float>(mip) / static_cast<float>(PREFILTER_MIP_LEVELS - 1), 0.05f);
+
+            // 各 mip 写不同 subresource，彼此无依赖；此处 barrier 仅隔离同 image 相邻
+            // dispatch 的写写序，防 validation 层对同 image 连续写的潜在告警
+            if (mip > 0)
+                cmd.MemoryBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                  VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+
+            cmd.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_PrefilterPipeline.Layout, 0, {preSets[mip]});
+
+            struct PrefilterPC
+            {
+                int32_t FaceSize;
+                int32_t EnvFaceSize;
+                float   Roughness;
+            } prePC{static_cast<int32_t>(mipSize), envFaceSize, roughness};
+            cmd.PushConstants(m_PrefilterPipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(prePC), &prePC);
+
+            const uint32_t gx = (mipSize + 15) / 16;
+            const uint32_t gy = (mipSize + 15) / 16;
+            cmd.Dispatch(gx, gy, 6);
+        }
+
+        // 输出 -> SHADER_READ_ONLY_OPTIMAL 供 PBR samplerCube 采样（全 mip + 6 layer）
         cmd.ImageBarrier(m_Irradiance.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-
-        // ---- Prefilter dispatch（用 roughness=0.5 作为单 mip 的代表；mip 链待后续补） ----
-        cmd.BindComputePipeline(m_PrefilterPipeline.Pipeline);
-        cmd.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_PrefilterPipeline.Layout, 0, {preSet});
-
-        struct PrefilterPC
-        {
-            int32_t FaceSize;
-            int32_t EnvFaceSize;
-            float   Roughness;
-        } prePC{PREFILTER_SIZE, envFaceSize, 0.5f};
-        cmd.PushConstants(m_PrefilterPipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(prePC), &prePC);
-
-        {
-            const uint32_t gx = (PREFILTER_SIZE * 6 + 15) / 16;
-            const uint32_t gy = (PREFILTER_SIZE + 15) / 16;
-            cmd.Dispatch(gx, gy, 1);
-        }
-
+                         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, 6);
         cmd.ImageBarrier(m_Prefilter.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+                         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
+                         PREFILTER_MIP_LEVELS, 6);
 
         ctx->EndSingleTimeCommands(raw);
 
-        // 当前 compute 输出是 2D 横向 atlas，不能绑定到 PBR 的 samplerCube。
-        // 在输出改为 6-layer cube-compatible image 且补齐 mip 链前保持未就绪，
-        // SceneRenderer 会关闭 IBL 并由场景 dispatcher 绑定类型正确的占位 cubemap。
-        m_IBLReady = false;
-        ENGINE_CORE_WARN("[VulkanIBL] Irradiance/Prefilter 2D atlases generated for diagnostics, but PBR IBL is "
-                         "disabled until cube image views and prefilter mip levels are implemented");
+        m_IBLReady = true;
+        ENGINE_CORE_INFO("[VulkanIBL] Irradiance cube ({} faces) + Prefilter cube ({} mips) generated; PBR IBL ready",
+                         IRRADIANCE_SIZE, PREFILTER_MIP_LEVELS);
     }
 
 } // namespace Engine
