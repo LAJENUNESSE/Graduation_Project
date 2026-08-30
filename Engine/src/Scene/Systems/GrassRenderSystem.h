@@ -32,6 +32,9 @@ namespace Engine
         void Init();
         void Shutdown();
         void UpdateGrassData(entt::registry& reg, float totalTime);
+        // shadowDepthView：Vulkan path 传 shadow map depth attachment 的 VkImageView
+        // （void* 透传，ShadowSystem::GetShadowDepthView）；BindTextureUnit 在 Vulkan
+        // 下是 no-op，须改走 BindTextureView。OpenGL path 忽略。
         void Render(entt::registry&         reg,
                     const EditorCamera&     camera,
                     const LightEnvironment& lights,
@@ -39,7 +42,8 @@ namespace Engine
                     const ShadowSettings&   shadowSettings,
                     float                   totalTime,
                     const SceneEntityIndex& index,
-                    WorldTransformCache*    cache = nullptr);
+                    WorldTransformCache*    cache           = nullptr,
+                    void*                   shadowDepthView = nullptr);
 
     private:
         void RebuildGrass(uint32_t                         eid,
@@ -73,6 +77,13 @@ namespace Engine
             Ref<ShaderStorageBuffer> CounterBuffer;  // binding 3 - grassCount
             Ref<ShaderStorageBuffer> IndirectArgs;   // binding 4 - DrawArraysIndirectCommand
             uint32_t                 GrassCount = 0; // fallback 用
+
+            // Vulkan 场景绘制的 GrassVSUBO/GrassFSUBO（set0 binding1/4），仅 Vulkan
+            // 路径创建（D-13 模板）。per-frame-in-flight 双份：帧 N+2 BeginFrame 的
+            // fence 等待保证写 [fi] 时帧 N 的 draw 已完成，避免 CPU 覆盖未执行命令
+            // 读取的数据（与 dispatcher FrameResources 同一惯例）
+            Ref<UniformBuffer> VSUbo[2]; // 256B std140（数据 196B）
+            Ref<UniformBuffer> FSUbo[2]; // 256B std140（数据 128B）
 
             // Async readback（仅 OpenGL 路径使用，Vulkan 走同步回读）
             Ref<GPUAsyncReadback> Readback;

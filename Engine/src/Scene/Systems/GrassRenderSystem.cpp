@@ -92,6 +92,47 @@ namespace Engine
         static constexpr uint32_t MAX_GRASS_BLADES = 500000;
         // 参数 UBO 绑定点 — 与 grass_placement.glsl 中 layout(std140, binding = 2) 对应
         static constexpr uint32_t GRASS_PARAMS_UBO_BINDING = 2;
+
+        // ---- grass billboard 渲染 UBO（grass_billboard.glsl VULKAN 分支，set0）----
+        static constexpr uint32_t GRASS_VS_UBO_BINDING = 1; // GrassVSUBO
+        static constexpr uint32_t GRASS_FS_UBO_BINDING = 4; // GrassFSUBO
+
+        // std140 UBO 镜像 — 与 GrassVSUBO 块逐字节对应：3×mat4 + float，数据 196B
+        // （buffer 按 P-18 round 256）
+        struct GrassVSUBOStd140
+        {
+            glm::mat4 ViewProjection;
+            glm::mat4 Transform;
+            glm::mat4 LightSpaceMatrix;
+            float     Time;
+            float     Pad[3];
+        };
+        static_assert(sizeof(GrassVSUBOStd140) == 208, "GrassVSUBOStd140 必须与 grass_billboard.glsl std140 布局一致");
+
+        // std140：DirLight{vec3,vec3,float} 结构体步长 48B（vec3 各占 16B 槽）
+        struct alignas(16) GrassFSDirLightStd140
+        {
+            glm::vec3 Direction;
+            float     Pad0;
+            glm::vec3 Color;
+            float     Pad1;
+            float     Intensity;
+            float     Pad2[3];
+        };
+        static_assert(sizeof(GrassFSDirLightStd140) == 48, "GrassFSDirLightStd140 必须与 std140 DirLight 布局一致");
+
+        // std140 UBO 镜像 — 与 GrassFSUBO 块逐字节对应：DirLight[2] + 3×int + 2×float，数据 128B
+        struct GrassFSUBOStd140
+        {
+            GrassFSDirLightStd140 DirLights[2];
+            int32_t               NumDirLights;
+            int32_t               ShadowEnabled;
+            int32_t               EntityID;
+            float                 ShadowBias;
+            float                 AmbientStrength;
+            float                 Pad[3];
+        };
+        static_assert(sizeof(GrassFSUBOStd140) == 128, "GrassFSUBOStd140 必须与 grass_billboard.glsl std140 布局一致");
     } // namespace
 
     void GrassRenderSystem::Init()
@@ -285,6 +326,13 @@ namespace Engine
         {
             // ---- Vulkan compute 路径 ----
             EnsureVulkanComputeResources();
+
+            // 渲染侧 GrassVSUBO/GrassFSUBO（grass_billboard.glsl VULKAN 分支 set0
+            // binding1/4），per-frame-in-flight 双份；数据按 P-18 round 256
+            for (auto& ubo : inst.VSUbo)
+                ubo = UniformBuffer::Create(256, GRASS_VS_UBO_BINDING);
+            for (auto& ubo : inst.FSUbo)
+                ubo = UniformBuffer::Create(256, GRASS_FS_UBO_BINDING);
 
             auto* ctx = VulkanContext::Get();
             ENGINE_CORE_RELEASE_ASSERT(ctx != nullptr, "[Grass][Vulkan] VulkanContext not initialized");
@@ -486,7 +534,8 @@ namespace Engine
                                    const ShadowSettings&   shadowSettings,
                                    float                   totalTime,
                                    const SceneEntityIndex& index,
-                                   WorldTransformCache*    cache)
+                                   WorldTransformCache*    cache,
+                                   void*                   shadowDepthView)
     {
         if (!RendererCapabilities::Get().SupportsComputeShaders)
             return;
@@ -507,7 +556,42 @@ namespace Engine
         bool shadowActive = shadowSettings.Enabled && shadow.HasValidShadowCaster;
         m_BillboardShader->SetInt("u_ShadowEnabled", shadowActive ? 1 : 0);
         m_BillboardShader->SetFloat("u_ShadowBias", shadowSettings.Bias);
-        RenderCommand::BindTextureUnit(1, shadow.ShadowMapTextureID);
+
+        // Vulkan 场景绘制：GrassVSUBO/GrassFSUBO 帧级数据打包（D-13 模板）——散装
+        // SetXxx 在 Vulkan 下只是 CPU 缓存且 dispatcher 不为草 shader 打包 Global/
+        // Lights ring，矩阵/时间/光照必须按 std140 写入 UBO 走通用 UBO 槽。
+        // per-entity 的 Transform/EntityID 在下方循环内补填后上传。
+        const bool       vulkanBackend = RendererAPI::GetAPI() == RendererAPI::API::Vulkan;
+        uint32_t         frameIndex    = 0;
+        GrassVSUBOStd140 vsUbo{};
+        GrassFSUBOStd140 fsUbo{};
+        if (vulkanBackend)
+        {
+            vsUbo.ViewProjection   = camera.GetViewProjection();
+            vsUbo.LightSpaceMatrix = shadow.LightSpaceMatrix;
+            vsUbo.Time             = totalTime;
+
+            const int numDirLights = static_cast<int>(std::min<size_t>(lights.DirLights.size(), 2));
+            for (int i = 0; i < numDirLights; ++i)
+            {
+                fsUbo.DirLights[i].Direction = lights.DirLights[i].Direction;
+                fsUbo.DirLights[i].Color     = lights.DirLights[i].Color;
+                fsUbo.DirLights[i].Intensity = lights.DirLights[i].Intensity;
+            }
+            fsUbo.NumDirLights    = numDirLights;
+            fsUbo.ShadowEnabled   = shadowActive ? 1 : 0;
+            fsUbo.ShadowBias      = shadowSettings.Bias;
+            fsUbo.AmbientStrength = lights.AmbientStrength;
+
+            frameIndex = VulkanContext::Get()->GetCurrentFrameIndex();
+        }
+
+        // 阴影贴图槽：BindTextureUnit 在 Vulkan 是 no-op，须绑 depth attachment view
+        // （CSM 模式下主 shadow map FBO 从未执行 renderpass，绑级联 0，与 GeometryPass 一致）
+        if (vulkanBackend)
+            RenderCommand::BindTextureView(1, shadowDepthView, nullptr);
+        else
+            RenderCommand::BindTextureUnit(1, shadow.ShadowMapTextureID);
         m_BillboardShader->SetInt("u_ShadowMap", 1);
 
         // 禁用面剔除（草叶两面可见）
@@ -528,9 +612,21 @@ namespace Engine
             auto& inst      = it->second;
             auto& transform = view.get<TransformComponent>(entity);
 
-            m_BillboardShader->SetMat4("u_Transform",
-                                       WorldTransformService::ComputeWorldTransform(reg, entity, index, cache));
+            const glm::mat4 worldTransform = WorldTransformService::ComputeWorldTransform(reg, entity, index, cache);
+            m_BillboardShader->SetMat4("u_Transform", worldTransform);
             m_BillboardShader->SetInt("u_EntityID", static_cast<int>(eid));
+
+            if (vulkanBackend)
+            {
+                // per-entity 数据进 UBO 后 Bind 录入通用 UBO 槽，本实体的
+                // DrawArraysInstanced 录制时由 dispatcher 按反射 binding 写 descriptor
+                vsUbo.Transform = worldTransform;
+                fsUbo.EntityID  = static_cast<int32_t>(eid);
+                inst.VSUbo[frameIndex]->SetData(&vsUbo, sizeof(vsUbo));
+                inst.FSUbo[frameIndex]->SetData(&fsUbo, sizeof(fsUbo));
+                inst.VSUbo[frameIndex]->Bind(GRASS_VS_UBO_BINDING);
+                inst.FSUbo[frameIndex]->Bind(GRASS_FS_UBO_BINDING);
+            }
 
             // 绑定草地纹理 (unit 2)
             Texture2D* grassTex = AssetManager::Get<Texture2D>(tc.GrassTexture);
