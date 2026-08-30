@@ -46,8 +46,6 @@ namespace Engine
     private:
         void Invalidate();
         void Destroy();
-        // 临时调试：FBO 像素 readback 探针（定位视口黑屏用，验证后移除）
-        void DebugRecordPixelReadback(VkCommandBuffer cmd);
 
     private:
         FramebufferSpecification m_Spec;
@@ -74,13 +72,10 @@ namespace Engine
         bool m_ColorInitialTransitionDone = false;
         bool m_DepthInitialTransitionDone = false;
 
-        // 临时调试探针状态（同上，验证后移除）
-        VkBuffer      m_DbgStagingBuffer     = VK_NULL_HANDLE;
-        VmaAllocation m_DbgStagingAllocation = nullptr;
-        void*         m_DbgStagingMapped     = nullptr;
-        VkFence       m_DbgFence             = VK_NULL_HANDLE;
-        bool          m_DbgPending           = false;
-        uint64_t      m_DbgFrameCounter      = 0;
+        // ReadPixel 同步回读用 4B staging（persistently mapped，FBO 生命周期内复用）
+        VkBuffer      m_ReadbackBuffer     = VK_NULL_HANDLE;
+        VmaAllocation m_ReadbackAllocation = nullptr;
+        void*         m_ReadbackMapped     = nullptr;
     };
 
 } // namespace Engine

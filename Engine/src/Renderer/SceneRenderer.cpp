@@ -782,11 +782,9 @@ namespace Engine
         if (!pickingFBO || !m_Context.Camera || !m_Context.Registry)
             return;
 
-        // Phase 8.2：Vulkan path 的拾取回读未接通（RED_INTEGER 单 attachment pass
-        // 与 PBR 双输出 pipeline 不兼容），跳过整段绘制。
-        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
-            return;
-
+        // Vulkan path 拾取已接通：picking FBO 与 HDR FBO 同为双 color + depth 结构，
+        // 且 dispatcher pipeline key 含 VkRenderPass——RED_INTEGER attachment 的独立
+        // renderpass 会获得自己的 pipeline 变体（原"单/双输出不兼容"限制已不存在）。
         pickingFBO->Bind();
         RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 1.0f});
         RenderCommand::Clear();

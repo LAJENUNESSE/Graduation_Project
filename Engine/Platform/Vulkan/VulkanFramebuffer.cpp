@@ -52,7 +52,8 @@ namespace Engine
 
         static VkImageUsageFlags ColorUsageFlags()
         {
-            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            // TRANSFER_SRC 供 ReadPixel 同步回读（copy image→buffer）
+            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         }
 
         static VkImageUsageFlags DepthUsageFlags()
@@ -353,9 +354,12 @@ namespace Engine
         const std::vector<AttachmentResource> colorAttachments = m_ColorAttachments;
         const AttachmentResource              depthAttachment  = m_DepthAttachment;
         const bool                            allocatorReady   = VulkanAllocator::IsInitialized();
+        const VkBuffer                        readbackBuffer   = m_ReadbackBuffer;
+        const VmaAllocation                   readbackAlloc    = m_ReadbackAllocation;
 
         VulkanContext::DeferDestroy(
-            [framebuffer, renderPass, colorAttachments, depthAttachment, allocatorReady](VkDevice device)
+            [framebuffer, renderPass, colorAttachments, depthAttachment, allocatorReady, readbackBuffer,
+             readbackAlloc](VkDevice device)
             {
                 if (framebuffer != VK_NULL_HANDLE)
                     vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -374,12 +378,17 @@ namespace Engine
                     vkDestroyImageView(device, depthAttachment.ImageView, nullptr);
                 if (depthAttachment.Image != VK_NULL_HANDLE && allocatorReady)
                     vmaDestroyImage(VulkanAllocator::GetAllocator(), depthAttachment.Image, depthAttachment.Allocation);
+
+                if (readbackBuffer != VK_NULL_HANDLE && allocatorReady)
+                    vmaDestroyBuffer(VulkanAllocator::GetAllocator(), readbackBuffer, readbackAlloc);
             });
 
         m_Framebuffer = VK_NULL_HANDLE;
         m_RenderPass  = VK_NULL_HANDLE;
         m_ColorAttachments.clear();
         m_DepthAttachment = {};
+        m_ReadbackBuffer  = VK_NULL_HANDLE;
+        m_ReadbackMapped  = nullptr;
     }
 
     // Phase 8.2：录制场景 render pass 进主帧 cmd。上层 SceneRenderer::RenderPipeline
@@ -473,12 +482,95 @@ namespace Engine
         Invalidate();
     }
 
-    int VulkanFramebuffer::ReadPixel(uint32_t /*attachmentIndex*/, int /*x*/, int /*y*/)
+    int VulkanFramebuffer::ReadPixel(uint32_t attachmentIndex, int x, int y)
     {
-        return -1;
+        auto* ctx = VulkanContext::Get();
+        if (!ctx || attachmentIndex >= m_ColorAttachments.size())
+            return -1;
+        const auto& att = m_ColorAttachments[attachmentIndex];
+        if (att.Image == VK_NULL_HANDLE || x < 0 || y < 0 || x >= static_cast<int>(m_Spec.Width) ||
+            y >= static_cast<int>(m_Spec.Height))
+            return -1;
+
+        // 4B staging 懒创建（persistently mapped，本 FBO 生命周期内复用）
+        if (m_ReadbackBuffer == VK_NULL_HANDLE)
+        {
+            VkBufferCreateInfo bufInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+            bufInfo.size  = sizeof(int32_t);
+            bufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            VmaAllocationCreateInfo allocInfo{};
+            allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+            allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            VmaAllocationInfo outInfo{};
+            const VkResult r = vmaCreateBuffer(VulkanAllocator::GetAllocator(), &bufInfo, &allocInfo, &m_ReadbackBuffer,
+                                               &m_ReadbackAllocation, &outInfo);
+            ENGINE_CORE_RELEASE_ASSERT(r == VK_SUCCESS, "[VulkanFramebuffer] ReadPixel staging create failed");
+            ENGINE_CORE_RELEASE_ASSERT(outInfo.pMappedData != nullptr, "ReadPixel staging mapping returned null");
+            m_ReadbackMapped = outInfo.pMappedData;
+        }
+
+        // 点击回读走 SingleTime 同步 copy（低频，队列 stall 可接受）。场景 renderpass
+        // 退出后 color attachment 停在 SHADER_READ_ONLY_OPTIMAL，转 TRANSFER_SRC 完成
+        // copy 后立即还原，下一帧 renderpass 的 initialLayout 假设不受影响。
+        VkCommandBuffer raw = ctx->BeginSingleTimeCommands();
+
+        VkImageMemoryBarrier toSrc{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        toSrc.srcAccessMask               = VK_ACCESS_SHADER_READ_BIT;
+        toSrc.dstAccessMask               = VK_ACCESS_TRANSFER_READ_BIT;
+        toSrc.oldLayout                   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        toSrc.newLayout                   = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        toSrc.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        toSrc.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        toSrc.image                       = att.Image;
+        toSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        toSrc.subresourceRange.levelCount = 1;
+        toSrc.subresourceRange.layerCount = 1;
+        vkCmdPipelineBarrier(raw, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
+                             0, nullptr, 1, &toSrc);
+
+        VkBufferImageCopy region{};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset                 = {x, y, 0};
+        region.imageExtent                 = {1, 1, 1};
+        vkCmdCopyImageToBuffer(raw, att.Image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_ReadbackBuffer, 1, &region);
+
+        VkImageMemoryBarrier backToShader = toSrc;
+        backToShader.srcAccessMask        = VK_ACCESS_TRANSFER_WRITE_BIT;
+        backToShader.dstAccessMask        = VK_ACCESS_SHADER_READ_BIT;
+        backToShader.oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        backToShader.newLayout            = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        vkCmdPipelineBarrier(raw, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr,
+                             0, nullptr, 1, &backToShader);
+
+        ctx->EndSingleTimeCommands(raw);
+
+        int32_t value = 0;
+        std::memcpy(&value, m_ReadbackMapped, sizeof(int32_t));
+        return static_cast<int>(value);
     }
 
-    void VulkanFramebuffer::ClearAttachment(uint32_t /*index*/, int /*value*/) {}
+    void VulkanFramebuffer::ClearAttachment(uint32_t index, int value)
+    {
+        // 与 RendererAPI::Clear 同约束：仅在场景 renderpass 录制中可用
+        auto*                 ctx = VulkanContext::Get();
+        const VkCommandBuffer cmd = ctx ? ctx->GetCurrentFrameCommandBuffer() : VK_NULL_HANDLE;
+        if (cmd == VK_NULL_HANDLE || !ctx || ctx->GetActiveSceneRenderPass() == VK_NULL_HANDLE)
+            return;
+        if (index >= m_ColorAttachments.size())
+            return;
+
+        VkClearAttachment clear{};
+        clear.aspectMask                = VK_IMAGE_ASPECT_COLOR_BIT;
+        clear.colorAttachment           = index;
+        clear.clearValue.color.int32[0] = value;
+
+        VkClearRect rect{};
+        rect.rect.offset = {0, 0};
+        rect.rect.extent = {ctx->GetActiveSceneWidth(), ctx->GetActiveSceneHeight()};
+        rect.layerCount  = 1;
+        vkCmdClearAttachments(cmd, 1, &clear, 1, &rect);
+    }
 
     uint32_t VulkanFramebuffer::GetColorAttachmentRendererID(uint32_t /*index*/) const
     {
