@@ -224,6 +224,7 @@ namespace Engine
         commandBuffer.Begin();
 
         m_FrameInProgress = true;
+        ++m_FrameCounter;
         return true;
     }
 
@@ -685,10 +686,27 @@ namespace Engine
             queueCreateInfos.push_back(queueInfo);
         }
 
+        // hostQueryReset（Vulkan 1.2 特性，VkPhysicalDeviceVulkan12Features）：启用后
+        // 可用宿主端 vkResetQueryPool——vkCmdResetQueryPool 不得录制进 render pass，
+        // 而性能计时器的 Begin/End 调用点嵌在 HDR FBO 的 render pass 内。
+        // 注意：SDK 1.4 头的 sType 拼写为 ...VULKAN_1_2_FEATURES（1_2 而非 12）
+        VkPhysicalDeviceVulkan12Features vulkan12Features{};
+        vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        {
+            VkPhysicalDeviceVulkan12Features supported{};
+            supported.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            VkPhysicalDeviceFeatures2 features2{};
+            features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+            features2.pNext = &supported;
+            vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
+            vulkan12Features.hostQueryReset = supported.hostQueryReset;
+        }
+
         VkPhysicalDeviceFeatures deviceFeatures{};
 
         VkDeviceCreateInfo createInfo{};
         createInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        createInfo.pNext                   = &vulkan12Features;
         createInfo.queueCreateInfoCount    = static_cast<uint32_t>(queueCreateInfos.size());
         createInfo.pQueueCreateInfos       = queueCreateInfos.data();
         createInfo.pEnabledFeatures        = &deviceFeatures;

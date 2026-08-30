@@ -110,6 +110,9 @@ namespace Engine
         }
         uint32_t GetCurrentImageIndex() const { return m_PendingImageIndex; }
         uint32_t GetCurrentFrameIndex() const { return m_CurrentFrame; }
+        // 单调递增帧序号（BeginFrame 时 +1）——供帧内状态机（如 GPU 计时器游标）
+        // 区分"同一帧的后续调用"与"下一帧"，帧槽索引 0/1 交替无法表达该信息
+        uint64_t GetFrameCounter() const { return m_FrameCounter; }
 
         // 注册需在本帧主 submit 完成后信号化的 fence（追加零 cmd submit）。
         // VulkanAsyncReadback 用它感知 host-visible staging buffer 何时可读。
@@ -267,6 +270,7 @@ namespace Engine
         std::vector<VkFramebuffer> m_ImGuiFramebuffers;
         ImDrawData*                m_PendingImGuiDrawData = nullptr;
         SwapchainInfo              m_SwapchainInfo;
+        uint64_t                   m_FrameCounter = 0;
 
         VulkanSceneState                           m_SceneState;
         VulkanGraphicsPipelineBuilder              m_PipelineBuilder;
