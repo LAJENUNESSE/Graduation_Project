@@ -15,6 +15,7 @@
   - **粒子 billboard 可见**（`f6a26a9`）— dispatcher 支持 SSBO 绑定 + DrawArraysInstanced 真实录制 + 空顶点输入 pipeline；顺带修复 IBL 资源退出泄漏（`eea850b`）
   - **编辑器拾取接通**（`cf2154c`）— ReadPixel 同步回读 + ClearAttachment + RenderEditorPicking 解禁
   - **粒子 counter 语义对齐**（`dc61fd8`/`c4c6065`/`9addf68`，2026-08-30）— counter 变更 GPU 序化（D-20）+ compact 越界 guard + `ENGINE_PARTICLE_COUNTER_DEBUG` 追踪设施，消除 Vulkan overflow 警告循环，等价性遗留第 1 项结案（§6 有实测数据）
+  - **GPU 计时 + validation 归零批次**（`8a6283f`/`7ae1b8e`/`c4996bf`/`1e548fd`，2026-08-30）— GPUTimerQuery 抽象化+工厂分派+VulkanGPUTimerQuery（D-21/P-29），SPH 占位 SSBO 兜底；`--vulkan` 性能面板 GPU 计时生效、validation 0 报错，等价性遗留第 2 项与 backlog 第 7 项结案
   - 收尾：validation 门控还原（`ENGINE_VULKAN_VALIDATION` 环境变量）、调试打印清理、SPEC 回写（`38884dd`/`46b399e`）、CI 新增 Windows Vulkan 编译 job（`6804ee7`）
 - **运行期状态**：粒子场景/默认场景运行 validation 0 报错，多场景切换与长时运行退出零资源泄漏。
 - **下一步**：见 [§6 Next Steps](#6-next-steps)。
@@ -250,6 +251,12 @@
 > **Why**：host 立即写与 2 帧在飞的 GPU dispatch 无顺序保障，落点漂进上一帧 dispatch 序列——实测 `ENGINE_PARTICLE_COUNTER_DEBUG` 显示 sanitize 回写(dead=10000)落地后下一帧 compact 又累加 → 回读恒 20000/30000 → 每帧 overflow 警告 + clamp 循环（等价性遗留第 1 项）。GL 免疫是因单命令流内 CPU 写天然有序；GPU 序化后 Vulkan 与 GL 语义对齐。
 > **How to apply**：新增"CPU 每帧更新 + GPU 跨帧累计"的 buffer（各系统 counter/累计器）一律走 FillBuffer/UpdateBuffer + barrier 模板；仅本帧 CPU 写、GPU 读的一次性参数（UBO）可保留 host 写（参数逐帧不变时实际无害，见 P-28 备注）。跨帧 copy 与下一帧 FillBuffer 的 WAR 依赖同队列按序假设（与 D-11 空 submit fence 同级）。
 
+### D-21：Vulkan GPU timestamp 计时——宿主重置 + 帧内游标 + 多 pair begin 锚（`1e548fd`）
+
+> **Decision**：`VulkanGPUTimerQuery`（2 帧槽 × 每槽 4 对 × 2 query）——(1) 重置走**宿主端 `vkResetQueryPool`**（hostQueryReset 特性，`VulkanContext` 建设备时经 `VkPhysicalDeviceVulkan12Features` pNext 启用），不用 cmd 重置；(2) 同帧多对 Begin/End（编辑器主渲染+拾取重录 GeometryPass）经帧内游标占用**不同 query 对**，`VulkanContext::GetFrameCounter()` 单调帧号驱动游标复位；(3) Begin/End 两侧都用 `BOTTOM_OF_PIPE`。
+> **Why**：实测（RTX 3050 Ti，validation+原始值探针）三条驱动事实：cmd `vkCmdResetQueryPool` 录进 render pass 被 validation 拒绝丢弃（计时器调用点嵌在 HDR FBO 的 render pass 内——`VulkanFramebuffer::Bind` 即 BeginRenderPass）；"query uses 之间必须 reset" 禁止同帧两对写同一 query；**render pass 内的 timestamp 写入（TOP/BOTTOM 皆然）被驱动合并到同一时刻，pair 内 delta 恒 0**。多 pair 时相邻 pair 的 begin 锚差值（= 下一 pass 起点 − 本 pass 起点）恰为主 pass GPU 时长（拾取 pass 起点≈主 pass 结束）；单 pair（pass 外）保持 end−begin。
+> **How to apply**：新增计时器直接经 `PerformanceMonitor::Get().GetXxxGPUTimer()` 访问器使用（工厂按 API 分派，`8a6283f`）；Begin/End 调用点无需关心是否在 render pass 内。局限：单 pair 且嵌在 pass 内的计时在 Play 模式（无拾取重录）退化为 0——需精确时把测量点放 pass 外，或启用 synchronization2 的 `vkCmdWriteTimestamp2`。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -284,6 +291,7 @@
 | P-26 | ReadPixel 回读要求 image usage 含 `TRANSFER_SRC_BIT`，否则 copy 非法 | FBO attachment 创建时未预埋回读用途 | `ColorUsageFlags()` 已加 TRANSFER_SRC（`cf2154c`）；新增回读类功能先查 usage 位 |
 | P-27 | descriptor pool 缺新 descriptor 类型时 alloc **静默失败** → draw 被丢弃（仅 validation 报 pool 类型缺失） | dispatcher 支持 SSBO 等新绑定类型但 pool size 未同步 | per-frame pool sizes 与 dispatcher 支持的类型同步维护（`f6a26a9`）；新增 descriptor 类型时先补 pool |
 | P-28 | host 立即写跨帧累计 buffer 与 2 帧在飞 GPU dispatch 无顺序保障 → 清零落点漂进上一帧 dispatch 序列，compact/simulate 在"回写值"上二次累加（counter 双倍累积，实测 readback dead=20000/30000 vs probe=10000） | SPH 场景每帧 compact 全量重建 counter + GPU 滞后 ≥1 帧（该场景 Vulkan ~28fps vs GL ~77fps，滞后常态） | 跨帧累计 buffer 变更一律 GPU 序（D-20：FillBuffer/UpdateBuffer + BufferUpdate barrier）；诊断用 `ENGINE_PARTICLE_COUNTER_DEBUG=1` 逐帧对比 probe（GPU 内存直读）与 readback（异步回读），两者系统性差值即乱序证据 |
+| P-29 | GPU 计时器的 cmd 重置/timestamp 写入与 render pass 的三条硬约束：cmd `vkCmdResetQueryPool` 进 render pass 被 validation 拒绝丢弃；同帧多对 Begin/End 写同一 query 触发 "reset between uses"；pass 内 timestamp 写入被驱动合并（pair 内 delta 恒 0） | 计时器调用点嵌在 HDR/shadow render pass 内（`VulkanFramebuffer::Bind` 即 BeginRenderPass）+ 编辑器拾取每帧重录 GeometryPass | 宿主端 `vkResetQueryPool`（需启用 hostQueryReset——**注意 SDK 1.4 头的 sType 拼写是 `...VULKAN_1_2_FEATURES`（1_2 而非 12），基础 VkPhysicalDeviceFeatures 里没有该字段**）+ 帧内游标分 query 对 + 多 pair begin 锚差值（D-21） |
 
 ---
 
@@ -303,14 +311,14 @@
 
 **等价性遗留**
 1. ~~**粒子计数语义差异**~~ — **已解决**（`dc61fd8`/`c4c6065`/`9addf68`，2026-08-30）：根因是 counter host 立即写与 2 帧在飞 dispatch 无序（P-28），4 处变更 GPU 序化后对齐 GL（D-20）。修复前后实测（`ENGINE_PARTICLE_COUNTER_DEBUG=1`，粒子测试.scene，EmitRate=300）：修复前 Vulkan 回读 dead=20000/30000（probe=10000）、每帧 overflow 警告 + corrected=1；修复后 2610 帧 0 警告 0 corrected，probe==readback，dead+alive≈10146 与 GL 基线（9858/288，77fps）同特征同量级（Vulkan 74fps）。注：GL/Vulkan 的 alive 计数本身含 compact+simulate 同帧双计（≈2×真实存活，低于 max 不报错），两后端一致，属既存语义非缺陷。等价性验证设施说明：`ENGINE_PARTICLE_EQUIV_SMOKE` 为 GL↔CUDA 单进程对比，无法覆盖 Vulkan（单进程单 RHI，GL compute 封装在 Vulkan 上是 stub；且 counter 语义分歧不体现在粒子数据快照里）——Vulkan 侧以 counter 追踪 + 双后端实测协议替代（见 D-20/P-28），真跨 RHI 对比需离线进程编排，暂不做
-2. **SPH/流体 compute 占位 buffer validation**：无 MeshSDF 场景下 dispatch 报 MeshSDFBuffer/RigidBodyBuffer/MeshSDFVoxelBuffer 未更新（P-16 同类占位策略不彻底），功能不受影响
-3. **阴影健壮性**：CSM 模式下主 shadow map FBO 从未执行 renderpass（`SceneRenderer.cpp:337-343` 注释），地形也不写入 shadow map
+2. ~~**SPH/流体 compute 占位 buffer validation**~~ — **已解决**（`c4996bf`，2026-08-30）：sph_force.glsl 声明 binding 3/10/11，耦合关闭时从未写入触发 3 条 "never been updated"。粒子侧无条件懒创建占位（binding 3 复用 InitRigidBodyBuffer、10/11 新增 16B GPUOnly 占位，dispatchSPH 增加 bindMeshSDF 参数）；流体侧同款无条件 InitRigidBodyBuffer/InitMeshSDFBuffer 加固（流体 pass 当前 Vulkan 跳过不触发 validation，属提前加固，接通后需复验）。实测 `ENGINE_VULKAN_VALIDATION=1` 运行 0 报错
+3. **阴影健壮性**：CSM 模式下主 shadow map FBO 从未执行 renderpass（`SceneRenderer.cpp:337-343` 注释），地形也不写入 shadow map——注：GPU 计时器（D-21）实测 ShadowPass GPU avg 0.000ms 即此空转的真实反映
 
 **功能 backlog（按价值排序）**
 4. **草地 billboard 接通**：GrassPass 仍禁用——grass_billboard.glsl 的 GrassVSUBO（set0 binding1，196B）在 cpp 侧无创建/上传代码（GL 用散装 uniform），需按 D-13"cpp 端 UBO + dispatcher UBO 槽"方案接线；顺带可解 P-12 indirect
 5. **Bloom**（`SceneRenderer.cpp` 后处理段，依赖 GL ID 传递改 view 直通，参照 tone mapping 先例）
 6. **SSAO**（`VulkanTexture.cpp` RGB_Float 上传 + callerFBO 语义）
-7. **VulkanGPUTimerQuery**（VkQueryPool TIMESTAMP，性能面板/论文数据）
+7. ~~**VulkanGPUTimerQuery**~~ — **已完成**（`8a6283f`/`7ae1b8e`/`1e548fd`/`c4996bf`，2026-08-30）：GPUTimerQuery 抽象化 + 工厂分派 + VulkanGPUTimerQuery（VkQueryPool TIMESTAMP，D-21/P-29）；实测 --vulkan 性能面板 Scene GPU avg 0.047ms、Particle GPU avg 0.234ms、Shadow avg 0（shadow pass 空转的真实反映）、validation 0 报错；GL 复跑与基线一致零回归。局限：单 pair 且 Begin/End 嵌在 render pass 内的计时在 Play 模式（无拾取重录）退化，见 D-21
 8. **screen-space 流体链**（深度/厚度/composite，依赖 2 的 counter 对齐更好）
 9. **地形 pass**（Terrain UBO/descriptor 接入 dispatcher）
 10. **物理调试线框画进视口**（debug 兜底队列从 swapchain 重定向到场景 renderpass）
