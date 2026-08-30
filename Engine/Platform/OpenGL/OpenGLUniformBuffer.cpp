@@ -28,4 +28,9 @@ namespace Engine
         glBufferSubData(GL_UNIFORM_BUFFER, offset, size, data);
     }
 
+    void OpenGLUniformBuffer::Bind(uint32_t binding) const
+    {
+        glBindBufferBase(GL_UNIFORM_BUFFER, binding, m_RendererID);
+    }
+
 } // namespace Engine
