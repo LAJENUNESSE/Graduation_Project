@@ -1,6 +1,6 @@
 #include "engpch.h"
 #include "Core/Log.h"
-#include "Debug/GPUTimerQuery.h"
+#include "Platform/OpenGL/OpenGLGPUTimerQuery.h"
 #include "Renderer/RendererAPI.h"
 
 #include <glad/gl.h>
@@ -19,7 +19,7 @@ namespace Engine
         }
     } // namespace
 
-    GPUTimerQuery::GPUTimerQuery()
+    OpenGLGPUTimerQuery::OpenGLGPUTimerQuery()
     {
         if (RendererAPI::GetAPI() != RendererAPI::API::OpenGL)
         {
@@ -44,13 +44,13 @@ namespace Engine
         glGenQueries(2, m_QueryIDs);
     }
 
-    GPUTimerQuery::~GPUTimerQuery()
+    OpenGLGPUTimerQuery::~OpenGLGPUTimerQuery()
     {
         // Resources should already be freed by Destroy().
         // Do NOT call glDeleteQueries here — the GL context may be gone.
     }
 
-    void GPUTimerQuery::Destroy()
+    void OpenGLGPUTimerQuery::Destroy()
     {
         if (m_Disabled)
             return;
@@ -63,7 +63,7 @@ namespace Engine
         }
     }
 
-    void GPUTimerQuery::Begin()
+    void OpenGLGPUTimerQuery::Begin()
     {
         m_HasValidResult = false;
 
@@ -90,7 +90,7 @@ namespace Engine
         m_QueryActive = true;
     }
 
-    void GPUTimerQuery::End()
+    void OpenGLGPUTimerQuery::End()
     {
         if (m_Disabled)
             return;

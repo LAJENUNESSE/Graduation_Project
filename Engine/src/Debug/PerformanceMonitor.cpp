@@ -11,6 +11,16 @@
 namespace Engine
 {
 
+    PerformanceMonitor::PerformanceMonitor()
+    {
+        // 按当前 RendererAPI 分派后端实现——首次 Get() 发生在渲染器 API 设定之后
+        // （Init/CSV 由上层在窗口创建后触发），分派正确性由 Vulkan 下 GPU 计时非 0 验证
+        m_ShadowPassGPU      = GPUTimerQuery::Create();
+        m_SceneRenderGPU     = GPUTimerQuery::Create();
+        m_ParticleComputeGPU = GPUTimerQuery::Create();
+        m_FluidComputeGPU    = GPUTimerQuery::Create();
+    }
+
     void PerformanceMonitor::Init()
     {
         m_FrameNumber  = 0;
@@ -55,10 +65,14 @@ namespace Engine
     void PerformanceMonitor::Shutdown()
     {
         // Release GPU queries while GL context is still alive
-        m_ShadowPassGPU.Destroy();
-        m_SceneRenderGPU.Destroy();
-        m_ParticleComputeGPU.Destroy();
-        m_FluidComputeGPU.Destroy();
+        if (m_ShadowPassGPU)
+            m_ShadowPassGPU->Destroy();
+        if (m_SceneRenderGPU)
+            m_SceneRenderGPU->Destroy();
+        if (m_ParticleComputeGPU)
+            m_ParticleComputeGPU->Destroy();
+        if (m_FluidComputeGPU)
+            m_FluidComputeGPU->Destroy();
 
         if (m_CsvFile.is_open())
         {
@@ -130,8 +144,8 @@ namespace Engine
                       << std::setprecision(3) << m_ShadowPassCpuMs << "," << std::setprecision(3) << m_SceneRenderCpuMs
                       << "," << std::setprecision(3) << m_ImGuiCpuMs << "," << std::setprecision(3) << m_PollEventsCpuMs
                       << "," << std::setprecision(3) << m_SwapBuffersCpuMs << "," << std::setprecision(3)
-                      << m_ShadowPassGPU.GetElapsedMs() << "," << std::setprecision(3)
-                      << m_SceneRenderGPU.GetElapsedMs() << "," << std::setprecision(3) << GetParticleComputeGpuMs()
+                      << m_ShadowPassGPU->GetElapsedMs() << "," << std::setprecision(3)
+                      << m_SceneRenderGPU->GetElapsedMs() << "," << std::setprecision(3) << GetParticleComputeGpuMs()
                       << "," << std::setprecision(3) << GetFluidComputeGpuMs() << "," << std::defaultfloat
                       << m_Stats.DrawCalls << "," << m_Stats.Vertices << "," << m_Stats.Triangles << ","
                       << GetFrameDominantStageLabel() << "," << std::setprecision(3) << m_RefreshHz << ","

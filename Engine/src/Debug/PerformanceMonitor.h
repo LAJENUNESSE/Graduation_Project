@@ -59,12 +59,12 @@ namespace Engine
         }
 
         // GPU timer queries (owned by monitor, used by Scene)
-        GPUTimerQuery& GetShadowPassGPUTimer() { return m_ShadowPassGPU; }
-        GPUTimerQuery& GetSceneRenderGPUTimer() { return m_SceneRenderGPU; }
-        GPUTimerQuery& GetParticleComputeGPUTimer() { return m_ParticleComputeGPU; }
+        GPUTimerQuery& GetShadowPassGPUTimer() { return *m_ShadowPassGPU; }
+        GPUTimerQuery& GetSceneRenderGPUTimer() { return *m_SceneRenderGPU; }
+        GPUTimerQuery& GetParticleComputeGPUTimer() { return *m_ParticleComputeGPU; }
 
         // Fluid compute timing
-        GPUTimerQuery& GetFluidComputeGPUTimer() { return m_FluidComputeGPU; }
+        GPUTimerQuery& GetFluidComputeGPUTimer() { return *m_FluidComputeGPU; }
         void           SetFluidActive(bool v) { m_FluidActive = v; }
         bool           IsFluidActive() const { return m_FluidActive; }
 
@@ -117,10 +117,10 @@ namespace Engine
                 return "Other";
             }
         }
-        float GetShadowPassGpuMs() const { return m_ShadowPassGPU.GetElapsedMs(); }
-        float GetSceneRenderGpuMs() const { return m_SceneRenderGPU.GetElapsedMs(); }
-        float GetParticleComputeGpuMs() const { return m_ParticleComputeGPU.GetElapsedMs(); }
-        float GetFluidComputeGpuMs() const { return m_FluidComputeGPU.GetElapsedMs(); }
+        float GetShadowPassGpuMs() const { return m_ShadowPassGPU->GetElapsedMs(); }
+        float GetSceneRenderGpuMs() const { return m_SceneRenderGPU->GetElapsedMs(); }
+        float GetParticleComputeGpuMs() const { return m_ParticleComputeGPU->GetElapsedMs(); }
+        float GetFluidComputeGpuMs() const { return m_FluidComputeGPU->GetElapsedMs(); }
 
         // Frame time history (ring buffer for PlotLines)
         static constexpr int FrameHistorySize = 120;
@@ -128,7 +128,7 @@ namespace Engine
         int                  GetFrameTimeHistoryOffset() const { return m_FrameTimeHistoryOffset; }
 
     private:
-        PerformanceMonitor()                                     = default;
+        PerformanceMonitor();
         ~PerformanceMonitor()                                    = default;
         PerformanceMonitor(const PerformanceMonitor&)            = delete;
         PerformanceMonitor& operator=(const PerformanceMonitor&) = delete;
@@ -171,18 +171,18 @@ namespace Engine
         uint32_t m_SwapBurstMissedVBlank = 0;
         bool     m_SwapBurstActive       = false;
 
-        // GPU timers
-        GPUTimerQuery m_ShadowPassGPU;
-        GPUTimerQuery m_SceneRenderGPU;
-        GPUTimerQuery m_ParticleComputeGPU;
+        // GPU timers（按 RendererAPI 工厂分派的后端实现，构造时创建）
+        Ref<GPUTimerQuery> m_ShadowPassGPU;
+        Ref<GPUTimerQuery> m_SceneRenderGPU;
+        Ref<GPUTimerQuery> m_ParticleComputeGPU;
 
         // Fluid GPU timers
-        GPUTimerQuery m_FluidComputeGPU;
-        bool          m_FluidActive = false;
+        Ref<GPUTimerQuery> m_FluidComputeGPU;
+        bool               m_FluidActive = false;
 
         // CUDA compute timing channels（与 GL timer 平行，独立通过 cudaEvent query 喂入）
         float m_ParticleComputeCudaMs     = 0.0f;
-        float m_FluidComputeCudaMs       = 0.0f;
+        float m_FluidComputeCudaMs        = 0.0f;
         bool  m_ParticleComputeCudaActive = false;
         bool  m_FluidComputeCudaActive    = false;
 
