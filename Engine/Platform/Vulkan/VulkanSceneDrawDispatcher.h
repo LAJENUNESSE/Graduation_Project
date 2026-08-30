@@ -57,12 +57,13 @@ namespace Engine
             uint32_t        ViewportWidth        = 0;
             uint32_t        ViewportHeight       = 0;
 
-            bool     Indexed      = false;
-            uint32_t IndexCount   = 0;
-            uint32_t VertexCount  = 0; // non-indexed 用
-            uint32_t FirstIndex   = 0;
-            int32_t  VertexOffset = 0;
-            uint32_t FirstVertex  = 0; // non-indexed 用
+            bool     Indexed       = false;
+            uint32_t IndexCount    = 0;
+            uint32_t VertexCount   = 0; // non-indexed 用
+            uint32_t InstanceCount = 1; // DrawArraysInstanced（粒子/草地 billboard）
+            uint32_t FirstIndex    = 0;
+            int32_t  VertexOffset  = 0;
+            uint32_t FirstVertex   = 0; // non-indexed 用
 
             // 光栅状态（来自 VulkanRendererAPI 成员缓存）
             bool DepthTest   = true;

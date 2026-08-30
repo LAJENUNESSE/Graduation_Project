@@ -34,6 +34,26 @@ namespace Engine
             m_TextureSlots[slot] = {};
     }
 
+    void VulkanSceneState::BindStorageSlot(uint32_t binding, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range)
+    {
+        if (binding >= kMaxStorageSlots)
+        {
+            static bool warnedRange = false;
+            if (!warnedRange)
+            {
+                warnedRange = true;
+                ENGINE_CORE_WARN("[Vulkan] Storage slot {0} out of range (max {1})", binding, kMaxStorageSlots - 1);
+            }
+            return;
+        }
+
+        auto& bindingData  = m_StorageSlots[binding];
+        bindingData.Buffer = buffer;
+        bindingData.Offset = offset;
+        bindingData.Range  = range;
+        bindingData.Valid  = (buffer != VK_NULL_HANDLE);
+    }
+
     void VulkanSceneState::ResetTextureSlots()
     {
         m_TextureSlots.fill({});
@@ -42,6 +62,12 @@ namespace Engine
     const VulkanSceneState::TextureBinding& VulkanSceneState::GetTextureSlot(uint32_t slot) const
     {
         return (slot < kMaxTextureSlots) ? m_TextureSlots[slot] : kInvalidBinding;
+    }
+
+    const VulkanSceneState::StorageBinding& VulkanSceneState::GetStorageSlot(uint32_t binding) const
+    {
+        static const StorageBinding kInvalidStorage{};
+        return (binding < kMaxStorageSlots) ? m_StorageSlots[binding] : kInvalidStorage;
     }
 
 } // namespace Engine

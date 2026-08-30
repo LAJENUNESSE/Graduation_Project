@@ -254,18 +254,29 @@ namespace Engine
             return;
         }
 
-        // Phase 8.2：instanced 真实绘制未接通（粒子 billboard 需要 SSBO 注册表，
-        // 属后续阶段）。场景 pass 激活时直接丢弃——若进 pending 队列会被 debug
-        // pass 用 DebugTriangle 管线画满 swapchain（粒子场景上万 instance 铺屏）。
-        if (vkContext->GetActiveSceneRenderPass() != VK_NULL_HANDLE)
+        // Phase 8.3：instanced 真实绘制（粒子/草地 billboard——空 VAO + SSBO 数据 +
+        // gl_VertexID 展开 quad），录制失败仍进 debug 兜底队列防铺屏
+        const VkCommandBuffer cmd      = vkContext->GetCurrentFrameCommandBuffer();
+        const VertexArray*    boundVAO = vkContext->GetSceneState().GetCurrentVertexArray();
+        if (cmd != VK_NULL_HANDLE && vkContext->GetActiveSceneRenderPass() != VK_NULL_HANDLE && boundVAO)
         {
-            static bool warnedDropped = false;
-            if (!warnedDropped)
-            {
-                warnedDropped = true;
-                ENGINE_CORE_WARN("[Vulkan] DrawArraysInstanced not wired to scene path yet; draw dropped");
-            }
-            return;
+            VulkanSceneDrawDispatcher::DrawParams params{};
+            params.Cmd                  = cmd;
+            params.RenderPass           = vkContext->GetActiveSceneRenderPass();
+            params.ColorAttachmentCount = vkContext->GetActiveSceneColorAttachmentCount();
+            params.Indexed              = false;
+            params.VertexCount          = count;
+            params.InstanceCount        = instanceCount;
+            params.FirstVertex          = first;
+            params.DepthTest            = m_DepthTestEnabled && m_DepthMaskEnabled;
+            params.DepthWrite           = m_DepthMaskEnabled;
+            params.DepthLEqual          = (m_DepthFunc == DepthFunc::LEqual);
+            params.CullBack             = m_CullFaceEnabled && m_CullFaceMode == CullFaceMode::Back;
+
+            auto* shader = dynamic_cast<VulkanShader*>(vkContext->GetSceneState().GetCurrentShader());
+            if (shader && vkContext->GetSceneDrawDispatcher().DispatchDraw(boundVAO, shader, params,
+                                                                           vkContext->GetCurrentFrameIndex()))
+                return;
         }
 
         vkContext->QueueDrawArraysInstanced(count, instanceCount, first);

@@ -145,12 +145,8 @@ namespace Engine
         };
         static_assert(sizeof(MaterialUboStd140) == 64, "MaterialUBO std140 size");
 
-        struct ScenePCStd140
-        {
-            glm::mat4 Transform;       //  0
-            glm::vec4 NormalMatrix[3]; // 64：std430 mat3 列各占 16B
-        };
-        static_assert(sizeof(ScenePCStd140) == 112, "Scene push constant size");
+        // PC 打包不再依赖固定结构：128B 通用块按 shader uniform 名匹配各 mat4/mat3 槽位，
+        // 覆盖 PBR / Skybox / 粒子 billboard 三种 PC 布局（见 DispatchDraw 内注释）
 
         // GLSL sampler uniform 名 → OpenGL texture unit（与 PBR.glsl / Skybox.glsl 约定一致）
         uint32_t SlotForSamplerName(std::string name)
@@ -259,6 +255,7 @@ namespace Engine
             std::vector<VkDescriptorPoolSize> sizes = {
                 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kMaxMaterialAllocsPerFrame * 3},
                 {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxMaterialAllocsPerFrame * 8},
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kMaxMaterialAllocsPerFrame * 4}, // 粒子/草地 billboard SSBO
             };
 
             VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
@@ -708,7 +705,11 @@ namespace Engine
             return false;
 
         auto* va = dynamic_cast<const VulkanVertexArray*>(vertexArray);
-        if (!va || va->GetVertexBuffers().empty())
+        if (!va)
+            return false;
+        // 粒子/草地 billboard 用空 VAO（顶点由 gl_VertexID 生成，数据走 SSBO），
+        // 仅 indexed 绘制必须有顶点缓冲
+        if (params.Indexed && va->GetVertexBuffers().empty())
             return false;
 
         auto* context = VulkanContext::Get();
@@ -794,6 +795,14 @@ namespace Engine
                 else if (hasSet1 && b.Set == 1)
                     w1.WriteBuffer(b.Binding, fr.MaterialBuffer, materialOffset, kMaterialUboSize, b.Type);
             }
+            else if (b.Type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+            {
+                // SSBO：从场景状态机槽取（StorageBuffer::Bind(binding) 写入，粒子/草地 billboard）
+                const auto& slot = scene.GetStorageSlot(b.Binding);
+                if (!slot.Valid)
+                    continue; // 未绑定且 shader 实际消费时由 validation 层报告
+                (b.Set == 0 ? w0 : w1).WriteBuffer(b.Binding, slot.Buffer, slot.Offset, slot.Range, b.Type);
+            }
             else if (b.Type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
             {
                 const uint32_t slotBase = SlotForSamplerName(baseName);
@@ -857,29 +866,53 @@ namespace Engine
             w1.UpdateSet(m_Device, sets[1]);
 
         // ---- push constant（per-draw 变换）----
-        // 仅当反射 PC 确实容纳 mat4 级别的 u_Transform（≥64B）时才写 ScenePCStd140；
-        // 后处理等 shader 的 PC 布局不同（如 4 个标量共 16B），按 112B 写会越界污染
+        // 仅当反射 PC 确实容纳 mat4 级别的数据（≥64B）时才写 128B 通用块；
+        // 后处理等 shader 的 PC 布局不同（如 4 个标量共 16B），按 128B 写会越界污染。
+        // Slot0（offset 0 的 mat4）与 Slot1（offset 64）按 shader uniform 名匹配，
+        // 覆盖 PBR（Transform+NormalMatrix）/ Skybox（单 mat4 视图投影）/
+        // 粒子 billboard（u_View+u_Projection 各占一个 mat4 槽）。
         const auto& pcs            = shader->GetReflectedPushConstants();
         const bool  hasTransformPC = std::any_of(pcs.begin(), pcs.end(), [](const auto& r) { return r.Size >= 64; });
         if (hasTransformPC)
         {
-            ScenePCStd140 pcData{};
-            if (auto it = shader->GetMat4Uniforms().find("u_Transform"); it != shader->GetMat4Uniforms().end())
-                pcData.Transform = it->second;
-            else if (auto vpIt = shader->GetMat4Uniforms().find("u_ViewProjection");
-                     vpIt != shader->GetMat4Uniforms().end())
-                pcData.Transform = vpIt->second; // Skybox 等 PC 首槽即视图投影的 shader（单 mat4 布局与首槽重合）
-            if (auto it = shader->GetMat3Uniforms().find("u_NormalMatrix"); it != shader->GetMat3Uniforms().end())
+            std::array<uint8_t, 128> pcBlock{};
+            const auto&              mat4s = shader->GetMat4Uniforms();
+            const auto&              mat3s = shader->GetMat3Uniforms();
+
+            auto writeMat4 = [&](const char* name, size_t byteOffset)
+            {
+                if (auto it = mat4s.find(name); it != mat4s.end())
+                {
+                    std::memcpy(pcBlock.data() + byteOffset, &it->second, sizeof(glm::mat4));
+                    return true;
+                }
+                return false;
+            };
+
+            if (!writeMat4("u_Transform", 0))
+                if (!writeMat4("u_ViewProjection", 0))
+                    writeMat4("u_View", 0);
+
+            if (auto nmIt = mat3s.find("u_NormalMatrix"); nmIt != mat3s.end())
             {
                 // glm 列主序 mat3 → 3×vec16B 槽位
                 for (int c = 0; c < 3; ++c)
-                    pcData.NormalMatrix[c] = glm::vec4(it->second[c], 0.0f);
+                {
+                    const glm::vec4 col(nmIt->second[c], 0.0f);
+                    std::memcpy(pcBlock.data() + 64 + c * sizeof(glm::vec4), &col, sizeof(glm::vec4));
+                }
+            }
+            else
+            {
+                writeMat4("u_Projection", 64);
             }
 
             for (const auto& range : pcs)
+            {
+                const uint32_t writeSize = std::min(range.Size, 128u - range.Offset);
                 VulkanCommandBuffer(params.Cmd)
-                    .PushConstants(handle.Layout, range.Stages, range.Offset, range.Size,
-                                   reinterpret_cast<const uint8_t*>(&pcData) + range.Offset);
+                    .PushConstants(handle.Layout, range.Stages, range.Offset, writeSize, pcBlock.data() + range.Offset);
+            }
         }
 
         // ---- 录制 ----
@@ -922,7 +955,7 @@ namespace Engine
         }
         else
         {
-            cmd.Draw(params.VertexCount, 1, params.FirstVertex);
+            cmd.Draw(params.VertexCount, params.InstanceCount, params.FirstVertex);
         }
 
         return true;

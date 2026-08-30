@@ -637,10 +637,16 @@ namespace Engine
         const char* forceDirect    = std::getenv("ENGINE_PARTICLE_DIRECT_DRAW");
         bool        envForceDirect = forceDirect && forceDirect[0] == '1';
 
-        m_UseIndirectDraw = !(vmwareDriver || envForceDirect);
+        // Vulkan 下 DrawArraysIndirect 仍是 stub（GL ID 传参无法定位 VkBuffer），
+        // 强制走 direct instanced 路径（存活数经异步回读供 CPU 侧 instanceCount）
+        const bool vulkanBackend = RendererAPI::GetAPI() == RendererAPI::API::Vulkan;
+
+        m_UseIndirectDraw = !(vmwareDriver || envForceDirect || vulkanBackend);
         if (!m_UseIndirectDraw)
         {
-            ENGINE_WARN("[Particle] Using direct instanced draw fallback (VMware compatibility mode).");
+            ENGINE_WARN("[Particle] Using direct instanced draw fallback ({0}).",
+                        vulkanBackend ? "Vulkan backend (DrawArraysIndirect not yet implemented)"
+                                      : "VMware compatibility mode");
         }
 
         const char* allowSPHEnv      = std::getenv("ENGINE_ENABLE_SPH_ON_VMWARE");

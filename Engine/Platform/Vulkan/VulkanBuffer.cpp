@@ -314,6 +314,10 @@ namespace Engine
     void VulkanStorageBuffer::Bind(uint32_t binding) const
     {
         m_LastBinding = binding;
+        // 记录到场景状态机 SSBO 槽（OpenGL glBindBufferBase 语义），场景 draw 录制时
+        // 由 dispatcher 按反射 binding 写 descriptor；binding 号即槽号
+        if (auto* context = VulkanContext::Get())
+            context->GetSceneState().BindStorageSlot(binding, m_Buffer, 0, VK_WHOLE_SIZE);
     }
 
     void VulkanStorageBuffer::Unbind() const
