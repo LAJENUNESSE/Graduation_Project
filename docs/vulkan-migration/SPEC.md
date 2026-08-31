@@ -9,6 +9,7 @@
 
 ## 1. 当前位置
 
+- **基准数据战役结案（2026-08-31）**：热饱和轮 `results_v3/run_20260831_110725` 作废（P-32 背景：nvidia-smi 双墙实证，凉机复测坐实代码无辜）；**定稿轮 = `benchmark/results/run_20260831_174549`**（空调房 45 分钟 29/30 过门禁，GL/CUDA 回 v2 档、Vulkan PCISPH 中规模加速比 1.31/1.23 优于 v2；CUDA WCSPH 50k 被 L∞ 门禁统计误伤，用户拍板论文说明不改容差）。工具链沉淀：`benchmark/run_cooled.ps1`（温控分段 + 重试 + 进度）、`plot_results.py --allow-partial` + 0.2% 参考线修正（`e03391c`）、`compare_v2_v3.py` 参数化。**论文正文 = 根目录 AAA_建材批发.docx**（数据来源根目录 `results_v2\`，换定稿轮需同步表 6-2/6-3、§6.3.2 定性结论与图 6-1/6-2）。下一步：D-24/D-25 Vulkan 优化 → 优化后重采全量 → docx 换版。
 - **Phase 1 ~ 8.2 全部完成**：DrawIndexed 真实录制、PBR 几何 pass / 天空盒 / IBL 三 compute / 粒子与 SPH 与流体 compute 模拟 / ImGui 视口全部在 Vulkan path 可用；validation 层报错已从首轮 51 条归零。
 - **功能完善批次已全部落地（2026-08-30）**：
   - **IBL cube 化**（`5c476e4`）— Irradiance/Prefilter 输出改 6-layer cube-compatible + Prefilter 5 级 mip 链，PBR 环境光照恢复；顺带修复 skybox push constant 不含 u_ViewProjection 导致天空盒不可见（`a22e9dc`）
@@ -271,6 +272,18 @@
 > **Why**：grass_billboard.glsl VULKAN 分支的 GrassVSUBO/GrassFSUBO 无 cpp 侧创建/上传代码（GL 用散装 uniform），descriptor 静默留空（P-19）；草 UBO 含 per-frame（Time/相机/灯光）与 per-entity（Transform/EntityID）两类数据，单份 UBO 跨帧复用存在"帧 N+1 CPU 写覆盖帧 N 未执行 draw 读取"的竞争，per-frame 双份借 BeginFrame fence 等待严格消除。
 > **How to apply**：新增场景 shader 自定义 set0 UBO 时按此模板——cpp 端 `UniformBuffer::Create(256 对齐, binding)`（GL 路径不 alloc）→ 每帧 `SetData` 打包 std140 → `Bind(binding)` 录槽 → dispatcher 自动消费；per-frame 变更数据用双份按帧索引。顺带注意：**TerrainPass 的 `UpdateTerrainMeshes` 是纯 CPU 侧**（高度图→TerrainMeshData），草地 placement 依赖它，地形绘制解禁前 Vulkan 分支必须保留数据更新（`55537a5`）；`u_GrassTexture` 的 sampler 名→槽映射为 unit 2（`4cf0853`）。
 
+### D-24：Vulkan SPH 每帧固定开销优化 — descriptor set 按帧槽缓存（方案已批准待实施）
+
+> **Decision**：FluidSystemGPU 的 Vulkan SPH 路径把每 dispatch 的 `descriptorPool->Allocate + 全量 Write + UpdateSet`（PCISPH 模式每帧 27 次 alloc + ~163 个 VkWriteDescriptorSet，`FluidSystemGPU.cpp:1428-1482/1546-1557`）改为**按 frame-in-flight 槽位（2）缓存的 persistent descriptor set**——所有被绑定的 VkBuffer 句柄初始化后恒定（particle/alive/PCISPH/grid/rigid/SDF 均一次性创建，UBO `SetData` 仅 memcpy 内容不改句柄 `VulkanBuffer.cpp:434-439`），set 只需在 buffer 创建/重建时写一次，每帧仅 vkCmdBindDescriptorSets。SPH 7 pipeline 各按 2 槽缓存，simulate 同理。
+> **Why**：子代理逐行审计（2026-08-31）量化：每帧固定开销 = 27×(alloc+update+2×bind+push) + 29×全局 barrier，全部消耗在 host 录制期与 GPU barrier 执行，与 CUDA 的"每 launch 零绑定成本"（`kernel<<<>>>` 传值参数）之间的差距正源于此——这是 Vulkan compute 与 CUDA 打平的主因之一。dynamic offset 方案被否：UBO 是专用小 buffer 句柄恒定，persistent binding 更简单且覆盖全部收益。
+> **How to apply**：pool 每帧 Reset（`FluidSystemGPU.cpp:1318`，P-15/P-9 惯例）需为缓存 set 改为不分槽 reset 或独立持久 pool；buffer 重建（resize/InitPCISPH 懒创建）时对应槽位缓存必须失效重写；Grid 的 SetExternalBuffers 切换外部 buffer 时同样失效。风险点：缓存 set 引用的 buffer 若被延迟销毁（D-18 deletion queue）需保证 set 不再被 in-flight cmd 引用。
+
+### D-25：帧内 compute→compute barrier 的 dstStage 收窄（方案已批准待实施）
+
+> **Decision**：`VulkanBarrierUtil.cpp:27-34` 的 SSBO barrier 掩码从 `dstStage=COMPUTE|VERTEX|FRAGMENT`（全局 memory barrier）拆为两档：**帧内 dispatch 间 28 个 barrier 用 compute→compute**（SPH dispatchSPH 每个之后 + Grid 内部），仅 `FluidSystemGPU.cpp:1573` simulate 末 barrier 与 grid 之后供 render pass 消费 particle 的 `:1425` 保留 graphics dst。改一个掩码变体常量即可，29 个 barrier 全部受益。
+> **Why**：帧内 dispatch 间消费者只有 compute，携带 VERTEX|FRAGMENT dst 会迫使驱动为 graphics 阶段建立同步域（无效等待）。零风险收窄，与 D-24 叠加预期显著缩小与 CUDA 的固定开销差。
+> **How to apply**：新增 Vulkan compute 链时按"消费者阶段"选 barrier 变体；若后续 dispatch 结果直接进 render pass（如 counter 供 draw 读取），该 barrier 保留 graphics dst。配套零风险清理：`FluidSystemGPU.cpp:1425` 与 `SpatialHashGrid.cpp:448` 背靠背同语义 barrier，删前者；PushConstants 21 次 SPH dispatch 内容相同，可在段首 push 一次。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -308,6 +321,8 @@
 | P-29 | GPU 计时器的 cmd 重置/timestamp 写入与 render pass 的三条硬约束：cmd `vkCmdResetQueryPool` 进 render pass 被 validation 拒绝丢弃；同帧多对 Begin/End 写同一 query 触发 "reset between uses"；pass 内 timestamp 写入被驱动合并（pair 内 delta 恒 0） | 计时器调用点嵌在 HDR/shadow render pass 内（`VulkanFramebuffer::Bind` 即 BeginRenderPass）+ 编辑器拾取每帧重录 GeometryPass | 宿主端 `vkResetQueryPool`（需启用 hostQueryReset——**注意 SDK 1.4 头的 sType 拼写是 `...VULKAN_1_2_FEATURES`（1_2 而非 12），基础 VkPhysicalDeviceFeatures 里没有该字段**）+ 帧内游标分 query 对 + 多 pair begin 锚差值（D-21） |
 | P-30 | ~~RenderDoc 注入运行时**主场景 HDR pass 整体不录 command**~~ — **已失效**（2026-08-31 实测）：注入 `renderdoc-cli capture`（正确语法 `capture EXE -w DIR -a ARGS -d N -o OUT.rdc`）抓到完整帧（54 events，HDR/picking/shadow/ImGui pass 与 dispatcher draws 齐全），debug_pixel/`export-buffer` 一步定位草地黑剪影根因 | ~~同左~~ | 视觉类问题优先走抓帧 + debug_pixel（D-23 三件套），仅当抓帧异常时退回引擎侧诊断日志路线 |
 | P-31 | cpp UBO 镜像结构体按"每成员补到 16B 边界"的 C++ 直觉写 → 与 GLSL std140 真实布局错位，尾部标量全读 0；validation 不报、static_assert 自证错误、内容回读"正确" | 镜像含 `struct{vec3,vec3,float}` 或其他"标量可塞进前一 vec3 槽尾"的组合（如 GrassFSUBO DirLight） | 按 std140 规则逐槽推导（D-23）：只有 vec3/vec4/mat/数组/结构体首址对齐 16B，**标量不对齐**；用 RenderDoc 反射 byteSize 交叉验证镜像尺寸 |
+| P-32 | L∞ 门禁对稳态波动做差 → 统计误伤：WCSPH 50k 三后端 MaxDensityError 同在 960±8，两个 ±4 内的量直接做差得 ±8，5.0 阈值随机拒合格组（2026-08-31 定稿轮 CUDA WCSPH 50k 差 5.85 被拒、v2 轮同组差 1.26 过——全过靠基线抽签运气） | 逐样本最大误差本身与 GPU 驻留状态/浮点归约顺序同量级（±0.8% of 960）时，"目标 − 基线"的绝对差阈值失效 | 均值偏差达标的组不轻判坏；处理顺序：先查均值与三后端 MaxErr 分布（都在同一带内=基线抽样噪声非退化），必要时重跑抽签或放宽容差并同步论文口径；本次定稿轮 29/30，用户拍板不改容差、论文说明（`plot_results.py --allow-partial` 跳过被拒组出图，`e03391c`） |
+| P-33 | PowerShell `Write-Host` 写 information stream（流 6），`powershell -File x.ps1 > log.txt` **不捕获** → 计划任务/重定向场景进度全黑 | 任何需要重定向落盘/被宿主读取的 PS 脚本 | 进度与结果输出一律 `Write-Output`（或 `[Console]::Out.WriteLine`）；`Write-Progress` 仅交互终端有意义，重定向时自动无害。注意 PS5.1 `Import-Csv` 默认 ANSI 读 CSV，中文内容需显式 `-Encoding UTF8` |
 
 ---
 
