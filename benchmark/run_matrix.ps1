@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Editor = "build-benchmark/Editor/RelWithDebInfo/Editor.exe",
     [ValidateSet("opengl", "cuda", "vulkan")]
@@ -87,6 +87,11 @@ function Test-CompleteResult {
     return $true
 }
 
+$total = $Backends.Count * $Solvers.Count * $Particles.Count
+$done = 0
+$failed = [System.Collections.Generic.List[string]]::new()
+$matrixSw = [System.Diagnostics.Stopwatch]::StartNew()
+# 组级进度/结果必须 Write-Output（P-33）：Write-Host 走 information stream，重定向不捕获
 foreach ($backend in $Backends) {
     foreach ($solver in $Solvers) {
         foreach ($particleCount in $Particles) {
@@ -105,9 +110,9 @@ foreach ($backend in $Backends) {
                 "--output", $partFile
             )
 
-            Write-Host ("[benchmark] {0} {1} particles={2}" -f $backend, $solver, $particleCount)
+            Write-Output ("[benchmark] {0} {1} particles={2}" -f $backend, $solver, $particleCount)
             if ($DryRun) {
-                Write-Host ("  {0} {1}" -f $editorPath, ($benchmarkArgs -join " "))
+                Write-Output ("  {0} {1}" -f $editorPath, ($benchmarkArgs -join " "))
                 continue
             }
 
@@ -120,26 +125,55 @@ foreach ($backend in $Backends) {
                     -ExpectedWarmup $Warmup `
                     -ExpectedFrames $Frames `
                     -ExpectedRuns $Runs)) {
-                Write-Host "  complete result found; skipping"
+                Write-Output "  complete result found; skipping"
                 $partFiles.Add($partFile)
+                $done++
                 continue
             }
 
-            & $editorPath @benchmarkArgs
-            if ($LASTEXITCODE -ne 0) {
-                throw "Benchmark failed with exit code ${LASTEXITCODE}: $backend/$solver/$particleCount"
+            # P1：失败重试（共 3 次尝试），最终失败降级为记录并继续——
+            # 一组崩溃不再炸掉整条矩阵；完整列表在结尾打印并置退出码 2
+            $ok = $false
+            for ($attempt = 1; $attempt -le 3 -and -not $ok; $attempt++) {
+                if ($attempt -gt 1) {
+                    Write-Output "  retry $attempt after previous failure; cooling 10s"
+                    Start-Sleep -Seconds 10
+                }
+                & $editorPath @benchmarkArgs
+                $exitCode = $LASTEXITCODE
+                $lineCount = 0
+                if (Test-Path -LiteralPath $partFile -PathType Leaf) {
+                    $lineCount = (Get-Content -LiteralPath $partFile).Count
+                }
+                if ($exitCode -eq 0 -and $lineCount -eq ($Frames * $Runs + 1)) {
+                    $ok = $true
+                    $partFiles.Add($partFile)
+                }
+                else {
+                    Write-Output ("  FAILED exit={0} lines={1} (expected {2})" -f $exitCode, $lineCount, ($Frames * $Runs + 1))
+                    if (Test-Path -LiteralPath $partFile -PathType Leaf) {
+                        Remove-Item -LiteralPath $partFile -Force
+                    }
+                }
             }
-            if (-not (Test-Path -LiteralPath $partFile -PathType Leaf)) {
-                throw "Benchmark did not create its CSV output: $partFile"
+            if (-not $ok) {
+                $failed.Add("$backend/$solver/$particleCount")
             }
-            $partFiles.Add($partFile)
+            $done++
+            $etaMin = if ($done -gt 0) { $matrixSw.Elapsed.TotalMinutes / $done * ($total - $done) } else { 0 }
+            Write-Output ("[progress] {0}/{1} elapsed={2:F0}min eta={3:F0}min" -f $done, $total, $matrixSw.Elapsed.TotalMinutes, $etaMin)
         }
     }
 }
 
 if ($DryRun) {
-    Write-Host "[benchmark] Dry run complete; no process was started."
+    Write-Output "[benchmark] Dry run complete; no process was started."
     exit 0
+}
+
+if ($failed.Count -gt 0) {
+    Write-Output ("[benchmark] FAILED groups ({0}): {1}" -f $failed.Count, ($failed -join "; "))
+    exit 2
 }
 
 $firstFile = $true
@@ -154,5 +188,5 @@ foreach ($partFile in $partFiles) {
     }
 }
 
-Write-Host "[benchmark] Raw matrix complete: $rawResult"
+Write-Output "[benchmark] Raw matrix complete: $rawResult"
 Write-Host "[benchmark] Summarize with: python benchmark/summarize.py `"$rawResult`""
