@@ -272,17 +272,17 @@
 > **Why**：grass_billboard.glsl VULKAN 分支的 GrassVSUBO/GrassFSUBO 无 cpp 侧创建/上传代码（GL 用散装 uniform），descriptor 静默留空（P-19）；草 UBO 含 per-frame（Time/相机/灯光）与 per-entity（Transform/EntityID）两类数据，单份 UBO 跨帧复用存在"帧 N+1 CPU 写覆盖帧 N 未执行 draw 读取"的竞争，per-frame 双份借 BeginFrame fence 等待严格消除。
 > **How to apply**：新增场景 shader 自定义 set0 UBO 时按此模板——cpp 端 `UniformBuffer::Create(256 对齐, binding)`（GL 路径不 alloc）→ 每帧 `SetData` 打包 std140 → `Bind(binding)` 录槽 → dispatcher 自动消费；per-frame 变更数据用双份按帧索引。顺带注意：**TerrainPass 的 `UpdateTerrainMeshes` 是纯 CPU 侧**（高度图→TerrainMeshData），草地 placement 依赖它，地形绘制解禁前 Vulkan 分支必须保留数据更新（`55537a5`）；`u_GrassTexture` 的 sampler 名→槽映射为 unit 2（`4cf0853`）。
 
-### D-24：Vulkan SPH 每帧固定开销优化 — descriptor set 按帧槽缓存（方案已批准待实施）
+### D-24：Vulkan SPH 每帧固定开销优化 — descriptor set 按帧槽缓存（已实施 `950cd9c`）
 
-> **Decision**：FluidSystemGPU 的 Vulkan SPH 路径把每 dispatch 的 `descriptorPool->Allocate + 全量 Write + UpdateSet`（PCISPH 模式每帧 27 次 alloc + ~163 个 VkWriteDescriptorSet，`FluidSystemGPU.cpp:1428-1482/1546-1557`）改为**按 frame-in-flight 槽位（2）缓存的 persistent descriptor set**——所有被绑定的 VkBuffer 句柄初始化后恒定（particle/alive/PCISPH/grid/rigid/SDF 均一次性创建，UBO `SetData` 仅 memcpy 内容不改句柄 `VulkanBuffer.cpp:434-439`），set 只需在 buffer 创建/重建时写一次，每帧仅 vkCmdBindDescriptorSets。SPH 7 pipeline 各按 2 槽缓存，simulate 同理。
-> **Why**：子代理逐行审计（2026-08-31）量化：每帧固定开销 = 27×(alloc+update+2×bind+push) + 29×全局 barrier，全部消耗在 host 录制期与 GPU barrier 执行，与 CUDA 的"每 launch 零绑定成本"（`kernel<<<>>>` 传值参数）之间的差距正源于此——这是 Vulkan compute 与 CUDA 打平的主因之一。dynamic offset 方案被否：UBO 是专用小 buffer 句柄恒定，persistent binding 更简单且覆盖全部收益。
-> **How to apply**：pool 每帧 Reset（`FluidSystemGPU.cpp:1318`，P-15/P-9 惯例）需为缓存 set 改为不分槽 reset 或独立持久 pool；buffer 重建（resize/InitPCISPH 懒创建）时对应槽位缓存必须失效重写；Grid 的 SetExternalBuffers 切换外部 buffer 时同样失效。风险点：缓存 set 引用的 buffer 若被延迟销毁（D-18 deletion queue）需保证 set 不再被 in-flight cmd 引用。
+> **Decision**：FluidSystemGPU 的 Vulkan SPH 路径把每 dispatch 的 `descriptorPool->Allocate + 全量 Write + UpdateSet`（PCISPH 模式每帧 27 次 alloc + ~163 个 VkWriteDescriptorSet）改为**按 frame-in-flight 槽位（2）缓存的 persistent descriptor set**（`CachedSets[2][8]`，索引 density/WCSPH-force/pcisph5 级/simulate）——所有被绑定的 VkBuffer 句柄初始化后恒定（UBO `SetData` 仅 memcpy 内容不改句柄），set 首帧写一次后每帧仅 rebind。专用持久 `CachedPool` 不随帧 Reset；设备级 Shutdown 才销毁缓存。
+> **Why**：每帧固定开销 27×(alloc+update+2×bind+push) + 29×全局 barrier 全部消耗在 host 录制期与 GPU barrier 执行——这是 Vulkan compute 与 CUDA（每 launch 零绑定成本）打平的主因。dynamic offset 方案被否：UBO 是专用小 buffer 句柄恒定，persistent binding 更简单且覆盖全部收益。
+> **How to apply**：缓存 set 引用的 buffer 若重建（resize/InitPCISPH 懒创建/Grid SetExternalBuffers 切换）必须失效对应槽位（当前基准/流体路径这些句柄恒定故无失效逻辑；未来接入动态 buffer 时补）。正确性前提：帧 N+2 复用帧 N 的 set 前 BeginFrame 已等该槽 fence，且首写均发生在该 set 从未被 in-flight cmd 引用前——新增缓存 set 时必须保持这两条。实测（RTX 3050 Ti Laptop，PCISPH 50k，validation 0）：密度逐位一致，Compute_ms 80.3/74.4/85.0/85.3/85.7 vs 定稿轮 88.4ms，收益 3-11%（Run1 快 9%、均值 ~6%）。
 
-### D-25：帧内 compute→compute barrier 的 dstStage 收窄（方案已批准待实施）
+### D-25：帧内 compute→compute barrier 的 dstStage 收窄（已实施 `950cd9c`）
 
-> **Decision**：`VulkanBarrierUtil.cpp:27-34` 的 SSBO barrier 掩码从 `dstStage=COMPUTE|VERTEX|FRAGMENT`（全局 memory barrier）拆为两档：**帧内 dispatch 间 28 个 barrier 用 compute→compute**（SPH dispatchSPH 每个之后 + Grid 内部），仅 `FluidSystemGPU.cpp:1573` simulate 末 barrier 与 grid 之后供 render pass 消费 particle 的 `:1425` 保留 graphics dst。改一个掩码变体常量即可，29 个 barrier 全部受益。
-> **Why**：帧内 dispatch 间消费者只有 compute，携带 VERTEX|FRAGMENT dst 会迫使驱动为 graphics 阶段建立同步域（无效等待）。零风险收窄，与 D-24 叠加预期显著缩小与 CUDA 的固定开销差。
-> **How to apply**：新增 Vulkan compute 链时按"消费者阶段"选 barrier 变体；若后续 dispatch 结果直接进 render pass（如 counter 供 draw 读取），该 barrier 保留 graphics dst。配套零风险清理：`FluidSystemGPU.cpp:1425` 与 `SpatialHashGrid.cpp:448` 背靠背同语义 barrier，删前者；PushConstants 21 次 SPH dispatch 内容相同，可在段首 push 一次。
+> **Decision**：ShaderStorage barrier 掩码（原 `dstStage=COMPUTE|VERTEX|FRAGMENT`）拆两档：**帧内 dispatch 间 25 个（fluid 21 + grid 4）用 compute→compute**（`ssboComputeFn` / SpatialHashGrid BuildVulkan 收窄版 ssboMasks），仅 grid 之后（publish particle 给 render pass）与 simulate 末尾 2 个保留全 dst 掩码。改常量级改动，29 个 barrier 中 25 个受益。
+> **Why**：帧内 dispatch 间消费者只有 compute，携带 VERTEX|FRAGMENT dst 迫使驱动为 graphics 阶段建立同步域（无效等待）。
+> **How to apply**：新增 Vulkan compute 链按"消费者阶段"选 barrier 变体；dispatch 结果直接进 render pass 的 barrier 保留 graphics dst。配套清理（D-25 附带）：PushConstants 21 次 SPH dispatch 内容相同可段首一次（未做，收益极低）。
 
 ---
 
