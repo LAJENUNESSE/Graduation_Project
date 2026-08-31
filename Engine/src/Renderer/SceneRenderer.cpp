@@ -293,14 +293,6 @@ namespace Engine
         m_PassQueue.push_back(
             {"GeometryPass", [this](RenderContext& ctx)
              {
-                 // ---- 临时调试（验证后移除）----
-                 static bool s_dbgGeo = false;
-                 if (!s_dbgGeo)
-                 {
-                     s_dbgGeo = true;
-                     ENGINE_CORE_WARN("[DbgGeo] enter, registry={0}", static_cast<const void*>(ctx.Registry));
-                 }
-
                  PerformanceMonitor::Get().GetSceneRenderGPUTimer().Begin();
 
                  Renderer::BeginScene(ctx.Camera->GetViewProjection());
