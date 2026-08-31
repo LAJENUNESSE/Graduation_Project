@@ -441,7 +441,8 @@ namespace Engine
                                        m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(),
                                                               emitter.ParticleCount, emitter.ParticleRadius,
                                                               ctx.Camera->GetViewMatrix(), ctx.Camera->GetProjection(),
-                                                              ctx.SceneColorTexID, ctx.SceneDepthTexID, emitter);
+                                                              ctx.SceneColorTexID, ctx.SceneDepthTexID, emitter,
+                                                              m_HDRFramebuffer);
                                    }
                                }});
 
@@ -623,10 +624,6 @@ namespace Engine
         if (!RendererCapabilities::Get().SupportsComputeShaders)
             return;
 
-        // Phase 8.2：screen-space 流体的深度/厚度链路在 Vulkan path 未接通，跳过
-        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
-            return;
-
         for (auto& pass : m_PassQueue)
         {
             if (pass.Enabled && pass.Name == "FluidPass")
@@ -743,9 +740,8 @@ namespace Engine
         }
 
         // FluidPass: 在粒子绘制完成后、后处理之前执行。
-        // Vulkan path 的 RenderFluidPass 直接早退（深度/厚度链路未接通），
-        // 整块跳过，避免录一个只有 Begin/End 的空 render pass。
-        if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
+        // Vulkan 下 FluidRenderer::RenderVulkan 内部会先结束当前 HDR render pass
+        // （拷贝 sceneColor/sceneDepth），composite 前重新 Bind（loadOp=LOAD 保内容）。
         {
             m_HDRFramebuffer->Bind();
 
