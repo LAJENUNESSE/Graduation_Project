@@ -1,7 +1,13 @@
 import csv
+import sys
 from pathlib import Path
 
 root = Path(r"C:/Dev/Workspace/C++/Graduation_Project")
+
+# 用法: python compare_v2_v3.py [baseline_summary.csv] [target_summary.csv]
+# 默认: results_v2（8/22 论文口径基线） vs run_20260831_174549（空调房定稿轮）
+DEFAULT_BASELINE = "results_v2/summary.csv"
+DEFAULT_TARGET = "benchmark/results/run_20260831_174549/summary.csv"
 
 
 def load(path):
@@ -12,8 +18,8 @@ def load(path):
     return rows
 
 
-v2 = load(root / "benchmark/results/run_20260822_223630/summary.csv")
-v3 = load(root / "results_v3/run_20260831_110725/summary.csv")
+v2 = load(root / (sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASELINE))
+v3 = load(root / (sys.argv[2] if len(sys.argv) > 2 else DEFAULT_TARGET))
 
 print(f"{'Backend':8} {'Solver':7} {'Part':>6} | {'v2 ms':>10} {'v3 ms':>10} {'delta%':>8} | {'v2 speed':>8} {'v3 speed':>8}")
 print("-" * 78)
