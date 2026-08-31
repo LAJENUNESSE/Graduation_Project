@@ -109,30 +109,32 @@ namespace Engine
         };
         static_assert(sizeof(GrassVSUBOStd140) == 208, "GrassVSUBOStd140 必须与 grass_billboard.glsl std140 布局一致");
 
-        // std140：DirLight{vec3,vec3,float} 结构体步长 48B（vec3 各占 16B 槽）
+        // std140:DirLight{vec3,vec3,float} —— std140 规则下 float 紧贴前一 vec3 的槽尾
+        // (direction@0、color@16、intensity@28),struct 大小 32、数组步长 32。
+        // 此前误用 48B 步长(intensity@32),导致 GPU 按 32B 步长解释时尾部标量全部错位
+        // (NumDirLights@64/AmbientStrength@80 读到 0)——草地 FS 黑剪影根因(D-23)
         struct alignas(16) GrassFSDirLightStd140
         {
-            glm::vec3 Direction;
-            float     Pad0;
-            glm::vec3 Color;
-            float     Pad1;
-            float     Intensity;
-            float     Pad2[3];
+            glm::vec3 Direction; // @0  (12B)
+            float     Pad0;      // @12 (color 按 std140 对齐到 16B 槽)
+            glm::vec3 Color;     // @16 (12B)
+            float     Intensity; // @28 —— 与前一 vec3 共占一个 16B 槽
         };
-        static_assert(sizeof(GrassFSDirLightStd140) == 48, "GrassFSDirLightStd140 必须与 std140 DirLight 布局一致");
+        static_assert(sizeof(GrassFSDirLightStd140) == 32, "GrassFSDirLightStd140 必须与 std140 DirLight 布局一致");
 
-        // std140 UBO 镜像 — 与 GrassFSUBO 块逐字节对应：DirLight[2] + 3×int + 2×float，数据 128B
+        // std140 UBO 镜像 — 与 GrassFSUBO 块逐字节对应:DirLight[2](0..63) + 3×int + 2×float,
+        // 数据 84B,按块对齐 round 到 96B(buffer 按 P-18 round 256)
         struct GrassFSUBOStd140
         {
-            GrassFSDirLightStd140 DirLights[2];
-            int32_t               NumDirLights;
-            int32_t               ShadowEnabled;
-            int32_t               EntityID;
-            float                 ShadowBias;
-            float                 AmbientStrength;
-            float                 Pad[3];
+            GrassFSDirLightStd140 DirLights[2];    // 0..63
+            int32_t               NumDirLights;    // @64
+            int32_t               ShadowEnabled;   // @68
+            int32_t               EntityID;        // @72
+            float                 ShadowBias;      // @76
+            float                 AmbientStrength; // @80
+            float                 Pad[3];          // @84..95
         };
-        static_assert(sizeof(GrassFSUBOStd140) == 128, "GrassFSUBOStd140 必须与 grass_billboard.glsl std140 布局一致");
+        static_assert(sizeof(GrassFSUBOStd140) == 96, "GrassFSUBOStd140 必须与 grass_billboard.glsl std140 布局一致");
     } // namespace
 
     void GrassRenderSystem::Init()
@@ -594,16 +596,16 @@ namespace Engine
             fsUbo.ShadowBias      = shadowSettings.Bias;
             fsUbo.AmbientStrength = lights.AmbientStrength;
 
-            static bool s_LoggedUboPack = false;
-            if (!s_LoggedUboPack)
+            static int s_LoggedUboPack = 0;
+            if (s_LoggedUboPack < 5) // 前 5 帧都打:首帧灯光收集可能未就绪,需看后续帧
             {
-                s_LoggedUboPack = true;
-                const auto& d0  = lights.DirLights.empty() ? LightEnvironment::DirLight{} : lights.DirLights[0];
-                ENGINE_CORE_WARN("[Grass][Vulkan] UBO pack: numDir={0} amb={1:.3f} shadow={2} bias={3:.4f} "
-                                 "dir0=({4:.2f},{5:.2f},{6:.2f}) col0=({7:.2f},{8:.2f},{9:.2f}) int0={10:.2f}",
-                                 numDirLights, lights.AmbientStrength, shadowActive ? 1 : 0, shadowSettings.Bias,
-                                 d0.Direction.x, d0.Direction.y, d0.Direction.z, d0.Color.x, d0.Color.y, d0.Color.z,
-                                 d0.Intensity);
+                ++s_LoggedUboPack;
+                const auto& d0 = lights.DirLights.empty() ? LightEnvironment::DirLight{} : lights.DirLights[0];
+                ENGINE_CORE_WARN("[Grass][Vulkan] UBO pack f{0}: numDir={1} amb={2:.3f} shadow={3} bias={4:.4f} "
+                                 "dir0=({5:.2f},{6:.2f},{7:.2f}) col0=({8:.2f},{9:.2f},{10:.2f}) int0={11:.2f}",
+                                 s_LoggedUboPack - 1, numDirLights, lights.AmbientStrength, shadowActive ? 1 : 0,
+                                 shadowSettings.Bias, d0.Direction.x, d0.Direction.y, d0.Direction.z, d0.Color.x,
+                                 d0.Color.y, d0.Color.z, d0.Intensity);
             }
 
             frameIndex = VulkanContext::Get()->GetCurrentFrameIndex();
