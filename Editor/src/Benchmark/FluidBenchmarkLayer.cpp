@@ -14,6 +14,16 @@
 #include <sstream>
 #include <system_error>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
+
 namespace Engine
 {
 
@@ -88,10 +98,20 @@ namespace Engine
                          FluidBenchmarkConfig::BackendLabel(m_Config.Backend),
                          FluidBenchmarkConfig::SolverLabel(m_Config.Solver), m_Config.ParticleCount,
                          m_Config.Iterations, m_Config.WarmupFrames, m_Config.SampleFrames, m_Config.Runs);
+
+#ifdef _WIN32
+        // 离线基准无人输入，屏保/显示器关闭会让 NVIDIA 驱动直接终止持有 OpenGL
+        // 上下文的进程（实测表现为无 dump、无日志的 exit 1，分钟级随机死亡）。
+        // 整个基准期间保持系统与显示器 awake，OnDetach 恢复。
+        SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+#endif
     }
 
     void FluidBenchmarkLayer::OnDetach()
     {
+#ifdef _WIN32
+        SetThreadExecutionState(ES_CONTINUOUS);
+#endif
         if (m_Config.Backend == FluidBenchmarkBackend::OpenGL)
             PerformanceMonitor::Get().GetFluidComputeGPUTimer().SetBlockingReadback(false);
         if (m_Output.is_open())
