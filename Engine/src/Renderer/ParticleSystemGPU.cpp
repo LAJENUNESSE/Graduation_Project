@@ -715,14 +715,17 @@ namespace Engine
         }
 
 #ifdef ENGINE_ENABLE_CUDA
-        // ---- CUDA compute sidecar 初始化 ----
+        // ---- CUDA compute sidecar 初始化（仅 OpenGL 路径）----
+        // Vulkan 下 StorageBuffer 没有 GL id（GetRendererID()=0），注册必然失败并
+        // 触发中毒连环日志；CUDA 模拟分支本身只在 GL 路径可达，这里同步守卫。
         m_CudaImpl->RequestedInteropBackend = GetRequestedInteropBackend();
 
         if (!m_CudaImpl->InitAttempted)
         {
             m_CudaImpl->InitAttempted = true;
 
-            if (m_CudaImpl->RequestedInteropBackend == InteropBackend::CudaGL && !CudaInterop::IsCudaPoisoned())
+            if (m_CudaImpl->RequestedInteropBackend == InteropBackend::CudaGL &&
+                RendererAPI::GetAPI() == RendererAPI::API::OpenGL && !CudaInterop::IsCudaPoisoned())
             {
                 m_CudaImpl->GLInterop = CreateScope<CudaGLInteropContext>();
                 m_CudaImpl->SlotParticle =
