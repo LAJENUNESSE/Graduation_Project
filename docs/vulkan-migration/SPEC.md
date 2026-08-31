@@ -10,6 +10,7 @@
 ## 1. 当前位置
 
 - **基准数据战役结案（2026-08-31）**：热饱和轮 `results_v3/run_20260831_110725` 作废（P-32 背景：nvidia-smi 双墙实证，凉机复测坐实代码无辜）；**定稿轮 = `benchmark/results/run_20260831_174549`**（空调房 45 分钟 29/30 过门禁，GL/CUDA 回 v2 档、Vulkan PCISPH 中规模加速比 1.31/1.23 优于 v2；CUDA WCSPH 50k 被 L∞ 门禁统计误伤，用户拍板论文说明不改容差）。工具链沉淀：`benchmark/run_cooled.ps1`（温控分段 + 重试 + 进度）、`plot_results.py --allow-partial` + 0.2% 参考线修正（`e03391c`）、`compare_v2_v3.py` 参数化。**论文正文 = 根目录 AAA_建材批发.docx**（数据来源根目录 `results_v2\`，换定稿轮需同步表 6-2/6-3、§6.3.2 定性结论与图 6-1/6-2）。下一步：D-24/D-25 Vulkan 优化 → 优化后重采全量 → docx 换版。
+- **screen-space 流体链接通（2026-08-31，`a98fde1`/`8af2418`/`072d6a0`/`40ae294`）**：流体模拟（EmitVulkan + SPH + simulate）与渲染（depth/smooth/thickness/composite 四 pass）全部在 Vulkan path 可用，validation 0 报错、GL 回归无异常（见 D-26/P-34/P-35，backlog 8 结案）
 - **Phase 1 ~ 8.2 全部完成**：DrawIndexed 真实录制、PBR 几何 pass / 天空盒 / IBL 三 compute / 粒子与 SPH 与流体 compute 模拟 / ImGui 视口全部在 Vulkan path 可用；validation 层报错已从首轮 51 条归零。
 - **功能完善批次已全部落地（2026-08-30）**：
   - **IBL cube 化**（`5c476e4`）— Irradiance/Prefilter 输出改 6-layer cube-compatible + Prefilter 5 级 mip 链，PBR 环境光照恢复；顺带修复 skybox push constant 不含 u_ViewProjection 导致天空盒不可见（`a22e9dc`）
@@ -284,6 +285,12 @@
 > **Why**：帧内 dispatch 间消费者只有 compute，携带 VERTEX|FRAGMENT dst 迫使驱动为 graphics 阶段建立同步域（无效等待）。
 > **How to apply**：新增 Vulkan compute 链按"消费者阶段"选 barrier 变体；dispatch 结果直接进 render pass 的 barrier 保留 graphics dst。配套清理（D-25 附带）：PushConstants 21 次 SPH dispatch 内容相同可段首一次（未做，收益极低）。
 
+### D-26：screen-space 流体渲染链的 Vulkan 适配策略（已实施 `072d6a0`/`40ae294`）
+
+> **Decision**：fluid_depth/thickness/smooth/composite 四 shader 的 VULKAN 分支（半成品：FluidParticleVSUBO/sampler 声明早已就位）基础上接通 cpp 侧——大块参数走 std140 UBO（VS 144B / smooth 32B / composite 192B，镜像 struct 全 static_assert 自校验）；smooth 原 20B 小 push constant 超出 dispatcher 128B 通用 PC 打包（仅 ≥64B 触发）覆盖范围，shader 改 UBO 而非扩 PC 机制；sceneColor/sceneDepth 经 vkCmdCopyImage 拷独立 image（规避反馈环 + composite pass 内 depth attachment layout 冲突）；thickness 的 ONE/ONE 加色混合与 composite 的 attachment≥1 关写走 StateBits 新位（kBlendOneOne/kColorMask1Off）进 pipeline cache key，后者启用 independentBlend 特性；Vulkan 禁止嵌套 render pass——RenderVulkan 入口先结束 caller HDR pass，composite 前重新 Bind（loadOp=LOAD 保内容）。
+> **Why**：复用 dispatcher 现成三槽机制（UBO/SSBO/纹理 view）而非新建即席录制通道；writeMask 每附件差异是 GL SetDrawBuffer(0) 语义在 Vulkan 的等价物，必须 independentBlend（VUID-00605 要求 pAttachments 全字段一致）。
+> **How to apply**：新增"GL 风格即时多 pass 渲染"（后处理类）接 Vulkan 时按同套路：End 活跃 pass → 各自 FBO Bind/Unbind → 拷贝所需场景纹理（vkCmdCopyImage，注意 D32_SFLOAT 是 DEPTH-only aspect）→ 重新 Bind caller FBO → 最终 pass。坑见 P-34。
+
 ---
 
 ## 4. 已知陷阱（Pitfalls）
@@ -323,6 +330,8 @@
 | P-31 | cpp UBO 镜像结构体按"每成员补到 16B 边界"的 C++ 直觉写 → 与 GLSL std140 真实布局错位，尾部标量全读 0；validation 不报、static_assert 自证错误、内容回读"正确" | 镜像含 `struct{vec3,vec3,float}` 或其他"标量可塞进前一 vec3 槽尾"的组合（如 GrassFSUBO DirLight） | 按 std140 规则逐槽推导（D-23）：只有 vec3/vec4/mat/数组/结构体首址对齐 16B，**标量不对齐**；用 RenderDoc 反射 byteSize 交叉验证镜像尺寸 |
 | P-32 | L∞ 门禁对稳态波动做差 → 统计误伤：WCSPH 50k 三后端 MaxDensityError 同在 960±8，两个 ±4 内的量直接做差得 ±8，5.0 阈值随机拒合格组（2026-08-31 定稿轮 CUDA WCSPH 50k 差 5.85 被拒、v2 轮同组差 1.26 过——全过靠基线抽签运气） | 逐样本最大误差本身与 GPU 驻留状态/浮点归约顺序同量级（±0.8% of 960）时，"目标 − 基线"的绝对差阈值失效 | 均值偏差达标的组不轻判坏；处理顺序：先查均值与三后端 MaxErr 分布（都在同一带内=基线抽样噪声非退化），必要时重跑抽签或放宽容差并同步论文口径；本次定稿轮 29/30，用户拍板不改容差、论文说明（`plot_results.py --allow-partial` 跳过被拒组出图，`e03391c`） |
 | P-33 | PowerShell `Write-Host` 写 information stream（流 6），`powershell -File x.ps1 > log.txt` **不捕获** → 计划任务/重定向场景进度全黑 | 任何需要重定向落盘/被宿主读取的 PS 脚本 | 进度与结果输出一律 `Write-Output`（或 `[Console]::Out.WriteLine`）；`Write-Progress` 仅交互终端有意义，重定向时自动无害。注意 PS5.1 `Import-Csv` 默认 ANSI 读 CSV，中文内容需显式 `-Encoding UTF8` |
+| P-34 | 流体 4-pass 接通的连环 validation（146 条）：① 附件 usage 缺 TRANSFER_SRC/DST（oldLayout/newLayout-01212/013）；② D24S8 barrier/copy aspect 需 DEPTH\|STENCIL 但 D32_SFLOAT 只能 DEPTH（03320/09601）；③ vkCmdCopyImage 要求 src/dst **精确同格式**（01548）——Editor HDR 用 DEPTH_COMPONENT（D32_SFLOAT）而拷贝 FBO 误配 DEPTH24STENCIL8；④ sampler2D 采 depth 的 descriptor view 不得含 STENCIL aspect（01976）；⑤ 双附件 render pass 上 attachment 间 blend/writeMask 不同需 independentBlend（00605） | 新接"拷贝场景附件 + 采样 depth"类 pass | 拷贝 FBO 格式跟源格式走（DEPTH_COMPONENT 而非想当然的 D24S8）；depth aspect 按 image 实际格式定；depth 采样用独立 depth-only view（GetDepthAttachmentSampledView）；independentBlend 在 device 创建时启用 |
+| P-35 | `ParticleSystemGPU::Emit` 风格的"GL 分支写完 Vulkan no-op 挂着"静默失效难发现：DispatchCompute stub 只 WarnUnsupportedOnce，且 std::cout 类警告混在几百行日志里 | 新 GL 特性未同步 Vulkan 分支时 | 一次性发射类失效症状 = 粒子恒零初始化被 simulate 边界推到盒底（life=0、位置=盒底）；双后端同场景同 env 回读对照是最快定位手段（GL 正常 + Vulkan 零化即 GL-only 调用未接通） |
 
 ---
 
@@ -344,7 +353,7 @@
 
 **等价性遗留**
 1. ~~**粒子计数语义差异**~~ — **已解决**（`dc61fd8`/`c4c6065`/`9addf68`，2026-08-30）：根因是 counter host 立即写与 2 帧在飞 dispatch 无序（P-28），4 处变更 GPU 序化后对齐 GL（D-20）。修复前后实测（`ENGINE_PARTICLE_COUNTER_DEBUG=1`，粒子测试.scene，EmitRate=300）：修复前 Vulkan 回读 dead=20000/30000（probe=10000）、每帧 overflow 警告 + corrected=1；修复后 2610 帧 0 警告 0 corrected，probe==readback，dead+alive≈10146 与 GL 基线（9858/288，77fps）同特征同量级（Vulkan 74fps）。注：GL/Vulkan 的 alive 计数本身含 compact+simulate 同帧双计（≈2×真实存活，低于 max 不报错），两后端一致，属既存语义非缺陷。等价性验证设施说明：`ENGINE_PARTICLE_EQUIV_SMOKE` 为 GL↔CUDA 单进程对比，无法覆盖 Vulkan（单进程单 RHI，GL compute 封装在 Vulkan 上是 stub；且 counter 语义分歧不体现在粒子数据快照里）——Vulkan 侧以 counter 追踪 + 双后端实测协议替代（见 D-20/P-28），真跨 RHI 对比需离线进程编排，暂不做
-2. ~~**SPH/流体 compute 占位 buffer validation**~~ — **已解决**（`c4996bf`，2026-08-30）：sph_force.glsl 声明 binding 3/10/11，耦合关闭时从未写入触发 3 条 "never been updated"。粒子侧无条件懒创建占位（binding 3 复用 InitRigidBodyBuffer、10/11 新增 16B GPUOnly 占位，dispatchSPH 增加 bindMeshSDF 参数）；流体侧同款无条件 InitRigidBodyBuffer/InitMeshSDFBuffer 加固（流体 pass 当前 Vulkan 跳过不触发 validation，属提前加固，接通后需复验）。实测 `ENGINE_VULKAN_VALIDATION=1` 运行 0 报错
+2. ~~**SPH/流体 compute 占位 buffer validation**~~ — **已解决**（`c4996bf`，2026-08-30）：sph_force.glsl 声明 binding 3/10/11，耦合关闭时从未写入触发 3 条 "never been updated"。粒子侧无条件懒创建占位（binding 3 复用 InitRigidBodyBuffer、10/11 新增 16B GPUOnly 占位，dispatchSPH 增加 bindMeshSDF 参数）；流体侧同款无条件 InitRigidBodyBuffer/InitMeshSDFBuffer 加固。**复验完成**（2026-08-31 流体链接通后）：`ENGINE_VULKAN_VALIDATION=1` 流体测试.scene 运行 0 报错
 3. **阴影健壮性**：CSM 模式下主 shadow map FBO 从未执行 renderpass（`SceneRenderer.cpp:337-343` 注释），地形也不写入 shadow map——注：GPU 计时器（D-21）实测 ShadowPass GPU avg 0.000ms 即此空转的真实反映
 
 **功能 backlog（按价值排序）**
@@ -352,7 +361,7 @@
 5. **Bloom**（`SceneRenderer.cpp` 后处理段，依赖 GL ID 传递改 view 直通，参照 tone mapping 先例）
 6. **SSAO**（`VulkanTexture.cpp` RGB_Float 上传 + callerFBO 语义）
 7. ~~**VulkanGPUTimerQuery**~~ — **已完成**（`8a6283f`/`7ae1b8e`/`1e548fd`/`c4996bf`，2026-08-30）：GPUTimerQuery 抽象化 + 工厂分派 + VulkanGPUTimerQuery（VkQueryPool TIMESTAMP，D-21/P-29）；实测 --vulkan 性能面板 Scene GPU avg 0.047ms、Particle GPU avg 0.234ms、Shadow avg 0（shadow pass 空转的真实反映）、validation 0 报错；GL 复跑与基线一致零回归。局限：单 pair 且 Begin/End 嵌在 render pass 内的计时在 Play 模式（无拾取重录）退化，见 D-21
-8. **screen-space 流体链**（深度/厚度/composite，依赖 2 的 counter 对齐更好）
+8. ~~**screen-space 流体链**~~ — **已完成**（`8af2418`/`072d6a0`/`40ae294`，2026-08-31，见 D-26/P-34）：模拟侧 `FluidSystemGPU::EmitVulkan` 原生 dispatch（EmitPipeline 原已构建未使用；descriptor pool 每帧 Reset 改按 frame counter 去重防销毁在引用 set）+ `SceneRenderer::UpdateFluidSystems` 前移 render pass 外；渲染侧四 pass 全接通（validation 0，HDR 探针读出水色 0.13/0.23/0.89，GL 回归无错误）。已知边界：瀑布展示.scene 的 lifetimeMode（EmitRate>0 且 Lifetime>0）在 GL 下本就不发射（SceneRenderer 注释与代码不符，FluidSystemGPU 从不消费 EmitRate），Vulkan 与 GL 行为一致非回归
 9. **地形 pass**（Terrain UBO/descriptor 接入 dispatcher）
 10. **物理调试线框画进视口**（debug 兜底队列从 swapchain 重定向到场景 renderpass）
 11. **其余**：MSAA、VulkanSwapchain 从 VulkanContext 拆出（stub）、Blend/Scissor/ColorMask 状态消费、CUDA-Vulkan 互操作（`docs/cuda-reintroduction-report.md` 明确当前阶段不恢复）
