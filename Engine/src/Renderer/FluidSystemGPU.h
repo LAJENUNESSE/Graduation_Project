@@ -157,7 +157,7 @@ namespace Engine
         struct CudaImpl;
         Scope<CudaImpl> m_CudaImpl;
 
-        // ---- Vulkan 路径（emit + simulate；SPH 段 Commit C 接通）----
+        // ---- Vulkan 路径（emit + SPH + simulate 全流程）----
         // Vulkan 资源以 Pimpl 隐藏在 .cpp，避免 .h 引入 Vulkan 头依赖。
         struct VulkanResources;
         Scope<VulkanResources> m_VulkanResources;
@@ -171,7 +171,7 @@ namespace Engine
         // constant（u_AliveCount/u_DeltaTime/u_UsePredictedPos）
         Ref<UniformBuffer> m_SPHParamsUBO;
 
-        // MeshSDFMeta 异步回读（Commit D 预埋；当前 SPH 段在 Vulkan 跳过，跑不到）
+        // MeshSDFMeta 异步回读（SPH 段接通后自然生效）
         Ref<GPUAsyncReadback> m_SDFMetaReadback;
 
         // Vulkan 路径 Update 分派
@@ -179,6 +179,7 @@ namespace Engine
                           const glm::vec3&             emitterPos,
                           const FluidEmitterComponent& emitter,
                           entt::registry*              registry);
+        void EmitVulkan(const glm::vec3& emitterPos, const FluidEmitterComponent& emitter);
         bool InitVulkanComputeResources();
         bool InitSPHVulkanPipelines();
         void DestroyVulkanComputeResources();

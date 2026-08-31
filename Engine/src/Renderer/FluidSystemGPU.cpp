@@ -194,10 +194,13 @@ namespace Engine
         VulkanComputePipelineHandle    EmitPipeline{};
         VulkanComputePipelineHandle    SimulatePipeline{};
         Ref<VulkanDescriptorPool>      Pools[2];
-        VkQueryPool                    TimestampPool       = VK_NULL_HANDLE;
-        float                          TimestampPeriodNs   = 0.0f;
-        uint32_t                       TimestampValidBits  = 0;
-        bool                           TimestampWritten[2] = {false, false};
+        // 每 frame counter 只 Reset 一次的记号：emit 与 update 都可能成为本帧
+        // 首个分配者，若先分配后 Reset 会销毁录制中引用的 descriptor set
+        uint64_t    PoolResetFrame[2]   = {~0ull, ~0ull};
+        VkQueryPool TimestampPool       = VK_NULL_HANDLE;
+        float       TimestampPeriodNs   = 0.0f;
+        uint32_t    TimestampValidBits  = 0;
+        bool        TimestampWritten[2] = {false, false};
 
         // ---- SPH 7 pipeline ----
         bool                           SPHInitialized = false;
@@ -461,6 +464,14 @@ namespace Engine
     {
         if (!m_Initialized)
             return;
+
+#ifdef ENGINE_ENABLE_VULKAN
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            EmitVulkan(emitterPos, emitter);
+            return;
+        }
+#endif
 
         m_ParticleBuffer->Bind(0);
 
@@ -1252,6 +1263,71 @@ namespace Engine
         m_VulkanResources->Initialized = false;
     }
 
+    // 一次性发射（Vulkan 原生 dispatch）：fluid_emit.glsl = binding 0(粒子池 SSBO)
+    // + binding 5(EmitParams std140 UBO) + push constant(ParticleCount/Time)，local_size_x=64。
+    // 必须在 render pass 外录制（UpdateFluidSystems 的调用位置保证）。
+    void FluidSystemGPU::EmitVulkan(const glm::vec3& emitterPos, const FluidEmitterComponent& emitter)
+    {
+        auto* ctx = VulkanContext::Get();
+        if (!ctx)
+            return;
+        VkCommandBuffer cmd = ctx->GetCurrentFrameCommandBuffer();
+        if (cmd == VK_NULL_HANDLE)
+        {
+            // BeginFrame 未执行（swapchain recreate 或 SmokeLayer 直走 SwapBuffers），跳过录制
+            return;
+        }
+        if (!InitVulkanComputeResources())
+            return;
+
+        VkDevice            device = m_VulkanResources->Device;
+        VulkanCommandBuffer cmdBuf(cmd);
+
+        const uint32_t             frameIndex     = ctx->GetCurrentFrameIndex();
+        Ref<VulkanDescriptorPool>& descriptorPool = m_VulkanResources->Pools[frameIndex];
+        if (m_VulkanResources->PoolResetFrame[frameIndex] != ctx->GetFrameCounter())
+        {
+            descriptorPool->Reset();
+            m_VulkanResources->PoolResetFrame[frameIndex] = ctx->GetFrameCounter();
+        }
+
+        FluidEmitParamsUBO ubo{};
+        ubo.EmitterPosV      = glm::vec4(emitterPos, 0.0f);
+        ubo.EmitExtentsV     = glm::vec4(emitter.EmitExtents, 0.0f);
+        ubo.InitialVelocityV = glm::vec4(emitter.InitialVelocity, 0.0f);
+        m_EmitParamsUBO->SetData(&ubo, sizeof(ubo));
+
+        auto vkEmitUBO = std::dynamic_pointer_cast<VulkanUniformBuffer>(m_EmitParamsUBO);
+        ENGINE_CORE_RELEASE_ASSERT(vkEmitUBO, "[Fluid][Vulkan] emit UBO 转型失败");
+
+        auto vkParticle = std::dynamic_pointer_cast<VulkanStorageBuffer>(m_ParticleBuffer);
+        ENGINE_CORE_RELEASE_ASSERT(vkParticle, "[Fluid][Vulkan] particle 转型失败");
+
+        VkDescriptorSet set = descriptorPool->Allocate(m_VulkanResources->EmitLayout->GetHandle());
+        ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Fluid][Vulkan] emit DescriptorPool 分配失败");
+
+        VulkanDescriptorWriter w;
+        w.WriteBuffer(0, vkParticle->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        w.WriteBuffer(FLUID_EMIT_UBO_BINDING, vkEmitUBO->GetBuffer(), 0, sizeof(FluidEmitParamsUBO),
+                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        w.UpdateSet(device, set);
+
+        cmdBuf.BindComputePipeline(m_VulkanResources->EmitPipeline.Pipeline);
+        cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->EmitPipeline.Layout, 0, {set});
+
+        FluidEmitPC pc{};
+        pc.ParticleCount = m_ParticleCount;
+        pc.Time          = m_TotalTime;
+        cmdBuf.PushConstants(m_VulkanResources->EmitPipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+
+        const uint32_t groups = (m_ParticleCount + 63) / 64;
+        if (groups > 0)
+            cmdBuf.Dispatch(groups, 1, 1);
+
+        const VulkanBarrierMasks ssboBarrier = ResolveBarrierBits(BarrierBit::ShaderStorage);
+        cmdBuf.MemoryBarrier(ssboBarrier.SrcStage, ssboBarrier.DstStage, ssboBarrier.SrcAccess, ssboBarrier.DstAccess);
+    }
+
     void FluidSystemGPU::UpdateVulkan(float                        dt,
                                       const glm::vec3&             emitterPos,
                                       const FluidEmitterComponent& emitter,
@@ -1314,8 +1390,13 @@ namespace Engine
 
         // 每个 in-flight frame 独占一个 descriptor pool；BeginFrame 已等待该 frame slot 的 fence，
         // 因此此处 Reset 不会使另一帧仍在使用的 descriptor set 失效。
+        // 按 frame counter 去重：同帧 EmitVulkan 可能已先分配（emit 的 set 仍被录制引用）。
         Ref<VulkanDescriptorPool>& descriptorPool = m_VulkanResources->Pools[frameIndex];
-        descriptorPool->Reset();
+        if (m_VulkanResources->PoolResetFrame[frameIndex] != ctx->GetFrameCounter())
+        {
+            descriptorPool->Reset();
+            m_VulkanResources->PoolResetFrame[frameIndex] = ctx->GetFrameCounter();
+        }
 
         // 取四元组 ShaderStorage barrier（每 dispatch 后插一次）
         const VulkanBarrierMasks ssboBarrier   = ResolveBarrierBits(BarrierBit::ShaderStorage);

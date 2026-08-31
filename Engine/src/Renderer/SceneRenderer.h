@@ -130,6 +130,7 @@ namespace Engine
 
     private:
         void UpdateParticleSystems();
+        void UpdateFluidSystems();
 
         std::vector<RenderPassConfig> m_PassQueue;
 

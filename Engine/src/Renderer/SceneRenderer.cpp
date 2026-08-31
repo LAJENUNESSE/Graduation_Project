@@ -427,63 +427,15 @@ namespace Engine
                                    if (!ctx.Registry)
                                        return;
 
+                                   // 模拟（emit + update）已前移至 UpdateFluidSystems（render pass 外，
+                                   // Vulkan compute dispatch 约束）；本 pass 只负责 screen-space 渲染。
                                    auto fluidView = ctx.Registry->view<TransformComponent, FluidEmitterComponent>();
-                                   m_MeshSDFFrameStats = {};
-
                                    for (auto entity : fluidView)
                                    {
                                        auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
-
-                                       // 计算世界坐标（子实体的 Translation 是局部坐标，需变换到世界空间）
-                                       glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
-                                           *ctx.Registry, entity, *ctx.EntityIndex, ctx.TransformCache);
-                                       glm::vec3 worldPos = glm::vec3(worldMat[3]);
-
-                                       uint32_t eid    = static_cast<uint32_t>(entity);
-                                       auto&    system = m_FluidSystems[eid];
-
-                                       if (!system || system->GetParticleCount() != emitter.ParticleCount)
-                                       {
-                                           system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
-                                           system->Init();
-                                           m_FluidEmitted.erase(eid); // 重建后需要重新发射
-                                       }
-
-                                       // 发射策略：lifetime 模式由 Update 内部处理连续发射，
-                                       // 否则保持原有一次性/持续发射逻辑
-                                       const bool lifetimeMode =
-                                           (emitter.EmitRate > 0.0f && emitter.ParticleLifetime > 0.0f);
-                                       if (!lifetimeMode)
-                                       {
-                                           const bool continuousEmit =
-                                               (emitter.CurrentPreset == FluidEmitterComponent::Preset::FaucetWater);
-                                           if (continuousEmit)
-                                           {
-                                               system->Emit(worldPos, emitter);
-                                           }
-                                           else if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
-                                           {
-                                               system->Emit(worldPos, emitter);
-                                               m_FluidEmitted.insert(eid);
-                                           }
-                                       }
-
-                                       // 每帧模拟 (lifetime 模式下 emit 在 Update 内部执行)
-                                       system->Update(ctx.DeltaTime, worldPos, emitter, ctx.Registry);
-
-                                       const auto& meshStats = system->GetMeshSDFDebugStats();
-                                       if (meshStats.Enabled)
-                                       {
-                                           ++m_MeshSDFFrameStats.ActiveEmitters;
-                                           m_MeshSDFFrameStats.BodyCount += meshStats.BodyCount;
-                                           m_MeshSDFFrameStats.VoxelCount += meshStats.VoxelCount;
-                                           m_MeshSDFFrameStats.EstimatedSamples += meshStats.EstimatedSamples;
-                                           m_MeshSDFFrameStats.Resolution =
-                                               std::max(m_MeshSDFFrameStats.Resolution, meshStats.Resolution);
-                                           m_MeshSDFFrameStats.Band =
-                                               std::max(m_MeshSDFFrameStats.Band, meshStats.Band);
-                                           m_MeshSDFFrameStats.BuildCpuMs += meshStats.LastBuildCpuMs;
-                                       }
+                                       auto& system  = m_FluidSystems[static_cast<uint32_t>(entity)];
+                                       if (!system)
+                                           continue;
 
                                        // Screen-Space Fluid 渲染
                                        m_FluidRenderer.Render(system->GetParticleBuffer(), system->GetEmptyVAO(),
@@ -603,6 +555,69 @@ namespace Engine
         }
     }
 
+    // 流体模拟步进（emit + update），在 RenderPipeline 中任何 graphics render pass 之前
+    // 调用——Vulkan 的 compute dispatch 必须录在 render pass 外（与 UpdateParticleSystems 同约束）。
+    void SceneRenderer::UpdateFluidSystems()
+    {
+        if (!m_Context.Registry)
+            return;
+
+        auto fluidView      = m_Context.Registry->view<TransformComponent, FluidEmitterComponent>();
+        m_MeshSDFFrameStats = {};
+
+        for (auto entity : fluidView)
+        {
+            auto& emitter = fluidView.get<FluidEmitterComponent>(entity);
+
+            // 计算世界坐标（子实体的 Translation 是局部坐标，需变换到世界空间）
+            glm::mat4 worldMat = WorldTransformService::ComputeWorldTransform(
+                *m_Context.Registry, entity, *m_Context.EntityIndex, m_Context.TransformCache);
+            glm::vec3 worldPos = glm::vec3(worldMat[3]);
+
+            uint32_t eid    = static_cast<uint32_t>(entity);
+            auto&    system = m_FluidSystems[eid];
+
+            if (!system || system->GetParticleCount() != emitter.ParticleCount)
+            {
+                system = CreateRef<FluidSystemGPU>(emitter.ParticleCount);
+                system->Init();
+                m_FluidEmitted.erase(eid); // 重建后需要重新发射
+            }
+
+            // 发射策略：lifetime 模式下 EmitRate/ParticleLifetime 仅在 Update 内部消费；
+            // 否则保持一次性/FaucetWater 持续发射逻辑
+            const bool lifetimeMode = (emitter.EmitRate > 0.0f && emitter.ParticleLifetime > 0.0f);
+            if (!lifetimeMode)
+            {
+                const bool continuousEmit = (emitter.CurrentPreset == FluidEmitterComponent::Preset::FaucetWater);
+                if (continuousEmit)
+                {
+                    system->Emit(worldPos, emitter);
+                }
+                else if (m_FluidEmitted.find(eid) == m_FluidEmitted.end())
+                {
+                    system->Emit(worldPos, emitter);
+                    m_FluidEmitted.insert(eid);
+                }
+            }
+
+            // 每帧模拟
+            system->Update(m_Context.DeltaTime, worldPos, emitter, m_Context.Registry);
+
+            const auto& meshStats = system->GetMeshSDFDebugStats();
+            if (meshStats.Enabled)
+            {
+                ++m_MeshSDFFrameStats.ActiveEmitters;
+                m_MeshSDFFrameStats.BodyCount += meshStats.BodyCount;
+                m_MeshSDFFrameStats.VoxelCount += meshStats.VoxelCount;
+                m_MeshSDFFrameStats.EstimatedSamples += meshStats.EstimatedSamples;
+                m_MeshSDFFrameStats.Resolution = std::max(m_MeshSDFFrameStats.Resolution, meshStats.Resolution);
+                m_MeshSDFFrameStats.Band       = std::max(m_MeshSDFFrameStats.Band, meshStats.Band);
+                m_MeshSDFFrameStats.BuildCpuMs += meshStats.LastBuildCpuMs;
+            }
+        }
+    }
+
     void SceneRenderer::RenderFluidPass()
     {
         if (!RendererCapabilities::Get().SupportsComputeShaders)
@@ -664,6 +679,7 @@ namespace Engine
 
         // compute dispatch、barrier 与异步回读 copy 必须在任何 graphics render pass 之外录制。
         UpdateParticleSystems();
+        UpdateFluidSystems();
 
         // 主场景渲染到 HDR FBO
         m_HDRFramebuffer->Bind();
