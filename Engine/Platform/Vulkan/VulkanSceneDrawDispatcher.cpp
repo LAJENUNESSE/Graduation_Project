@@ -800,15 +800,26 @@ namespace Engine
                 {
                     // 通用 UBO 槽：UniformBuffer::Bind(binding) 写入（草地 GrassVSUBO/GrassFSUBO
                     // 等非 Global/Lights/Material 命名的 set0 UBO）
-                    const auto& slot = scene.GetUniformSlot(b.Binding);
+                    const auto&                slot = scene.GetUniformSlot(b.Binding);
+                    static std::array<bool, 8> s_LoggedGenericUboMiss{};
                     if (!slot.Valid)
-                        continue; // 未绑定且 shader 实际消费时由 validation 层报告
-                    static bool s_LoggedGenericUbo = false;
-                    if (!s_LoggedGenericUbo)
                     {
-                        s_LoggedGenericUbo = true;
-                        ENGINE_CORE_WARN("[DbgGenericUBO] write: base={0} set={1} binding={2} range={3} buf={4}",
-                                         baseName, b.Set, b.Binding, (uint64_t)slot.Range, (void*)slot.Buffer);
+                        if (b.Binding < s_LoggedGenericUboMiss.size() && !s_LoggedGenericUboMiss[b.Binding])
+                        {
+                            s_LoggedGenericUboMiss[b.Binding] = true;
+                            ENGINE_CORE_WARN("[DbgGenericUBO] MISS: base={0} set={1} binding={2} (slot invalid)",
+                                             baseName, b.Set, b.Binding);
+                        }
+                        continue; // 未绑定且 shader 实际消费时由 validation 层报告
+                    }
+                    static std::array<bool, 8> s_LoggedGenericUboHit{};
+                    if (b.Binding < s_LoggedGenericUboHit.size() && !s_LoggedGenericUboHit[b.Binding])
+                    {
+                        s_LoggedGenericUboHit[b.Binding] = true;
+                        ENGINE_CORE_WARN("[DbgGenericUBO] write: base={0} set={1} binding={2} offset={3} range={4} "
+                                         "buf={5}",
+                                         baseName, b.Set, b.Binding, (uint64_t)slot.Offset, (uint64_t)slot.Range,
+                                         (void*)slot.Buffer);
                     }
                     w0.WriteBuffer(b.Binding, slot.Buffer, slot.Offset, slot.Range, b.Type);
                 }
