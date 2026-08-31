@@ -145,6 +145,7 @@ installer/redist/*.exe
 
 # Benchmark 结果矩阵（原始数据不入库，惯例同 benchmark/results/）
 results_v2/
+results_v3/
 results_ablation_cub/
 results_ablation_blelloch/
 results_*_run.log
