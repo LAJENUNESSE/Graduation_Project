@@ -533,8 +533,7 @@ namespace Engine
             return;
 
 #ifdef ENGINE_ENABLE_VULKAN
-        // Vulkan 路径分派 — emit + simulate 已迁，SPH 段（含 PCISPH 8 迭代）暂跳过，
-        // 由 Commit C 接通。
+        // Vulkan 路径分派 — emit + SPH（density → PCISPH 迭代/WCSPH force）+ simulate 全流程
         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
         {
             UpdateVulkan(dt, emitterPos, emitter, registry);
@@ -1140,8 +1139,9 @@ namespace Engine
         m_VulkanResources->TimestampValidBits = queueFamilies[graphicsQueueFamily].timestampValidBits;
 
         m_VulkanResources->Initialized = true;
-        ENGINE_CORE_INFO("[Fluid][Vulkan] 流体 compute pipeline 初始化完成 (emit + simulate, timestampPeriod={}ns)",
-                         m_VulkanResources->TimestampPeriodNs);
+        ENGINE_CORE_INFO(
+            "[Fluid][Vulkan] 流体 compute pipeline 初始化完成 (emit + SPH + simulate, timestampPeriod={}ns)",
+            m_VulkanResources->TimestampPeriodNs);
         return true;
     }
 
