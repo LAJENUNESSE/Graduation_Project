@@ -181,6 +181,8 @@ namespace Engine
             params.DepthWrite           = m_DepthMaskEnabled;
             params.DepthLEqual          = (m_DepthFunc == DepthFunc::LEqual);
             params.CullBack             = m_CullFaceEnabled && m_CullFaceMode == CullFaceMode::Back;
+            params.BlendOneOne   = m_BlendEnabled && m_BlendSrc == BlendFactor::One && m_BlendDst == BlendFactor::One;
+            params.ColorMask1Off = m_SingleAttachmentWrite;
 
             auto* shader = dynamic_cast<VulkanShader*>(vkContext->GetSceneState().GetCurrentShader());
             if (shader && vkContext->GetSceneDrawDispatcher().DispatchDraw(vertexArray.get(), shader, params,
@@ -229,7 +231,9 @@ namespace Engine
             params.DepthWrite           = m_DepthMaskEnabled;
             params.DepthLEqual          = (m_DepthFunc == DepthFunc::LEqual);
             // 天空盒画在深度 ≤ 上（xyww trick），关闭背面剔除由 SkyboxSystem 的 cull 状态决定
-            params.CullBack = m_CullFaceEnabled && m_CullFaceMode == CullFaceMode::Back;
+            params.CullBack      = m_CullFaceEnabled && m_CullFaceMode == CullFaceMode::Back;
+            params.BlendOneOne   = m_BlendEnabled && m_BlendSrc == BlendFactor::One && m_BlendDst == BlendFactor::One;
+            params.ColorMask1Off = m_SingleAttachmentWrite;
 
             auto* shader = dynamic_cast<VulkanShader*>(vkContext->GetSceneState().GetCurrentShader());
             if (shader && vkContext->GetSceneDrawDispatcher().DispatchDraw(boundVAO, shader, params,
@@ -272,6 +276,8 @@ namespace Engine
             params.DepthWrite           = m_DepthMaskEnabled;
             params.DepthLEqual          = (m_DepthFunc == DepthFunc::LEqual);
             params.CullBack             = m_CullFaceEnabled && m_CullFaceMode == CullFaceMode::Back;
+            params.BlendOneOne   = m_BlendEnabled && m_BlendSrc == BlendFactor::One && m_BlendDst == BlendFactor::One;
+            params.ColorMask1Off = m_SingleAttachmentWrite;
 
             auto* shader = dynamic_cast<VulkanShader*>(vkContext->GetSceneState().GetCurrentShader());
             if (shader && vkContext->GetSceneDrawDispatcher().DispatchDraw(boundVAO, shader, params,
@@ -461,11 +467,15 @@ namespace Engine
 
     void VulkanRendererAPI::SetDrawBuffer(uint32_t attachment)
     {
-        (void)attachment;
+        // 流体 composite 的 GL 语义：只写 attachment 0（保护 HDR FBO 的 entityID 附件）。
+        // 换算成 pipeline 的 attachment ≥1 colorWriteMask=0（DrawParams.ColorMask1Off），
+        // SetDrawBuffers 恢复全写。渲染通道仍保持两附件（renderpass 兼容性不变）。
+        m_SingleAttachmentWrite = (attachment == 0);
     }
 
     void VulkanRendererAPI::SetDrawBuffers(uint32_t count, const uint32_t* attachments)
     {
+        m_SingleAttachmentWrite = false; // 恢复调用者的多附件写状态
         (void)count;
         (void)attachments;
     }

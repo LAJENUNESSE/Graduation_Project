@@ -121,13 +121,32 @@ namespace Engine
                 depthStencil.depthCompareOp    = desc.DepthLEqual ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS;
                 depthStencil.stencilTestEnable = VK_FALSE;
 
-                // ---- blend：每个 color attachment 独立状态（不透明路径禁用混合）----
+                // ---- blend：每个 color attachment 独立状态（默认不透明禁用混合）----
+                // BlendOneOne：attachment 0 加色混合 ONE/ONE（流体厚度 pass 的 GL
+                // SetBlendFunc(One, One) 语义，alpha 同步加色）
                 std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.ColorAttachmentCount);
-                for (auto& blend : blendAttachments)
+                for (size_t i = 0; i < blendAttachments.size(); ++i)
                 {
-                    blend.blendEnable    = VK_FALSE;
-                    blend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+                    auto&                       blend     = blendAttachments[i];
+                    const VkColorComponentFlags writeMask = (desc.ColorMask1Off && i >= 1)
+                                                                ? 0
+                                                                : (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                                                   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
+                    blend.colorWriteMask                  = writeMask;
+                    if (desc.BlendOneOne && i == 0)
+                    {
+                        blend.blendEnable         = VK_TRUE;
+                        blend.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                        blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                        blend.colorBlendOp        = VK_BLEND_OP_ADD;
+                        blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                        blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                        blend.alphaBlendOp        = VK_BLEND_OP_ADD;
+                    }
+                    else
+                    {
+                        blend.blendEnable = VK_FALSE;
+                    }
                 }
                 VkPipelineColorBlendStateCreateInfo colorBlend{
                     VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
@@ -237,6 +256,10 @@ namespace Engine
             bits |= PipelineStateBits::kCullFront;
         if (desc.DepthLEqual)
             bits |= PipelineStateBits::kDepthLEqual;
+        if (desc.BlendOneOne)
+            bits |= PipelineStateBits::kBlendOneOne;
+        if (desc.ColorMask1Off)
+            bits |= PipelineStateBits::kColorMask1Off;
         return bits;
     }
 

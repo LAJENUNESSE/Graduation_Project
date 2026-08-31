@@ -68,7 +68,10 @@ namespace Engine
         CullFaceMode m_CullFaceMode       = CullFaceMode::Back;
         BlendFactor  m_BlendSrc           = BlendFactor::SrcAlpha;
         BlendFactor  m_BlendDst           = BlendFactor::OneMinusSrcAlpha;
-        float        m_LineWidth          = 1.0f;
+        // GL SetDrawBuffer(0) 单附件写状态：pipeline 对 attachment ≥1 关写
+        // （流体 composite 保护 HDR FBO 的 entityID 附件），SetDrawBuffers 恢复全写
+        bool  m_SingleAttachmentWrite = false;
+        float m_LineWidth             = 1.0f;
     };
 
 } // namespace Engine

@@ -692,17 +692,21 @@ namespace Engine
         // 注意：SDK 1.4 头的 sType 拼写为 ...VULKAN_1_2_FEATURES（1_2 而非 12）
         VkPhysicalDeviceVulkan12Features vulkan12Features{};
         vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        VkPhysicalDeviceFeatures2 features2{};
+        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
         {
             VkPhysicalDeviceVulkan12Features supported{};
             supported.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-            VkPhysicalDeviceFeatures2 features2{};
-            features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
             features2.pNext = &supported;
             vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
             vulkan12Features.hostQueryReset = supported.hostQueryReset;
         }
 
+        // independentBlend：流体 composite 在 HDR 双附件 render pass 上只写
+        // attachment 0（保护 entityID），attachment 1 的 blend/colorWriteMask
+        // 与 attachment 0 不同，需要 per-attachment blend 支持
         VkPhysicalDeviceFeatures deviceFeatures{};
+        deviceFeatures.independentBlend = features2.features.independentBlend;
 
         VkDeviceCreateInfo createInfo{};
         createInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

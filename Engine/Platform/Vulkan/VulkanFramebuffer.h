@@ -43,6 +43,18 @@ namespace Engine
         void* GetColorAttachmentViewHandle(uint32_t index = 0) const override;
         void* GetDepthAttachmentViewHandle() const override;
 
+        // screen-space 流体链（vkCmdCopyImage sceneColor 拷贝 + composite 采样 sceneDepth）：
+        // 拷贝源与采样源需要 VkImage 句柄做 layout 转换；view 供 descriptor 绑定
+        VkImage     GetColorAttachmentImage(uint32_t index = 0) const;
+        VkFormat    GetColorAttachmentFormat(uint32_t index = 0) const;
+        VkImageView GetDepthAttachmentImageView() const { return m_DepthAttachment.ImageView; }
+        VkImage     GetDepthAttachmentImage() const { return m_DepthAttachment.Image; }
+        VkFormat    GetDepthAttachmentFormat() const { return m_DepthAttachment.Format; }
+        // depth-only aspect 采样 view：sampler2D 采样 D24S8 时 descriptor view 不得含
+        // STENCIL aspect（VUID-VkDescriptorImageInfo-imageView-01976）。懒创建，析构销毁
+        VkImageView GetDepthAttachmentSampledView();
+        void*       GetDepthAttachmentSampledViewHandle();
+
     private:
         void Invalidate();
         void Destroy();
@@ -58,8 +70,11 @@ namespace Engine
             VkFormat      Format     = VK_FORMAT_UNDEFINED;
         };
 
-        std::vector<AttachmentResource>              m_ColorAttachments;
-        AttachmentResource                           m_DepthAttachment{};
+        std::vector<AttachmentResource> m_ColorAttachments;
+        AttachmentResource              m_DepthAttachment{};
+        // depth-only 采样 view（懒创建）
+        VkImageView m_DepthSampledView = VK_NULL_HANDLE;
+
         std::vector<FramebufferTextureSpecification> m_ColorAttachmentSpecs;
         FramebufferTextureSpecification              m_DepthAttachmentSpec = FramebufferTextureFormat::None;
 

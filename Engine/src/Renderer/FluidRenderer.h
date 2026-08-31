@@ -9,6 +9,10 @@
 
 #include <glm/glm.hpp>
 
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Renderer/UniformBuffer.h"
+#endif
+
 namespace Engine
 {
 
@@ -30,9 +34,11 @@ namespace Engine
         // particleCount: number of alive particles
         // particleRadius: radius for sphere impostors
         // view, projection: camera matrices
-        // sceneColorTexID: scene HDR color texture (read-only copy will be made)
-        // sceneDepthTexID: scene depth texture
+        // sceneColorTexID/sceneDepthTexID: scene color/depth (GL texture id；Vulkan 下忽略，
+        //   由 hdrTarget 的 attachment 取 image/view)
         // emitter: rendering parameters (FluidColor, Fresnel, etc.)
+        // hdrTarget: 调用者的 HDR FBO。GL 下 composite 直接写当前绑定；Vulkan 下用于
+        //   sceneColor/sceneDepth 拷贝源与 composite 前重新 Bind（render pass 不能嵌套）
         void Render(const Ref<ShaderStorageBuffer>& particleBuffer,
                     const Ref<VertexArray>&         emptyVAO,
                     uint32_t                        particleCount,
@@ -41,11 +47,23 @@ namespace Engine
                     const glm::mat4&                projection,
                     uint32_t                        sceneColorTexID,
                     uint32_t                        sceneDepthTexID,
-                    const FluidEmitterComponent&    emitter);
+                    const FluidEmitterComponent&    emitter,
+                    const Ref<Framebuffer>&         hdrTarget = nullptr);
 
     private:
         void CreateFullscreenQuad();
         void RenderFullscreenQuad();
+#ifdef ENGINE_ENABLE_VULKAN
+        void RenderVulkan(const Ref<ShaderStorageBuffer>& particleBuffer,
+                          const Ref<VertexArray>&         emptyVAO,
+                          uint32_t                        particleCount,
+                          float                           particleRadius,
+                          const glm::mat4&                view,
+                          const glm::mat4&                projection,
+                          const FluidEmitterComponent&    emitter,
+                          const Ref<Framebuffer>&         hdrTarget);
+        void CopySceneAttachmentsVulkan(const Ref<Framebuffer>& hdrTarget);
+#endif
 
         uint32_t m_Width       = 0;
         uint32_t m_Height      = 0;
@@ -67,6 +85,18 @@ namespace Engine
         Ref<Shader> m_SmoothShader;
         Ref<Shader> m_ThicknessShader;
         Ref<Shader> m_CompositeShader;
+
+#ifdef ENGINE_ENABLE_VULKAN
+        // Vulkan 路径：shader 大块参数走 std140 UBO（与 GLSL Vulkan 分支的 uniform
+        // 块逐字节对应；dispatcher 通用 UBO 槽在 draw 录制时写 descriptor）。
+        // binding 与 shader 声明一致：VS 1 / smooth 1 / composite 4。
+        Ref<UniformBuffer> m_FluidVSUBO;      // 144B depth/thickness 顶点参数
+        Ref<UniformBuffer> m_SmoothParamsUBO; // 32B  smooth 每迭代参数
+        Ref<UniformBuffer> m_CompositeUBO;    // 192B composite 参数
+        // u_SceneDepth 拷贝容器（depth-only FBO；HDR depth 在 composite 的
+        // render pass 内是 attachment layout，直接采样会 layout 冲突）
+        Ref<Framebuffer> m_SceneDepthCopyFBO;
+#endif
     };
 
 } // namespace Engine

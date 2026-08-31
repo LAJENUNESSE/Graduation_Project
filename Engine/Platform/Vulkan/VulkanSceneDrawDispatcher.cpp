@@ -174,6 +174,14 @@ namespace Engine
                 {"u_Splatmap", 6},
                 // CSM 数组基址：SceneRenderer 把级联深度 view 绑在 slots 10~13
                 {"u_CascadeShadowMaps", 10},
+                // screen-space 流体链（FluidRenderer BindTextureView 绑槽；pass 内独占，
+                // 与 PBR 的 0~15 复用无冲突）。u_SceneDepth 在 10~13 段以获得
+                // DEPTH_STENCIL_READ_ONLY_OPTIMAL layout（BindTextureView 按 slot 硬编码）
+                {"u_DepthTexture", 0},
+                {"u_FluidDepth", 0},
+                {"u_FluidThickness", 2},
+                {"u_SceneColor", 3},
+                {"u_SceneDepth", 10},
             };
             auto it = table.find(name);
             return it != table.end() ? it->second : UINT32_MAX;
@@ -731,6 +739,8 @@ namespace Engine
         desc.DepthWrite           = params.DepthWrite;
         desc.DepthLEqual          = params.DepthLEqual;
         desc.CullBack             = params.CullBack;
+        desc.BlendOneOne          = params.BlendOneOne;
+        desc.ColorMask1Off        = params.ColorMask1Off;
 
         VulkanPipelineCache::PipelineHandle handle = context->GetPipelineBuilder().GetOrCreate(m_Device, desc);
         if (handle.Pipeline == VK_NULL_HANDLE)

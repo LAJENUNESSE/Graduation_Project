@@ -31,6 +31,9 @@ namespace Engine
 
         VkImageView GetImageView() const { return m_ImageView; }
         VkSampler   GetSampler() const { return m_Sampler; }
+        // sceneColor 拷贝目标（vkCmdCopyImage 需要目标 VkImage 做布局转换）
+        VkImage  GetImage() const { return m_Image; }
+        VkFormat GetFormat() const { return m_Format; }
 
     private:
         void CreateImage(uint32_t width, uint32_t height, VkFormat format);

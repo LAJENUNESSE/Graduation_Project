@@ -3,10 +3,53 @@
 #include "Core/Log.h"
 #include "Renderer/Buffer.h"
 #include "Renderer/RenderCommand.h"
+#include "Renderer/RendererAPI.h"
 #include "Scene/Components.h"
+
+#ifdef ENGINE_ENABLE_VULKAN
+#include "Platform/Vulkan/VulkanCommandBuffer.h"
+#include "Platform/Vulkan/VulkanContext.h"
+#include "Platform/Vulkan/VulkanFramebuffer.h"
+#include "Platform/Vulkan/VulkanTexture.h"
+#endif
 
 namespace Engine
 {
+
+#ifdef ENGINE_ENABLE_VULKAN
+    namespace
+    {
+        // std140 镜像 — 与 fluid_depth/thickness.glsl 的 FluidParticleVSUBO 块对应（144B）
+        struct alignas(16) FluidVSParamsUBO
+        {
+            glm::mat4 View;                 // 0
+            glm::mat4 Projection;           // 64
+            glm::vec4 ParticleRadiusAndPad; // 128: x=ParticleRadius
+        };
+        static_assert(sizeof(FluidVSParamsUBO) == 144, "FluidVSParamsUBO must be std140 144 bytes");
+
+        // std140 镜像 — 与 fluid_smooth.glsl 的 FluidSmoothParams 块对应（32B）
+        struct alignas(16) FluidSmoothUBO
+        {
+            glm::vec4 ScreenSizeAndParams; // 0: xy=ScreenSize, z=FilterRadius, w=DepthFalloff
+            glm::vec4 HorizontalAndPad;    // 16: x=Horizontal
+        };
+        static_assert(sizeof(FluidSmoothUBO) == 32, "FluidSmoothUBO must be std140 32 bytes");
+
+        // std140 镜像 — 与 fluid_composite.glsl 的 FluidCompositeUBO 块对应（192B）
+        struct alignas(16) FluidCompositeParamsUBO
+        {
+            glm::mat4 InvProjection;    // 0
+            glm::mat4 InvView;          // 64
+            glm::vec4 FluidColor;       // 128: xyz
+            glm::vec4 AbsorptionColor;  // 144: xyz
+            glm::vec4 ScreenSizeAndAbs; // 160: xy=ScreenSize, z=AbsorptionScale
+            glm::vec4 SurfaceParams;    // 176: x=FresnelPower, y=RefractionStrength,
+                                        //      z=Reflectivity, w=RefractiveIndex
+        };
+        static_assert(sizeof(FluidCompositeParamsUBO) == 192, "FluidCompositeParamsUBO must be std140 192 bytes");
+    } // namespace
+#endif
 
     void FluidRenderer::CreateFullscreenQuad()
     {
@@ -96,6 +139,24 @@ namespace Engine
             m_SceneColorCopyTex = Texture2D::Create(width, height, spec);
         }
 
+#ifdef ENGINE_ENABLE_VULKAN
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            // shader 大块参数走 std140 UBO（binding 与 GLSL Vulkan 分支声明一致）
+            m_FluidVSUBO      = UniformBuffer::Create(sizeof(FluidVSParamsUBO), 1);
+            m_SmoothParamsUBO = UniformBuffer::Create(sizeof(FluidSmoothUBO), 1);
+            m_CompositeUBO    = UniformBuffer::Create(sizeof(FluidCompositeParamsUBO), 4);
+
+            // u_SceneDepth 拷贝容器（depth-only FBO；HDR depth 在 composite 的 render
+            // pass 内是 attachment layout，直接采样 descriptor layout 会冲突）
+            FramebufferSpecification depthCopySpec;
+            depthCopySpec.Attachments = {FramebufferTextureFormat::DEPTH_COMPONENT};
+            depthCopySpec.Width       = width;
+            depthCopySpec.Height      = height;
+            m_SceneDepthCopyFBO       = Framebuffer::Create(depthCopySpec);
+        }
+#endif
+
         m_Initialized = true;
     }
 
@@ -128,6 +189,12 @@ namespace Engine
     void FluidRenderer::Shutdown()
     {
         m_SceneColorCopyTex.reset();
+#ifdef ENGINE_ENABLE_VULKAN
+        m_FluidVSUBO.reset();
+        m_SmoothParamsUBO.reset();
+        m_CompositeUBO.reset();
+        m_SceneDepthCopyFBO.reset();
+#endif
         m_Initialized = false;
     }
 
@@ -139,10 +206,19 @@ namespace Engine
                                const glm::mat4&                projection,
                                uint32_t                        sceneColorTexID,
                                uint32_t                        sceneDepthTexID,
-                               const FluidEmitterComponent&    emitter)
+                               const FluidEmitterComponent&    emitter,
+                               const Ref<Framebuffer>&         hdrTarget)
     {
         if (!m_Initialized || particleCount == 0)
             return;
+
+#ifdef ENGINE_ENABLE_VULKAN
+        if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
+        {
+            RenderVulkan(particleBuffer, emptyVAO, particleCount, particleRadius, view, projection, emitter, hdrTarget);
+            return;
+        }
+#endif
 
         // Save caller's FBO and GL state
         int       callerFBO       = RenderCommand::GetBoundFramebufferID();
@@ -340,5 +416,292 @@ namespace Engine
         RenderCommand::SetDepthTest(true);
         RenderCommand::SetClearColor(savedClearColor);
     }
+
+#ifdef ENGINE_ENABLE_VULKAN
+
+    // 拷贝调用者 HDR FBO 的 color0/depth 到独立 image（sceneColor 反馈环规避 + sceneDepth
+    // layout 冲突规避）。必须在无活跃 render pass 时调用。
+    void FluidRenderer::CopySceneAttachmentsVulkan(const Ref<Framebuffer>& hdrTarget)
+    {
+        auto*           ctx         = VulkanContext::Get();
+        VkCommandBuffer cmd         = ctx ? ctx->GetCurrentFrameCommandBuffer() : VK_NULL_HANDLE;
+        auto*           hdrFB       = static_cast<VulkanFramebuffer*>(hdrTarget.get());
+        auto*           copyTex     = static_cast<VulkanTexture2D*>(m_SceneColorCopyTex.get());
+        auto*           depthCopyFB = static_cast<VulkanFramebuffer*>(m_SceneDepthCopyFBO.get());
+        if (cmd == VK_NULL_HANDLE || !hdrFB || !copyTex || !depthCopyFB)
+            return;
+
+        VulkanCommandBuffer cmdBuf(cmd);
+
+        // ---- color0: SHADER_READ_ONLY -> TRANSFER_SRC -> copy -> SHADER_READ_ONLY ----
+        const VkImage    srcColor = hdrFB->GetColorAttachmentImage(0);
+        const VkImage    dstColor = copyTex->GetImage();
+        const VkExtent3D extent{m_Width, m_Height, 1};
+        if (srcColor != VK_NULL_HANDLE && dstColor != VK_NULL_HANDLE)
+        {
+            cmdBuf.ImageBarrier(srcColor, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                VK_IMAGE_ASPECT_COLOR_BIT);
+            cmdBuf.ImageBarrier(dstColor, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                                VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+
+            VkImageCopy region{};
+            region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.extent         = extent;
+            vkCmdCopyImage(cmd, srcColor, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstColor,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+            cmdBuf.ImageBarrier(srcColor, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+            cmdBuf.ImageBarrier(dstColor, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        }
+
+        // ---- depth: DEPTH_STENCIL_READ_ONLY -> TRANSFER_SRC -> copy -> DEPTH_STENCIL_READ_ONLY ----
+        const VkImage srcDepth            = hdrFB->GetDepthAttachmentImage();
+        const VkImage dstDepth            = depthCopyFB->GetDepthAttachmentImage();
+        static bool   s_WarnedDepthFormat = false;
+        if (hdrFB->GetDepthAttachmentFormat() != depthCopyFB->GetDepthAttachmentFormat())
+        {
+            if (!s_WarnedDepthFormat)
+            {
+                s_WarnedDepthFormat = true;
+                ENGINE_CORE_WARN("[Fluid][Vulkan] depth copy FBO format mismatch, skip sceneDepth copy");
+            }
+        }
+        else if (srcDepth != VK_NULL_HANDLE && dstDepth != VK_NULL_HANDLE)
+        {
+            // D24S8 未启用 separateDepthStencilLayouts 时 barrier/copy 必须带双 aspect
+            constexpr VkImageAspectFlags kDepthAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+            cmdBuf.ImageBarrier(srcDepth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                kDepthAspect);
+            cmdBuf.ImageBarrier(dstDepth, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                                VK_ACCESS_TRANSFER_WRITE_BIT, kDepthAspect);
+
+            VkImageCopy region{};
+            region.srcSubresource = {kDepthAspect, 0, 0, 1};
+            region.dstSubresource = {kDepthAspect, 0, 0, 1};
+            region.extent         = extent;
+            vkCmdCopyImage(cmd, srcDepth, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstDepth,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+            cmdBuf.ImageBarrier(srcDepth, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                VK_ACCESS_SHADER_READ_BIT, kDepthAspect);
+            cmdBuf.ImageBarrier(dstDepth, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                VK_ACCESS_SHADER_READ_BIT, kDepthAspect);
+        }
+    }
+
+    void FluidRenderer::RenderVulkan(const Ref<ShaderStorageBuffer>& particleBuffer,
+                                     const Ref<VertexArray>&         emptyVAO,
+                                     uint32_t                        particleCount,
+                                     float                           particleRadius,
+                                     const glm::mat4&                view,
+                                     const glm::mat4&                projection,
+                                     const FluidEmitterComponent&    emitter,
+                                     const Ref<Framebuffer>&         hdrTarget)
+    {
+        auto*                 ctx = VulkanContext::Get();
+        const VkCommandBuffer cmd = ctx ? ctx->GetCurrentFrameCommandBuffer() : VK_NULL_HANDLE;
+        if (!ctx || cmd == VK_NULL_HANDLE || !hdrTarget)
+            return;
+
+        // caller（SceneRenderer::RenderPipeline）的 HDR render pass 活跃中——Vulkan
+        // 禁止嵌套 BeginRenderPass，先结束，composite 前重新 Bind（loadOp=LOAD 保内容）
+        if (ctx->GetActiveSceneRenderPass() != VK_NULL_HANDLE)
+        {
+            VulkanCommandBuffer(cmd).EndRenderPass();
+            ctx->SetActiveSceneRenderPass(VK_NULL_HANDLE, 0, false, 0, 0);
+        }
+
+        glm::vec4 savedClearColor = RenderCommand::GetClearColor();
+        particleBuffer->Bind(0); // SSBO 槽 0（dispatcher 录制 depth/thickness draw 时消费）
+
+        // ---- std140 UBO 打包（depth/thickness VS 共用）----
+        FluidVSParamsUBO vsUbo{};
+        vsUbo.View                 = view;
+        vsUbo.Projection           = projection;
+        vsUbo.ParticleRadiusAndPad = glm::vec4(particleRadius, 0.0f, 0.0f, 0.0f);
+        m_FluidVSUBO->SetData(&vsUbo, sizeof(vsUbo));
+        m_FluidVSUBO->Bind(1);
+
+        // 可配置分辨率：Depth/Smooth/Thickness 在缩放分辨率下执行
+        float    renderScale = std::clamp(emitter.RenderScale, 0.25f, 1.0f);
+        uint32_t fluidW      = std::max(1u, static_cast<uint32_t>(m_Width * renderScale));
+        uint32_t fluidH      = std::max(1u, static_cast<uint32_t>(m_Height * renderScale));
+
+        m_DepthFBO->Resize(fluidW, fluidH);
+        m_SmoothFBO[0]->Resize(fluidW, fluidH);
+        m_SmoothFBO[1]->Resize(fluidW, fluidH);
+        m_ThicknessFBO->Resize(fluidW, fluidH);
+        if (m_SceneDepthCopyFBO)
+            m_SceneDepthCopyFBO->Resize(m_Width, m_Height);
+
+        // ================================================================
+        // Pass 1: Depth — sphere impostor rendering to R32F
+        // ================================================================
+        m_DepthFBO->Bind();
+        RenderCommand::SetViewport(0, 0, fluidW, fluidH);
+
+        RenderCommand::SetClearColor({1e10f, 0.0f, 0.0f, 0.0f});
+        RenderCommand::Clear();
+
+        RenderCommand::SetDepthTest(true);
+        RenderCommand::SetDepthFunc(DepthFunc::Less);
+        RenderCommand::SetDepthMask(true);
+
+        // 与 GL 同因：防上游 SRC_ALPHA blend 把 R32F 输出乘 0（Vulkan pipeline 默认
+        // blend 关闭，但保持状态一致以便跨后端行为对齐）
+        bool prevBlend = RenderCommand::GetBlendEnabled();
+        if (prevBlend)
+            RenderCommand::SetBlend(false);
+
+        m_DepthShader->Bind(); // u_View/u_Projection/u_ParticleRadius 经 FluidVSParamsUBO(binding 1)
+        emptyVAO->Bind();
+        RenderCommand::DrawArraysInstanced(6, particleCount);
+
+        if (prevBlend)
+            RenderCommand::SetBlend(true);
+
+        m_DepthFBO->Unbind();
+
+        // ================================================================
+        // Pass 2: Bilateral smooth — ping-pong blur
+        // ================================================================
+        const Ref<Framebuffer> smoothInputFB    = m_DepthFBO;
+        const int              smoothIterations = std::max(emitter.SmoothIterations, 1);
+
+        RenderCommand::SetBlend(false);
+        RenderCommand::SetScissorTest(false);
+        RenderCommand::SetColorMask(true, true, true, true);
+
+        auto* srcFB = static_cast<VulkanFramebuffer*>(smoothInputFB.get());
+        for (int i = 0; i < smoothIterations; i++)
+        {
+            // Horizontal
+            m_SmoothFBO[0]->Bind();
+            RenderCommand::SetViewport(0, 0, fluidW, fluidH);
+            RenderCommand::SetDepthTest(false);
+
+            m_SmoothShader->Bind();
+            RenderCommand::BindTextureView(0, srcFB->GetColorAttachmentViewHandle(0), nullptr);
+            {
+                FluidSmoothUBO sm{};
+                sm.ScreenSizeAndParams = glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH),
+                                                   emitter.SmoothFilterRadius, emitter.SmoothDepthFalloff);
+                sm.HorizontalAndPad    = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+                m_SmoothParamsUBO->SetData(&sm, sizeof(sm));
+                m_SmoothParamsUBO->Bind(1);
+            }
+            RenderFullscreenQuad();
+            m_SmoothFBO[0]->Unbind();
+
+            // Vertical
+            m_SmoothFBO[1]->Bind();
+            RenderCommand::SetViewport(0, 0, fluidW, fluidH);
+
+            m_SmoothShader->Bind();
+            RenderCommand::BindTextureView(0, m_SmoothFBO[0]->GetColorAttachmentViewHandle(0), nullptr);
+            {
+                FluidSmoothUBO sm{};
+                sm.ScreenSizeAndParams = glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH),
+                                                   emitter.SmoothFilterRadius, emitter.SmoothDepthFalloff);
+                sm.HorizontalAndPad    = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+                m_SmoothParamsUBO->SetData(&sm, sizeof(sm));
+                m_SmoothParamsUBO->Bind(1);
+            }
+            RenderFullscreenQuad();
+            m_SmoothFBO[1]->Unbind();
+
+            srcFB = static_cast<VulkanFramebuffer*>(m_SmoothFBO[1].get());
+        }
+
+        // ================================================================
+        // Pass 3: Thickness — additive blending
+        // ================================================================
+        m_ThicknessFBO->Bind();
+        RenderCommand::SetViewport(0, 0, fluidW, fluidH);
+
+        RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 0.0f});
+        RenderCommand::ClearColorOnly();
+
+        RenderCommand::SetDepthTest(false);
+        RenderCommand::SetDepthMask(false);
+        RenderCommand::SetBlendFunc(BlendFactor::One, BlendFactor::One); // → pipeline additive blend
+
+        particleBuffer->Bind(0);
+
+        m_ThicknessShader->Bind(); // u_View/u_Projection/u_ParticleRadius 经 FluidVSParamsUBO(binding 1)
+        emptyVAO->Bind();
+        RenderCommand::DrawArraysInstanced(6, particleCount);
+
+        RenderCommand::SetBlendFunc(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+        RenderCommand::SetDepthMask(true);
+
+        m_ThicknessFBO->Unbind();
+
+        // ================================================================
+        // sceneColor / sceneDepth 拷贝（无活跃 render pass 时执行）
+        // ================================================================
+        CopySceneAttachmentsVulkan(hdrTarget);
+
+        // ================================================================
+        // Pass 4: Composite — 重新 Bind HDR（新 render pass，loadOp=LOAD）后合成
+        // ================================================================
+        hdrTarget->Bind();
+
+        RenderCommand::SetDrawBuffer(0); // 只写 attachment 0（pipeline 对 attachment 1 关写）
+        RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+        RenderCommand::SetDepthTest(false);
+
+        m_CompositeShader->Bind();
+
+        auto* depthCopyFB = static_cast<VulkanFramebuffer*>(m_SceneDepthCopyFBO.get());
+        auto* copyTex     = static_cast<VulkanTexture2D*>(m_SceneColorCopyTex.get());
+        RenderCommand::BindTextureView(0, srcFB->GetColorAttachmentViewHandle(0), nullptr);          // u_FluidDepth
+        RenderCommand::BindTextureView(2, m_ThicknessFBO->GetColorAttachmentViewHandle(0), nullptr); // u_FluidThickness
+        RenderCommand::BindTextureView(3, copyTex->GetImageView(), nullptr);                         // u_SceneColor
+        RenderCommand::BindTextureView(10, depthCopyFB->GetDepthAttachmentSampledViewHandle(),
+                                       nullptr); // u_SceneDepth（depth-only aspect 采样 view）
+
+        {
+            FluidCompositeParamsUBO comp{};
+            comp.InvProjection   = glm::inverse(projection);
+            comp.InvView         = glm::inverse(view);
+            comp.FluidColor      = glm::vec4(emitter.FluidColor, 1.0f);
+            comp.AbsorptionColor = glm::vec4(emitter.AbsorptionColor, 1.0f);
+            comp.ScreenSizeAndAbs =
+                glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH), emitter.AbsorptionScale, 0.0f);
+            comp.SurfaceParams =
+                glm::vec4(emitter.FresnelPower, emitter.RefractionStrength, emitter.Reflectivity, 1.333f);
+            m_CompositeUBO->SetData(&comp, sizeof(comp));
+            m_CompositeUBO->Bind(4);
+        }
+
+        RenderFullscreenQuad();
+
+        // 恢复状态（HDR FBO 留给 caller Unbind）
+        {
+            static const uint32_t drawBuffers[2] = {0, 1};
+            RenderCommand::SetDrawBuffers(2, drawBuffers);
+        }
+        RenderCommand::SetDepthTest(true);
+        RenderCommand::SetClearColor(savedClearColor);
+    }
+#endif // ENGINE_ENABLE_VULKAN
 
 } // namespace Engine

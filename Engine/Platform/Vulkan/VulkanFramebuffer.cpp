@@ -58,7 +58,10 @@ namespace Engine
 
         static VkImageUsageFlags DepthUsageFlags()
         {
-            return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            // TRANSFER_SRC：流体 composite 的 sceneDepth 拷贝源（HDR depth）
+            // TRANSFER_DST：depth-only 拷贝 FBO 的拷贝目标
+            return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         }
 
         static VkImageAspectFlags AspectForFormat(VkFormat format)
@@ -356,10 +359,11 @@ namespace Engine
         const bool                            allocatorReady   = VulkanAllocator::IsInitialized();
         const VkBuffer                        readbackBuffer   = m_ReadbackBuffer;
         const VmaAllocation                   readbackAlloc    = m_ReadbackAllocation;
+        const VkImageView                     depthSampledView = m_DepthSampledView;
 
         VulkanContext::DeferDestroy(
-            [framebuffer, renderPass, colorAttachments, depthAttachment, allocatorReady, readbackBuffer,
-             readbackAlloc](VkDevice device)
+            [framebuffer, renderPass, colorAttachments, depthAttachment, allocatorReady, readbackBuffer, readbackAlloc,
+             depthSampledView](VkDevice device)
             {
                 if (framebuffer != VK_NULL_HANDLE)
                     vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -381,14 +385,17 @@ namespace Engine
 
                 if (readbackBuffer != VK_NULL_HANDLE && allocatorReady)
                     vmaDestroyBuffer(VulkanAllocator::GetAllocator(), readbackBuffer, readbackAlloc);
+                if (depthSampledView != VK_NULL_HANDLE)
+                    vkDestroyImageView(device, depthSampledView, nullptr);
             });
 
         m_Framebuffer = VK_NULL_HANDLE;
         m_RenderPass  = VK_NULL_HANDLE;
         m_ColorAttachments.clear();
-        m_DepthAttachment = {};
-        m_ReadbackBuffer  = VK_NULL_HANDLE;
-        m_ReadbackMapped  = nullptr;
+        m_DepthAttachment  = {};
+        m_ReadbackBuffer   = VK_NULL_HANDLE;
+        m_ReadbackMapped   = nullptr;
+        m_DepthSampledView = VK_NULL_HANDLE;
     }
 
     // Phase 8.2：录制场景 render pass 进主帧 cmd。上层 SceneRenderer::RenderPipeline
@@ -492,11 +499,13 @@ namespace Engine
             y >= static_cast<int>(m_Spec.Height))
             return -1;
 
-        // 4B staging 懒创建（persistently mapped，本 FBO 生命周期内复用）
+        // staging 按附件块大小分配（RGBA16F 8B/像素，RGBA8/R32I 4B），
+        // persistently mapped，本 FBO 生命周期内复用；回读值仍取低 4B
         if (m_ReadbackBuffer == VK_NULL_HANDLE)
         {
+            const uint32_t     blockBytes = (att.Format == VK_FORMAT_R16G16B16A16_SFLOAT) ? 8 : 4;
             VkBufferCreateInfo bufInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-            bufInfo.size  = sizeof(int32_t);
+            bufInfo.size  = blockBytes;
             bufInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
             VmaAllocationCreateInfo allocInfo{};
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
@@ -605,6 +614,52 @@ namespace Engine
             return VK_NULL_HANDLE;
         }
         return m_ColorAttachments[index].ImageView;
+    }
+
+    VkImage VulkanFramebuffer::GetColorAttachmentImage(uint32_t index) const
+    {
+        if (index >= m_ColorAttachments.size())
+        {
+            ENGINE_CORE_WARN("[Vulkan] Color attachment image index {0} out of range ({1})", index,
+                             m_ColorAttachments.size());
+            return VK_NULL_HANDLE;
+        }
+        return m_ColorAttachments[index].Image;
+    }
+
+    VkFormat VulkanFramebuffer::GetColorAttachmentFormat(uint32_t index) const
+    {
+        if (index >= m_ColorAttachments.size())
+            return VK_FORMAT_UNDEFINED;
+        return m_ColorAttachments[index].Format;
+    }
+
+    VkImageView VulkanFramebuffer::GetDepthAttachmentSampledView()
+    {
+        auto* context = VulkanContext::Get();
+        if (!context || m_DepthAttachment.Image == VK_NULL_HANDLE)
+            return VK_NULL_HANDLE;
+
+        if (m_DepthSampledView != VK_NULL_HANDLE)
+            return m_DepthSampledView;
+
+        // sampler2D 采样 depth 附件：view aspect 必须只含 DEPTH
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image                       = m_DepthAttachment.Image;
+        viewInfo.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format                      = m_DepthAttachment.Format;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.layerCount = 1;
+        const VkResult result = vkCreateImageView(context->GetDevice(), &viewInfo, nullptr, &m_DepthSampledView);
+        ENGINE_CORE_RELEASE_ASSERT(result == VK_SUCCESS, "Failed to create depth sampled view");
+        return m_DepthSampledView;
+    }
+
+    void* VulkanFramebuffer::GetDepthAttachmentSampledViewHandle()
+    {
+        return reinterpret_cast<void*>(GetDepthAttachmentSampledView());
     }
 
 } // namespace Engine

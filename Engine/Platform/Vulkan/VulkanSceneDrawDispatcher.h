@@ -70,6 +70,12 @@ namespace Engine
             bool DepthWrite  = true;
             bool DepthLEqual = false;
             bool CullBack    = true;
+
+            // attachment 0 加色混合 ONE/ONE（流体厚度 pass）
+            bool BlendOneOne = false;
+            // attachment ≥1 关写（流体 composite pass 保护 entityID 附件；
+            // 由 SetDrawBuffer(0) 单附件状态驱动）
+            bool ColorMask1Off = false;
         };
 
         // 返回 false 表示资源未就绪（无 shader / 无 renderpass / descriptor 分配失败），

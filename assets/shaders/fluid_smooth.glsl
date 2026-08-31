@@ -22,7 +22,9 @@ layout(location = 0) in vec2 v_TexCoord;
 
 #ifdef VULKAN
 layout(set = 0, binding = 0) uniform sampler2D u_DepthTexture;
-layout(push_constant) uniform FluidSmoothPC
+// dispatcher 的通用 PC 打包只覆盖 ≥64B 的 mat4 级布局（128B 通用块），
+// 小参数块走 std140 UBO（FluidRenderer 每次绘制打包上传，binding 1）
+layout(std140, set = 0, binding = 1) uniform FluidSmoothParams
 {
     vec2  u_ScreenSize;
     float u_FilterRadius;
