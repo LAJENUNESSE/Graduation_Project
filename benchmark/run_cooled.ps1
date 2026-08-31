@@ -20,6 +20,7 @@ param(
     [double]$SegBudgetMin = 6.0,
     [int]$CoolTimeoutMin = 25,
     [switch]$SkipBuild,
+    [switch]$SkipCooling,
     [switch]$DryRun
 )
 
@@ -74,6 +75,11 @@ function Get-GpuState
 function Wait-GpuCool
 {
     param([string]$Reason)
+    if ($SkipCooling)
+    {
+        Write-Output "[cool] skipped (-SkipCooling) before $Reason"
+        return $true
+    }
     $state = Get-GpuState
     if ($null -eq $state.TempC)
     {
