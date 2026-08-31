@@ -218,6 +218,15 @@ namespace Engine
         VulkanComputePipelineHandle    PCISPHDensityPipeline{};
         VulkanComputePipelineHandle    PCISPHForcePipeline{};
         VulkanComputePipelineHandle    PCISPHApplyPipeline{};
+
+        // ---- D-24: 缓存 descriptor set（消每帧 alloc+write）----
+        // SPH/simulate 绑定的所有 VkBuffer 句柄初始化后恒定（UBO SetData 只改内容），
+        // set 按帧槽各写一次后只 rebind。索引：0=density 1=WCSPH force 2=pcisphInit
+        // 3=pcisphPredict 4=pcisphDensity 5=pcisphForce 6=pcisphApply 7=simulate。
+        // CachedPool 持久不 Reset——帧 N+2 复用帧 N 的 set 前，BeginFrame 已等该槽 fence。
+        Ref<VulkanDescriptorPool> CachedPool;
+        VkDescriptorSet           CachedSets[2][8]    = {};
+        bool                      CachedWritten[2][8] = {};
     };
 #else
     struct FluidSystemGPU::VulkanResources
@@ -1113,6 +1122,9 @@ namespace Engine
         for (auto& pool : m_VulkanResources->Pools)
             pool = VulkanDescriptorPool::CreateDefaultComputePool(m_VulkanResources->Device, 256);
 
+        // D-24：SPH/simulate 缓存 set 专用持久 pool——不随帧 Reset（只需 2 槽 × 8 set）
+        m_VulkanResources->CachedPool = VulkanDescriptorPool::CreateDefaultComputePool(m_VulkanResources->Device, 64);
+
         auto failTimestampSetup = [&](const std::string& reason)
         {
             m_BackendFailureReason         = reason;
@@ -1255,6 +1267,16 @@ namespace Engine
             m_VulkanResources->SPHInitialized = false;
         }
 
+        // D-24：缓存 set 与 CachedPool 一并销毁——设备级 Shutdown 才走这里，
+        // 重初始化时缓存自然重建
+        m_VulkanResources->CachedPool.reset();
+        for (auto& row : m_VulkanResources->CachedSets)
+            for (auto& set : row)
+                set = VK_NULL_HANDLE;
+        for (auto& row : m_VulkanResources->CachedWritten)
+            for (auto& flag : row)
+                flag = false;
+
         for (auto& pool : m_VulkanResources->Pools)
             pool.reset();
         m_VulkanResources->EmitLayout.reset();
@@ -1388,9 +1410,9 @@ namespace Engine
         vkCmdResetQueryPool(cmd, m_VulkanResources->TimestampPool, queryBase, 2);
         vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_VulkanResources->TimestampPool, queryBase);
 
-        // 每个 in-flight frame 独占一个 descriptor pool；BeginFrame 已等待该 frame slot 的 fence，
-        // 因此此处 Reset 不会使另一帧仍在使用的 descriptor set 失效。
-        // 按 frame counter 去重：同帧 EmitVulkan 可能已先分配（emit 的 set 仍被录制引用）。
+        // per-frame pool 保留给 emit（D-24 后 SPH/simulate 用独立持久 CachedPool）。
+        // 按 frame counter 去重：同帧 EmitVulkan 可能已先分配（emit 的 set 仍被录制引用），
+        // 先分配后 Reset 会销毁录制中引用的 descriptor set。
         Ref<VulkanDescriptorPool>& descriptorPool = m_VulkanResources->Pools[frameIndex];
         if (m_VulkanResources->PoolResetFrame[frameIndex] != ctx->GetFrameCounter())
         {
@@ -1398,12 +1420,21 @@ namespace Engine
             m_VulkanResources->PoolResetFrame[frameIndex] = ctx->GetFrameCounter();
         }
 
-        // 取四元组 ShaderStorage barrier（每 dispatch 后插一次）
-        const VulkanBarrierMasks ssboBarrier   = ResolveBarrierBits(BarrierBit::ShaderStorage);
-        auto                     ssboBarrierFn = [&]()
+        // ShaderStorage barrier 两档（D-25）：dispatchSPH 间消费者只有 compute，dstStage
+        // 收窄避免驱动为 graphics 建同步域；grid 之后与 simulate 末尾要供 render pass 读
+        // particle，保留全 dst 掩码
+        const VulkanBarrierMasks ssboBarrier        = ResolveBarrierBits(BarrierBit::ShaderStorage);
+        VulkanBarrierMasks       ssboComputeBarrier = ssboBarrier;
+        ssboComputeBarrier.DstStage                 = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        auto ssboBarrierFn                          = [&]()
         {
             cmdBuf.MemoryBarrier(ssboBarrier.SrcStage, ssboBarrier.DstStage, ssboBarrier.SrcAccess,
                                  ssboBarrier.DstAccess);
+        };
+        auto ssboComputeFn = [&]()
+        {
+            cmdBuf.MemoryBarrier(ssboComputeBarrier.SrcStage, ssboComputeBarrier.DstStage, ssboComputeBarrier.SrcAccess,
+                                 ssboComputeBarrier.DstAccess);
         };
 
         // 缓存 SSBO → VkBuffer 工具
@@ -1505,47 +1536,56 @@ namespace Engine
             m_Grid.BuildVulkan(cmd, m_ParticleCount, /*predicted=*/false);
             ssboBarrierFn();
 
-            // 各 SPH dispatch 共用：alloc set → write SSBO+UBO → bind → PC → dispatch → barrier
+            // 各 SPH dispatch 共用（D-24）：set 按帧槽缓存——首帧写、后续只 bind → PC → dispatch → barrier
             auto dispatchSPH = [&](const VulkanComputePipelineHandle&    pipe,
                                    const Ref<VulkanDescriptorSetLayout>& layout, bool bindPCISPH, bool bindRigid,
-                                   bool bindMeshSDF, bool bindSurfaceNormal, bool bindGrid, uint32_t usePredictedPos)
+                                   bool bindMeshSDF, bool bindSurfaceNormal, bool bindGrid, uint32_t usePredictedPos,
+                                   int cachedIndex)
             {
-                VkDescriptorSet set = descriptorPool->Allocate(layout->GetHandle());
-                ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Fluid][Vulkan] SPH pool 耗尽");
+                VkDescriptorSet set = m_VulkanResources->CachedSets[frameIndex][cachedIndex];
+                if (!m_VulkanResources->CachedWritten[frameIndex][cachedIndex])
+                {
+                    set = m_VulkanResources->CachedPool->Allocate(layout->GetHandle());
+                    ENGINE_CORE_RELEASE_ASSERT(set != VK_NULL_HANDLE, "[Fluid][Vulkan] cached SPH pool 耗尽");
 
-                VulkanDescriptorWriter w;
-                w.WriteBuffer(0, bufferOf(m_ParticleBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                if (bindPCISPH && m_PCISPHBuffer)
-                    w.WriteBuffer(1, bufferOf(m_PCISPHBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                w.WriteBuffer(2, bufferOf(m_AliveList), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                if (bindRigid)
-                {
-                    // 已由上方 InitRigidBodyBuffer 无条件懒创建；耦合关闭时为占位
-                    w.WriteBuffer(3, bufferOf(m_RigidBodyBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    VulkanDescriptorWriter w;
+                    w.WriteBuffer(0, bufferOf(m_ParticleBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    if (bindPCISPH && m_PCISPHBuffer)
+                        w.WriteBuffer(1, bufferOf(m_PCISPHBuffer), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    w.WriteBuffer(2, bufferOf(m_AliveList), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    if (bindRigid)
+                    {
+                        // 已由上方 InitRigidBodyBuffer 无条件懒创建；耦合关闭时为占位
+                        w.WriteBuffer(3, bufferOf(m_RigidBodyBuffer), 0, VK_WHOLE_SIZE,
+                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    }
+                    if (bindGrid)
+                    {
+                        w.WriteBuffer(5, bufferOf(m_Grid.GetCellStart()), 0, VK_WHOLE_SIZE,
+                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                        w.WriteBuffer(6, bufferOf(m_Grid.GetCellCount()), 0, VK_WHOLE_SIZE,
+                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                        w.WriteBuffer(7, bufferOf(m_Grid.GetSortedIndices()), 0, VK_WHOLE_SIZE,
+                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    }
+                    if (bindSurfaceNormal && m_SurfaceNormalBuffer)
+                        w.WriteBuffer(8, bufferOf(m_SurfaceNormalBuffer), 0, VK_WHOLE_SIZE,
+                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    if (bindMeshSDF)
+                    {
+                        // 已由上方 InitMeshSDFBuffer 无条件懒创建；耦合关闭时为占位
+                        w.WriteBuffer(10, bufferOf(m_MeshSDFMetaBuffer), 0, VK_WHOLE_SIZE,
+                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                        w.WriteBuffer(11, bufferOf(m_MeshSDFVoxelBuffer), 0, VK_WHOLE_SIZE,
+                                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                    }
+                    w.WriteBuffer(FLUID_SPH_UBO_BINDING, vkSPHUBO->GetBuffer(), 0, sizeof(SPHParamsUBO),
+                                  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+                    w.UpdateSet(device, set);
+
+                    m_VulkanResources->CachedSets[frameIndex][cachedIndex]    = set;
+                    m_VulkanResources->CachedWritten[frameIndex][cachedIndex] = true;
                 }
-                if (bindGrid)
-                {
-                    w.WriteBuffer(5, bufferOf(m_Grid.GetCellStart()), 0, VK_WHOLE_SIZE,
-                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                    w.WriteBuffer(6, bufferOf(m_Grid.GetCellCount()), 0, VK_WHOLE_SIZE,
-                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                    w.WriteBuffer(7, bufferOf(m_Grid.GetSortedIndices()), 0, VK_WHOLE_SIZE,
-                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                }
-                if (bindSurfaceNormal && m_SurfaceNormalBuffer)
-                    w.WriteBuffer(8, bufferOf(m_SurfaceNormalBuffer), 0, VK_WHOLE_SIZE,
-                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                if (bindMeshSDF)
-                {
-                    // 已由上方 InitMeshSDFBuffer 无条件懒创建；耦合关闭时为占位
-                    w.WriteBuffer(10, bufferOf(m_MeshSDFMetaBuffer), 0, VK_WHOLE_SIZE,
-                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                    w.WriteBuffer(11, bufferOf(m_MeshSDFVoxelBuffer), 0, VK_WHOLE_SIZE,
-                                  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-                }
-                w.WriteBuffer(FLUID_SPH_UBO_BINDING, vkSPHUBO->GetBuffer(), 0, sizeof(SPHParamsUBO),
-                              VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-                w.UpdateSet(device, set);
 
                 cmdBuf.BindComputePipeline(pipe.Pipeline);
                 cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, pipe.Layout, 0, {set});
@@ -1559,14 +1599,14 @@ namespace Engine
                 uint32_t groups = (m_ParticleCount + 255) / 256;
                 if (groups > 0)
                     cmdBuf.Dispatch(groups, 1, 1);
-                ssboBarrierFn();
+                ssboComputeFn();
             };
 
             // ---- SPH Density ----
             // bindings: 0(P), 2(alive), 5/6/7(grid), 8(SN write)
             dispatchSPH(m_VulkanResources->SPHDensityPipeline, m_VulkanResources->SPHDensityLayout,
                         /*PCISPH=*/false, /*Rigid=*/false, /*MeshSDF=*/false, /*SN=*/true,
-                        /*Grid=*/true, /*UsePred=*/0u);
+                        /*Grid=*/true, /*UsePred=*/0u, /*cached=*/0);
 
             if (emitter.PCISPHEnabled)
             {
@@ -1574,7 +1614,7 @@ namespace Engine
                 // bindings: 0(P), 1(PCISPH), 2(alive), 5/6/7(grid), 8(SN read)
                 dispatchSPH(m_VulkanResources->PCISPHInitPipeline, m_VulkanResources->PCISPHInitLayout,
                             /*PCISPH=*/true, /*Rigid=*/false, /*MeshSDF=*/false, /*SN=*/true,
-                            /*Grid=*/true, /*UsePred=*/0u);
+                            /*Grid=*/true, /*UsePred=*/0u, /*cached=*/2);
 
                 int iterations = std::clamp(emitter.PCISPHIterations, 1, 8);
                 for (int iter = 0; iter < iterations; ++iter)
@@ -1585,21 +1625,21 @@ namespace Engine
                     // Predict: bindings 0(P), 1(PCISPH), 2(alive)
                     dispatchSPH(m_VulkanResources->PCISPHPredictPipeline, m_VulkanResources->PCISPHPredictLayout,
                                 /*PCISPH=*/true, /*Rigid=*/false, /*MeshSDF=*/false, /*SN=*/false,
-                                /*Grid=*/false, usePred);
+                                /*Grid=*/false, usePred, /*cached=*/3);
                     // Density: bindings 0(P), 1(PCISPH), 2(alive), 5/6/7(grid)
                     dispatchSPH(m_VulkanResources->PCISPHDensityPipeline, m_VulkanResources->PCISPHDensityLayout,
                                 /*PCISPH=*/true, /*Rigid=*/false, /*MeshSDF=*/false, /*SN=*/false,
-                                /*Grid=*/true, usePred);
+                                /*Grid=*/true, usePred, /*cached=*/4);
                     // Force: bindings 0(P), 1(PCISPH), 2(alive), 3(rigid), 5/6/7(grid), 10/11(meshSDF)
                     dispatchSPH(m_VulkanResources->PCISPHForcePipeline, m_VulkanResources->PCISPHForceLayout,
                                 /*PCISPH=*/true, /*Rigid=*/true, /*MeshSDF=*/true, /*SN=*/false,
-                                /*Grid=*/true, usePred);
+                                /*Grid=*/true, usePred, /*cached=*/5);
                 }
 
                 // Apply: bindings 0(P), 1(PCISPH), 2(alive)
                 dispatchSPH(m_VulkanResources->PCISPHApplyPipeline, m_VulkanResources->PCISPHApplyLayout,
                             /*PCISPH=*/true, /*Rigid=*/false, /*MeshSDF=*/false, /*SN=*/false,
-                            /*Grid=*/false, /*UsePred=*/0u);
+                            /*Grid=*/false, /*UsePred=*/0u, /*cached=*/6);
             }
             else
             {
@@ -1607,7 +1647,7 @@ namespace Engine
                 // bindings: 0(P), 2(alive), 3(rigid), 5/6/7(grid), 8(SN read), 10/11(meshSDF)
                 dispatchSPH(m_VulkanResources->SPHForcePipeline, m_VulkanResources->SPHForceLayout,
                             /*PCISPH=*/false, /*Rigid=*/true, /*MeshSDF=*/true, /*SN=*/true,
-                            /*Grid=*/true, /*UsePred=*/0u);
+                            /*Grid=*/true, /*UsePred=*/0u, /*cached=*/1);
             }
         }
 
@@ -1624,18 +1664,25 @@ namespace Engine
                 glm::vec4(emitterPos + emitter.BoundaryMax, emitter.PCISPHEnabled ? 1.0f : 0.0f);
             m_SimParamsUBO->SetData(&simUbo, sizeof(FluidSimParamsUBO));
 
-            VkDescriptorSet simulateSet = descriptorPool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
-            ENGINE_CORE_RELEASE_ASSERT(simulateSet != VK_NULL_HANDLE,
-                                       "[Fluid][Vulkan] simulate DescriptorPool 分配失败");
+            VkDescriptorSet simulateSet = m_VulkanResources->CachedSets[frameIndex][7];
+            if (!m_VulkanResources->CachedWritten[frameIndex][7])
+            {
+                simulateSet = m_VulkanResources->CachedPool->Allocate(m_VulkanResources->SimulateLayout->GetHandle());
+                ENGINE_CORE_RELEASE_ASSERT(simulateSet != VK_NULL_HANDLE,
+                                           "[Fluid][Vulkan] simulate DescriptorPool 分配失败");
 
-            auto vkParticle = std::dynamic_pointer_cast<VulkanStorageBuffer>(m_ParticleBuffer);
-            ENGINE_CORE_RELEASE_ASSERT(vkParticle, "[Fluid][Vulkan] particle 转型失败");
+                auto vkParticle = std::dynamic_pointer_cast<VulkanStorageBuffer>(m_ParticleBuffer);
+                ENGINE_CORE_RELEASE_ASSERT(vkParticle, "[Fluid][Vulkan] particle 转型失败");
 
-            VulkanDescriptorWriter w;
-            w.WriteBuffer(0, vkParticle->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-            w.WriteBuffer(FLUID_SIM_UBO_BINDING, vkSimUBO->GetBuffer(), 0, sizeof(FluidSimParamsUBO),
-                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-            w.UpdateSet(device, simulateSet);
+                VulkanDescriptorWriter w;
+                w.WriteBuffer(0, vkParticle->GetBuffer(), 0, VK_WHOLE_SIZE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                w.WriteBuffer(FLUID_SIM_UBO_BINDING, vkSimUBO->GetBuffer(), 0, sizeof(FluidSimParamsUBO),
+                              VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+                w.UpdateSet(device, simulateSet);
+
+                m_VulkanResources->CachedSets[frameIndex][7]    = simulateSet;
+                m_VulkanResources->CachedWritten[frameIndex][7] = true;
+            }
 
             cmdBuf.BindComputePipeline(m_VulkanResources->SimulatePipeline.Pipeline);
             cmdBuf.BindDescriptorSets(VK_PIPELINE_BIND_POINT_COMPUTE, m_VulkanResources->SimulatePipeline.Layout, 0,

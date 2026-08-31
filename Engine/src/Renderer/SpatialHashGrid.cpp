@@ -301,8 +301,12 @@ namespace Engine
         auto*    ctx    = VulkanContext::Get();
         VkDevice device = ctx->GetDevice();
 
-        // BarrierBit::ShaderStorage → Vulkan stage/access 四元组（compute→compute 精确匹配）
-        const VulkanBarrierMasks ssboMasks = ResolveBarrierBits(BarrierBit::ShaderStorage);
+        // BarrierBit::ShaderStorage → Vulkan stage/access 四元组。
+        // D-25：grid 内部三 pass 间消费者只有 compute，dstStage 收窄为 compute→compute，
+        // 减小驱动同步域；最终 publish 给外部（render pass 读 particle）由调用方的
+        // 全掩码 barrier 负责。
+        VulkanBarrierMasks ssboMasks = ResolveBarrierBits(BarrierBit::ShaderStorage);
+        ssboMasks.DstStage           = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 
         VulkanCommandBuffer cmd(cmdHandle);
 
