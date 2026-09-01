@@ -90,9 +90,12 @@ namespace Engine
         // Vulkan 路径：shader 大块参数走 std140 UBO（与 GLSL Vulkan 分支的 uniform
         // 块逐字节对应；dispatcher 通用 UBO 槽在 draw 录制时写 descriptor）。
         // binding 与 shader 声明一致：VS 1 / smooth 1 / composite 4。
-        Ref<UniformBuffer> m_FluidVSUBO;      // 144B depth/thickness 顶点参数
-        Ref<UniformBuffer> m_SmoothParamsUBO; // 32B  smooth 每迭代参数
-        Ref<UniformBuffer> m_CompositeUBO;    // 192B composite 参数
+        Ref<UniformBuffer> m_FluidVSUBO; // 144B depth/thickness 顶点参数
+        // 32B smooth 每迭代参数：H/V 各一份。VulkanUniformBuffer::SetData 是立即
+        // memcpy，单缓冲会让同一命令缓冲里先录制的 H-draw 在 GPU 执行时读到
+        // 后写入的 V 参数（全变竖向平滑）。
+        Ref<UniformBuffer> m_SmoothParamsUBO[2];
+        Ref<UniformBuffer> m_CompositeUBO; // 192B composite 参数
         // u_SceneDepth 拷贝容器（depth-only FBO；HDR depth 在 composite 的
         // render pass 内是 attachment layout，直接采样会 layout 冲突）
         Ref<Framebuffer> m_SceneDepthCopyFBO;

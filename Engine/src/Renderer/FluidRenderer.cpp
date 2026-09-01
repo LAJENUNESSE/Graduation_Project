@@ -143,9 +143,10 @@ namespace Engine
         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
         {
             // shader 大块参数走 std140 UBO（binding 与 GLSL Vulkan 分支声明一致）
-            m_FluidVSUBO      = UniformBuffer::Create(sizeof(FluidVSParamsUBO), 1);
-            m_SmoothParamsUBO = UniformBuffer::Create(sizeof(FluidSmoothUBO), 1);
-            m_CompositeUBO    = UniformBuffer::Create(sizeof(FluidCompositeParamsUBO), 4);
+            m_FluidVSUBO         = UniformBuffer::Create(sizeof(FluidVSParamsUBO), 1);
+            m_SmoothParamsUBO[0] = UniformBuffer::Create(sizeof(FluidSmoothUBO), 1);
+            m_SmoothParamsUBO[1] = UniformBuffer::Create(sizeof(FluidSmoothUBO), 1);
+            m_CompositeUBO       = UniformBuffer::Create(sizeof(FluidCompositeParamsUBO), 4);
 
             // u_SceneDepth 拷贝容器（depth-only FBO；HDR depth 在 composite 的 render
             // pass 内是 attachment layout，直接采样 descriptor layout 会冲突）
@@ -191,7 +192,8 @@ namespace Engine
         m_SceneColorCopyTex.reset();
 #ifdef ENGINE_ENABLE_VULKAN
         m_FluidVSUBO.reset();
-        m_SmoothParamsUBO.reset();
+        m_SmoothParamsUBO[0].reset();
+        m_SmoothParamsUBO[1].reset();
         m_CompositeUBO.reset();
         m_SceneDepthCopyFBO.reset();
 #endif
@@ -604,8 +606,8 @@ namespace Engine
                 sm.ScreenSizeAndParams = glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH),
                                                    emitter.SmoothFilterRadius, emitter.SmoothDepthFalloff);
                 sm.HorizontalAndPad    = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
-                m_SmoothParamsUBO->SetData(&sm, sizeof(sm));
-                m_SmoothParamsUBO->Bind(1);
+                m_SmoothParamsUBO[0]->SetData(&sm, sizeof(sm));
+                m_SmoothParamsUBO[0]->Bind(1);
             }
             RenderFullscreenQuad();
             m_SmoothFBO[0]->Unbind();
@@ -621,8 +623,8 @@ namespace Engine
                 sm.ScreenSizeAndParams = glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH),
                                                    emitter.SmoothFilterRadius, emitter.SmoothDepthFalloff);
                 sm.HorizontalAndPad    = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-                m_SmoothParamsUBO->SetData(&sm, sizeof(sm));
-                m_SmoothParamsUBO->Bind(1);
+                m_SmoothParamsUBO[1]->SetData(&sm, sizeof(sm));
+                m_SmoothParamsUBO[1]->Bind(1);
             }
             RenderFullscreenQuad();
             m_SmoothFBO[1]->Unbind();
@@ -644,6 +646,10 @@ namespace Engine
         RenderCommand::SetBlendFunc(BlendFactor::One, BlendFactor::One); // → pipeline additive blend
 
         particleBuffer->Bind(0);
+
+        // smooth 迭代把槽 1 换成了 SmoothUBO(32B)，thickness VS 的 144B 块必须
+        // 重绑 FluidVSUBO，否则在 robustBufferAccess 关闭下越界读相邻堆内存
+        m_FluidVSUBO->Bind(1);
 
         m_ThicknessShader->Bind(); // u_View/u_Projection/u_ParticleRadius 经 FluidVSParamsUBO(binding 1)
         emptyVAO->Bind();
