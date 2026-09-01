@@ -701,8 +701,8 @@ namespace Engine
             // 0.0f 垫片，导致 Fresnel=0、Refraction 实际读到 Fresnel 的值）
             comp.ScreenSizeAndAbs = glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH),
                                               emitter.AbsorptionScale, emitter.FresnelPower);
-            comp.SurfaceParams =
-                glm::vec4(emitter.RefractionStrength, emitter.Reflectivity, emitter.RefractiveIndex, 0.0f);
+            // RefractiveIndex 与 GL 路径一致取水的折射率硬编码（组件无此字段）
+            comp.SurfaceParams = glm::vec4(emitter.RefractionStrength, emitter.Reflectivity, 1.333f, 0.0f);
             m_CompositeUBO->SetData(&comp, sizeof(comp));
             m_CompositeUBO->Bind(4);
         }
