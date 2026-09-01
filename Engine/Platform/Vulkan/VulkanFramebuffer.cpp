@@ -481,8 +481,12 @@ namespace Engine
             return;
         }
 
-        ENGINE_CORE_WARN("[VulkanFramebuffer::Resize] this={0} size=({1},{2})", static_cast<const void*>(this), width,
-                         height);
+        // 同尺寸直接返回：FluidRenderer::RenderVulkan 每帧按 RenderScale 无条件调
+        // Resize，无守卫会逐帧销毁重建 image/renderpass/framebuffer + 队列等待，
+        // 且重建后 attachment 内容 UNDEFINED（上一帧像素作废）
+        if (m_Framebuffer != VK_NULL_HANDLE && m_Spec.Width == width && m_Spec.Height == height)
+            return;
+
         m_Spec.Width  = width;
         m_Spec.Height = height;
 

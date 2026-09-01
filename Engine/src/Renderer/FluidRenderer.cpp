@@ -642,7 +642,10 @@ namespace Engine
         RenderCommand::SetViewport(0, 0, fluidW, fluidH);
 
         RenderCommand::SetClearColor({0.0f, 0.0f, 0.0f, 0.0f});
-        RenderCommand::ClearColorOnly();
+        // 厚度是加色累积，必须每帧真清零：ClearColorOnly 在 Vulkan 是空壳
+        // （render pass loadOp=LOAD 不清 → 厚度跨帧累加 + 旧位置残影）。
+        // thickness FBO 无深度附件，Clear() 即 color-only，走 vkCmdClearAttachments。
+        RenderCommand::Clear();
 
         RenderCommand::SetDepthTest(false);
         RenderCommand::SetDepthMask(false);
