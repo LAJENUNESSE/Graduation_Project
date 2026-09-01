@@ -39,13 +39,16 @@ namespace Engine
         // std140 镜像 — 与 fluid_composite.glsl 的 FluidCompositeUBO 块对应（192B）
         struct alignas(16) FluidCompositeParamsUBO
         {
-            glm::mat4 InvProjection;    // 0
-            glm::mat4 InvView;          // 64
-            glm::vec4 FluidColor;       // 128: xyz
-            glm::vec4 AbsorptionColor;  // 144: xyz
-            glm::vec4 ScreenSizeAndAbs; // 160: xy=ScreenSize, z=AbsorptionScale
-            glm::vec4 SurfaceParams;    // 176: x=FresnelPower, y=RefractionStrength,
-                                        //      z=Reflectivity, w=RefractiveIndex
+            glm::mat4 InvProjection;   // 0
+            glm::mat4 InvView;         // 64
+            glm::vec4 FluidColor;      // 128: xyz
+            glm::vec4 AbsorptionColor; // 144: xyz
+            // GLSL 侧为 vec2 u_ScreenSize@160 后接 5 个 float（std140 各占 4B）：
+            // AbsorptionScale@168 / FresnelPower@172 / RefractionStrength@176 /
+            // Reflectivity@180 / RefractiveIndex@184
+            glm::vec4 ScreenSizeAndAbs; // 160: xy=ScreenSize, z=AbsorptionScale, w=FresnelPower
+            glm::vec4 SurfaceParams;    // 176: x=RefractionStrength, y=Reflectivity,
+                                        //      z=RefractiveIndex, w=未使用
         };
         static_assert(sizeof(FluidCompositeParamsUBO) == 192, "FluidCompositeParamsUBO must be std140 192 bytes");
     } // namespace
@@ -690,10 +693,13 @@ namespace Engine
             comp.InvView         = glm::inverse(view);
             comp.FluidColor      = glm::vec4(emitter.FluidColor, 1.0f);
             comp.AbsorptionColor = glm::vec4(emitter.AbsorptionColor, 1.0f);
-            comp.ScreenSizeAndAbs =
-                glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH), emitter.AbsorptionScale, 0.0f);
+            // std140 标量序列对齐：GLSL 在 @172 读 FresnelPower、@176 起依次读
+            // RefractionStrength/Reflectivity/RefractiveIndex（原打包在 @172 放了
+            // 0.0f 垫片，导致 Fresnel=0、Refraction 实际读到 Fresnel 的值）
+            comp.ScreenSizeAndAbs = glm::vec4(static_cast<float>(fluidW), static_cast<float>(fluidH),
+                                              emitter.AbsorptionScale, emitter.FresnelPower);
             comp.SurfaceParams =
-                glm::vec4(emitter.FresnelPower, emitter.RefractionStrength, emitter.Reflectivity, 1.333f);
+                glm::vec4(emitter.RefractionStrength, emitter.Reflectivity, emitter.RefractiveIndex, 0.0f);
             m_CompositeUBO->SetData(&comp, sizeof(comp));
             m_CompositeUBO->Bind(4);
         }
