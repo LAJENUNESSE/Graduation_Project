@@ -1,0 +1,68 @@
+#include "SPHCommon.hlsli"
+
+StructuredBuffer<GPUParticle>   particles     : register(t0);
+RWStructuredBuffer<PCISPHData>  pcisphData    : register(u0);
+StructuredBuffer<uint>          aliveIndices  : register(t1);
+StructuredBuffer<uint>          cellStart     : register(t2);
+StructuredBuffer<uint>          cellCount     : register(t3);
+StructuredBuffer<uint>          sortedIndices : register(t4);
+
+[numthreads(256, 1, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint gid = dispatchThreadId.x;
+    if (gid >= u_AliveCount)
+        return;
+
+    uint myAliveIdx = gid;
+    uint myParticleIdx = aliveIndices[myAliveIdx];
+
+    float3 predPosI = pcisphData[gid].predictedPosAndPressure.xyz;
+    float h = u_SmoothingRadius;
+
+    float density = u_ParticleMass * poly6(0.0f, h);
+
+    float3 lookupPosI = (u_UsePredictedPos != 0) ? predPosI : particles[myParticleIdx].posAndLife.xyz;
+    int3 myCell = (int3)floor(lookupPosI / u_CellSize);
+
+    [unroll]
+    for (int dz = -1; dz <= 1; dz++)
+    {
+        [unroll]
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            [unroll]
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int3 neighborCell = myCell + int3(dx, dy, dz);
+                uint cellIdx = hashCell(neighborCell, u_GridSize);
+
+                uint cCount = cellCount[cellIdx];
+                if (cCount == 0u) continue;
+                uint cEndRaw = cellStart[cellIdx];
+                uint cEnd = min(cEndRaw, u_AliveCount);
+                uint cBegin = (cCount > cEnd) ? 0u : (cEnd - cCount);
+
+                for (uint s = cBegin; s < cEnd; s++)
+                {
+                    uint neighborAliveIdx = sortedIndices[s];
+                    if (neighborAliveIdx >= u_AliveCount) continue;
+                    uint neighborParticleIdx = aliveIndices[neighborAliveIdx];
+
+                    if (neighborParticleIdx == myParticleIdx) continue;
+
+                    float3 predPosJ = pcisphData[neighborAliveIdx].predictedPosAndPressure.xyz;
+                    float3 diff = predPosI - predPosJ;
+                    float r2 = dot(diff, diff);
+
+                    density += u_ParticleMass * poly6(r2, h);
+                }
+            }
+        }
+    }
+
+    pcisphData[gid].predictedVelAndDensity.w = density;
+
+    pcisphData[gid].predictedPosAndPressure.w += u_PCISPHDelta * max(0.0f, density - u_RestDensity);
+    pcisphData[gid].predictedPosAndPressure.w = min(pcisphData[gid].predictedPosAndPressure.w, 50000.0f);
+}
