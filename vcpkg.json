@@ -3,8 +3,15 @@
   "version-string": "0.1.0",
   "builtin-baseline": "62159a45e18f3a9ac0548628dcaf74fcb60c6ff9",
   "dependencies": [
+    "asio",
     "ffmpeg",
     "openal-soft",
     "lua"
+  ],
+  "overrides": [
+    {
+      "name": "asio",
+      "version-string": "1.32.0"
+    }
   ]
 }

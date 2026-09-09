@@ -36,6 +36,8 @@ set(ENGINE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImGui/ImGuiBuild.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImGui/ImGuiLayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Media/FFmpegDecoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Network/TcpClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Network/TcpServer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/BulletPhysicsWorld.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Physics/PhysicsDebugDraw.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Reflection/AutoInspector.cpp
@@ -145,6 +147,12 @@ find_package(FFMPEG REQUIRED)
 # Lua (vcpkg)
 find_package(Lua REQUIRED)
 
+# asio (vcpkg, header-only): Server/Editor 网络传输层
+find_path(ASIO_INCLUDE_DIR asio.hpp)
+if(NOT ASIO_INCLUDE_DIR)
+    message(FATAL_ERROR "asio not found (vcpkg 'asio' port required)")
+endif()
+
 # OpenAL (vcpkg)
 find_package(OpenAL CONFIG REQUIRED)
 
@@ -215,6 +223,7 @@ target_include_directories(Engine
         ${CMAKE_SOURCE_DIR}/vendor/bullet3/src
         ${FFMPEG_INCLUDE_DIRS}
         ${LUA_INCLUDE_DIR}
+        ${ASIO_INCLUDE_DIR}
 )
 
 target_link_libraries(Engine PUBLIC

@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Core/Layer.h"
+#include "NetworkSessionController.h"
 #include "Scene/SceneSerializer.h"
 
 #include <optional>
@@ -60,6 +61,7 @@ namespace Engine
         Scope<EditorBootstrapper>           m_Boot;
         Ref<Scene>                          m_ActiveScene;
         std::optional<EditorRenderSettings> m_PrePlayRenderSettings;
+        NetworkSessionController            m_NetworkSession;
         float                               m_AutosaveTimer  = 0.0f;
         bool                                m_LayoutLocked   = false;
         static constexpr float              AutosaveInterval = 300.0f; // 5 分钟

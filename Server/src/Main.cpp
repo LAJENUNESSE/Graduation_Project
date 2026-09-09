@@ -4,12 +4,15 @@
 #include "Core/Headless.h"
 #include "Core/Log.h"
 #include "Core/Timestep.h"
+#include "Network/Protocol.h"
+#include "Network/TcpServer.h"
 #include "Renderer/EditorCamera.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneSerializer.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <thread>
@@ -18,9 +21,10 @@ namespace
 {
     struct ServerOptions
     {
-        std::string ScenePath = "assets/scenes/network-demo.scene";
-        double      DurationSeconds = 10.0; // 0 = 一直运行
-        float       TickRate = 60.0f;
+        std::string ScenePath       = "assets/scenes/network-demo.scene";
+        double      DurationSeconds = 0.0; // 0 = 一直运行
+        float       TickRate        = 60.0f;
+        uint16_t    Port            = 30000;
     };
 
     ServerOptions ParseArgs(int argc, char** argv)
@@ -34,6 +38,8 @@ namespace
                 options.DurationSeconds = std::atof(argv[++i]);
             else if (std::strcmp(argv[i], "--tickrate") == 0 && i + 1 < argc)
                 options.TickRate = static_cast<float>(std::atof(argv[++i]));
+            else if (std::strcmp(argv[i], "--port") == 0 && i + 1 < argc)
+                options.Port = static_cast<uint16_t>(std::atoi(argv[++i]));
         }
         return options;
     }
@@ -52,15 +58,15 @@ int main(int argc, char** argv)
     ENGINE_CORE_INFO("[Server] Project root: {0}", PathUtils::PathToUtf8String(PathUtils::GetProjectRoot()));
 
     ServerOptions options = ParseArgs(argc, argv);
-    ENGINE_CORE_INFO("[Server] scene='{0}' duration={1}s tickRate={2}Hz", options.ScenePath, options.DurationSeconds,
-                     options.TickRate);
+    ENGINE_CORE_INFO("[Server] scene='{0}' duration={1}s tickRate={2}Hz port={3}", options.ScenePath,
+                     options.DurationSeconds, options.TickRate, options.Port);
 
     // 无头模式：不创建窗口/GL 上下文，图形工厂走占位路径
     Headless::SetEnabled(true);
 
     AssetManager::Init();
 
-    auto scene = CreateRef<Scene>();
+    auto            scene = CreateRef<Scene>();
     SceneSerializer serializer(scene);
     if (!serializer.Deserialize(options.ScenePath))
     {
@@ -71,6 +77,62 @@ int main(int argc, char** argv)
 
     scene->OnRuntimeStart();
     ENGINE_CORE_INFO("[Server] Runtime started, stepping physics at {0}Hz", options.TickRate);
+
+    // ── 网络：监听 + 握手/心跳（场景下发与快照在后续阶段接入） ──
+    Net::TcpServer server;
+    if (!server.Start(options.Port))
+    {
+        ENGINE_CORE_ERROR("[Server] Failed to start network on port {0}", options.Port);
+        scene->OnRuntimeStop();
+        AssetManager::Shutdown();
+        return 1;
+    }
+
+    std::atomic<uint64_t> lastClientActivityMs{0};
+
+    auto handleServerEvent = [&server, &lastClientActivityMs](const Net::ServerEvent& event)
+    {
+        if (event.Connected)
+        {
+            ENGINE_CORE_INFO("[Server] Client session {0} awaiting Hello", event.SessionId);
+            return;
+        }
+        if (event.Disconnected)
+        {
+            ENGINE_CORE_INFO("[Server] Client session {0} disconnected", event.SessionId);
+            return;
+        }
+        if (event.Msg.Type == Net::MessageType::C2S_Hello)
+        {
+            Net::ByteReader reader(event.Msg.Payload.data(), event.Msg.Payload.size());
+            uint16_t        clientVersion = 0;
+            std::string     clientName;
+            reader.U16(clientVersion) && reader.Str(clientName);
+            ENGINE_CORE_INFO("[Server] Hello from '{0}' (protocol v{1})", clientName, clientVersion);
+
+            // P1 先发最小 Welcome（场景字节为空，P2 接入真实场景下发）
+            Net::ByteWriter welcome;
+            welcome.U16(0); // assignedPlayerIndex
+            welcome.U32(0); // 场景 YAML 长度 = 0（暂不下发）
+            server.Send(event.SessionId, Net::MessageType::S2C_Welcome, welcome.Data());
+        }
+        else if (event.Msg.Type == Net::MessageType::C2S_Ping)
+        {
+            Net::ByteReader reader(event.Msg.Payload.data(), event.Msg.Payload.size());
+            double          clientTime = 0.0;
+            if (reader.F64(clientTime))
+            {
+                Net::ByteWriter pong;
+                pong.F64(clientTime);
+                server.Send(event.SessionId, Net::MessageType::S2C_Pong, pong.Data());
+                lastClientActivityMs.store(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                               std::chrono::steady_clock::now().time_since_epoch())
+                                               .count());
+            }
+        }
+    };
+
+    server.Poll(handleServerEvent);
 
     const auto  stepDuration = std::chrono::duration<double>(1.0 / static_cast<double>(options.TickRate));
     const auto  startTime    = std::chrono::steady_clock::now();
@@ -83,13 +145,14 @@ int main(int argc, char** argv)
     {
         auto frameStart = std::chrono::steady_clock::now();
 
+        server.Poll(handleServerEvent);
+
         EditorCamera dummyCamera;
         scene->OnUpdateRuntime(Timestep(stepSeconds), dummyCamera);
 
         ++tick;
         if (tick % static_cast<uint64_t>(options.TickRate) == 0)
         {
-            // 每秒打印一次动态刚体位置，便于无显示器环境验证仿真
             for (auto [entity, id, tc, rb] :
                  scene->GetRegistry().view<IDComponent, TransformComponent, RigidBodyComponent>().each())
             {
@@ -101,10 +164,11 @@ int main(int argc, char** argv)
             }
         }
 
-        std::this_thread::sleep_until(frameStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                                                        stepDuration));
+        std::this_thread::sleep_until(frameStart +
+                                      std::chrono::duration_cast<std::chrono::steady_clock::duration>(stepDuration));
     }
 
+    server.Stop();
     scene->OnRuntimeStop();
     AssetManager::Shutdown();
     ENGINE_CORE_INFO("[Server] Shutdown after {0} ticks", tick);

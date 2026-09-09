@@ -83,6 +83,11 @@ namespace Engine
         // 崩溃紧急保存
         CrashHandler::SetEmergencySaveCallback([this]() { PerformAutosave(); });
 
+        // 联机会话：服务器下发场景时打开（P2 起生效；P1 仅记录）
+        m_NetworkSession.SetSceneReceivedHandler(
+            [this](const std::string& yaml, uint16_t playerIndex)
+            { ENGINE_INFO("[Editor] Received scene from server ({} bytes, player {})", yaml.size(), playerIndex); });
+
         // 启动参数 --scene <path>：等价 Ctrl+O 打开场景（自动化验证/演示用）
         if (!Application::s_LaunchScenePath.empty())
         {
@@ -127,12 +132,14 @@ namespace Engine
 
         m_Boot->ViewportController().OnUpdate(ts, *m_ActiveScene);
         AssetManager::Update(ts);
+        m_NetworkSession.PollNetwork();
         m_Boot->RenderController().OnUpdate(ts, m_ActiveScene, m_Boot->SceneSession().GetState());
     }
 
     void EditorLayer::OnImGuiRender()
     {
         HandleShellActions(m_Boot->Shell().Draw(BuildShellState()));
+        m_NetworkSession.DrawDialog();
         m_Boot->PanelCoordinator().RenderPanels();
 
         EditorViewportContext viewportContext = m_Boot->ViewportController().BeginViewportWindow();
@@ -320,8 +327,13 @@ namespace Engine
             m_LayoutLocked = !m_LayoutLocked;
         if (actions.RequestResetLayout)
             m_Boot->Shell().RequestResetLayout();
+        if (actions.RequestConnectServer)
+            m_NetworkSession.OpenConnectDialog();
+        if (actions.RequestDisconnectServer)
+            m_NetworkSession.Disconnect();
         if (actions.RequestCloseApplication)
         {
+            m_NetworkSession.Disconnect();
             if (PromptSaveIfDirty())
                 Application::Get().Close();
         }
@@ -342,6 +354,8 @@ namespace Engine
         state.ShowScriptEditorPanel = m_Boot->PanelCoordinator().IsScriptEditorVisible();
         state.IsDirty               = m_Boot->SceneSession().IsDirty();
         state.ShowFpsOverlay        = m_Boot->ViewportController().IsShowFpsOverlay();
+        state.IsNetConnected        = m_NetworkSession.GetState() == NetSessionState::Connected;
+        state.NetStatusText         = m_NetworkSession.GetStatusText();
         state.IsLayoutLocked        = m_LayoutLocked;
         return state;
     }

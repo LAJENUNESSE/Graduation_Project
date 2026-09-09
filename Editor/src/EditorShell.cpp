@@ -113,6 +113,17 @@ namespace Engine
                 ImGui::EndMenu();
             }
 
+            if (ImGui::BeginMenu("网络"))
+            {
+                if (ImGui::MenuItem("连接服务器...", nullptr, false, !state.IsNetConnected))
+                    actions.RequestConnectServer = true;
+                if (ImGui::MenuItem("断开连接", nullptr, false, state.IsNetConnected))
+                    actions.RequestDisconnectServer = true;
+                ImGui::Separator();
+                ImGui::TextDisabled("%s", state.NetStatusText.c_str());
+                ImGui::EndMenu();
+            }
+
             if (ImGui::BeginMenu("视图"))
             {
                 if (ImGui::MenuItem("恢复默认布局 (UE风格)"))

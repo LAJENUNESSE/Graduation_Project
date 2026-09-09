@@ -25,6 +25,8 @@ namespace Engine
         bool        ShowFpsOverlay        = true;
         bool        IsDirty               = false;
         bool        IsLayoutLocked        = false;
+        bool        IsNetConnected        = false;
+        std::string NetStatusText;
     };
 
     struct EditorShellActions
@@ -44,6 +46,8 @@ namespace Engine
         bool RequestResetLayout      = false;
         bool ToggleLayoutLock        = false;
         bool RequestCloseApplication = false;
+        bool RequestConnectServer    = false;
+        bool RequestDisconnectServer = false;
     };
 
     class EditorShell
