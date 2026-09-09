@@ -15,6 +15,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 #include <thread>
 
 namespace
@@ -90,7 +92,20 @@ int main(int argc, char** argv)
 
     std::atomic<uint64_t> lastClientActivityMs{0};
 
-    auto handleServerEvent = [&server, &lastClientActivityMs](const Net::ServerEvent& event)
+    // 服务器权威场景：连接建立时全量下发
+    std::string sceneYaml;
+    {
+        std::ifstream sceneFile(options.ScenePath, std::ios::binary);
+        if (sceneFile)
+        {
+            std::ostringstream ss;
+            ss << sceneFile.rdbuf();
+            sceneYaml = ss.str();
+        }
+        ENGINE_CORE_INFO("[Server] Scene payload prepared: {0} bytes", sceneYaml.size());
+    }
+
+    auto handleServerEvent = [&server, &lastClientActivityMs, &sceneYaml](const Net::ServerEvent& event)
     {
         if (event.Connected)
         {
@@ -110,11 +125,22 @@ int main(int argc, char** argv)
             reader.U16(clientVersion) && reader.Str(clientName);
             ENGINE_CORE_INFO("[Server] Hello from '{0}' (protocol v{1})", clientName, clientVersion);
 
-            // P1 先发最小 Welcome（场景字节为空，P2 接入真实场景下发）
+            if (clientVersion != Net::kProtocolVersion)
+            {
+                Net::ByteWriter reject;
+                reject.Str("protocol version mismatch");
+                server.Send(event.SessionId, Net::MessageType::S2C_Reject, reject.Data());
+                return;
+            }
+
+            // Welcome: playerIndex(u16) + sceneYamlSize(u32) + yaml
             Net::ByteWriter welcome;
-            welcome.U16(0); // assignedPlayerIndex
-            welcome.U32(0); // 场景 YAML 长度 = 0（暂不下发）
+            welcome.U16(0); // assignedPlayerIndex（P3 改为按会话分配）
+            welcome.U32(static_cast<uint32_t>(sceneYaml.size()));
+            welcome.Bytes(reinterpret_cast<const uint8_t*>(sceneYaml.data()), sceneYaml.size());
             server.Send(event.SessionId, Net::MessageType::S2C_Welcome, welcome.Data());
+            ENGINE_CORE_INFO("[Server] Welcome sent to session {0}: scene={1} bytes", event.SessionId,
+                             sceneYaml.size());
         }
         else if (event.Msg.Type == Net::MessageType::C2S_Ping)
         {

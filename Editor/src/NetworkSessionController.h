@@ -41,7 +41,7 @@ namespace Engine
 
         NetSessionState GetState() const { return m_State; }
         uint16_t        GetAssignedPlayerIndex() const { return m_PlayerIndex; }
-        uint16_t        GetAssignedUUIDLo() const { return m_PlayerIndex; } // 调试用
+        void            SetPlayerIndex(uint16_t index) { m_PlayerIndex = index; }
 
         std::string GetStatusText() const;
 
@@ -50,9 +50,9 @@ namespace Engine
         void SendHello();
         void SendPing();
 
-        Net::TcpClient    m_Client;
-        NetSessionState   m_State       = NetSessionState::Disconnected;
-        uint16_t          m_PlayerIndex = 0;
+        Net::TcpClient  m_Client;
+        NetSessionState m_State       = NetSessionState::Disconnected;
+        uint16_t        m_PlayerIndex = 0;
 
         // 连接对话框状态
         bool        m_ShowConnectDialog = false;
@@ -61,7 +61,7 @@ namespace Engine
         std::string m_LastError;
 
         // 心跳
-        float m_PingTimer   = 0.0f;
+        float  m_PingTimer   = 0.0f;
         double m_LastPingRtt = 0.0;
         double m_PingSentAt  = 0.0;
 

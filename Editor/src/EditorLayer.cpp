@@ -83,10 +83,26 @@ namespace Engine
         // 崩溃紧急保存
         CrashHandler::SetEmergencySaveCallback([this]() { PerformAutosave(); });
 
-        // 联机会话：服务器下发场景时打开（P2 起生效；P1 仅记录）
+        // 联机会话：服务器下发场景 → 内存加载 + 进入联机运行态
         m_NetworkSession.SetSceneReceivedHandler(
             [this](const std::string& yaml, uint16_t playerIndex)
-            { ENGINE_INFO("[Editor] Received scene from server ({} bytes, player {})", yaml.size(), playerIndex); });
+            {
+                ENGINE_INFO("[Editor] Received scene from server ({} bytes, player {})", yaml.size(), playerIndex);
+
+                glm::vec2 renderSize = m_Boot->ViewportController().GetRenderSize();
+                if (!m_Boot->SceneSession().OpenSceneFromMemory(
+                        m_ActiveScene, yaml, static_cast<uint32_t>(renderSize.x), static_cast<uint32_t>(renderSize.y)))
+                {
+                    ENGINE_WARN("[Editor] Failed to apply server scene");
+                    return;
+                }
+                m_NetworkSession.SetPlayerIndex(playerIndex);
+
+                // 服务器权威运行态：本地不步进，等快照驱动
+                m_Boot->SceneSession().SetRuntimeMode(RuntimeMode::NetworkClient);
+                OnScenePlay();
+                ApplyActiveSceneContext(true);
+            });
 
         // 启动参数 --scene <path>：等价 Ctrl+O 打开场景（自动化验证/演示用）
         if (!Application::s_LaunchScenePath.empty())
@@ -133,7 +149,8 @@ namespace Engine
         m_Boot->ViewportController().OnUpdate(ts, *m_ActiveScene);
         AssetManager::Update(ts);
         m_NetworkSession.PollNetwork();
-        m_Boot->RenderController().OnUpdate(ts, m_ActiveScene, m_Boot->SceneSession().GetState());
+        m_Boot->RenderController().OnUpdate(ts, m_ActiveScene, m_Boot->SceneSession().GetState(),
+                                            m_Boot->SceneSession().GetRuntimeMode());
     }
 
     void EditorLayer::OnImGuiRender()
@@ -286,6 +303,7 @@ namespace Engine
             return;
 
         m_Boot->SceneSession().EndPlay(m_ActiveScene);
+        m_Boot->SceneSession().SetRuntimeMode(RuntimeMode::Local); // 联机/本地模式随 Stop 重置
         SyncCommandHistorySuspension();
         RestoreEditorRenderSettingsSnapshot();
 
@@ -330,7 +348,11 @@ namespace Engine
         if (actions.RequestConnectServer)
             m_NetworkSession.OpenConnectDialog();
         if (actions.RequestDisconnectServer)
+        {
             m_NetworkSession.Disconnect();
+            if (m_Boot->SceneSession().IsPlaying())
+                OnSceneStop(); // 断开后退出联机运行态，恢复本地编辑
+        }
         if (actions.RequestCloseApplication)
         {
             m_NetworkSession.Disconnect();

@@ -1,8 +1,12 @@
 #include "EditorSceneSession.h"
 
+#include "Asset/PathUtils.h"
 #include "Core/Log.h"
 #include "Renderer/SceneRenderer.h"
 #include "Scene/Components.h"
+
+#include <fstream>
+#include <sstream>
 
 namespace Engine
 {
@@ -110,6 +114,49 @@ namespace Engine
 
         ENGINE_INFO("[EditorEvent] OpenScene loaded '{0}', entities={1}", filepath, CountSceneEntities(activeScene));
         m_CurrentScenePath = filepath;
+        ClearDirty();
+        return true;
+    }
+
+    bool EditorSceneSession::OpenSceneFromMemory(Ref<Scene>&        activeScene,
+                                                 const std::string& yamlContent,
+                                                 uint32_t           viewportWidth,
+                                                 uint32_t           viewportHeight)
+    {
+        if (yamlContent.empty())
+            return false;
+
+        if (m_State == SceneState::Play)
+            EndPlay(activeScene);
+
+        auto newScene = CreateRef<Scene>();
+
+        // 场景 YAML 来自服务器内存字节：写临时文件后复用路径反序列化
+        // （Deserialize 只接受路径；临时文件放 logs/ 下避免污染 assets/）
+        const auto    tempPath = PathUtils::GetLogsRoot() / "network-scene-received.scene";
+        std::ofstream out(tempPath, std::ios::binary);
+        if (!out)
+        {
+            ENGINE_WARN("[NetSession] Failed to write received scene to '{0}'", tempPath.string());
+            return false;
+        }
+        out.write(yamlContent.data(), static_cast<std::streamsize>(yamlContent.size()));
+        out.close();
+
+        SceneSerializer serializer(newScene);
+        if (!serializer.Deserialize(PathUtils::PathToUtf8String(tempPath)))
+        {
+            ENGINE_WARN("[NetSession] Failed to deserialize scene received from server");
+            return false;
+        }
+
+        newScene->SetSceneRenderer(&m_SceneRenderer);
+        newScene->OnViewportResize(viewportWidth, viewportHeight);
+        m_EditorScene  = newScene;
+        m_RuntimeScene = nullptr;
+        activeScene    = m_EditorScene;
+
+        ENGINE_INFO("[EditorEvent] Network scene loaded, entities={0}", CountSceneEntities(activeScene));
         ClearDirty();
         return true;
     }

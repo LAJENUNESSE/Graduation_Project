@@ -13,6 +13,9 @@ namespace Engine
     public:
         void BeginFrame() { ++m_FrameCounter; }
 
+        // 使整帧缓存失效（如网络客户端应用快照后强制重算世界变换）
+        void Invalidate() { ++m_FrameCounter; }
+
         bool TryGet(entt::entity e, glm::mat4& out) const
         {
             auto it = m_Entries.find(static_cast<uint32_t>(e));
