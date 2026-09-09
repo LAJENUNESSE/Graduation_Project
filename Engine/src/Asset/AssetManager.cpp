@@ -3,6 +3,7 @@
 #include "Asset/AsyncLoadQueue.h"
 #include "Asset/FileWatcher.h"
 #include "Core/Assert.h"
+#include "Core/Headless.h"
 #include "Core/Log.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/RendererAPI.h"
@@ -36,6 +37,13 @@ namespace Engine
         s_Initialized = true;
         s_AsyncQueue  = CreateScope<AsyncLoadQueue>();
         s_FileWatcher = CreateScope<FileWatcher>();
+
+        // 无头模式：跳过内置 GL 资源（白色纹理/builtin 网格会触发 GL 调用）
+        if (Headless::Enabled())
+        {
+            ENGINE_CORE_INFO("AssetManager initialized (headless, builtins skipped)");
+            return;
+        }
 
         if (RendererAPI::GetAPI() != RendererAPI::API::Vulkan)
             RegisterBuiltins();
@@ -104,7 +112,8 @@ namespace Engine
             return;
 
         // Poll async load results
-        if (s_AsyncQueue)
+        // 无头模式跳过：PollResults 会调 Texture2D::Create 走 GL
+        if (s_AsyncQueue && !Headless::Enabled())
         {
             auto results = s_AsyncQueue->PollResults();
             for (auto& result : results)
@@ -136,6 +145,10 @@ namespace Engine
 
     void AssetManager::ReloadAsset(AssetHandle handle, AssetType type)
     {
+        // 无头模式不支持热重载（重建资产会触发 GL）
+        if (Headless::Enabled())
+            return;
+
         switch (type)
         {
         case AssetType::Texture2D:
@@ -184,7 +197,11 @@ namespace Engine
             s_TexturePathIndex.erase(it);
         }
 
-        auto        tex          = Texture2D::Create(path);
+        // 无头模式：不创建 GL 纹理，SlotMap 插入空占位（只保留路径索引与 handle 有效性）
+        Ref<Texture2D> tex;
+        if (!Headless::Enabled())
+            tex = Texture2D::Create(path);
+
         AssetHandle h            = s_Textures.Insert(tex, path, AssetType::Texture2D);
         s_TexturePathIndex[path] = h;
 
@@ -210,6 +227,31 @@ namespace Engine
         }
 
         Ref<Mesh> mesh;
+        if (Headless::Enabled())
+        {
+            // 无头模式：builtin 网格走占位（VAO 留空），模型文件只登记路径——
+            // 物理侧经 GetModelPath() + assimp 独立重读，不需要 GPU 资源
+            if (path == "builtin:Cube")
+                mesh = Mesh::CreateCube();
+            else if (path == "builtin:Plane")
+                mesh = Mesh::CreatePlane();
+            else if (path == "builtin:Sphere")
+                mesh = Mesh::CreateSphere();
+            else
+            {
+                // 模型文件：走 assimp 正常解析（不建 GPU 缓冲），保留 GetModelPath() 供物理读取
+                mesh = Mesh::CreateFromFile(path);
+                ENGINE_CORE_INFO("AssetManager: Registered mesh path (headless) '{0}'", path);
+            }
+
+            if (!mesh)
+                return {};
+
+            AssetHandle h         = s_Meshes.Insert(mesh, path, AssetType::Mesh);
+            s_MeshPathIndex[path] = h;
+            return h;
+        }
+
         if (path == "builtin:Cube")
             mesh = Mesh::CreateCube();
         else if (path == "builtin:Plane")
@@ -246,14 +288,19 @@ namespace Engine
             s_CubemapPathIndex.erase(it);
         }
 
-        // Split path by semicolons
-        std::vector<std::string> faces;
-        std::istringstream       iss(path);
-        std::string              face;
-        while (std::getline(iss, face, ';'))
-            faces.push_back(face);
+        Ref<TextureCubemap> cubemap;
+        if (!Headless::Enabled())
+        {
+            // Split path by semicolons
+            std::vector<std::string> faces;
+            std::istringstream       iss(path);
+            std::string              face;
+            while (std::getline(iss, face, ';'))
+                faces.push_back(face);
 
-        auto        cubemap      = TextureCubemap::Create(faces);
+            cubemap = TextureCubemap::Create(faces);
+        }
+
         AssetHandle h            = s_Cubemaps.Insert(cubemap, path, AssetType::TextureCubemap);
         s_CubemapPathIndex[path] = h;
 
@@ -266,6 +313,10 @@ namespace Engine
     {
         if (path.empty())
             return {};
+
+        // 无头模式退化为同步占位登记（不提交 GL 纹理上传）
+        if (Headless::Enabled())
+            return Load<Texture2D>(path);
 
         AssetHandle h;
         bool        needSubmit = false;

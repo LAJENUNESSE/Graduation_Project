@@ -1,0 +1,145 @@
+Scene: NetworkDemo
+ShadowSettings:
+  Enabled: true
+  MapResolution: 1024
+  Bias: 0.005
+  OrthoSize: 20
+  NearPlane: 0.1
+  FarPlane: 50
+  CSMEnabled: true
+  CascadeCount: 3
+  CascadeSplitLambda: 0.75
+RenderSettings:
+  BloomEnabled: false
+  BloomThreshold: 1
+  BloomStrength: 0.3
+  BloomIterations: 3
+  ToneMappingMode: 1
+  GammaCorrection: true
+  MSAASamples: 1
+  SSAOEnabled: false
+  SSAORadius: 0.5
+  SSAOBias: 0.025
+  SSAOKernelSize: 32
+  SSAOIntensity: 1.5
+Entities:
+  - Entity: 17100000000000000001
+    TagComponent:
+      Tag: 地面
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [20, 0.1, 20]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.8, 0.8, 0.8, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+    RigidBodyComponent:
+      Type: 0
+      Mass: 1
+      Restitution: 0.5
+      Friction: 0.5
+      GravityScale: 1
+      FixedRotation: false
+  - Entity: 17100000000000000002
+    TagComponent:
+      Tag: Player1
+    TransformComponent:
+      Translation: [-2, 1.5, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.2, 0.6, 1, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+    RigidBodyComponent:
+      Type: 1
+      Mass: 1
+      Restitution: 0.3
+      Friction: 0.5
+      GravityScale: 1
+      FixedRotation: false
+  - Entity: 17100000000000000003
+    TagComponent:
+      Tag: Player2
+    TransformComponent:
+      Translation: [2, 1.5, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [1, 0.6, 0.2, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+    RigidBodyComponent:
+      Type: 1
+      Mass: 1
+      Restitution: 0.3
+      Friction: 0.5
+      GravityScale: 1
+      FixedRotation: false
+  - Entity: 17100000000000000004
+    TagComponent:
+      Tag: 障碍物
+    TransformComponent:
+      Translation: [0, 0.6, -3]
+      Rotation: [0, 45, 0]
+      Scale: [2, 1.2, 1]
+    MeshRendererComponent:
+      MeshType: Cube
+      Color: [0.9, 0.9, 0.3, 1]
+      TexturePath: ""
+      Tiling: [1, 1]
+      Shininess: 32
+      NormalMapPath: ""
+      Metallic: 0
+      Roughness: 0.5
+      MetallicTexturePath: ""
+      RoughnessTexturePath: ""
+      AOTexturePath: ""
+    BoxColliderComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
+      IsTrigger: false
+    RigidBodyComponent:
+      Type: 0
+      Mass: 1
+      Restitution: 0.5
+      Friction: 0.5
+      GravityScale: 1
+      FixedRotation: false

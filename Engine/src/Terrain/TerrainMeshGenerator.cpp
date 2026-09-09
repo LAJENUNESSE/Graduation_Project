@@ -1,6 +1,7 @@
 #include "engpch.h"
 #include "Terrain/TerrainMeshGenerator.h"
 #include "Asset/PathUtils.h"
+#include "Core/Headless.h"
 #include "Core/Log.h"
 #include "Renderer/Buffer.h"
 
@@ -235,6 +236,10 @@ namespace Engine
         }
 
         lod.IndexCount = static_cast<uint32_t>(indices.size());
+
+        // 无头模式跳过 GPU 缓冲创建（物理侧只消费 HeightData）
+        if (Headless::Enabled())
+            return lod;
 
         // 创建 VAO
         lod.VAO = VertexArray::Create();

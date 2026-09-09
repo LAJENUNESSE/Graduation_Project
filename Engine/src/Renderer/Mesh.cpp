@@ -3,6 +3,7 @@
 #include "Asset/AssetManager.h"
 
 #include "Asset/PathUtils.h"
+#include "Core/Headless.h"
 #include "Core/Log.h"
 #include "Renderer/Buffer.h"
 
@@ -31,6 +32,9 @@ namespace Engine
 
     Ref<Mesh> Mesh::CreateCube()
     {
+        if (Headless::Enabled())
+            return CreatePrimitiveHeadless("Cube");
+
         // 24 vertices: 4 per face, each face has its own normal and tangent
         // Layout: Position(3) + Normal(3) + TexCoords(2) + Tangent(3) = 11 floats/vertex
         // clang-format off
@@ -102,6 +106,9 @@ namespace Engine
 
     Ref<Mesh> Mesh::CreatePlane()
     {
+        if (Headless::Enabled())
+            return CreatePrimitiveHeadless("Plane");
+
         // 4 vertices in XZ plane at y=0, normal pointing up, tangent along +X
         // Layout: Position(3) + Normal(3) + TexCoords(2) + Tangent(3) = 11 floats/vertex
         // clang-format off
@@ -133,6 +140,9 @@ namespace Engine
 
     Ref<Mesh> Mesh::CreateSphere(int sectors, int stacks)
     {
+        if (Headless::Enabled())
+            return CreatePrimitiveHeadless("Sphere");
+
         if (sectors < 3)
             sectors = 3;
         if (stacks < 2)
@@ -238,8 +248,7 @@ namespace Engine
     {
         Assimp::Importer  importer;
         const std::string resolvedFilepath = PathUtils::ResolvePathString(filepath);
-
-        unsigned int flags = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
+        unsigned int      flags            = aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs |
                              aiProcess_JoinIdenticalVertices | aiProcess_CalcTangentSpace;
 
         const aiScene* scene = importer.ReadFile(resolvedFilepath, flags);
@@ -322,60 +331,66 @@ namespace Engine
             if (indices.empty())
                 continue;
 
-            // Create GPU buffers
-            auto vertexArray = VertexArray::Create();
-
-            auto vertexBuffer =
-                VertexBuffer::Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
-            vertexBuffer->SetLayout(GetMeshVertexLayout());
-            vertexArray->AddVertexBuffer(vertexBuffer);
-
-            auto indexBuffer = IndexBuffer::Create(indices.data(), static_cast<uint32_t>(indices.size()));
-            vertexArray->SetIndexBuffer(indexBuffer);
-
             SubMesh sub;
-            sub.VAO        = vertexArray;
             sub.IndexCount = static_cast<uint32_t>(indices.size());
 
-            // Extract diffuse texture from material
-            if (aiM->mMaterialIndex < scene->mNumMaterials)
+            // 无头模式：跳过 GPU 缓冲与纹理上传，保留路径信息（物理侧 LoadMeshData 走 assimp 独立重读）
+            if (!Headless::Enabled())
             {
-                aiMaterial* mat = scene->mMaterials[aiM->mMaterialIndex];
-                if (mat->GetTextureCount(aiTextureType_DIFFUSE) > 0)
+                auto vertexArray = VertexArray::Create();
+
+                auto vertexBuffer =
+                    VertexBuffer::Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(float)));
+                vertexBuffer->SetLayout(GetMeshVertexLayout());
+                vertexArray->AddVertexBuffer(vertexBuffer);
+
+                auto indexBuffer = IndexBuffer::Create(indices.data(), static_cast<uint32_t>(indices.size()));
+                vertexArray->SetIndexBuffer(indexBuffer);
+
+                sub.VAO = vertexArray;
+
+                // Extract diffuse texture from material
+                if (aiM->mMaterialIndex < scene->mNumMaterials)
                 {
-                    aiString texPath;
-                    mat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath);
-
-                    std::string texStr = texPath.C_Str();
-                    if (!texStr.empty())
+                    aiMaterial* mat = scene->mMaterials[aiM->mMaterialIndex];
+                    if (mat->GetTextureCount(aiTextureType_DIFFUSE) > 0)
                     {
-                        // Resolve relative to model directory
-                        std::filesystem::path fullTexPath = modelDir / texStr;
+                        aiString texPath;
+                        mat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath);
 
-                        if (std::filesystem::exists(fullTexPath))
+                        std::string texStr = texPath.C_Str();
+                        if (!texStr.empty())
                         {
-                            sub.DiffuseTexturePath  = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
-                            sub.DiffuseTextureAsset = AssetManager::Load<Texture2D>(sub.DiffuseTexturePath);
+                            // Resolve relative to model directory
+                            std::filesystem::path fullTexPath = modelDir / texStr;
+
+                            if (std::filesystem::exists(fullTexPath))
+                            {
+                                sub.DiffuseTexturePath  = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                                sub.DiffuseTextureAsset = AssetManager::Load<Texture2D>(sub.DiffuseTexturePath);
+                            }
                         }
                     }
-                }
 
-                // Extract normal map texture from material
-                if (mat->GetTextureCount(aiTextureType_NORMALS) > 0 || mat->GetTextureCount(aiTextureType_HEIGHT) > 0)
-                {
-                    aiString      texPath;
-                    aiTextureType normalType = (mat->GetTextureCount(aiTextureType_NORMALS) > 0) ? aiTextureType_NORMALS
-                                                                                                 : aiTextureType_HEIGHT;
-                    mat->GetTexture(normalType, 0, &texPath);
-
-                    std::string texStr = texPath.C_Str();
-                    if (!texStr.empty())
+                    // Extract normal map texture from material
+                    if (mat->GetTextureCount(aiTextureType_NORMALS) > 0 ||
+                        mat->GetTextureCount(aiTextureType_HEIGHT) > 0)
                     {
-                        std::filesystem::path fullTexPath = modelDir / texStr;
-                        if (std::filesystem::exists(fullTexPath))
+                        aiString      texPath;
+                        aiTextureType normalType = (mat->GetTextureCount(aiTextureType_NORMALS) > 0)
+                                                       ? aiTextureType_NORMALS
+                                                       : aiTextureType_HEIGHT;
+                        mat->GetTexture(normalType, 0, &texPath);
+
+                        std::string texStr = texPath.C_Str();
+                        if (!texStr.empty())
                         {
-                            sub.NormalTexturePath  = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
-                            sub.NormalTextureAsset = AssetManager::Load<Texture2D>(sub.NormalTexturePath);
+                            std::filesystem::path fullTexPath = modelDir / texStr;
+                            if (std::filesystem::exists(fullTexPath))
+                            {
+                                sub.NormalTexturePath  = PathUtils::ToProjectRelativeOrAbsolute(fullTexPath);
+                                sub.NormalTextureAsset = AssetManager::Load<Texture2D>(sub.NormalTexturePath);
+                            }
                         }
                     }
                 }

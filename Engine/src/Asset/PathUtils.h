@@ -17,6 +17,10 @@ namespace Engine::PathUtils
     bool DiscoverProjectRoot(const std::filesystem::path& startDirectory);
     bool HasProjectRoot();
 
+    // 从当前可执行文件位置向上探测项目根并 SetProjectRoot（Server 等自建 main 的进程复用）；
+    // 探测失败时回退设为 exe 所在目录。返回是否成功命中项目根。
+    bool DiscoverProjectRootFromExecutable();
+
     const std::filesystem::path& GetProjectRoot();
     std::filesystem::path        GetAssetRoot();
     std::filesystem::path        GetLogsRoot();

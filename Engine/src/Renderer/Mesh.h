@@ -49,6 +49,12 @@ namespace Engine
         {
         };
 
+        // 无头模式占位：跳过 GPU 缓冲创建（物理侧只需 GetModelPath/网格类型），VAO 留空
+        static Ref<Mesh> CreatePrimitiveHeadless(const char* meshType)
+        {
+            return CreateRef<Mesh>(PrivateTag{}, Ref<VertexArray>{}, 0, meshType);
+        }
+
     public:
         // Single-submesh constructor (primitives)
         Mesh(PrivateTag, const Ref<VertexArray>& vertexArray, uint32_t indexCount, const std::string& meshType)

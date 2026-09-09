@@ -176,6 +176,33 @@ namespace Engine::PathUtils
         return !s_ProjectRoot.empty();
     }
 
+    bool DiscoverProjectRootFromExecutable()
+    {
+        std::filesystem::path exeDir;
+
+#ifdef _WIN32
+        wchar_t exePath[MAX_PATH];
+        if (GetModuleFileNameW(nullptr, exePath, MAX_PATH) == 0)
+            return false;
+        exeDir = std::filesystem::path(exePath).parent_path();
+#elif defined(__linux__)
+        char    buf[PATH_MAX];
+        ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (len <= 0)
+            return false;
+        buf[len] = '\0';
+        exeDir   = std::filesystem::path(buf).parent_path();
+#else
+        return false;
+#endif
+
+        if (DiscoverProjectRoot(exeDir))
+            return true;
+
+        SetProjectRoot(exeDir);
+        return false;
+    }
+
     const std::filesystem::path& GetProjectRoot()
     {
         if (s_ProjectRoot.empty())

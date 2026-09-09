@@ -59,6 +59,7 @@ add_subdirectory(vendor)
 add_subdirectory(Engine)
 add_subdirectory(Sandbox)
 add_subdirectory(Editor)
+add_subdirectory(Server)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
