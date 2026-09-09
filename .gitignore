@@ -67,6 +67,8 @@ docs/*
 !docs/vulkan-migration/**
 !docs/decisions/
 !docs/decisions/**
+!docs/server/
+!docs/server/**
 !docs/simplification-audit/
 !docs/simplification-audit/**
 !docs/thesis/

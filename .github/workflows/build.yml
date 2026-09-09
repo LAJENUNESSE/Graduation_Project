@@ -56,6 +56,9 @@ jobs:
       - name: Build Engine
         run: cmake --build build --config RelWithDebInfo --target Engine
 
+      - name: Build Server
+        run: cmake --build build --config RelWithDebInfo --target Server
+
       - name: Build Editor
         run: cmake --build build --config RelWithDebInfo --target Editor
 
@@ -165,6 +168,9 @@ jobs:
 
       - name: Build Engine
         run: cmake --build build --target Engine
+
+      - name: Build Server
+        run: cmake --build build --target Server
 
       - name: Build Editor
         run: cmake --build build --target Editor
