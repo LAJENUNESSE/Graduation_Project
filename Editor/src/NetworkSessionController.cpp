@@ -1,15 +1,28 @@
 #include "engpch.h"
 #include "NetworkSessionController.h"
 
+#include "Core/KeyCodes.h"
 #include "Core/Log.h"
-#include "Core/Timestep.h"
+#include "Core/Input.h"
+#include "Scene/Components.h"
+#include "Scene/Scene.h"
+#include "Scene/SceneEntityIndex.h"
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <chrono>
 
 namespace Engine
 {
+
+    namespace
+    {
+        double NowSeconds()
+        {
+            return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        }
+    } // namespace
 
     void NetworkSessionController::OpenConnectDialog()
     {
@@ -36,7 +49,7 @@ namespace Engine
                 uint16_t port = static_cast<uint16_t>(std::atoi(m_PortBuffer));
                 if (m_Client.Connect(m_HostBuffer, port))
                 {
-                    m_State     = NetSessionState::Connected;
+                    m_State = NetSessionState::Connected;
                     m_LastError.clear();
                     SendHello();
                     ImGui::CloseCurrentPopup();
@@ -65,10 +78,13 @@ namespace Engine
     void NetworkSessionController::SendPing()
     {
         Net::ByteWriter writer;
-        double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-        writer.F64(now);
-        m_PingSentAt = now;
+        writer.F64(NowSeconds());
         m_Client.Send(Net::MessageType::C2S_Ping, writer.Data());
+    }
+
+    void NetworkSessionController::SendInput(uint16_t bits)
+    {
+        m_Client.Send(Net::MessageType::C2S_Input, Net::EncodeInput(m_InputSeq++, bits));
     }
 
     void NetworkSessionController::HandleMessage(const Net::Message& msg)
@@ -117,11 +133,30 @@ namespace Engine
             Net::ByteReader reader(msg.Payload.data(), msg.Payload.size());
             double          clientTime = 0.0;
             if (reader.F64(clientTime))
+                m_LastPingRtt = (NowSeconds() - clientTime) * 1000.0;
+            break;
+        }
+        case Net::MessageType::S2C_Snapshot:
+        {
+            Net::DecodedSnapshot decoded;
+            if (!Net::DecodeSnapshot(msg.Payload, decoded))
             {
-                double now =
-                    std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-                m_LastPingRtt = (now - clientTime) * 1000.0;
+                ENGINE_CORE_WARN("[NetSession] Malformed snapshot");
+                break;
             }
+            // 过期快照丢弃（乱序保护）
+            if (!m_Snapshots.empty() && decoded.Tick <= m_Snapshots.back().Tick)
+                break;
+
+            RemoteSnapshot snap;
+            snap.Tick           = decoded.Tick;
+            snap.ReceiveTimeSec = NowSeconds();
+            snap.Entities       = std::move(decoded.Entities);
+            m_Snapshots.push_back(std::move(snap));
+
+            // 缓冲上限 16 帧（0.8s @20Hz），防止积累
+            while (m_Snapshots.size() > 16)
+                m_Snapshots.pop_front();
             break;
         }
         default:
@@ -145,22 +180,109 @@ namespace Engine
                 HandleMessage(event.Msg);
             });
 
+        if (m_State != NetSessionState::Connected)
+            return;
+
         // 心跳：1s 间隔
-        if (m_State == NetSessionState::Connected)
+        m_PingTimer += ImGui::GetIO().DeltaTime;
+        if (m_PingTimer >= 1.0f)
         {
-            m_PingTimer += ImGui::GetIO().DeltaTime;
-            if (m_PingTimer >= 1.0f)
-            {
-                m_PingTimer = 0.0f;
-                SendPing();
-            }
+            m_PingTimer = 0.0f;
+            SendPing();
         }
+
+        // 输入采样上行：50Hz 固定间隔（快照率 20Hz 的 2.5 倍，服务器端即到即用）
+        m_InputTimer += ImGui::GetIO().DeltaTime;
+        if (m_InputTimer >= 0.02f)
+        {
+            m_InputTimer = 0.0f;
+
+            uint16_t bits = 0;
+            if (Input::IsKeyPressed(KeyCode::W))
+                bits |= Net::kInputW;
+            if (Input::IsKeyPressed(KeyCode::S))
+                bits |= Net::kInputS;
+            if (Input::IsKeyPressed(KeyCode::A))
+                bits |= Net::kInputA;
+            if (Input::IsKeyPressed(KeyCode::D))
+                bits |= Net::kInputD;
+            if (Input::IsKeyPressed(KeyCode::Q))
+                bits |= Net::kInputQ;
+            if (Input::IsKeyPressed(KeyCode::E))
+                bits |= Net::kInputE;
+
+            SendInput(bits);
+        }
+    }
+
+    bool NetworkSessionController::ApplyInterpolatedTransforms(Ref<Scene>& scene, double renderTimeSec)
+    {
+        // 插值延迟 = 2 个快照间隔（20Hz → 100ms）；渲染时刻 = 最新快照到达时间 - 延迟
+        constexpr double kInterpDelaySec = 0.1;
+        if (m_Snapshots.size() < 2)
+            return false;
+
+        const double target = m_Snapshots.back().ReceiveTimeSec - kInterpDelaySec;
+
+        // 找到 target 前后的两帧快照
+        size_t idx1 = 0;
+        while (idx1 + 1 < m_Snapshots.size() && m_Snapshots[idx1 + 1].ReceiveTimeSec <= target)
+            ++idx1;
+        if (idx1 + 1 >= m_Snapshots.size())
+            return false;
+
+        const RemoteSnapshot& a    = m_Snapshots[idx1];
+        const RemoteSnapshot& b    = m_Snapshots[idx1 + 1];
+        const double          span = b.ReceiveTimeSec - a.ReceiveTimeSec;
+        const float           alpha =
+            span > 0.0 ? static_cast<float>(std::clamp((target - a.ReceiveTimeSec) / span, 0.0, 1.0)) : 0.0f;
+
+        auto& registry = scene->GetRegistry();
+        auto& index    = const_cast<SceneEntityIndex&>(scene->GetEntityIndex());
+        bool  applied  = false;
+        for (const auto& se : b.Entities)
+        {
+            entt::entity entity = index.Find(static_cast<uint64_t>(se.Uuid));
+            if (entity == entt::null || !registry.valid(entity))
+                continue;
+            if (!registry.all_of<TransformComponent>(entity))
+                continue;
+
+            auto& tc = registry.get<TransformComponent>(entity);
+
+            // 在 a 中找同实体做线性插值；找不到（新出现）直接取 b
+            glm::vec3                  pos = se.Translation, rot = se.Rotation;
+            const Net::SnapshotEntity* prev = nullptr;
+            for (const auto& e : a.Entities)
+            {
+                if (e.Uuid == se.Uuid)
+                {
+                    prev = &e;
+                    break;
+                }
+            }
+            if (prev)
+            {
+                pos = glm::mix(prev->Translation, se.Translation, alpha);
+                rot = glm::mix(prev->Rotation, se.Rotation, alpha);
+            }
+
+            tc.Translation = pos;
+            tc.Rotation    = rot;
+            applied        = true;
+        }
+
+        // 快照写完后强制世界变换缓存失效，本帧渲染重算
+        if (applied)
+            scene->GetTransformCache().Invalidate();
+        return applied;
     }
 
     void NetworkSessionController::Disconnect()
     {
         m_Client.Disconnect();
         m_State = NetSessionState::Disconnected;
+        m_Snapshots.clear();
     }
 
     std::string NetworkSessionController::GetStatusText() const

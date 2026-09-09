@@ -67,6 +67,9 @@ namespace Engine
         // 获取本帧碰撞事件（Step 后有效），包含 Enter/Stay/Exit
         const std::vector<CollisionEvent>& GetCollisionEvents() const { return m_CollisionEvents; }
 
+        // 对指定实体的 Dynamic 刚体设置线速度（服务器输入注入用；体不存在或非 Dynamic 返回 false）
+        bool SetEntityLinearVelocity(entt::entity entity, const glm::vec3& velocity);
+
     private:
         btDiscreteDynamicsWorld*             m_DynamicsWorld   = nullptr;
         btBroadphaseInterface*               m_Broadphase      = nullptr;

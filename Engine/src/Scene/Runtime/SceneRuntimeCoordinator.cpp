@@ -35,6 +35,13 @@ namespace Engine
             m_BulletPhysicsWorld->DestroyBody(entity);
     }
 
+    bool SceneRuntimeCoordinator::ApplyEntityLinearVelocity(entt::entity entity, const glm::vec3& velocity)
+    {
+        if (!m_BulletPhysicsWorld)
+            return false;
+        return m_BulletPhysicsWorld->SetEntityLinearVelocity(entity, velocity);
+    }
+
     void SceneRuntimeCoordinator::OnRuntimeStart(SceneRenderer* renderer)
     {
         size_t entityCount = 0;

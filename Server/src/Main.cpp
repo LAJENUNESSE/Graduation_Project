@@ -11,6 +11,8 @@
 #include "Scene/Entity.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneSerializer.h"
+#include "SessionManager.h"
+#include "Network/SnapshotCodec.h"
 
 #include <atomic>
 #include <chrono>
@@ -105,7 +107,11 @@ int main(int argc, char** argv)
         ENGINE_CORE_INFO("[Server] Scene payload prepared: {0} bytes", sceneYaml.size());
     }
 
-    auto handleServerEvent = [&server, &lastClientActivityMs, &sceneYaml](const Net::ServerEvent& event)
+    // 玩家会话管理：Tag == PlayerN 的实体为各槽位可控实体
+    SessionManager sessions;
+    sessions.BindPlayerEntities(scene);
+
+    auto handleServerEvent = [&server, &lastClientActivityMs, &sceneYaml, &sessions](const Net::ServerEvent& event)
     {
         if (event.Connected)
         {
@@ -114,6 +120,7 @@ int main(int argc, char** argv)
         }
         if (event.Disconnected)
         {
+            sessions.ReleaseSlot(event.SessionId);
             ENGINE_CORE_INFO("[Server] Client session {0} disconnected", event.SessionId);
             return;
         }
@@ -133,14 +140,30 @@ int main(int argc, char** argv)
                 return;
             }
 
+            uint16_t playerIndex = sessions.AssignSlot(event.SessionId);
+            if (playerIndex == UINT16_MAX)
+            {
+                Net::ByteWriter reject;
+                reject.Str("server full");
+                server.Send(event.SessionId, Net::MessageType::S2C_Reject, reject.Data());
+                return;
+            }
+
             // Welcome: playerIndex(u16) + sceneYamlSize(u32) + yaml
             Net::ByteWriter welcome;
-            welcome.U16(0); // assignedPlayerIndex（P3 改为按会话分配）
+            welcome.U16(playerIndex);
             welcome.U32(static_cast<uint32_t>(sceneYaml.size()));
             welcome.Bytes(reinterpret_cast<const uint8_t*>(sceneYaml.data()), sceneYaml.size());
             server.Send(event.SessionId, Net::MessageType::S2C_Welcome, welcome.Data());
-            ENGINE_CORE_INFO("[Server] Welcome sent to session {0}: scene={1} bytes", event.SessionId,
-                             sceneYaml.size());
+            ENGINE_CORE_INFO("[Server] Welcome sent to session {0}: player={1} scene={2} bytes", event.SessionId,
+                             playerIndex, sceneYaml.size());
+        }
+        else if (event.Msg.Type == Net::MessageType::C2S_Input)
+        {
+            uint32_t seq  = 0;
+            uint16_t bits = 0;
+            if (Net::DecodeInput(event.Msg.Payload, seq, bits))
+                sessions.ApplyInput(event.SessionId, bits, seq);
         }
         else if (event.Msg.Type == Net::MessageType::C2S_Ping)
         {
@@ -160,9 +183,11 @@ int main(int argc, char** argv)
 
     server.Poll(handleServerEvent);
 
-    const auto  stepDuration = std::chrono::duration<double>(1.0 / static_cast<double>(options.TickRate));
-    const auto  startTime    = std::chrono::steady_clock::now();
-    const float stepSeconds  = 1.0f / options.TickRate;
+    const auto      stepDuration        = std::chrono::duration<double>(1.0 / static_cast<double>(options.TickRate));
+    const auto      startTime           = std::chrono::steady_clock::now();
+    const float     stepSeconds         = 1.0f / options.TickRate;
+    constexpr float kSnapshotRate       = 20.0f; // Hz
+    float           snapshotAccumulator = 0.0f;
 
     uint64_t tick = 0;
     while (options.DurationSeconds <= 0.0 ||
@@ -173,8 +198,44 @@ int main(int argc, char** argv)
 
         server.Poll(handleServerEvent);
 
+        // 输入 → 权威刚体速度注入（每 tick）
+        const float moveSpeed = 5.0f;
+        for (uint16_t i = 0; i < SessionManager::kMaxPlayers; ++i)
+        {
+            auto* slot = sessions.GetSlot(i);
+            if (!slot || !slot->Occupied || slot->Entity == entt::null || !scene->GetRegistry().valid(slot->Entity))
+                continue;
+
+            glm::vec3      velocity{0.0f};
+            const uint16_t bits = slot->InputBits;
+            if (bits & Net::kInputW)
+                velocity.z += moveSpeed;
+            if (bits & Net::kInputS)
+                velocity.z -= moveSpeed;
+            if (bits & Net::kInputA)
+                velocity.x -= moveSpeed;
+            if (bits & Net::kInputD)
+                velocity.x += moveSpeed;
+            if (bits & Net::kInputQ)
+                velocity.y += moveSpeed;
+            if (bits & Net::kInputE)
+                velocity.y -= moveSpeed;
+
+            scene->ApplyEntityLinearVelocity(slot->Entity, velocity);
+        }
+
         EditorCamera dummyCamera;
         scene->OnUpdateRuntime(Timestep(stepSeconds), dummyCamera);
+
+        // 20Hz 快照广播（Dynamic 刚体 Transform 全量）
+        snapshotAccumulator += stepSeconds;
+        if (snapshotAccumulator >= 1.0f / kSnapshotRate)
+        {
+            snapshotAccumulator = 0.0f;
+            auto entities       = Net::CollectSnapshotEntities(scene);
+            server.Broadcast(Net::MessageType::S2C_Snapshot,
+                             Net::EncodeSnapshot(static_cast<uint32_t>(tick), entities));
+        }
 
         ++tick;
         if (tick % static_cast<uint64_t>(options.TickRate) == 0)

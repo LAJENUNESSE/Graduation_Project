@@ -149,6 +149,13 @@ namespace Engine
         m_Boot->ViewportController().OnUpdate(ts, *m_ActiveScene);
         AssetManager::Update(ts);
         m_NetworkSession.PollNetwork();
+
+        // 联机运行态：应用服务器快照（插值写 Transform），本地不步进
+        const bool netPlay =
+            m_Boot->SceneSession().IsPlaying() && m_Boot->SceneSession().GetRuntimeMode() == RuntimeMode::NetworkClient;
+        if (netPlay)
+            m_NetworkSession.ApplyInterpolatedTransforms(m_ActiveScene, 0.0);
+
         m_Boot->RenderController().OnUpdate(ts, m_ActiveScene, m_Boot->SceneSession().GetState(),
                                             m_Boot->SceneSession().GetRuntimeMode());
     }

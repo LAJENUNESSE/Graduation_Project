@@ -3,6 +3,7 @@
 #include "Core/Timestep.h"
 
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 #include <memory>
 #include <set>
 #include <vector>
@@ -33,6 +34,9 @@ namespace Engine
 
         // 供 Scene::DestroyEntity 调用
         void DestroyPhysicsBody(entt::entity entity);
+
+        // 服务器权威：对运行中 Dynamic 刚体设置线速度（无物理世界/体不存在返回 false）
+        bool ApplyEntityLinearVelocity(entt::entity entity, const glm::vec3& velocity);
 
         // 不可拷贝/移动（持有引用成员）
         SceneRuntimeCoordinator(const SceneRuntimeCoordinator&)            = delete;
