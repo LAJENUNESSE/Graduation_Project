@@ -52,6 +52,9 @@ pic/
 logs/
 benchmark/results/
 
+# Local scratch (test logs, ad-hoc scripts)
+tmp/
+
 # Python cache
 __pycache__/
 *.pyc
