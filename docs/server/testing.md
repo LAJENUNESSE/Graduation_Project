@@ -170,6 +170,29 @@ Server/src/Main.cpp
   -> BulletPhysicsWorld::GetEntityLinearVelocity()           Engine/src/Physics/BulletPhysicsWorld.cpp
 ```
 
+### 4.1 必须唤醒休眠刚体（踩过的坑）
+
+`BulletPhysicsWorld::SetEntityLinearVelocity()` 写完速度后**必须**显式唤醒刚体：
+
+```cpp
+body->setLinearVelocity(ToBt(velocity));
+body->activate(true);                              // 关键：forceActivation
+body->setActivationState(DISABLE_DEACTIVATION);    // 服务器权威模拟下不允许自动休眠
+```
+
+**症状**：漏了这两行时，输入注入日志一切正常
+（`ApplyInput ... bits=1`、`inject ... vel=(0.00,0.00,5.00)`），但方块纹丝不动，
+冒烟脚本报 `FAIL: 按住 W 后未前进：Δz=0.000`。
+
+**机理**：`setActivationState(DISABLE_DEACTIVATION)` 只阻止**将来**的自动休眠，
+不会唤醒**已经**睡着的刚体。地面方块落地静止约 1s 后 `active` 就变成 0；
+`setLinearVelocity()` 对 inactive 刚体只是改了数值，`stepSimulation` 会跳过
+整个 inactive island，同一 tick 内速度被丢弃。
+
+**为什么难查**：这个 bug 与「服务器跑了多久」强相关 —— 长跑的服务器上必然复现，
+重启后第一次测试（方块还在下落/刚落地）反而能过，容易被误判成脚本 flaky，
+或错误归因到「0 号槽被别的客户端占用」。
+
 ---
 
 ## 5. 已知未覆盖的盲区

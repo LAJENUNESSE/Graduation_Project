@@ -14,6 +14,10 @@
     4. 水平输入：按住 W 后 +Z 位移是否达标（输入 -> 权威刚体链路是否打通）
     5. 重力回归门禁：Q 抬升 -> 松手 -> 测自由落体回落幅度
 
+本脚本占用的槽位由服务器决定（`Welcome.playerIndex`），**不假定是 P1**。
+服务器上若已有别的连接（比如编辑器）占着 0 号槽，本脚本会拿到 P2，
+此时它自动改用 P2 的实体做测试。若你希望它测 P1，先断开其它连接或重启服务器。
+
 第 5 项是历史 bug 的回归门禁。服务端曾每 tick 用 setLinearVelocity 整体覆盖速度，
 无输入时写 (0,0,0)，把 Bullet 累加的重力速度清零，方块于是以约 g*dt ≈ 0.16 m/s
 匀速下沉而不是按 9.81 m/s² 加速下落。
@@ -25,6 +29,9 @@
     退化：松手后匀速下沉，3s 内仅回落约 0.48m -> 断言失败
 
 退出码：0 = 全部通过，1 = 断言失败，2 = 连接/协议错误。
+
+注意：脚本会就地移动方块，跑完之后场景里方块已不在初始位置。
+连续跑到第 3 次以后，"按初始位置认实体"可能失效 —— 重启服务器即可。
 """
 
 import argparse
@@ -49,12 +56,16 @@ kInputQ = 1 << 4
 # network-demo.scene：地面顶面 y=0.05，方块半高 0.5，故静止高度约 0.55
 REST_Y = 0.55
 # network-demo.scene：Player1 起点 (-2, 1.5, 0)，Player2 起点 (2, 1.5, 0)
-# 本脚本占用 0 号槽位（Player1），用初始 x < 0 识别被控实体，避免依赖 entt 遍历顺序。
-CONTROLLED_START_X = -2.0
+# 玩家槽位 -> 初始 x。被控实体必须按 Welcome 返回的 playerIndex 选，
+# 不能假定自己一定拿到 0 号槽：服务器上若已有别的连接（比如编辑器），
+# 本脚本会拿到 1 号槽，此时按 Player1 的特征去找会认错实体（见下方 locate 处注释）。
+PLAYER_START_X = {-2.0: 0, 2.0: 1}  # 初始 x -> 槽位
+PLAYER_SLOT_START_X = {v: k for k, v in PLAYER_START_X.items()}  # 槽位 -> 初始 x
 
 FORWARD_MOVE_THRESHOLD = 0.5  # 按住 W 后 +Z 位移下限
 LIFT_THRESHOLD = 1.0  # 按住 Q 后 +Y 抬升下限
 FALL_THRESHOLD = 1.0  # 松手后自由落体回落幅度下限（见下方重力回归说明）
+POS_MATCH_TOLERANCE = 0.75  # 按初始位置认实体时的容差
 
 
 def frame(msg_type, payload=b"", version=PROTOCOL_VERSION):
@@ -187,6 +198,11 @@ def main():
     if len(body) != 6 + yaml_size:
         fail(f"Welcome 长度不符：声明 {yaml_size}B，实际 {len(body) - 6}B")
     print(f"[1/5] Welcome: player=P{player_index + 1}, scene={yaml_size}B")
+    if player_index != 0:
+        print(f"      注意：拿到的是 P{player_index + 1} 而非 P1，"
+              f"说明服务器上已有其它连接占用 0 号槽（编辑器？）。\n"
+              f"      本脚本会自动改用 P{player_index + 1} 的实体做测试，但如果那不是你想要的，"
+              f"请断开其它连接或重启服务器后重跑。")
 
     # ── 2. Ping -> Pong ────────────────────────────────────────────────
     sent_time = time.time()
@@ -213,26 +229,55 @@ def main():
     last_tick, last_entities = snaps_w[-1]
     print(f"[3/5] Snapshot: 收到 {len(snaps_w)} 帧（tick {first_tick} → {last_tick}），"
           f"{len(last_entities)} 个 Dynamic 实体")
-
     if not first_entities:
         fail("首帧快照无 Dynamic 实体")
 
-    # 用初始 x < 0 定位 Player1（本脚本占用的槽位），避免依赖 entt 遍历顺序
+    # 按 Welcome 返回的槽位确定自己那个实体的初始 x，避免依赖 entt 遍历顺序。
+    #
+    # ⚠️ 这里**必须**用 player_index，不能写成"找 x≈-2 的那个"：
+    # 服务器上若已有别的连接占着 0 号槽（比如编辑器已连上），本脚本会拿到 1 号槽，
+    # 此时自己的实体在 x=+2。若还按 x≈-2 去找，会认成对方那个静止不动的实体，
+    # 于是"按住 W 没有位移"——但那其实是别人没输入，不是脚本的输入没生效。
+    expected_x = PLAYER_SLOT_START_X.get(player_index)
+    if expected_x is None:
+        fail(f"未知的玩家槽位 {player_index}（场景里只约定 Player1/Player2 两个可控实体）")
+
     controlled = None
     for uuid, pos in first_entities.items():
-        if abs(pos[0] - CONTROLLED_START_X) < 1.0:
+        if abs(pos[0] - expected_x) < POS_MATCH_TOLERANCE:
             controlled = uuid
             break
     if controlled is None:
-        fail(f"未能在快照中定位 Player1（初始 x≈{CONTROLLED_START_X}）")
+        seen = ", ".join(f"x={p[0]:+.2f}" for p in first_entities.values())
+        fail(f"未能在快照中定位自己的实体（槽位 P{player_index + 1}，期望初始 x≈{expected_x}）；"
+             f"当前快照实体位置：{seen}\n"
+             f"      若期望的实体已被移动过（例如上一轮测试留下的位移），"
+             f"重启服务器再跑本脚本。")
+
+    # 顺带记下另一个玩家（用来确认输入只驱动自己的实体）
+    other = None
+    for uuid, pos in first_entities.items():
+        if uuid != controlled and abs(pos[0] + expected_x) < POS_MATCH_TOLERANCE:
+            other = uuid
+            break
 
     start_pos = first_entities[controlled]
     end_pos = last_entities.get(controlled, start_pos)
 
     dz = end_pos[2] - start_pos[2]
     if dz <= FORWARD_MOVE_THRESHOLD:
-        fail(f"按住 W 后未前进：Δz={dz:.3f}（期望 > {FORWARD_MOVE_THRESHOLD}）")
-    print(f"[4/5] 水平输入生效：Player1 z {start_pos[2]:.2f} → {end_pos[2]:.2f} (Δz={dz:+.2f})")
+        fail(f"按住 W 后未前进：Δz={dz:.3f}（期望 > {FORWARD_MOVE_THRESHOLD}）。\n"
+             f"      被控实体：槽位 P{player_index + 1}，初始 x={start_pos[0]:+.2f}；"
+             f"z {start_pos[2]:.2f} → {end_pos[2]:.2f}")
+    print(f"[4/5] 水平输入生效：P{player_index + 1} z {start_pos[2]:.2f} → {end_pos[2]:.2f} (Δz={dz:+.2f})")
+
+    # 确认输入没有串到对方实体上
+    if other is not None:
+        other_last = last_entities.get(other)
+        if other_last is not None:
+            other_dz = abs(other_last[2] - first_entities[other][2])
+            if other_dz > FORWARD_MOVE_THRESHOLD:
+                fail(f"输入串到了对方实体：对方 z 也位移了 {other_dz:.2f}")
 
     # ── 5. 重力回归门禁：Q 抬升 → 松手 → 测自由落体 ────────────────────
     # 直接在开局测下落是测不到的：方块从 y=1.5 自由落体只需约 0.44s 就落到 y≈0.55，
@@ -262,8 +307,8 @@ def main():
              f"      这通常意味着服务端每 tick 用 setLinearVelocity 整体覆盖了速度，\n"
              f"      把 Bullet 累加的重力分量清零，方块会以约 0.16 m/s 匀速下沉而非自由落体。\n"
              f"      检查 Server/src/Main.cpp 的输入注入是否保留了 Y 轴速度。")
-    print(f"[5/5] 重力正常：抬升至 y={peak_y:.2f}，松手后回落 {dropped:.2f}m 到 y={low_y:.2f}"
-          f"（静止高度约 {REST_Y}）")
+    print(f"[5/5] 重力正常：P{player_index + 1} 抬升至 y={peak_y:.2f}，松手后回落 {dropped:.2f}m "
+          f"到 y={low_y:.2f}（静止高度约 {REST_Y}）")
 
     print("PASS")
     return 0
