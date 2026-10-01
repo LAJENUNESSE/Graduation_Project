@@ -45,6 +45,32 @@ PORT_SCAN_RANGE = 40
 SETTLE_SECONDS = 10.0
 
 
+def setup_console_encoding():
+    """让中文在 Windows 控制台里能正常显示。
+
+    Windows 控制台默认代码页常是 936(GBK)，而 Python 输出的是 UTF-8 字节，
+    两者不匹配时中文会变成乱码（输出本身没错，只是显示不对）。
+
+    处理顺序：
+      1. 先把控制台代码页切到 65001(UTF-8) —— Git Bash / cmd 都有效
+      2. 再把 Python 的 stdout/stderr 强制成 UTF-8
+    任一步失败都不致命：最坏情况只是显示乱码，测试逻辑不受影响。
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+            ctypes.windll.kernel32.SetConsoleCP(65001)
+        except Exception:
+            pass
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # 非 TextIOWrapper（如被重定向）时忽略
+
+
 def log(msg):
     print(msg, flush=True)
 
@@ -127,7 +153,24 @@ def read_log(path):
         return ""
 
 
+def decode_best_effort(raw):
+    """把子进程输出的原始字节尽量还原成文本。
+
+    子进程的 stdout 编码取决于它自己的环境（可能被 PYTHONIOENCODING 控制，
+    也可能受系统代码页影响）。按 UTF-8 → GBK 顺序试，最后兜底 replace，
+    避免把 GBK 字节硬按 UTF-8 解出满屏 "锟斤拷"。
+    """
+    for enc in ("utf-8", "gbk"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", "replace")
+
+
 def main():
+    setup_console_encoding()
+
     parser = argparse.ArgumentParser(description="一键网络同步测试")
     parser.add_argument("--port", type=int, default=None,
                         help="指定端口（默认自动找空闲端口）")
@@ -209,12 +252,17 @@ def main():
         log(f"[5/6] 运行冒烟测试…（日志：{smoke_log.relative_to(REPO_ROOT)}）")
         log("-" * 62)
 
+        # 用 bytes 捕获再自己解码：子进程的编码取决于它自己的 stdout 环境，
+        # 不能假定一定是 UTF-8。按 UTF-8 → GBK 顺序尝试，都不行再 replace。
+        child_env = dict(env)
+        child_env["PYTHONIOENCODING"] = "utf-8"  # 明确要求子进程输出 UTF-8
         smoke = subprocess.run(
             [sys.executable, str(SMOKE_PY), "--port", str(port)],
-            cwd=str(REPO_ROOT), capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=180,
+            cwd=str(REPO_ROOT), capture_output=True, timeout=180,
+            env=child_env,
         )
-        smoke_out = (smoke.stdout or "") + (smoke.stderr or "")
+        raw = (smoke.stdout or b"") + (smoke.stderr or b"")
+        smoke_out = decode_best_effort(raw)
         print(smoke_out, end="" if smoke_out.endswith("\n") else "\n", flush=True)
         smoke_log.write_text(smoke_out, encoding="utf-8")
 

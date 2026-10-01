@@ -40,6 +40,30 @@ import struct
 import sys
 import time
 
+
+def _setup_console_encoding():
+    """让中文在 Windows 控制台正常显示。
+
+    Windows 控制台默认代码页常是 936(GBK)，而本脚本输出 UTF-8 字节，
+    不匹配时中文显示成乱码（数据本身没错）。这里把控制台切到 UTF-8 并把
+    stdout/stderr 固定为 UTF-8。失败不影响测试逻辑。
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+            ctypes.windll.kernel32.SetConsoleCP(65001)
+        except Exception:
+            pass
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
+_setup_console_encoding()
+
 # 与 Engine/src/Network/Protocol.h 保持一致
 MSG_HELLO = 1
 MSG_WELCOME = 2
