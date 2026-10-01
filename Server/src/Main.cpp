@@ -199,6 +199,12 @@ int main(int argc, char** argv)
         server.Poll(handleServerEvent);
 
         // 输入 → 权威刚体速度注入（每 tick）
+        //
+        // 关键：必须保留 Bullet 已累加的 Y 轴（重力）分量。早期实现每 tick 把速度整体覆盖为
+        // 输入速度，无输入时即 (0,0,0)，等于把上一 tick 的重力速度清零——物体因此以约
+        // g*dt ≈ 0.16 m/s 匀速下沉而非自由落体（视觉上"缓慢飘落"）。
+        // 现在分层接管：水平分量由输入直接控制（松键即停），Y 轴默认交还物理引擎，
+        // 仅 Q/E 按下时由输入接管。
         const float moveSpeed = 5.0f;
         for (uint16_t i = 0; i < SessionManager::kMaxPlayers; ++i)
         {
@@ -206,8 +212,16 @@ int main(int argc, char** argv)
             if (!slot || !slot->Occupied || slot->Entity == entt::null || !scene->GetRegistry().valid(slot->Entity))
                 continue;
 
-            glm::vec3      velocity{0.0f};
-            const uint16_t bits = slot->InputBits;
+            // 读回当前速度；读取失败按零处理，不影响后续注入
+            glm::vec3 currentVelocity{0.0f};
+            scene->ReadEntityLinearVelocity(slot->Entity, currentVelocity);
+
+            glm::vec3      velocity = currentVelocity;
+            const uint16_t bits     = slot->InputBits;
+
+            // 水平分量：输入直接接管，松键立即停止（演示场景不需要惯性滑行）
+            velocity.x = 0.0f;
+            velocity.z = 0.0f;
             if (bits & Net::kInputW)
                 velocity.z += moveSpeed;
             if (bits & Net::kInputS)
@@ -216,10 +230,12 @@ int main(int argc, char** argv)
                 velocity.x -= moveSpeed;
             if (bits & Net::kInputD)
                 velocity.x += moveSpeed;
+
+            // 垂直分量：默认保留重力累积；Q/E 按下时改由输入接管
             if (bits & Net::kInputQ)
-                velocity.y += moveSpeed;
-            if (bits & Net::kInputE)
-                velocity.y -= moveSpeed;
+                velocity.y = moveSpeed;
+            else if (bits & Net::kInputE)
+                velocity.y = -moveSpeed;
 
             scene->ApplyEntityLinearVelocity(slot->Entity, velocity);
         }
