@@ -635,6 +635,23 @@ namespace Engine
             return false; // 静态体不接受速度注入
 
         body->setLinearVelocity(ToBt(velocity));
+
+        // 关键：唤醒休眠刚体。
+        //
+        // Bullet 的 setActivationState(DISABLE_DEACTIVATION) 只影响"自动休眠"，
+        // 已经睡着的刚体靠 setLinearVelocity 不会自己醒——速度写进去了，但
+        // stepSimulation 会跳过 inactive island，同一 tick 内速度就被丢弃，
+        // 表现为"注入成功但物体纹丝不动"。
+        //
+        // 静态/停稳的地面方块很容易触发休眠：本例中方块落地静止约 1s 后
+        // active 就变成 0。服务器每 60Hz 持续注入输入，必须显式接管激活状态，
+        // 否则联机时"按住 W 不动"。
+        body->activate(true); // forceActivation=true：即使处于 ISLAND_SLEEPING 也强制唤醒
+
+        // 禁用自动休眠：服务器权威模拟下由输入驱动，不应让"无输入静止"的刚体
+        // 自行休眠——一旦休眠，之后的注入都要等 activate 生效，会引入额外延迟。
+        body->setActivationState(DISABLE_DEACTIVATION);
+
         return true;
     }
 
