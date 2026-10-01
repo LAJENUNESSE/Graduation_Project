@@ -70,6 +70,11 @@ namespace Engine
         // 对指定实体的 Dynamic 刚体设置线速度（服务器输入注入用；体不存在或非 Dynamic 返回 false）
         bool SetEntityLinearVelocity(entt::entity entity, const glm::vec3& velocity);
 
+        // 读取指定实体刚体的当前线速度（体不存在返回 false，out 保持不变）。
+        // 服务器注入水平输入时需要先读回速度，才能保留 Bullet 已累加的重力分量——
+        // 直接用 SetEntityLinearVelocity 整体覆盖会把 Y 轴清零，导致物体匀速下沉而非自由落体。
+        bool GetEntityLinearVelocity(entt::entity entity, glm::vec3& out) const;
+
     private:
         btDiscreteDynamicsWorld*             m_DynamicsWorld   = nullptr;
         btBroadphaseInterface*               m_Broadphase      = nullptr;

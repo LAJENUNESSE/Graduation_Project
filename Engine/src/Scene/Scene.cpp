@@ -164,6 +164,13 @@ namespace Engine
         return m_RuntimeCoordinator->ApplyEntityLinearVelocity(entity, velocity);
     }
 
+    bool Scene::ReadEntityLinearVelocity(entt::entity entity, glm::vec3& out) const
+    {
+        if (!m_RuntimeCoordinator)
+            return false;
+        return m_RuntimeCoordinator->ReadEntityLinearVelocity(entity, out);
+    }
+
     Ref<Scene> Scene::Copy(Ref<Scene> src)
     {
         auto newScene = CreateRef<Scene>();

@@ -638,6 +638,16 @@ namespace Engine
         return true;
     }
 
+    bool BulletPhysicsWorld::GetEntityLinearVelocity(entt::entity entity, glm::vec3& out) const
+    {
+        auto it = m_Bodies.find(static_cast<uint32_t>(entity));
+        if (it == m_Bodies.end() || !it->second.body)
+            return false;
+
+        out = ToGlm(it->second.body->getLinearVelocity());
+        return true;
+    }
+
     void BulletPhysicsWorld::DestroyBody(entt::entity entity)
     {
         if (!m_DynamicsWorld)

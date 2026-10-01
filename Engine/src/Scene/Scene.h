@@ -50,6 +50,10 @@ namespace Engine
         // 服务器权威：对运行中实体的 Dynamic 刚体设置线速度（无物理世界/非 Dynamic 返回 false）
         bool ApplyEntityLinearVelocity(entt::entity entity, const glm::vec3& velocity);
 
+        // 读取运行中实体的当前线速度（无物理世界/体不存在返回 false）。
+        // 注入水平输入前先读回，可保留 Bullet 累加的重力分量。
+        bool ReadEntityLinearVelocity(entt::entity entity, glm::vec3& out) const;
+
         static Ref<Scene> Copy(Ref<Scene> src);
 
         void OnViewportResize(uint32_t width, uint32_t height);

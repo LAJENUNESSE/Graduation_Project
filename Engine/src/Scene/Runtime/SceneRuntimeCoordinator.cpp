@@ -42,6 +42,13 @@ namespace Engine
         return m_BulletPhysicsWorld->SetEntityLinearVelocity(entity, velocity);
     }
 
+    bool SceneRuntimeCoordinator::ReadEntityLinearVelocity(entt::entity entity, glm::vec3& out) const
+    {
+        if (!m_BulletPhysicsWorld)
+            return false;
+        return m_BulletPhysicsWorld->GetEntityLinearVelocity(entity, out);
+    }
+
     void SceneRuntimeCoordinator::OnRuntimeStart(SceneRenderer* renderer)
     {
         size_t entityCount = 0;
