@@ -3,7 +3,9 @@
 #include "Core/Application.h"
 #include "Core/Log.h"
 #include "Renderer/RendererAPI.h"
+#ifdef ENGINE_ENABLE_VULKAN
 #include "Platform/Vulkan/VulkanContext.h"
+#endif
 #include "Debug/PerformanceMonitor.h"
 #include "ImGui/ImGuiLayer.h"
 #include "Scene/Scene.h"
@@ -124,6 +126,7 @@ namespace Engine
 
         uint32_t    textureID   = m_Framebuffer->GetColorAttachmentRendererID(0);
         ImTextureID viewportTex = static_cast<ImTextureID>(static_cast<uintptr_t>(textureID));
+#ifdef ENGINE_ENABLE_VULKAN
         if (RendererAPI::GetAPI() == RendererAPI::API::Vulkan)
         {
             // Phase 8.2：Vulkan path 以 VkDescriptorSet（void*）作为 ImTextureID
@@ -131,6 +134,7 @@ namespace Engine
                 VulkanContext::Get()->GetImGuiTextureForView(m_Framebuffer->GetColorAttachmentViewHandle(0));
             viewportTex = static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(descriptorSet));
         }
+#endif
         ImGui::Image(viewportTex, ImVec2(imageSize.x, imageSize.y), ImVec2(0, 1), ImVec2(1, 0));
 
         // FPS overlay drawn directly on the viewport via ImDrawList (simulated frosted-glass blur)

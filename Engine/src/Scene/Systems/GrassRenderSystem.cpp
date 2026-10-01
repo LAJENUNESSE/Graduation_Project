@@ -608,7 +608,11 @@ namespace Engine
                                  d0.Color.y, d0.Color.z, d0.Intensity);
             }
 
+            // VulkanContext 类型仅在 ENGINE_ENABLE_VULKAN 下声明（头文件按宏保护），
+            // 外层 vulkanBackend 只是运行时判断，挡不住非 Vulkan 构建的编译期符号查找。
+#ifdef ENGINE_ENABLE_VULKAN
             frameIndex = VulkanContext::Get()->GetCurrentFrameIndex();
+#endif
         }
 
         // 阴影贴图槽：BindTextureUnit 在 Vulkan 是 no-op，须绑 depth attachment view
