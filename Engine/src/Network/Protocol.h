@@ -18,26 +18,26 @@ namespace Engine::Net
     enum class MessageType : uint16_t
     {
         // 握手
-        C2S_Hello = 1,    // payload: protocolVersion(u16) + 客户端名长度(u16) + utf8 名
-        S2C_Welcome,      // payload: assignedPlayerIndex(u16) + 场景YAML长度(u32) + YAML 字节
-        S2C_Reject,       // payload: 原因长度(u16) + utf8 原因
+        C2S_Hello = 1, // payload: protocolVersion(u16) + 客户端名长度(u16) + utf8 名
+        S2C_Welcome,   // payload: assignedPlayerIndex(u16) + 场景YAML长度(u32) + YAML 字节
+        S2C_Reject,    // payload: 原因长度(u16) + utf8 原因
 
         // 会话
-        C2S_Input = 10,   // payload: seq(u32) + 按键位掩码(u16)
-        S2C_Snapshot,     // payload: tick(u32) + 实体数(u16) + N * [UUID(u64)+pos+rot+scale (12*3 f32 LE)]
-        C2S_Ping = 20,    // payload: clientTimeSec(f64)
-        S2C_Pong,         // payload: 原样回传 clientTimeSec(f64)
+        C2S_Input = 10, // payload: seq(u32) + 按键位掩码(u16)
+        S2C_Snapshot,   // payload: tick(u32) + 实体数(u16) + N * [UUID(u64)+pos3+rot3+scale3 (9*f32 LE)]
+        C2S_Ping = 20,  // payload: clientTimeSec(f64)
+        S2C_Pong,       // payload: 原样回传 clientTimeSec(f64)
     };
 
     // C2S_Input 按键位掩码
     enum InputBits : uint16_t
     {
-        kInputW = 1 << 0,
-        kInputS = 1 << 1,
-        kInputA = 1 << 2,
-        kInputD = 1 << 3,
-        kInputQ = 1 << 4,
-        kInputE = 1 << 5,
+        kInputW     = 1 << 0,
+        kInputS     = 1 << 1,
+        kInputA     = 1 << 2,
+        kInputD     = 1 << 3,
+        kInputQ     = 1 << 4,
+        kInputE     = 1 << 5,
         kInputSpace = 1 << 6,
         kInputShift = 1 << 7,
     };
@@ -228,7 +228,7 @@ namespace Engine::Net
         if (version != kProtocolVersion)
             return false;
 
-        out.Type      = static_cast<MessageType>(type);
+        out.Type = static_cast<MessageType>(type);
         out.Payload.assign(data + 8, data + total);
         consumed = total;
         return true;

@@ -23,9 +23,8 @@ namespace Engine::Net
     inline std::vector<SnapshotEntity> CollectSnapshotEntities(Ref<Scene>& scene)
     {
         std::vector<SnapshotEntity> entities;
-        auto& registry = scene->GetRegistry();
-        for (auto [entity, id, tc, rb] :
-             registry.view<IDComponent, TransformComponent, RigidBodyComponent>().each())
+        auto&                       registry = scene->GetRegistry();
+        for (auto [entity, id, tc, rb] : registry.view<IDComponent, TransformComponent, RigidBodyComponent>().each())
         {
             if (rb.Type != RigidBodyComponent::BodyType::Dynamic)
                 continue;
@@ -39,7 +38,8 @@ namespace Engine::Net
         return entities;
     }
 
-    // 编码 S2C_Snapshot payload：tick(u32) + count(u16) + N * [uuid(u64)+12*f32]
+    // 编码 S2C_Snapshot payload：tick(u32) + count(u16) + N * [uuid(u64) + 9*f32]
+    // 9 个 float 依次是 pos3 + rot3 + scale3（旧注释误写为 12*f32，据其实现的解析端会越界）
     inline std::vector<uint8_t> EncodeSnapshot(uint32_t tick, const std::vector<SnapshotEntity>& entities)
     {
         ByteWriter writer;
@@ -64,7 +64,7 @@ namespace Engine::Net
     // 解码（客户端侧）
     struct DecodedSnapshot
     {
-        uint32_t                Tick = 0;
+        uint32_t                    Tick = 0;
         std::vector<SnapshotEntity> Entities;
     };
 
