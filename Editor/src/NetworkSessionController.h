@@ -70,9 +70,13 @@ namespace Engine
         uint16_t        m_PlayerIndex = 0;
 
         // 连接对话框状态
-        bool        m_ShowConnectDialog = false;
-        char        m_HostBuffer[128]   = "127.0.0.1";
-        char        m_PortBuffer[16]    = "30000";
+        bool m_ShowConnectDialog = false;
+        // OpenConnectDialog() 只置请求位，真正调用 ImGui::OpenPopup() 要等到
+        // DrawDialog() 的当前窗口栈里——BeginPopupModal 必须与同帧的 OpenPopup
+        // 配对，光把 bool 置 true 弹窗不会出现。
+        bool        m_OpenPopupRequested = false;
+        char        m_HostBuffer[128]    = "127.0.0.1";
+        char        m_PortBuffer[16]     = "30000";
         std::string m_LastError;
 
         // 心跳

@@ -26,16 +26,31 @@ namespace Engine
 
     void NetworkSessionController::OpenConnectDialog()
     {
-        m_ShowConnectDialog = true;
+        // 只置请求位，不在这里调 ImGui::OpenPopup()。
+        //
+        // ImGui 的 BeginPopupModal 与 OpenPopup 必须在**同一个 ID 栈层级**成对出现：
+        // OpenPopup("连接服务器") 记录的 ID 取决于调用点所在的窗口。菜单动作发生在
+        // 主菜单栏的窗口上下文里，而弹窗要在 DrawDialog() 的调用点绘制，两者 ID
+        // 不匹配时弹窗永远不会出现。所以这里记下意图，等 DrawDialog() 那一帧
+        // 在正确的上下文里再调 OpenPopup。
+        m_OpenPopupRequested = true;
         m_LastError.clear();
     }
 
     void NetworkSessionController::DrawDialog()
     {
-        if (!m_ShowConnectDialog)
+        // 处理"打开弹窗"请求：必须与本帧的 BeginPopupModal 处于同一上下文
+        if (m_OpenPopupRequested)
+        {
+            m_OpenPopupRequested = false;
+            m_ShowConnectDialog  = true;
+            ImGui::OpenPopup("连接服务器");
+        }
+
+        if (!m_ShowConnectDialog && !ImGui::IsPopupOpen("连接服务器"))
             return;
 
-        ImGui::SetNextWindowSize(ImVec2(420, 0));
+        ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Appearing);
         if (ImGui::BeginPopupModal("连接服务器", &m_ShowConnectDialog, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::InputText("地址", m_HostBuffer, sizeof(m_HostBuffer));
