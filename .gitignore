@@ -55,6 +55,9 @@ benchmark/results/
 # Local scratch (test logs, ad-hoc scripts)
 tmp/
 
+# 一键网络测试的临时日志（每次运行都会覆盖）
+tests/manual/_oneclick_logs/
+
 # Python cache
 __pycache__/
 *.pyc
