@@ -2,8 +2,8 @@ import { Series } from "remotion";
 import { Scene, type Caption } from "./components/Scene";
 import { Discretization, Intro, MotherFormula } from "./scenes/Opening";
 import { DensityAndEOS, Kernels } from "./scenes/KernelsAndDensity";
-import { ForceModel, NeighborSearch } from "./scenes/ForcesAndSearch";
-import { GridRebuild, PCISPH } from "./scenes/PCISPHScene";
+import { ForceModel } from "./scenes/ForcesAndSearch";
+import { GridRebuild } from "./scenes/PCISPHScene";
 import { Backends, Stabilization } from "./scenes/Engineering";
 import {
   DataLayout,
@@ -12,11 +12,23 @@ import {
   SolverChoice,
 } from "./scenes/DeepDive";
 import { Outro, Results } from "./scenes/Results";
+import { HashGrid3D, KernelSphere3D } from "./scenes/three/Neighbor3D";
+import { FluidColumn3D, PCISPH3D } from "./scenes/three/PCISPH3D";
 
 /**
  * 每个镜头 = 标题 + 场景组件 + 字幕。
  * 时长与文案集中在这里，调整节奏只动这一处。
  */
+
+/** 3D 镜头自行绘制标题与字幕所需的参数 */
+type ShotChromeProps = {
+  index?: string;
+  title?: string;
+  anchor?: string;
+  captions?: Caption[];
+  withChrome?: boolean;
+};
+
 type Shot = {
   index: string;
   title: string;
@@ -25,7 +37,12 @@ type Shot = {
   duration: number;
   captions: Caption[];
   tone?: "plain" | "tint";
-  Component: React.FC;
+  /**
+   * true = 3D 镜头铺满整幅画布，标题与字幕由组件内部叠加渲染；
+   * false/缺省 = 常规 2D 版式，由 Scene 提供标题与字幕。
+   */
+  fullBleed?: boolean;
+  Component: React.ComponentType<ShotChromeProps>;
 };
 
 export const SHOTS: Shot[] = [
@@ -86,6 +103,29 @@ export const SHOTS: Shot[] = [
   },
   {
     index: "03",
+    title: "支撑域是一个球",
+    anchor: "SmoothingRadius = h",
+    duration: 360,
+    captions: [
+      {
+        from: 10,
+        text: "把母式里的支撑域单独拿出来看：它是以粒子为中心、半径 h 的球。",
+      },
+      {
+        from: 120,
+        text: "球内粒子的核函数权重 W > 0，参与密度与压力累加；球外权重恒为零，直接跳过。",
+      },
+      {
+        from: 230,
+        text: "所以 SPH 从来不需要遍历全部粒子，只需要这个球里的邻居——这正是空间哈希存在的理由。",
+      },
+    ],
+    tone: "tint",
+    fullBleed: true,
+    Component: KernelSphere3D,
+  },
+  {
+    index: "04",
     title: "核函数：Poly6 与 Spiky 的分工",
     anchor: "SPHKernelMath::Compute()",
     duration: 450,
@@ -110,7 +150,7 @@ export const SHOTS: Shot[] = [
     Component: Kernels,
   },
   {
-    index: "04",
+    index: "05",
     title: "密度估计与状态方程",
     anchor: "sph_density.glsl",
     duration: 450,
@@ -133,7 +173,7 @@ export const SHOTS: Shot[] = [
     Component: DensityAndEOS,
   },
   {
-    index: "05",
+    index: "06",
     title: "WCSPH 的力模型",
     anchor: "sph_force.glsl",
     duration: 480,
@@ -155,8 +195,8 @@ export const SHOTS: Shot[] = [
     Component: ForceModel,
   },
   {
-    index: "06",
-    title: "邻居搜索：空间哈希网格",
+    index: "07",
+    title: "邻居搜索：27 个格子的三维邻域",
     anchor: "SpatialHashGrid",
     duration: 480,
     captions: [
@@ -170,18 +210,19 @@ export const SHOTS: Shot[] = [
       },
       {
         from: 235,
-        text: "计数 → 前缀和 → 散射三步建表；散射后 cellStart 指向格末尾，所以查询起点要减掉计数。",
+        text: "注意这里是 3×3×3 共 27 个格子，不是平面上看到的 9 个——邻居遍历量是它的三倍。",
       },
       {
         from: 350,
-        text: "取 cellSize = 2h，相邻 3×3×3 个格子就能完整覆盖半径 h 的支撑域。",
+        text: "计数 → 前缀和 → 散射三步建表；取 cellSize = 2h，27 格就能完整覆盖半径 h 的支撑球。",
       },
     ],
     tone: "tint",
-    Component: NeighborSearch,
+    fullBleed: true,
+    Component: HashGrid3D,
   },
   {
-    index: "07",
+    index: "08",
     title: "PCISPH：把压力变成迭代",
     anchor: "sph_pcisph_*.glsl",
     duration: 540,
@@ -192,25 +233,48 @@ export const SHOTS: Shot[] = [
       },
       {
         from: 125,
-        text: "PCISPH 改成预测-校正：先算非压力加速度，猜一个预测速度与位置。",
+        text: "看这柱粒子压向地面：被压扁意味着局部密度已经超过 ρ₀，颜色随之变红。",
       },
       {
         from: 240,
-        text: "用预测位置重新估密度，若高于 ρ₀ 就按 P ← P + δ·Δρ 增压力，再重算压力加速度。",
+        text: "PCISPH 改用预测-校正：用预测位置重新估密度，再按 P ← P + δ·Δρ 逐轮把压力补上去。",
       },
       {
         from: 355,
-        text: "循环若干轮把预测密度压回目标值，右侧可以看到误差逐轮收敛。",
+        text: "每一轮迭代都把体积往回收一点，右侧误差条可以看到它逐步收敛。",
       },
       {
         from: 460,
         text: "迭代次数 I 直接决定精度与耗时，仓库默认 3 次，可在 1~8 之间调。",
       },
     ],
-    Component: PCISPH,
+    fullBleed: true,
+    Component: PCISPH3D,
   },
   {
-    index: "08",
+    index: "09",
+    title: "校正后的流体形态",
+    anchor: "WCSPH 力模型 · 三维演示",
+    duration: 380,
+    captions: [
+      {
+        from: 10,
+        text: "把同样的力模型放回三维：重力把水柱拉塌，近邻排斥让它向外铺开。",
+      },
+      {
+        from: 130,
+        text: "粘性让邻近粒子的速度趋于一致，所以流动是连成片的，而不是各自飞散。",
+      },
+      {
+        from: 260,
+        text: "粒子越压越密的地方压力越大——这就是状态方程在三维场景里最直观的体现。",
+      },
+    ],
+    fullBleed: true,
+    Component: FluidColumn3D,
+  },
+  {
+    index: "10",
     title: "δ 与网格重建的取舍",
     anchor: "ComputePCISPHDelta()",
     duration: 420,
@@ -236,7 +300,7 @@ export const SHOTS: Shot[] = [
     Component: GridRebuild,
   },
   {
-    index: "09",
+    index: "11",
     title: "工程稳定化措施",
     anchor: "SPHCommon.cpp / Components.h",
     duration: 450,
@@ -258,7 +322,7 @@ export const SHOTS: Shot[] = [
     Component: Stabilization,
   },
   {
-    index: "10",
+    index: "12",
     title: "参数不是平行滑条",
     anchor: "Components.h / PropertiesPanel",
     duration: 480,
@@ -284,7 +348,7 @@ export const SHOTS: Shot[] = [
     Component: ParamLayers,
   },
   {
-    index: "11",
+    index: "13",
     title: "GPU 数据布局",
     anchor: "ParticleSystemGPU.cpp",
     duration: 450,
@@ -306,7 +370,7 @@ export const SHOTS: Shot[] = [
     Component: DataLayout,
   },
   {
-    index: "12",
+    index: "14",
     title: "双后端一致性",
     anchor: "CudaSPHPipeline.h",
     duration: 420,
@@ -329,7 +393,7 @@ export const SHOTS: Shot[] = [
     Component: Backends,
   },
   {
-    index: "13",
+    index: "15",
     title: "实测：三后端 × 两求解器 × 五规模",
     anchor: "benchmark/results",
     duration: 480,
@@ -354,7 +418,7 @@ export const SHOTS: Shot[] = [
     Component: Results,
   },
   {
-    index: "14",
+    index: "16",
     title: "两种求解器怎么选",
     anchor: "WCSPH vs PCISPH",
     duration: 420,
@@ -372,7 +436,7 @@ export const SHOTS: Shot[] = [
     Component: SolverChoice,
   },
   {
-    index: "15",
+    index: "17",
     title: "常见失败模式与排查",
     anchor: "调参手册",
     duration: 420,
@@ -415,15 +479,26 @@ export const SPHExplainer: React.FC = () => {
     <Series>
       {SHOTS.map((shot, i) => (
         <Series.Sequence key={i} durationInFrames={shot.duration}>
-          <Scene
-            index={shot.index}
-            title={shot.title}
-            anchor={shot.anchor}
-            captions={shot.captions}
-            tone={shot.tone}
-          >
-            <shot.Component />
-          </Scene>
+          {shot.fullBleed ? (
+            // 3D 镜头：铺满整幅，标题与字幕由组件自身叠加
+            <shot.Component
+              index={shot.index}
+              title={shot.title}
+              anchor={shot.anchor}
+              captions={shot.captions}
+              withChrome
+            />
+          ) : (
+            <Scene
+              index={shot.index}
+              title={shot.title}
+              anchor={shot.anchor}
+              captions={shot.captions}
+              tone={shot.tone}
+            >
+              <shot.Component />
+            </Scene>
+          )}
         </Series.Sequence>
       ))}
     </Series>
