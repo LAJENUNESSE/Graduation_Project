@@ -160,6 +160,10 @@ results_ablation_cub/
 results_ablation_blelloch/
 results_*_run.log
 
+# remotion/ 数据可视化工程（依赖不入库，渲染产物由 out/ 规则忽略）
+remotion/node_modules/
+remotion/dist/
+
 # book/ LaTeX 编译产物
 book/main.bbl
 book/main.bcf
