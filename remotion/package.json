@@ -12,12 +12,14 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@remotion/cli": "^4.0.0",
+    "katex": "^0.19.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "remotion": "^4.0.0"
   },
   "devDependencies": {
     "@remotion/eslint-config-flat": "^4.0.0",
+    "@types/katex": "^0.16.8",
     "@types/react": "19.2.7",
     "@types/web": "0.0.166",
     "eslint": "10.12.0",

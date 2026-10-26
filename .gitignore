@@ -87,6 +87,9 @@ docs/thesis/*
 scripts/
 !docs/thesis/figures/scripted/scripts/
 !docs/thesis/figures/scripted/scripts/*.py
+# remotion/ 下的体检与出片脚本属于工程源码，需要入库
+!remotion/scripts/
+!remotion/scripts/*.mjs
 
 # Lua game scripts (tracked!)
 !assets/scripts/
