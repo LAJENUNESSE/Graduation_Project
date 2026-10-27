@@ -172,4 +172,16 @@ book/main.bbl
 book/main.bcf
 book/main.blg
 book/main.run.xml
+
+# 个人材料（简历、求职与论文审阅材料，不入库）
+简历/
+output/
+research/
+论文审阅意见核验报告.md
+论文答辩风险核验报告_*.md
+AAA_*.pre-v3.docx.bak
+
+# 本地临时目录与 Agent 工作目录
+.tmp/
+.workbuddy/
 book/main.synctex.gz
