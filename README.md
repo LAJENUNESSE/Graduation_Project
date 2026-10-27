@@ -157,6 +157,14 @@ cmake --build build-benchmark --config RelWithDebInfo --target Editor
 
 `vs2022-benchmark` 使用本机 Vulkan SDK 路径；在其他机器上使用前，应修改 `CMakePresets.json` 中的 `VULKAN_SDK` 或通过本地 preset 覆盖。
 
+> **⚠️ 已知问题：CUDA 架构未显式指定。** 上述两个 preset 都没有设置 `CMAKE_CUDA_ARCHITECTURES`，实际按 `sm_75`（Turing）生成代码，而本机 RTX 3050 Ti 为 Ampere（CC 8.6）。功能上依靠 PTX JIT 可以运行，但会产生首次编译开销且无法使用 Ampere 专属优化，**性能基准数据会系统性偏低**。做性能实验前请显式指定架构：
+>
+> ```bash
+> cmake --preset vs2022-cuda -DCMAKE_CUDA_ARCHITECTURES=86
+> ```
+>
+> 详见 [#8 build(cuda): CUDA preset 未指定架构，实际按 sm_75 编译导致 Ampere 性能失真](https://github.com/LAJENUNESSE/Graduation_Project/issues/8)。
+
 运行时日志若出现 `the provided PTX was compiled with an unsupported toolchain`，说明驱动版本过旧；此时引擎会自动回退到 OpenGL Compute 路径，更新驱动后可恢复 CUDA 路径。
 
 > CUDA Toolkit 与驱动的版本对应关系见 [NVIDIA 官方文档](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-toolkit-major-component-versions)。
