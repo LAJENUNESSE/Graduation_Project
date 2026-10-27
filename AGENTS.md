@@ -11,15 +11,16 @@ This file provides guidance to coding agents when working with code in this repo
 ```bash
 # First-time setup: initialize git submodules (vendors are submodules)
 git submodule update --init --recursive
-````
+```
 
-### Linux / VM (Ninja)
+### Linux / VM (Ninja + vcpkg)
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+# 需先设置 VCPKG_ROOT；首次配置会按 vcpkg.json 安装依赖
+cmake --preset linux-default
 cmake --build build --target Editor
 # Run
-./build/Editor/Editor.exe
+./build/Editor/Editor
 ```
 
 ### Windows (VS 2022 Build Tools + vcpkg)
@@ -48,9 +49,23 @@ cmake 不在全局 PATH 中，需使用 VS Build Tools 内置路径。
 > **注意：** Linux/Ninja 输出路径无配置子目录，Windows/VS 生成器输出路径含 `RelWithDebInfo/` 子目录。
 > 两个 preset 的输出目录相同（`build/`），切换 preset 后需重新配置但构建/运行路径不变。
 
-**Build targets:** `Engine` (static lib), `Editor` (exe), `Sandbox` (exe)
+**Build targets:** `Engine` (static lib), `Editor` (exe), `Sandbox` (exe), `Server` (headless exe), `EngineTests` (exe，`BUILD_TESTING=ON` 时可用)。
 
-**Run:** exe 启动时会自动检测项目根目录，因此可从任意目录启动。
+**Run:** 编辑器与服务器启动时会自动检测项目根目录，因此可从任意目录启动。
+
+### Tests
+
+```bash
+# Linux：配置后构建并运行单元测试
+cmake --build build --target EngineTests
+ctest --test-dir build --output-on-failure
+
+# Windows：使用上文 CMake 完整路径，VS 生成器需指定配置
+"C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config RelWithDebInfo --target EngineTests
+ctest --test-dir build -C RelWithDebInfo --output-on-failure
+```
+
+网络同步的协议冒烟与多终端演示说明见 `docs/server/testing.md`；测试场景和服务器应先启动，不要默认网络测试可以直接无人值守执行。
 
 ## Python / uv Environment
 
@@ -88,16 +103,20 @@ Python 依赖管理约定：
 
 ## Architecture
 
-| 目录                      | 职责                                                                                                                        |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `Editor/`                 | 可视化编辑器（exe），分层协调式架构（EditorLayer → 控制器/面板）                                                            |
-| `Engine/`                 | 引擎静态库（Core, Renderer, Scene, Reflection, Asset, Physics, Audio, Media, Terrain, Script, Events, Debug, ImGui）        |
-| `Engine/Platform/OpenGL/` | OpenGL 4.3 具体实现（默认后端）                                                                                             |
-| `Engine/Platform/Vulkan/` | Vulkan 1.2+ 具体实现（可选，`--vulkan` 命令行启用）                                                                         |
-| `Engine/Platform/CUDA/`   | CUDA compute sidecar（粒子/SPH，需 `ENGINE_ENABLE_CUDA=ON`），含错误检测 + 全局中毒回退                                     |
-| `vendor/`                 | 第三方库（glfw, glm, spdlog, entt, yaml-cpp, imguizmo, stb_image, imgui, assimp, bullet3）                                 |
-| `assets/`                 | 着色器(.glsl ×37)、模型、纹理、场景(.scene = YAML)                                                                          |
-| `docs/`                   | 技术调研报告、竞赛文档、论文、性能分析、Vulkan 迁移等                                                                       |
+| 目录                      | 职责 |
+| ------------------------- | ---- |
+| `Editor/`                 | 可视化编辑器（exe），分层协调式架构（EditorLayer → 控制器/面板）；支持局域网网络客户端 |
+| `Engine/`                 | 引擎静态库（Core, Renderer, Scene, Reflection, Asset, Physics, Audio, Media, Terrain, Script, Network, Events, Debug, ImGui） |
+| `Engine/Platform/OpenGL/` | OpenGL 4.3 具体实现（默认后端） |
+| `Engine/Platform/Vulkan/` | Vulkan 1.2+ 具体实现（可选，`--vulkan` 命令行启用） |
+| `Engine/Platform/CUDA/`   | CUDA compute sidecar（粒子/SPH，需 `ENGINE_ENABLE_CUDA=ON`），含错误检测 + 全局中毒回退 |
+| `Server/`                 | 服务器权威的无头联机服务进程，复用 Engine 的场景、物理与网络协议 |
+| `Sandbox/`                | 独立示例程序（exe） |
+| `tests/`                  | GoogleTest 单元测试（`EngineTests`）及 `manual/` 网络冒烟/演示脚本 |
+| `vendor/`                 | 第三方库（glfw, glm, spdlog, entt, yaml-cpp, imguizmo, stb_image, imgui, assimp, bullet3） |
+| `assets/`                 | GLSL 着色器、模型、纹理、场景（`.scene` = YAML） |
+| `remotion/`               | 独立的 React / Remotion / Three.js 视频工程，用于 SPH 原理与数据可视化；用法见 `remotion/README.md` |
+| `docs/`                   | 技术调研报告、竞赛文档、论文、性能分析、Vulkan 迁移与网络同步设计等 |
 
 各模块的详细约定见 `.claude/rules/` 下的路径限定规则文件。
 
@@ -123,8 +142,10 @@ Python 依赖管理约定：
 * `Ref<T>` is `std::shared_ptr<T>`, `Scope<T>` is `std::unique_ptr<T>` (defined in `Core/Base.h`)
 * **Scene 架构**：Scene 为 façade，复杂逻辑委托给 SceneRuntimeCoordinator / SceneHierarchyService / WorldTransformService，运行时资源由 RuntimeStore 管理
 * **Editor 架构**：EditorLayer 是主协调器，职责分散到 EditorSceneSession / EditorShell / EditorPanelCoordinator / EditorRenderController / EditorViewportController / EditorSelectionGizmoController + UndoSystem
-* **Vulkan 后端**：已合并主分支，35 个文件在 `Engine/Platform/Vulkan/`，通过 `vs2022-vulkan` preset + `Editor.exe --vulkan` 启用
-* **CUDA sidecar**：粒子和 SPH 管线有 CUDA 加速路径，含错误检测 + 全局中毒回退到 OpenGL Compute（仓库预设不含 CUDA）
+* **Vulkan 后端**：已合并主分支，实现位于 `Engine/Platform/Vulkan/`，通过 `vs2022-vulkan` preset + `Editor.exe --vulkan` 启用
+* **CUDA sidecar**：粒子和 SPH 管线有 CUDA 加速路径，含错误检测 + 全局中毒回退到 OpenGL Compute；默认关闭，可用 `vs2022-cuda` 或 `vs2022-benchmark` preset 启用（后者同时启用 Vulkan，输出到 `build-benchmark/`）
+* **网络同步**：`Engine/src/Network/` 共享 TCP 协议与客户端/服务端传输；`Server` 为 60Hz 无头权威服务器，Editor 客户端以快照插值渲染。当前仅面向局域网双玩家演示，不含预测/回滚或流体同步；详见 `docs/server/architecture.md`
+* **Remotion 视频工程**：独立于 CMake/C++ 构建，使用 npm 管理依赖；修改后运行 `npm run lint`，用法与渲染约定见 `remotion/README.md`
 
 ## License
 
@@ -132,7 +153,7 @@ LGPL v2.1+（FFmpeg 以 DLL 动态链接）
 
 ## CI/CD
 
-GitHub Actions — 多预设矩阵构建（Windows `default`, Linux `linux-default` + `linux-sanitize`, macOS `macos-default`）+ CodeQL 安全分析
+GitHub Actions 当前构建矩阵为 Windows `default` 与 `vs2022-vulkan`、Linux `linux-default` 与 `linux-sanitize`。Windows/Linux 构建包含 `Server`；Linux sanitizer 任务构建 `EngineTests` 并运行 CTest。`CMakePresets.json` 虽保留 `macos-default`，当前 CI 不执行 macOS 构建，也没有 CodeQL 工作流。
 
 ## Development Workflow
 
