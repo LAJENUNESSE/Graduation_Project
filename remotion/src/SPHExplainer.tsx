@@ -13,7 +13,7 @@ import {
 } from "./scenes/DeepDive";
 import { Outro, Results } from "./scenes/Results";
 import { HashGrid3D, KernelSphere3D } from "./scenes/three/Neighbor3D";
-import { FluidColumn3D, PCISPH3D } from "./scenes/three/PCISPH3D";
+import { FluidSurface3D, PCISPHFluid3D } from "./scenes/three/FluidSurface3D";
 
 /**
  * 每个镜头 = 标题 + 场景组件 + 字幕。
@@ -233,7 +233,7 @@ export const SHOTS: Shot[] = [
       },
       {
         from: 125,
-        text: "看这柱粒子压向地面：被压扁意味着局部密度已经超过 ρ₀，颜色随之变红。",
+        text: "水柱倒下时被压得过密，局部密度超过 ρ₀——右侧误差条会冲高。",
       },
       {
         from: 240,
@@ -241,7 +241,7 @@ export const SHOTS: Shot[] = [
       },
       {
         from: 355,
-        text: "每一轮迭代都把体积往回收一点，右侧误差条可以看到它逐步收敛。",
+        text: "每一轮迭代都把体积往回收一点，可以看误差条逐步收敛。",
       },
       {
         from: 460,
@@ -249,29 +249,29 @@ export const SHOTS: Shot[] = [
       },
     ],
     fullBleed: true,
-    Component: PCISPH3D,
+    Component: PCISPHFluid3D,
   },
   {
     index: "09",
-    title: "校正后的流体形态",
-    anchor: "WCSPH 力模型 · 三维演示",
+    title: "从粒子到液面",
+    anchor: "对应 SSFR：粒子 → 等值面 → 着色",
     duration: 380,
     captions: [
       {
         from: 10,
-        text: "把同样的力模型放回三维：重力把水柱拉塌，近邻排斥让它向外铺开。",
+        text: "真实渲染里，粒子本身是不该被看见的：观众看到的只有液面。",
       },
       {
         from: 130,
-        text: "粘性让邻近粒子的速度趋于一致，所以流动是连成片的，而不是各自飞散。",
+        text: "这里每一帧都把粒子位置喂给密度场，由光线步进求出等值面——球与球自然融合成连续水面。",
       },
       {
-        from: 260,
-        text: "粒子越压越密的地方压力越大——这就是状态方程在三维场景里最直观的体现。",
+        from: 255,
+        text: "再按厚度做吸收、按视角做 Fresnel 反射，就是项目里 SSFR 屏幕空间流体渲染在做的事。",
       },
     ],
     fullBleed: true,
-    Component: FluidColumn3D,
+    Component: FluidSurface3D,
   },
   {
     index: "10",

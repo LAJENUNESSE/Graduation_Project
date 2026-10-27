@@ -45,6 +45,94 @@ export const Scene3D: React.FC<{
 };
 
 /**
+ * 3D 镜头的叠加层：只负责标题、HUD 与字幕，不含画布。
+ *
+ * 需要自己控制 ThreeCanvas（自定义相机、着色器材质）的镜头用它，
+ * 其余镜头直接用下面的 Scene3DShot 组合即可。
+ */
+export const ShotChrome: React.FC<{
+  index?: string;
+  title?: string;
+  anchor?: string;
+  captions?: Caption[];
+  hud?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ index, title, anchor, captions = [], hud, children }) => {
+  const frame = useCurrentFrame();
+  const fadeIn = interpolate(frame, [0, 14], [0, 1], { extrapolateRight: "clamp" });
+
+  return (
+    <AbsoluteFill style={{ fontFamily: FONT.sans, color: COLOR.ink }}>
+      {children}
+      <TitleBar index={index} title={title} anchor={anchor} fadeIn={fadeIn} />
+      {hud}
+      <ShotCaptions captions={captions} />
+    </AbsoluteFill>
+  );
+};
+
+const TitleBar: React.FC<{
+  index?: string;
+  title?: string;
+  anchor?: string;
+  fadeIn: number;
+}> = ({ index, title, anchor, fadeIn }) => (
+  <div
+    style={{
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      padding: "26px 96px 22px",
+      display: "flex",
+      alignItems: "baseline",
+      gap: 20,
+      background:
+        "linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0))",
+      opacity: fadeIn,
+    }}
+  >
+    {index ? (
+      <span
+        style={{
+          fontFamily: FONT.serif,
+          fontSize: 40,
+          fontWeight: 700,
+          color: COLOR.accent,
+          letterSpacing: 2,
+        }}
+      >
+        {index}
+      </span>
+    ) : null}
+    {title ? (
+      <span
+        style={{
+          fontSize: 40,
+          fontWeight: 600,
+          letterSpacing: 1,
+          textShadow: "0 2px 12px rgba(255,255,255,0.9)",
+        }}
+      >
+        {title}
+      </span>
+    ) : null}
+    <span style={{ flex: 1 }} />
+    {anchor ? (
+      <span
+        style={{
+          fontFamily: FONT.mono,
+          fontSize: 18,
+          color: COLOR.inkMuted,
+        }}
+      >
+        {anchor}
+      </span>
+    ) : null}
+  </div>
+);
+
+/**
  * 全幅 3D 镜头版式：3D 铺满 1920×1080，标题与字幕作为叠加层浮在上面。
  *
  * 与 2D 的 Scene 保持同一套视觉语言（同样的标题位置、同样的字幕条），

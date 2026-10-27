@@ -21,7 +21,7 @@ npm install
 # 打开 Studio 预览（浏览器里逐帧查看）
 npm run dev
 
-# 渲染 SPH 原理讲解片（约 4 分钟，1920×1080）
+# 渲染 SPH 原理讲解片（约 4 分 25 秒，1920×1080，全片约 25~40 分钟）
 npx remotion render SPHExplainer out/SPH-Principles.mp4
 
 # 只渲染某一段（例如第 2 个镜头的前 200 帧）
@@ -33,6 +33,10 @@ npx remotion still SPHExplainer out/frame.png --frame=1200
 # 类型检查 + ESLint
 npm run lint
 ```
+
+渲染很慢是正常的：镜头 08/09 的液面用片元着色器逐像素做光线步进，
+又没有 GPU 加速。`remotion.config.ts` 已把超时放宽到 4 分钟，
+若改用 Node API 渲染需自行传 `timeoutInMilliseconds`。
 
 ## SPH 原理片的结构
 
@@ -47,7 +51,11 @@ npm run lint
 | 03 | 支撑域是一个球 | 支撑域是球而非圆，球外权重恒为 0 |
 | 07 | 27 格空间哈希邻域 | 平面只能画 3×3 九格，真实是 27 格 |
 | 08 | PCISPH 预测-校正 | 压缩、堆积、侧向挤出都是空间行为 |
-| 09 | 校正后的流体形态 | 水柱崩塌的铺开与堆叠只能在三维里看 |
+| 09 | 从粒子到液面 | 真实渲染里粒子不可见，只有连续液面可见 |
+
+其中 08 / 09 两个镜头**不是把粒子画成小球**，而是把粒子位置喂给密度场，
+由片元着色器做光线步进求出等值面，再按厚度做吸收、按视角做 Fresnel。
+这对应项目里 SSFR 的思路，也避免「一堆漂浮小球」的玩具感。
 
 | 镜头 | 内容 | 主要源码锚点 |
 | --- | --- | --- |
@@ -59,8 +67,8 @@ npm run lint
 | 05 | 密度估计与状态方程 | `sph_density.glsl` |
 | 06 | WCSPH 力模型（压力/粘性/表面张力/边界） | `sph_force.glsl` |
 | 07 | **27 格空间哈希邻域（3D）** | `SpatialHashGrid` |
-| 08 | **PCISPH 预测-校正迭代（3D）** | `sph_pcisph_*.glsl` |
-| 09 | **校正后的流体形态（3D）** | WCSPH 力模型演示 |
+| 08 | **PCISPH 预测-校正迭代（3D 液面）** | `sph_pcisph_*.glsl` |
+| 09 | **从粒子到液面（3D 液面）** | 对应 SSFR 管线 |
 | 10 | δ 推导与网格重建取舍 | `ComputePCISPHDelta()` |
 | 11 | 工程稳定化措施 | `SPHCommon.cpp` |
 | 12 | 参数的三层结构 | `Components.h` |
@@ -81,7 +89,7 @@ npm run lint
 | `src/SPHExplainer.tsx` | 全片时间线与字幕 |
 | `src/components/` | 版式骨架、字幕条、手写数学排版、通用动画 |
 | `src/scenes/` | 各镜头场景组件（2D 版式） |
-| `src/scenes/three/` | 三维镜头：Three.js 场景、支撑球、27 格网格、PCISPH 与流体演示 |
+| `src/scenes/three/` | 三维镜头：Three.js 场景、支撑球、27 格网格、液面渲染与流体模拟数据 |
 | `scripts/` | 出片、重编号与自动体检脚本 |
 | `out/` | 渲染产物，已 gitignore |
 
@@ -91,17 +99,45 @@ npm run lint
 ThreeCanvas 铺满 1920×1080，标题、HUD 与字幕作为叠加层浮在上面，
 视觉语言与 2D 镜头一致，交替出现时不会像两支片子。
 
+需要自己控制相机与着色器材质的镜头（如液面渲染），用 `ShotChrome`
+只取叠加层，画布自己搭。
+
 在 `SHOTS` 里给镜头加 `fullBleed: true`，组件就会收到
 `index / title / anchor / captions / withChrome`，自行渲染叠加层。
 
 关键约束：
 
 - **模拟必须整段预积分**。Remotion 会并发、乱序渲染各帧，
-  任何「依赖上一帧状态」的写法都会错乱。参见 `PCISPH3D.tsx` 里
-  `useMemo` 一次性算完 380 帧快照的做法。
-- 用 `useMemo` 缓存几何数据，避免每帧重建上百个球体。
+  任何「依赖上一帧状态」的写法都会错乱。参见 `fluidData.ts` 里
+  `simulateDamBreak()` 一次性算完整段、再按帧取快照的做法。
+- **流体不要画成一堆小球**。真实渲染里粒子不可见，只有液面可见。
+  见下面「液面渲染」一节。
 - headless 下走软件 WebGL（Remotion 默认 `hardwareAcceleration: "disable"`），
-  渲染能成功，但几何体数量要克制。
+  能渲染，但成本要自己控制：液面镜头用半分辨率渲染再放大，
+  单帧可降到约四分之一。
+
+## 液面渲染（为什么不用 Marching Cubes）
+
+初始版本把粒子画成一个个球，看起来像「玩具粒子堆」，不像流体。
+为了让粒子不可见、只让液面可见，有两条路：
+
+**Marching Cubes（已放弃）**
+`three/examples/jsm/objects/MarchingCubes.js` 在 Node 侧能正确生成几何
+（实测 11040 个真实顶点、包围盒 ±0.5），但在 headless 软件 WebGL 下
+始终画不出像素。排查过剔除、材质、创建时机、drawRange，均无效。
+这个结论记录在此，避免以后重复踩坑。
+
+**片元着色器光线步进（当前方案）**
+`FluidSurface3D.tsx` 把粒子位置写进 `DataTexture`，片元着色器在密度场里
+做 sphere tracing 求等值面，再按厚度做 Beer-Lambert 吸收、按视角做
+Fresnel 反射。粒子只作为场的数据源，屏幕上永远不会出现小球。
+这与项目 SSFR 的思路一致（先重建表面，再着色）。
+
+成本控制要点：
+- 每像素遍历全部粒子，所以粒子数控制在约 500（`fluidData.ts`）
+- 用水体包围盒做粗剔除，包围盒外可大步跳过
+- 半分辨率渲染后用 CSS 放大（`RENDER_SCALE = 0.5`）
+
 
 ## 自动体检脚本
 
@@ -117,6 +153,21 @@ node scripts/check-pixels.mjs out/shots
 # 验证某帧确实是立体的、有明暗变化的画面（而非全黑或纯色）
 node scripts/check-3d.mjs out/probe.png
 
+# 与色调无关的主体占比（适用于任意配色的镜头）
+node scripts/check-subject.mjs out/shots/f03370.png
+
+# 液体外观专用：蓝青主色、高光、明暗层次（仅适用于蓝色水）
+node scripts/check-water.mjs out/frame.png
+
+# 轮廓光滑度：区分「连续液面」与「一堆小球」
+node scripts/check-silhouette.mjs a.png b.png
+
+# 成片卡死检测：连续多秒画面无变化
+node scripts/check-motion.mjs out/video.mp4
+
+# 输出镜头时间表（标题 / 时长 / 是否全幅 3D）
+node scripts/shot-timeline.mjs
+
 # 插入镜头后按出现顺序重排编号
 node scripts/renumber-shots.mjs
 ```
@@ -124,6 +175,10 @@ node scripts/renumber-shots.mjs
 `check-shots.mjs` 会区分「镜头开头的刻意淡入」和「真正的空白缺陷」，
 只报告镜头中段的异常。`check-3d.mjs` 统计非背景像素占比、色彩桶数量与
 平均亮度——「渲染没报错」不等于「画面里真有几何体」，这个脚本补上这一步。
+
+注意 `check-water.mjs` 用「蓝色明显高于红色」判定液体，只适用于蓝色水。
+镜头 08 故意用密度热力色（偏红），对它跑会误报「几乎没水」；
+这类镜头请用 `check-subject.mjs`。
 
 ## 写作约定
 

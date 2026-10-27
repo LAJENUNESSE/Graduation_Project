@@ -6,6 +6,8 @@ import { VIDEO } from "./theme";
 import { ThreeProbe } from "./scenes/ThreeProbe";
 import { HashGrid3D, KernelSphere3D } from "./scenes/three/Neighbor3D";
 import { FluidColumn3D, PCISPH3D } from "./scenes/three/PCISPH3D";
+import { MetaballProbe } from "./scenes/three/MetaballProbe";
+import { FluidSurface3D } from "./scenes/three/FluidSurface3D";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -40,6 +42,14 @@ export const RemotionRoot: React.FC = () => {
         height={VIDEO.height}
       />
       <Composition
+        id="FluidSurface3D"
+        component={FluidSurface3D}
+        durationInFrames={380}
+        fps={30}
+        width={VIDEO.width}
+        height={VIDEO.height}
+      />
+      <Composition
         id="HashGrid3D"
         component={HashGrid3D}
         durationInFrames={420}
@@ -59,6 +69,16 @@ export const RemotionRoot: React.FC = () => {
         id="FluidColumn3D"
         component={FluidColumn3D}
         durationInFrames={380}
+        fps={30}
+        width={VIDEO.width}
+        height={VIDEO.height}
+      />
+
+      {/* 等值面提取探针：验证 Marching Cubes 在 headless 下可用 */}
+      <Composition
+        id="MetaballProbe"
+        component={MetaballProbe}
+        durationInFrames={90}
         fps={30}
         width={VIDEO.width}
         height={VIDEO.height}
